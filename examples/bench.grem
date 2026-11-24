@@ -1,0 +1,56 @@
+# One million entities, each with a position and a velocity, moved for 100
+# ticks. Prints how many entity updates run per second.
+#
+# bench/baseline.c does the same work by hand in C and prints the same
+# lines.
+
+ENTITIES = 1_000_000
+TICKS = 100
+
+# Two 32-bit fields each, so an entity's components take 16 bytes.
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+# The loop being measured: a pass over the Position and Velocity arrays.
+system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+# Entity `i` starts on a 1000 by 1000 grid with one of a few velocities.
+ENTITIES.times do |i|
+  position = Position(i % 1000, i / 1000)
+  velocity = Velocity((i % 7 - 3) * 0.5, (i % 5 - 2) * 0.25)
+  spawn position, velocity
+end
+
+# Time the ticks only, not the spawning. `Time.dt` keeps its starting value
+# of 1.0 / 60.
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+
+# Add up every x so that the result of the work is used and can be compared
+# with the baseline's.
+checksum = 0.0
+each Position do |pos|
+  checksum += pos.x
+end
+
+puts "entities: #{World.count(Position, Velocity)}"
+puts "ticks: #{TICKS}"
+puts "seconds: #{seconds.round(6)}"
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(3)}"
+puts "updates_per_second: #{(ENTITIES * TICKS / seconds).round}"
+puts "checksum: #{checksum}"

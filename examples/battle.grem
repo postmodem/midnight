@@ -1,0 +1,160 @@
+# Two teams fight until one of them has nobody left.
+#
+# Shows enums, tags, events, functions, `rand`, deferred `despawn`,
+# `World.run` and `World.stop`.
+
+enum Team
+  Red
+  Blue
+end
+
+component Fighter
+  name: String
+  team: Team
+  power: Int
+end
+
+component Health
+  hp: Int
+end
+
+# Marks a fighter whose health has run out, until `reap` removes them.
+tag Down
+
+event Hit
+  attacker: Entity
+  target: Entity
+  damage: Int
+end
+
+def rival(team: Team) -> Team
+  case team
+  when Team::Red then Team::Blue
+  when Team::Blue then Team::Red
+  end
+end
+
+# A random fighter from a team, or `Entity.none` if the team is empty.
+def anyone_from(team: Team) -> Entity
+  members: [Entity] = []
+  each Entity, Fighter do |e, fighter|
+    members.push(e) if fighter.team == team
+  end
+  return Entity.none if members.empty?
+  members[rand(members.length)]
+end
+
+def standing(team: Team) -> Int
+  count = 0
+  each Fighter do |fighter|
+    count += 1 if fighter.team == team
+  end
+  count
+end
+
+def total_hp(team: Team) -> Int
+  total = 0
+  each Fighter, Health do |fighter, health|
+    total += health.hp if fighter.team == team
+  end
+  total
+end
+
+def report(team: Team) -> String
+  "#{team} has #{standing(team)} standing with #{total_hp(team)} hp"
+end
+
+system start_round
+  puts "Round #{Time.tick + 1}"
+end
+
+# Every fighter swings at a random member of the other team. A swing is an
+# event: nobody is hurt until `apply_hits` reads it, so everyone standing at
+# the start of the round gets to swing. `anyone_from` runs a query of its
+# own inside this one.
+system attack
+  each Entity, Fighter do |e, fighter|
+    target = anyone_from(rival(fighter.team))
+    next unless target.alive?
+    emit Hit(e, target, fighter.power + rand(4))
+  end
+end
+
+# Take each hit off its target's health. `on` is not a query, so the `Down`
+# tag is attached at once and the next hit in the same round sees it.
+system apply_hits
+  on Hit do |hit|
+    # A fighter can be hit several times in a round. Hits on one who is
+    # already down are wasted.
+    next unless hit.target.alive?
+    next if hit.target.has?(Down)
+
+    hit.target[Health].hp -= hit.damage
+    left = hit.target[Health].hp
+
+    # Attackers are still on the field: the fallen stay until `reap` runs.
+    striker = hit.attacker[Fighter].name
+    victim = hit.target[Fighter].name
+    if left > 0
+      puts "  #{striker} hits #{victim} for #{hit.damage}, leaving #{left}"
+    else
+      puts "  #{striker} hits #{victim} for #{hit.damage} and brings them down"
+      hit.target.add(Down)
+    end
+  end
+end
+
+# Remove the fallen. Inside `each` a despawn is queued: the entity keeps its
+# components for the rest of the block and is gone when the loop ends.
+system reap
+  each Entity, Fighter, with: Down do |e, fighter|
+    e.despawn
+    puts "  #{fighter.name} leaves the field for #{fighter.team}"
+  end
+end
+
+# Stop the fight when a team is empty. `World.run` returns once the tick in
+# which `World.stop` was called has finished.
+system referee
+  red = standing(Team::Red)
+  blue = standing(Team::Blue)
+  puts "  " + report(Team::Red) + ", " + report(Team::Blue)
+
+  if red == 0 && blue == 0
+    puts "Nobody is left standing. It is a draw."
+    World.stop
+  elsif red == 0 || blue == 0
+    winner = if red > 0 then Team::Red else Team::Blue end
+    puts "#{winner} wins in round #{Time.tick + 1}."
+    World.stop
+  end
+end
+
+# Fighters start with a random power and health. The random generator
+# starts from the same seed in every run, so every run is the same fight.
+def recruit(name: String, team: Team)
+  spawn Fighter(name, team, 3 + rand(3)), Health(20 + rand(11))
+end
+
+reds = ["Ada", "Bram", "Cleo", "Dov"]
+blues = ["Eli", "Faye", "Gus", "Hana"]
+
+reds.each do |name|
+  recruit(name, Team::Red)
+end
+blues.each do |name|
+  recruit(name, Team::Blue)
+end
+
+puts "The teams"
+each Fighter, Health do |fighter, health|
+  who = "#{fighter.name} (#{fighter.team})"
+  puts "  #{who}: power #{fighter.power}, #{health.hp} hp"
+end
+
+World.run
+
+puts "Left standing after #{Time.tick} rounds: #{World.count(Fighter)}"
+each Fighter, Health do |fighter, health|
+  puts "  #{fighter.name} (#{fighter.team}) with #{health.hp} hp"
+end

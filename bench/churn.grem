@@ -1,0 +1,90 @@
+# Measures the operations that are not iteration, on one million entities:
+# `spawn`, `e[C]` through handles visited in a shuffled order, `add` and
+# `remove` of a tag, and `despawn`. Prints how many of each run per second.
+
+COUNT = 1_000_000
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Health
+  hp: Int32
+end
+
+tag Marked
+
+# Operations per second.
+def rate(operations: Int, seconds: Float) -> Int
+  (operations / seconds).round
+end
+
+# spawn
+start = clock
+COUNT.times do |i|
+  spawn Position(i, i), Health(i % 100)
+end
+spawn_seconds = clock - start
+
+# Collect a handle to every entity, then shuffle the handles (Fisher-Yates)
+# so that the phases below jump around in memory instead of walking it in
+# order. None of this is timed.
+handles: [Entity] = []
+each Entity do |e|
+  handles.push(e)
+end
+
+last = COUNT - 1
+last.downto(1) do |i|
+  j = rand(i + 1)
+  swap = handles[i]
+  handles[i] = handles[j]
+  handles[j] = swap
+end
+
+# The loops below walk a list. They are not queries, so each `add`, `remove`
+# and `despawn` takes effect at once.
+
+# e[C]
+total = 0
+start = clock
+handles.each do |e|
+  total += e[Health].hp
+end
+lookup_seconds = clock - start
+
+# add
+start = clock
+handles.each do |e|
+  e.add(Marked)
+end
+add_seconds = clock - start
+marked = World.count(Health, with: Marked)
+
+# remove
+start = clock
+handles.each do |e|
+  e.remove(Marked)
+end
+remove_seconds = clock - start
+unmarked = World.count(Health, without: Marked)
+
+# despawn
+start = clock
+handles.each do |e|
+  e.despawn
+end
+despawn_seconds = clock - start
+remaining = World.count
+
+puts "entities: #{COUNT}"
+puts "spawn_per_second: #{rate(COUNT, spawn_seconds)}"
+puts "lookup_per_second: #{rate(COUNT, lookup_seconds)}"
+puts "add_per_second: #{rate(COUNT, add_seconds)}"
+puts "remove_per_second: #{rate(COUNT, remove_seconds)}"
+puts "despawn_per_second: #{rate(COUNT, despawn_seconds)}"
+
+# The sum of every hp, the entities counted with the tag after `add` and
+# without it after `remove`, and the entities left at the end: 51500000.
+puts "checksum: #{total + marked + unmarked + remaining}"

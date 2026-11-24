@@ -1,0 +1,142 @@
+# Particles fall under gravity and bounce around a box, which is drawn as
+# text every few ticks.
+#
+# Shows structs with operator methods, resources, constants, lists and
+# strings.
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+
+  def +(other: Vec2) -> Vec2
+    Vec2(x + other.x, y + other.y)
+  end
+
+  def *(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+end
+
+# The box is WIDTH characters across and HEIGHT down. Row 0 is the top row,
+# so gravity points along +y.
+WIDTH = 30
+HEIGHT = 12
+GRAVITY = Vec2(0, 16)
+
+# The share of its speed a particle keeps when it bounces.
+DAMPING = 0.875
+
+TICKS = 40
+FRAME_EVERY = 8
+
+component Position
+  vec: Vec2
+end
+
+component Velocity
+  vec: Vec2
+end
+
+# The character a particle is drawn as.
+component Glyph
+  char: String
+end
+
+# The walls, and how many times a particle has hit one.
+resource Box
+  width: Float = WIDTH
+  height: Float = HEIGHT
+  bounces: Int = 0
+end
+
+# Gravity changes each velocity, and each velocity changes a position.
+# `+=` works on a Vec2 because the struct defines `+`.
+system move
+  each Position, Velocity do |pos, vel|
+    vel.vec += GRAVITY * Time.dt
+    pos.vec += vel.vec * Time.dt
+  end
+end
+
+# Where a coordinate ends up after bouncing off walls at 0 and at `size`.
+def reflect(v: Float, size: Float) -> Float
+  return -v if v < 0.0
+  return 2 * size - v if v > size
+  v
+end
+
+# Put particles that crossed a wall back inside, heading the other way and a
+# little slower.
+system bounce
+  each Position, Velocity do |pos, vel|
+    if pos.vec.x < 0.0 || pos.vec.x > Box.width
+      pos.vec.x = reflect(pos.vec.x, Box.width)
+      vel.vec.x *= -DAMPING
+      Box.bounces += 1
+    end
+    if pos.vec.y < 0.0 || pos.vec.y > Box.height
+      pos.vec.y = reflect(pos.vec.y, Box.height)
+      vel.vec.y *= -DAMPING
+      Box.bounces += 1
+    end
+  end
+end
+
+# The inside of the box as text: a list with one string per row.
+def render -> [String]
+  # One string per character cell, row after row. A list element can be
+  # replaced; a character inside a string can't.
+  cells = [" "] * (WIDTH * HEIGHT)
+  each Position, Glyph do |pos, glyph|
+    col = pos.vec.x.floor.clamp(0, WIDTH - 1)
+    row = pos.vec.y.floor.clamp(0, HEIGHT - 1)
+    cells[row * WIDTH + col] = glyph.char
+  end
+
+  rows: [String] = []
+  HEIGHT.times do |y|
+    line = ""
+    WIDTH.times do |x|
+      line += cells[y * WIDTH + x]
+    end
+    rows.push("|" + line + "|")
+  end
+  rows
+end
+
+# Print the box under a title line.
+def show(title: String)
+  border = "+" + "-" * WIDTH + "+"
+  rows = render
+  puts "#{title}: #{Box.bounces} bounces"
+  puts border
+  rows.each do |row|
+    puts row
+  end
+  puts border
+  puts
+end
+
+# Draw a frame every FRAME_EVERY ticks. `Time.tick` counts the ticks that
+# have finished, so the one in progress is tick `Time.tick + 1`.
+system draw
+  ticks = Time.tick + 1
+  show("after #{ticks.to_s.rjust(2)} ticks") if ticks % FRAME_EVERY == 0
+end
+
+spawn Position(Vec2(2, 1)), Velocity(Vec2(6, 0)), Glyph("a")
+spawn Position(Vec2(8, 3)), Velocity(Vec2(-5, 0)), Glyph("b")
+spawn Position(Vec2(15, 0.5)), Velocity(Vec2(9, 0)), Glyph("c")
+spawn Position(Vec2(22, 2)), Velocity(Vec2(-12, 0)), Glyph("d")
+spawn Position(Vec2(27, 5)), Velocity(Vec2(3, -8)), Glyph("e")
+spawn Position(Vec2(12, 8)), Velocity(Vec2(-7, -10)), Glyph("f")
+
+Time.dt = 0.125
+
+puts "#{World.count(Position)} particles, gravity #{GRAVITY}"
+puts
+show("at the start")
+
+TICKS.times do
+  World.tick
+end

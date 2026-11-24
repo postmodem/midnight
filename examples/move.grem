@@ -1,0 +1,32 @@
+component Position
+  x: Float
+  y: Float
+end
+
+component Velocity
+  dx: Float
+  dy: Float
+end
+
+tag Frozen
+
+system move
+  each Position, Velocity, without: Frozen do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system report
+  each Entity, Position do |e, pos|
+    puts "#{e} is at (#{pos.x}, #{pos.y})"
+  end
+end
+
+spawn Position(0, 0), Velocity(1, 2)
+spawn Position(5, 5), Velocity(-1, 0), Frozen
+
+Time.dt = 0.5
+3.times do
+  World.tick
+end

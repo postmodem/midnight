@@ -1,0 +1,99 @@
+# Conway's Life on a small board that wraps around at its edges.
+#
+# Shows `add` and `remove` driven by a query, a list in a resource, and
+# `require`.
+
+# The board size, `cell_index` and `alive_next?` come from life_rules.grem.
+require "life_rules"
+
+# Every square of the board is an entity with a `Cell`. The squares that
+# hold a live cell also have the `Alive` tag.
+component Cell
+  x: Int
+  y: Int
+end
+
+tag Alive
+
+# How many live neighbours each square has, indexed by `cell_index`.
+resource Board
+  neighbours: [Int] = []
+end
+
+system draw
+  squares = ["."] * (WIDTH * HEIGHT)
+  each Cell, with: Alive do |cell|
+    squares[cell_index(cell.x, cell.y)] = "O"
+  end
+
+  puts "generation #{Time.tick}: #{World.count(Cell, with: Alive)} alive"
+  HEIGHT.times do |y|
+    row = ""
+    WIDTH.times do |x|
+      row += squares[cell_index(x, y)]
+    end
+    puts row
+  end
+  puts
+end
+
+# Each live cell adds one to the count of the eight squares around it.
+system count_neighbours
+  Board.neighbours = [0] * (WIDTH * HEIGHT)
+  each Cell, with: Alive do |cell|
+    -1.upto(1) do |dy|
+      -1.upto(1) do |dx|
+        next if dx == 0 && dy == 0
+        Board.neighbours[cell_index(cell.x + dx, cell.y + dy)] += 1
+      end
+    end
+  end
+end
+
+# Apply the rules. The tag filters pick the squares to look at, and `add`
+# and `remove` inside `each` are queued until that loop ends.
+system step
+  each Entity, Cell, with: Alive do |e, cell|
+    count = Board.neighbours[cell_index(cell.x, cell.y)]
+    e.remove(Alive) unless alive_next?(true, count)
+  end
+
+  # The deaths above have been applied by now, so this loop also visits the
+  # squares that just emptied. None of them fills again: a cell dies with
+  # the wrong number of neighbours for a birth.
+  each Entity, Cell, without: Alive do |e, cell|
+    count = Board.neighbours[cell_index(cell.x, cell.y)]
+    e.add(Alive) if alive_next?(false, count)
+  end
+end
+
+# Put a live cell on square (x, y).
+def seed(x: Int, y: Int)
+  each Entity, Cell do |e, cell|
+    e.add(Alive) if cell.x == x && cell.y == y
+  end
+end
+
+HEIGHT.times do |y|
+  WIDTH.times do |x|
+    spawn Cell(x, y)
+  end
+end
+
+# A glider, which travels down and to the right.
+seed(1, 0)
+seed(2, 1)
+seed(0, 2)
+seed(1, 2)
+seed(2, 2)
+
+# A blinker, which flips between a row and a column of three.
+seed(10, 5)
+seed(11, 5)
+seed(12, 5)
+
+# A tick draws the board and then moves it on one generation, so nine ticks
+# show generations 0 to 8.
+9.times do
+  World.tick
+end
