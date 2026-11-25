@@ -1,6 +1,6 @@
 # 0004 — Strict GPU systems: the same `Float` bits on every device and on the CPU
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0003
 
 ## Goal
