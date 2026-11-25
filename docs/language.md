@@ -1263,15 +1263,22 @@ not: moving the data costs more than the arithmetic saves.
 
 Measured on an RTX 5090 beside a Ryzen 9 9950X3D:
 
-- A GPU block costs about 0.03 ms each time it runs, whatever the number of
-  entities.
-- A transfer costs about 0.05 to 0.07 ms per megabyte, in either direction.
+- A GPU block costs about 0.04 ms each time it runs, whatever the number of
+  entities up to a million.
+- A transfer costs about 0.04 to 0.06 ms per megabyte, an upload a little
+  more than a download.
 - Moving entities (`pos.x += vel.dx * Time.dt`, on two pairs of `Float32`)
-  is faster on the GPU from roughly 200,000 entities when the data stays
-  there, and at no number of entities when an ordinary system reads the
-  result in every tick.
-- Gravity among 16,384 bodies, every body against every other, takes 1.29 ms
+  is faster on the GPU from roughly 300,000 entities when the data stays
+  there: a million take 0.13 ms per tick on the CPU and 0.04 ms on the GPU.
+  When an ordinary system reads the result in every tick the GPU is slower
+  at every number of entities measured, up to four million: a million then
+  take 0.78 ms per tick, against 0.53 ms for the same two systems on the
+  CPU.
+- Gravity among 16,384 bodies, every body against every other, takes 1.33 ms
   per tick on the GPU and 356 ms on one CPU thread.
+
+`nix run .#bench-gpu` measures the gravity and the million entities on the
+machine it runs on.
 
 What follows from this:
 

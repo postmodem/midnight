@@ -195,6 +195,12 @@ runs gravity among 16,384 bodies on the GPU and on the CPU and prints the
 time per tick of each. It then moves one million entities three ways and
 prints the time per tick of each: on the CPU; on the GPU with the data left
 there; and on the GPU with a CPU system reading the result in every tick.
+"On the CPU" is the same program with `MIDNIGHT_GPU=off`. Last, it prints
+the transfer plan of the two GPU cases beside the transfers
+`MIDNIGHT_GPU=stats` counted, and fails if they differ. On a machine with no
+hardware GPU it prints the CPU times only; `MIDNIGHT_GPU=software` in the
+environment lets the GPU runs use software Vulkan. The programs are in
+`bench/`.
 
 ## Working on it
 
@@ -221,6 +227,11 @@ MIDNIGHT_TEST_GPU=software cargo test    # in the dev shell, on software Vulkan
 nix run .#gpu-test                       # release builds on the machine's GPU
 ```
 
+A run that finds no device, or runs a GPU system on the CPU, fails. The
+software mode points programs at the Vulkan driver file named in
+`MIDNIGHT_TEST_SOFTWARE_ICD`, which the dev shell sets to Mesa's `llvmpipe`.
+The suite tests the compiler cargo built, or the one `MIDNIGHT_BIN` names.
+
 On Linux, `nix flake check` includes `checks.gpu`, which runs them on Mesa's
 software Vulkan inside the build sandbox.
 
@@ -235,7 +246,8 @@ tests/run/      programs that must print exactly NAME.out
 tests/fail/     programs that must be rejected with exactly NAME.err
 tests/panic/    programs that must stop with the run-time error in NAME.err
 tests/plan/     programs whose transfer plan must be exactly NAME.plan
-bench/          baseline.c, churn.12am, bench.sh
+bench/          baseline.c, churn.12am, bench.sh; gpu_gravity.12am,
+                gpu_move.12am, gpu_move_read.12am, bench-gpu.sh
 specs/          one spec per change
 ```
 
