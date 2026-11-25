@@ -1,0 +1,58 @@
+# Stores into compact fields that need no check, because the value's range
+# fits the field: `clamp`, `%` by a positive and by a negative number, `/`
+# by a positive number, arithmetic on compact fields, a compound `%=`,
+# `min`, `max`, `abs`, `-` of a `%` by a constant, and a conditional of two
+# literals. The inputs reach the ends of each range.
+LIMIT = 100
+
+component In
+  n: Int32
+  i16: Int16
+  i8: Int8
+  u8: UInt8
+end
+
+component Out
+  clamp: Int8
+  mod: UInt8
+  mod_negative: Int8
+  div: Int8
+  arith: Int16
+  mod_compound: UInt8
+  min_max: UInt8
+  abs: UInt16
+  neg: Int8
+  cond: Int8
+end
+
+gpu system store
+  each In, Out do |i, o|
+    o.clamp = (i.n * 3).clamp(-128, 127)
+    o.mod = i.n % 256
+    o.mod_negative = i.n % -128
+    o.div = i.i16 / 300
+    o.arith = i.i8 * 256 + i.u8
+    o.mod_compound = i.u8
+    o.mod_compound %= 7
+    o.min_max = max(min(i.n, 255), 0)
+    o.abs = i.i16.abs
+    o.neg = -(i.n % LIMIT)
+    o.cond = i.n > 0 ? 127 : -128
+  end
+end
+
+zero = Out(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+spawn In(-2147483648, -32768, -128, 0), zero
+spawn In(-1000, -32767, -127, 1), zero
+spawn In(-129, -301, -1, 6), zero
+spawn In(-1, -300, 0, 7), zero
+spawn In(0, -1, 1, 128), zero
+spawn In(1, 0, 126, 254), zero
+spawn In(255, 299, 127, 255), zero
+spawn In(256, 32767, 127, 255), zero
+spawn In(1000000000, 300, -128, 255), zero
+spawn In(2147483647, 32766, 64, 3), zero
+World.tick
+each In, Out do |i, o|
+  puts "#{i.n} #{i.i16} #{i.i8} #{i.u8}: #{o}"
+end

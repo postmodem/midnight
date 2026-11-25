@@ -1,0 +1,17 @@
+# A store into an Int8 field of a value clamped to -128..128: one more than
+# the field holds at the top, so the store is checked and fails for 128.
+# Expected: value does not fit in Int8
+component Level
+  wanted: Int32
+  level: Int8
+end
+
+gpu system set
+  each Level do |l|
+    l.level = l.wanted.clamp(-128, 128)
+  end
+end
+
+spawn Level(5, 0)
+spawn Level(1000, 0)
+World.tick

@@ -1,0 +1,17 @@
+# A store into a UInt8 field of a value modulo 257, which can be 256: the
+# store is checked and fails for it.
+# Expected: value does not fit in UInt8
+component Slot
+  n: Int32
+  slot: UInt8
+end
+
+gpu system set
+  each Slot do |s|
+    s.slot = s.n % 257
+  end
+end
+
+spawn Slot(3, 0)
+spawn Slot(513, 0)
+World.tick
