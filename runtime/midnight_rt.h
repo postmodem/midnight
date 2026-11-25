@@ -757,7 +757,10 @@ typedef struct MnGpuBlock {
 
 void mn_gpu_run(MnGpuBlock *block);
 
-/* Whether any column has a GPU copy. */
+/* True exactly while the GPU copy of some component column, of any table,
+ * is current, alone or together with the CPU copy. A GPU copy that is no
+ * longer current does not count, and neither does the copy of a table's
+ * handles (MN_GPU_ENTITIES). Always false when no device is in use. */
 extern bool mn_gpu_active;
 
 void mn_gpu_sync(MnTable *table, uint32_t component, bool write);
