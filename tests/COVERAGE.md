@@ -400,6 +400,7 @@ programs written from the specification.
 | `if`, `elsif`, `unless`, modifiers, `case` on `Int`, `Bool` and enum, the conditional operator, as statements and as values | `gpu_control_flow`, `gpu_statements`, `gpu_field_types` |
 | `while`, `until`, `loop`, `times`, `upto`, `downto` | `gpu_control_flow`, `gpu_next_keeps_writes`, `gpu_functions` |
 | `&&` and `||` evaluate their right side only when it decides the result | `gpu_control_flow` |
+| A division that the conditional operator, `&&` or `||` skips does not fail | `gpu_statements` |
 | Operands are evaluated left to right, also when a later one assigns to a variable an earlier one read | `gpu_statements` |
 | `rand` and `rand(n)`: the same in every run; different per entity, tick, draw and block; draws in called functions count | `gpu_rand`, `gpu_control_flow` |
 | `srand` changes the numbers; drawing in a GPU system does not move the ordinary generator | `gpu_rand` |
