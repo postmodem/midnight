@@ -1,0 +1,5 @@
+error: can't call `age_of` in a GPU system
+  --> tests/fail/gpu_call_takes_uint32.12am:19:14
+   |
+19 |     body.n = age_of(Cell(body.n, 1))
+   |              ^^^^^^^^^^^^^^^^^^^^^^^ its parameter `cell` is a `Cell`, whose field `mask` is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare that field `Int32`

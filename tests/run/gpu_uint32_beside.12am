@@ -1,0 +1,55 @@
+# A `UInt32` field beside what a GPU block reads. The block reads the other
+# fields of a resource that has one, and its query is filtered by a
+# component that has one. Ordinary code reads and writes the `UInt32` fields
+# between the block's runs, and builds and passes the struct that has one.
+struct Stamp
+  serial: UInt32
+  weight: Int32
+end
+
+resource Counter
+  total: UInt32 = 4000000000
+  step: Int = 3
+  scale: Float = 0.5
+end
+
+component Body
+  x: Float32
+  n: Int32
+end
+
+component Seen
+  stamp: Stamp
+end
+
+def weigh(stamp: Stamp) -> Int
+  stamp.weight * 2
+end
+
+gpu system advance
+  each Body, with: Seen do |body|
+    body.n += Counter.step
+    body.x += Counter.scale
+  end
+end
+
+system count
+  each Body, Seen do |body, seen|
+    Counter.total += body.n
+    seen.stamp = Stamp(Counter.total, weigh(seen.stamp) + 1)
+  end
+end
+
+spawn Body(1.0, 10), Seen(Stamp(1, 1))
+spawn Body(2.0, 20), Seen(Stamp(2, 2))
+spawn Body(3.0, 30)
+World.tick
+Counter.step = 5
+World.tick
+each Body, Seen do |body, seen|
+  puts body, seen
+end
+each Body, without: Seen do |body|
+  puts body
+end
+puts Counter.total

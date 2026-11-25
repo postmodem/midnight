@@ -1,0 +1,23 @@
+# expect: can't call `fresh` in a GPU system, because it returns a `Cell`, whose field `mask` is a `UInt32`; the body of `fresh` is not reported, and the ordinary call on line 23 is fine
+# at: line 19, the call `fresh(body.n)`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32
+  age: Int32
+end
+
+def fresh(age: Int) -> Cell
+  Cell(0, age)
+end
+
+gpu system mark
+  each Body do |body|
+    body.n = fresh(body.n).age
+  end
+end
+
+puts fresh(3)

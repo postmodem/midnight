@@ -1,0 +1,6 @@
+Body(x: 2.0, n: 18)
+Seen(stamp: Stamp(serial: 4000000054, weight: 7))
+Body(x: 3.0, n: 28)
+Seen(stamp: Stamp(serial: 4000000082, weight: 11))
+Body(x: 3.0, n: 30)
+4000000082

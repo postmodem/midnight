@@ -6,14 +6,15 @@
 //!
 //! - values that are numbers, `Bool`s, enums, entities and records of
 //!   those: no expression, local, parameter or return value is a string or
-//!   a list, or a record with one inside;
+//!   a list, or a record with one inside, or a record with a `UInt32`
+//!   field at any depth;
 //! - the statements `Expr`, `Let`, `Assign`, `CompoundAssign`, `While`,
 //!   `Count`, `Next`, and `Break` out of a loop inside the block; in a
 //!   function also `Return`; in a GPU block also at most one `Each`, among
 //!   the statements of the block itself;
-//! - places that start at a local, a constant, a resource field or `Time`,
-//!   written only when they start at a local that is neither a parameter
-//!   of the nested `each` nor an `Entity` parameter;
+//! - places that start at a local, a constant, `Time` or a resource field
+//!   that is not a `UInt32`, written only when they start at a local that
+//!   is neither a parameter of the nested `each` nor an `Entity` parameter;
 //! - calls of functions that do not recurse, and of the built-ins for
 //!   numbers, `Math`, `min`, `max`, `rand` and `rand(n)`;
 //! - `Int` literals that fit in 32 bits.
@@ -43,6 +44,9 @@ use super::{util, walk};
 
 /// The types of the values a GPU system works on.
 const GPU_VALUES: &str = "numbers, `Bool`s, enums, entities and structs of those";
+
+/// Why GPU code has no `UInt32`.
+const UNSIGNED: &str = "which the signed 32-bit `Int` of a GPU system can't hold";
 
 /// Why `break` and `return` have no meaning in a GPU block.
 const NO_ORDER: &str = "runs have no order, so there is nothing to stop";
@@ -140,13 +144,27 @@ struct Reach<'p> {
     path: Vec<FuncId>,
 }
 
-/// Why values of a type can't exist on the GPU.
-enum Unfit {
-    /// It is a string or a list.
-    Itself,
-    /// It is a record with a string or a list in it: the path of the
-    /// first such field and the name of its type.
-    Field { path: String, ty: String },
+/// Why values of a type can't exist on the GPU: it is a string, a list or
+/// a `UInt32`, or a record with one in it.
+struct Unfit {
+    /// For a record: the path of the first such field and the name of
+    /// its type.
+    field: Option<(String, String)>,
+    /// What can't exist is a `UInt32`.
+    unsigned: bool,
+}
+
+impl Unfit {
+    /// How a label that has named the value goes on: for a string or a
+    /// list with `rule`, for a `UInt32` with the reason and the hint,
+    /// where `it` stands for the field to declare.
+    fn because(&self, it: &str, rule: &str) -> String {
+        if self.unsigned {
+            format!(", {UNSIGNED}; declare {it} `Int32`")
+        } else {
+            format!("; {rule}")
+        }
+    }
 }
 
 /// Where a statement sits in a GPU block.
@@ -258,17 +276,23 @@ impl<'p> Pass<'p> {
         out
     }
 
-    /// Why values of a type can't exist on the GPU. `None` for numbers,
-    /// `Bool`s, enums, entities and plain records.
+    /// Why values of a type can't exist on the GPU. `None` for the other
+    /// numbers, `Bool`s, enums, entities and records of those.
     fn unfit(&self, ty: &Type) -> Option<Unfit> {
+        let unsigned = |ty: &Type| matches!(ty, Type::Compact(Compact::UInt32));
         match ty {
-            Type::String | Type::List(_) => Some(Unfit::Itself),
+            Type::String | Type::List(_) | Type::Compact(Compact::UInt32) => Some(Unfit {
+                field: None,
+                unsigned: unsigned(ty),
+            }),
             Type::Record(id) => {
-                let fields = self.fields(*id, &|ty| matches!(ty, Type::String | Type::List(_)));
+                let fields = self.fields(*id, &|ty| {
+                    matches!(ty, Type::String | Type::List(_)) || unsigned(ty)
+                });
                 let (path, field) = fields.into_iter().next()?;
-                Some(Unfit::Field {
-                    path,
-                    ty: self.type_name(field),
+                Some(Unfit {
+                    field: Some((path, self.type_name(field))),
+                    unsigned: unsigned(field),
                 })
             }
             _ => None,
@@ -276,14 +300,20 @@ impl<'p> Pass<'p> {
     }
 
     /// For a type whose values can't exist on the GPU, what a value of it
-    /// is: "a `String`", "a `Label`, whose field `text` is a `String`".
-    fn not_a_gpu_value(&self, ty: &Type) -> Option<String> {
+    /// is and why it can't: "a `String`; " and `rule`, "a `Label`, whose
+    /// field `text` is a `String`; " and `rule`, "a `Cell`, whose field
+    /// `mask` is a `UInt32`, " and the reason and the hint.
+    fn not_a_gpu_value(&self, ty: &Type, rule: &str) -> Option<String> {
         let name = self.type_name(ty);
-        Some(match self.unfit(ty)? {
-            Unfit::Itself => a(&name),
-            Unfit::Field { path, ty } => {
-                format!("{}, whose field `{path}` is {}", a(&name), a(&ty))
-            }
+        let unfit = self.unfit(ty)?;
+        Some(match &unfit.field {
+            None => format!("{}{}", a(&name), unfit.because("it", rule)),
+            Some((path, field)) => format!(
+                "{}, whose field `{path}` is {}{}",
+                a(&name),
+                a(field),
+                unfit.because("that field", rule)
+            ),
         })
     }
 
@@ -495,9 +525,7 @@ impl<'a, 'p> Walk<'a, 'p> {
                 Type::Float | Type::Int => format!(
                     "{fields}, 64 bits wide; the GPU holds numbers of at most 32 bits, so declare {them} `{ty}32`"
                 ),
-                Type::Compact(_) => format!(
-                    "{fields}, which the signed 32-bit `Int` of a GPU system can't hold; declare {them} `Int32`"
-                ),
+                Type::Compact(_) => format!("{fields}, {UNSIGNED}; declare {them} `Int32`"),
                 _ => format!(
                     "{fields}; a GPU system queries plain components, with no string or list at any depth"
                 ),
@@ -755,23 +783,24 @@ impl<'a, 'p> Walk<'a, 'p> {
     /// starts at a local is not looked at: the local's first value, its
     /// parameter type or its query term has been.
     fn place(&mut self, place: &'p Place) {
+        let reads = format!("a GPU system reads {GPU_VALUES}");
         let program = self.pass.program;
         match &place.kind {
             PlaceKind::Local(_) | PlaceKind::Time(_) => {}
             PlaceKind::Const(id) => {
                 let constant = &program.consts[id.0];
-                if let Some(what) = self.pass.not_a_gpu_value(&constant.ty) {
+                if let Some(what) = self.pass.not_a_gpu_value(&constant.ty, &reads) {
                     self.report(
                         format!("constant `{}` can't be read {}", constant.name, self.here()),
                         place.span,
-                        format!("it is {what}; a GPU system reads {GPU_VALUES}"),
+                        format!("it is {what}"),
                     );
                 }
             }
             PlaceKind::ResourceField(id, field) => {
                 let resource = &program.resources[id.0];
                 let field = &resource.fields[*field];
-                if let Some(what) = self.pass.not_a_gpu_value(&field.ty) {
+                if let Some(what) = self.pass.not_a_gpu_value(&field.ty, &reads) {
                     self.report(
                         format!(
                             "resource field `{}.{}` can't be read {}",
@@ -780,7 +809,7 @@ impl<'a, 'p> Walk<'a, 'p> {
                             self.here()
                         ),
                         place.span,
-                        format!("it is {what}; a GPU system reads {GPU_VALUES}"),
+                        format!("it is {what}"),
                     );
                 }
             }
@@ -830,11 +859,13 @@ impl<'a, 'p> Walk<'a, 'p> {
             _ => {
                 if let Some(unfit) = self.pass.unfit(&e.ty) {
                     let ty = self.pass.type_name(&e.ty);
-                    let label = match unfit {
-                        Unfit::Itself => format!("the GPU works on {GPU_VALUES}"),
-                        Unfit::Field { path, ty } => format!(
-                            "its field `{path}` is {}; the GPU works on {GPU_VALUES}",
-                            a(&ty)
+                    let works = format!("the GPU works on {GPU_VALUES}");
+                    let label = match &unfit.field {
+                        None => works,
+                        Some((path, field)) => format!(
+                            "its field `{path}` is {}{}",
+                            a(field),
+                            unfit.because("it", &works)
                         ),
                     };
                     self.report(
@@ -1008,10 +1039,11 @@ impl<'a, 'p> Walk<'a, 'p> {
         let callee = &program.funcs[func.0];
         let name = self.pass.func_name(func);
 
+        let takes = format!("a function called from a GPU system takes and returns {GPU_VALUES}");
         let mut unfit = None;
         for (i, param) in callee.params.iter().enumerate() {
             let local = &callee.body.locals[param.0];
-            if let Some(what) = self.pass.not_a_gpu_value(&local.ty) {
+            if let Some(what) = self.pass.not_a_gpu_value(&local.ty, &takes) {
                 unfit = Some(if i == 0 && callee.owner.is_some() {
                     format!("its receiver is {what}")
                 } else {
@@ -1021,18 +1053,12 @@ impl<'a, 'p> Walk<'a, 'p> {
             }
         }
         if unfit.is_none()
-            && let Some(what) = self.pass.not_a_gpu_value(&callee.ret)
+            && let Some(what) = self.pass.not_a_gpu_value(&callee.ret, &takes)
         {
             unfit = Some(format!("it returns {what}"));
         }
         if let Some(unfit) = unfit {
-            self.report(
-                format!("can't call `{name}` {}", self.here()),
-                span,
-                format!(
-                    "{unfit}; a function called from a GPU system takes and returns {GPU_VALUES}"
-                ),
-            );
+            self.report(format!("can't call `{name}` {}", self.here()), span, unfit);
             return;
         }
 

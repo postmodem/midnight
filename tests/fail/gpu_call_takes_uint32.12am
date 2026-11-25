@@ -1,0 +1,23 @@
+# expect: can't call `age_of` in a GPU system, because its parameter `cell` is a `Cell`, whose field `mask` is a `UInt32`; the constructor in the argument is part of the same report, and the ordinary call on line 23 is fine
+# at: line 19, the call `age_of(Cell(body.n, 1))`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32
+  age: Int32
+end
+
+def age_of(cell: Cell) -> Int
+  cell.age
+end
+
+gpu system mark
+  each Body do |body|
+    body.n = age_of(Cell(body.n, 1))
+  end
+end
+
+puts age_of(Cell(7, 3))

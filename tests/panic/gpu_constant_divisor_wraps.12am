@@ -1,0 +1,19 @@
+# A GPU block divides by a constant that is not zero, 4294967296, but wraps
+# to zero on the way into the block. The division fails there as it does
+# for any zero divisor.
+# Expected: division by zero
+SPAN = 2 ** 34 / 4
+
+component Share
+  total: Int32
+  each_gets: Int32
+end
+
+gpu system split
+  each Share do |share|
+    share.each_gets = share.total / SPAN
+  end
+end
+
+spawn Share(10, 0)
+World.tick

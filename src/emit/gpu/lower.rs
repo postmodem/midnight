@@ -1006,7 +1006,8 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             Compact::UInt8 => helpers::TO_UINT8,
             Compact::UInt16 => helpers::TO_UINT16,
             // Every 32-bit `Int` fits in 32 bits.
-            Compact::Float32 | Compact::Int32 | Compact::UInt32 => return value.e,
+            Compact::Float32 | Compact::Int32 => return value.e,
+            Compact::UInt32 => unreachable!("the checker keeps `UInt32` fields out of GPU code"),
         };
         let (low, high) = compact.int_range().expect("an integer type");
         let fits = match (&value.e, source) {
@@ -1288,7 +1289,14 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                         Expr::I32(literal) => literal != 0,
                         _ => false,
                     };
-                    if safe {
+                    if safe
+                        && let (Expr::I32(a), Expr::I32(b)) = (&left.e, &right.e)
+                        && let Some(value) = analysis::fold_int(op, i64::from(*a), i64::from(*b))
+                    {
+                        // The low 32 bits of the 64-bit result are the
+                        // 32-bit result.
+                        Val::literal(Expr::I32(value as i32), Ty::I32)
+                    } else if safe {
                         self.helper(plain, vec![left, right], Ty::I32)
                     } else {
                         let site = self.lo.site(span, message);

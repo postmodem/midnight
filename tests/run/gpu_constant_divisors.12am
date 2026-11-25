@@ -1,0 +1,61 @@
+# A GPU block divides by constants that are themselves made by `/`, `%` and
+# `**`. A constant is worked out at 64 bits and wraps to 32 bits on the way
+# into the block, so `HUGE`, 2147483655, is -2147483641 there; the same
+# operators between constants inside the block work at 32 bits. The
+# ordinary system does the same sums at 64 bits.
+WIDTH = 64
+ROWS = WIDTH / 4
+ODD = ROWS % 5 + 2 ** 3
+DOWN = -WIDTH / 10
+HUGE = 2 ** 40 / 2 ** 9 + 7
+
+component Cell
+  n: Int32
+  by_rows: Int32
+  mod_odd: Int32
+  down: Int32
+  mod_huge: Int32
+  both: Int32
+end
+
+component Wide
+  n: Int
+  by_rows: Int
+  mod_odd: Int
+  down: Int
+  mod_huge: Int
+  both: Int
+end
+
+gpu system split
+  each Cell do |cell|
+    cell.by_rows = cell.n / ROWS
+    cell.mod_odd = cell.n % ODD
+    cell.down = cell.n / DOWN + cell.n % DOWN
+    cell.mod_huge = cell.n % HUGE
+    cell.both = cell.n / (WIDTH / 8) + 100 % (2 ** 3 - 1)
+  end
+end
+
+system split_wide
+  each Wide do |wide|
+    wide.by_rows = wide.n / ROWS
+    wide.mod_odd = wide.n % ODD
+    wide.down = wide.n / DOWN + wide.n % DOWN
+    wide.mod_huge = wide.n % HUGE
+    wide.both = wide.n / (WIDTH / 8) + 100 % (2 ** 3 - 1)
+  end
+end
+
+[100, -100, 7, 0, -1].each do |n|
+  spawn Cell(n, 0, 0, 0, 0, 0)
+  spawn Wide(n, 0, 0, 0, 0, 0)
+end
+World.tick
+puts ROWS, ODD, DOWN, HUGE
+each Cell do |cell|
+  puts cell
+end
+each Wide do |wide|
+  puts wide
+end

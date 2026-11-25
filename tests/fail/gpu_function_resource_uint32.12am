@@ -1,0 +1,22 @@
+# expect: resource field `Config.mask` can't be read in a function called from a GPU system, because it is a `UInt32`; the ordinary call on line 22 is fine
+# at: line 13, the place `Config.mask`; note at line 18, the call `masked(body.n)`
+
+component Body
+  n: Int32
+end
+
+resource Config
+  mask: UInt32 = 7
+end
+
+def masked(n: Int) -> Int
+  n % Config.mask
+end
+
+gpu system mark
+  each Body do |body|
+    body.n = masked(body.n)
+  end
+end
+
+puts masked(9)
