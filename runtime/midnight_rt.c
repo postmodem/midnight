@@ -6,6 +6,15 @@
 
 #include "midnight_rt.h"
 
+/* MN_GPU_SYSTEMS is defined when the program declares a GPU system, and
+ * MN_GPU as well when midnight_gpu.c is compiled with it. */
+#ifdef MN_GPU
+#include "midnight_gpu.h"
+#ifndef MN_GPU_SYSTEMS
+#define MN_GPU_SYSTEMS
+#endif
+#endif
+
 #include <errno.h>
 #include <math.h>
 #include <stdarg.h>
@@ -20,8 +29,11 @@ MnTime mn_time = {0, 1.0 / 60, 0.0};
 
 /* ---- Leaving the program ----------------------------------------------- */
 
+/* mn_leave, mn_out_of_memory, mn_malloc, mn_calloc and mn_realloc are also
+ * called from midnight_gpu.c, which finds them in midnight_gpu.h. */
+
 /* Flushes both standard streams and ends the process at once. */
-static _Noreturn void mn_leave(int status) {
+_Noreturn void mn_leave(int status) {
     fflush(stdout);
     fflush(stderr);
     _Exit(status);
@@ -42,25 +54,25 @@ _Noreturn void mn_exit(int64_t status) { mn_leave((int)(status & 0xff)); }
 
 /* ---- Memory -------------------------------------------------------------- */
 
-static _Noreturn void mn_out_of_memory(void) {
+_Noreturn void mn_out_of_memory(void) {
     fflush(stdout);
     fputs("midnight: out of memory\n", stderr);
     abort();
 }
 
-static void *mn_malloc(size_t size) {
+void *mn_malloc(size_t size) {
     void *memory = malloc(size ? size : 1);
     if (!memory) mn_out_of_memory();
     return memory;
 }
 
-static void *mn_calloc(size_t count, size_t size) {
+void *mn_calloc(size_t count, size_t size) {
     void *memory = calloc(count ? count : 1, size ? size : 1);
     if (!memory) mn_out_of_memory();
     return memory;
 }
 
-static void *mn_realloc(void *memory, size_t size) {
+void *mn_realloc(void *memory, size_t size) {
     memory = realloc(memory, size ? size : 1);
     if (!memory) mn_out_of_memory();
     return memory;
@@ -180,6 +192,7 @@ static uint32_t table_create(const uint32_t *set, uint32_t set_count,
     table->data_count = 0;
     table->drop_count = 0;
     table->hash = hash;
+    table->gpu = NULL;
     for (size_t c = 0; c < component_count; c++) {
         table->columns[c] = NULL;
         table->add_edges[c] = MN_NONE;
@@ -328,6 +341,17 @@ static void table_grow(MnTable *table) {
     table->capacity = capacity;
 }
 
+/* Call before reading a table's arrays in order to change its rows, and
+ * before adding, removing or moving a row: makes the CPU copy of every
+ * column the only current one. */
+static inline void table_changing(MnTable *table) {
+#ifdef MN_GPU
+    if (table->gpu) mn_gpu_reclaim(table);
+#else
+    (void)table;
+#endif
+}
+
 /* Adds a row for `e` and returns its index. The row's values are not
  * initialised. */
 static inline uint32_t table_append(MnTable *table, MnEntity e) {
@@ -379,6 +403,7 @@ static void spawn_now(MnEntity e, MnBundle *bundle, void *const *values) {
     const MnComponentInfo *info = w->program->components;
     uint32_t id = bundle_table(w->tables[0], bundle);
     MnTable *table = w->tables[id];
+    table_changing(table);
     uint32_t row = table_append(table, e);
     MnSlot *slot = &w->slots[e.index];
     slot->table = id;
@@ -411,7 +436,9 @@ static void add_now(MnEntity e, MnBundle *bundle, void *const *values) {
     uint32_t id = bundle_table(from, bundle);
     MnTable *to = w->tables[id];
     uint32_t to_row = from_row;
+    table_changing(from);
     if (to != from) {
+        table_changing(to);
         to_row = table_append(to, e);
         for (uint32_t i = 0; i < from->data_count; i++) {
             uint32_t c = from->data[i];
@@ -451,6 +478,8 @@ static void remove_now(MnEntity e, const uint32_t *components,
     uint32_t id = table_without(from, components, count);
     if (id == from->id) return;
     MnTable *to = w->tables[id];
+    table_changing(from);
+    table_changing(to);
     uint32_t to_row = table_append(to, e);
     for (uint32_t i = 0; i < to->data_count; i++) {
         uint32_t c = to->data[i];
@@ -475,6 +504,7 @@ static void despawn_now(MnEntity e) {
     MnSlot *slot = &w->slots[e.index];
     if (slot->table != MN_NO_TABLE) {
         MnTable *table = w->tables[slot->table];
+        table_changing(table);
         if (table->drop_count != 0) table_drop_row(table, slot->row);
         table_remove(table, slot->row);
         w->live_entities--;
@@ -737,12 +767,19 @@ static void events_discard(uint32_t event, uint64_t until) {
 
 /* ---- Systems and ticks --------------------------------------------------- */
 
+#ifdef MN_GPU_SYSTEMS
+static void gpu_tick_end(void);
+#endif
+
 static void tick(void) {
     MnWorld *w = &mn_world;
     const MnProgram *program = w->program;
     w->in_tick = true;
     for (uint32_t i = 0; i < program->system_count; i++) program->systems[i]();
     w->in_tick = false;
+#ifdef MN_GPU_SYSTEMS
+    gpu_tick_end();
+#endif
     mn_time.tick++;
     mn_time.elapsed += mn_time.dt;
     for (uint32_t i = 0; i < program->event_count; i++) {
@@ -1573,26 +1610,53 @@ void mn_sleep(double seconds) {
 
 bool mn_gpu_active = false;
 
+uint64_t mn_gpu_uploads;
+uint64_t mn_gpu_downloads;
+
+#ifndef MN_GPU
 /* No column has a GPU copy. */
 void mn_gpu_sync(MnTable *table, uint32_t component, bool write) {
     (void)table;
     (void)component;
     (void)write;
 }
+#endif
+
+/* The words of MIDNIGHT_GPU. */
+static struct {
+    bool off;
+    bool software;
+    bool info;
+    bool stats;
+} gpu_options;
 
 /* What mn_gpu_run keeps for a block between calls. */
 typedef struct MnGpuScratch {
+    MnGpuBlock *block;
+    /* The block that ran for the first time before this one. */
+    struct MnGpuScratch *next;
     uint32_t *uniform;
     void **outer;
     const void **inner;
     /* One buffer per inner column, grown as needed. */
     void **snapshots;
     size_t *snapshot_sizes;
+    /* What midnight_gpu.c keeps for the block. */
+    void *device;
+    /* The `info` line that says why the block runs on the CPU has been
+     * printed. */
+    bool reported;
 } MnGpuScratch;
+
+/* The block that ran for the first time most recently. */
+static MnGpuScratch *gpu_blocks;
 
 static MnGpuScratch *gpu_scratch(MnGpuBlock *block) {
     if (block->state) return block->state;
     MnGpuScratch *scratch = mn_calloc(1, sizeof *scratch);
+    scratch->block = block;
+    scratch->next = gpu_blocks;
+    gpu_blocks = scratch;
     scratch->uniform = mn_calloc(block->uniform_words, sizeof(uint32_t));
     scratch->outer = mn_calloc(block->outer_count + 1, sizeof(void *));
     scratch->inner = mn_calloc(block->inner_count + 1, sizeof(void *));
@@ -1621,7 +1685,6 @@ static bool gpu_writes(const MnGpuBlock *block, uint32_t component) {
 static uint32_t gpu_snapshot(const MnGpuBlock *block, MnGpuScratch *scratch) {
     MnQuery *query = block->inner;
     if (!query) return 0;
-    mn_query_update(query);
     uint64_t rows = 0;
     uint32_t populated = 0;
     const MnTable *only = NULL;
@@ -1661,11 +1724,11 @@ void mn_gpu_run(MnGpuBlock *block) {
     MnGpuScratch *scratch = gpu_scratch(block);
     MnQuery *query = block->outer;
     mn_query_update(query);
+    if (block->inner) mn_query_update(block->inner);
 
     uint32_t *uniform = scratch->uniform;
     float dt = (float)mn_time.dt;
     float elapsed = (float)mn_time.elapsed;
-    uniform[1] = gpu_snapshot(block, scratch);
     uniform[2] = mn_gpu_seed;
     uniform[3] = block->id;
     uniform[4] = (uint32_t)mn_time.tick;
@@ -1674,6 +1737,18 @@ void mn_gpu_run(MnGpuBlock *block) {
     uniform[7] = 0;
     if (block->fill) block->fill(uniform);
 
+    const char *reason = "no device";
+#ifdef MN_GPU
+    reason = mn_gpu_device_run(block, uniform, &scratch->device);
+    if (!reason) return;
+#endif
+    if (gpu_options.info && !scratch->reported) {
+        scratch->reported = true;
+        fprintf(stderr, "midnight: gpu: %s (each %u) runs on the CPU: %s\n",
+                block->system, (unsigned)block->each, reason);
+    }
+
+    uniform[1] = gpu_snapshot(block, scratch);
     uint32_t error = UINT32_MAX;
     MnGpuRun run = {uniform, scratch->outer, scratch->inner, &error};
     for (uint32_t t = 0; t < query->table_count; t++) {
@@ -1691,6 +1766,87 @@ void mn_gpu_run(MnGpuBlock *block) {
     }
 }
 
+#ifdef MN_GPU_SYSTEMS
+/* Reads MIDNIGHT_GPU, chooses the device and prints the `info` line. */
+static void gpu_start(void) {
+    static const struct {
+        const char *word;
+        bool *option;
+    } words[] = {
+        {"off", &gpu_options.off},
+        {"software", &gpu_options.software},
+        {"info", &gpu_options.info},
+        {"stats", &gpu_options.stats},
+    };
+    const char *list = getenv("MIDNIGHT_GPU");
+    while (list && *list != '\0') {
+        size_t len = strcspn(list, ",");
+        size_t i = 0;
+        while (i < 4 && (strlen(words[i].word) != len ||
+                         memcmp(words[i].word, list, len) != 0)) {
+            i++;
+        }
+        if (i < 4) {
+            *words[i].option = true;
+        } else if (len != 0) {
+            fprintf(stderr, "midnight: MIDNIGHT_GPU: unknown word `%.*s`\n",
+                    (int)len, list);
+        }
+        list += len;
+        if (*list == ',') list++;
+    }
+
+    const char *device = NULL;
+#ifdef MN_GPU
+    if (!gpu_options.off) device = mn_gpu_device_start(gpu_options.software);
+#endif
+    if (gpu_options.info) {
+        fprintf(stderr, "midnight: gpu: %s\n", device ? device : "no device");
+    }
+}
+
+/* Waits for the device and prints the `stats` line of the tick that is
+ * ending. */
+static void gpu_tick_end(void) {
+#ifdef MN_GPU
+    mn_gpu_device_wait();
+#endif
+    if (!gpu_options.stats) return;
+    fflush(stdout);
+    fprintf(stderr, "midnight: gpu: tick %lld: %llu upload%s, %llu download%s\n",
+            (long long)mn_time.tick, (unsigned long long)mn_gpu_uploads,
+            mn_gpu_uploads == 1 ? "" : "s",
+            (unsigned long long)mn_gpu_downloads,
+            mn_gpu_downloads == 1 ? "" : "s");
+    mn_gpu_uploads = 0;
+    mn_gpu_downloads = 0;
+}
+#endif
+
+/* Releases what mn_gpu_run kept for every block, then the device. */
+static void gpu_finish(void) {
+    while (gpu_blocks) {
+        MnGpuScratch *scratch = gpu_blocks;
+        gpu_blocks = scratch->next;
+#ifdef MN_GPU
+        mn_gpu_device_forget(scratch->device);
+#endif
+        for (uint32_t i = 0; i < scratch->block->inner_count; i++) {
+            free(scratch->snapshots[i]);
+        }
+        free(scratch->uniform);
+        free(scratch->outer);
+        free(scratch->inner);
+        free(scratch->snapshots);
+        free(scratch->snapshot_sizes);
+        scratch->block->state = NULL;
+        free(scratch);
+    }
+#ifdef MN_GPU
+    mn_gpu_device_finish();
+#endif
+}
+
 /* ---- Start and finish ---------------------------------------------------- */
 
 void mn_start(const MnProgram *program) {
@@ -1706,6 +1862,9 @@ void mn_start(const MnProgram *program) {
     w->table_map = mn_calloc(w->table_map_capacity, sizeof(uint32_t));
     table_for_set(w->scratch_set, 0);
     mn_srand(MN_DEFAULT_SEED);
+#ifdef MN_GPU_SYSTEMS
+    gpu_start();
+#endif
     clock_gettime(CLOCK_MONOTONIC, &mn_started);
 }
 
@@ -1757,6 +1916,7 @@ static void world_destroy(void) {
 
 void mn_finish(void) {
     fflush(stdout);
+    gpu_finish();
 #ifdef MN_DEBUG
     world_destroy();
     if (mn_live_buffers != 0) {

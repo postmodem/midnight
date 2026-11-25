@@ -1,0 +1,976 @@
+/*
+ * The part of the Midnight runtime that talks to wgpu-native. See
+ * midnight_gpu.h for what each function promises, and the GPU systems
+ * section of midnight_rt.h for how generated code describes a block.
+ */
+
+#include "midnight_gpu.h"
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <webgpu/webgpu.h>
+#include <webgpu/wgpu.h>
+
+#define COLUMN_USAGE                                                           \
+    (WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc | WGPUBufferUsage_CopyDst)
+#define SNAPSHOT_USAGE (WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst)
+#define UNIFORM_USAGE (WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst)
+#define READBACK_USAGE (WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst)
+
+/* The largest number of workgroups a dispatch asks for in one dimension:
+ * MN_GPU_ROW_SPAN rows. */
+#define MAX_GROUPS 65535u
+
+/* A wgpu buffer. No two buffers ever made share a serial, so a bind group
+ * built from a buffer is still good exactly when the serial it recorded is
+ * the buffer's. */
+typedef struct Buffer {
+    WGPUBuffer handle;
+    uint64_t size;
+    uint64_t serial;
+} Buffer;
+
+enum { ON_CPU, ON_GPU, ON_BOTH };
+
+/* The GPU copy of one column of one table. */
+typedef struct Column {
+    uint32_t component; /* a component id, or MN_GPU_ENTITIES */
+    uint32_t size;      /* bytes per row */
+    /* Which copy is current. */
+    uint8_t where;
+    Buffer buffer;
+    /* Changes whenever the contents of `buffer` do. */
+    uint64_t version;
+} Column;
+
+struct MnGpuTable {
+    Column *columns;
+    uint32_t count;
+    uint32_t capacity;
+    /* How many columns are not ON_CPU. */
+    uint32_t current;
+};
+
+static struct {
+    WGPUInstance instance;
+    WGPUDevice device;
+    WGPUQueue queue;
+    char name[160];
+    /* The largest buffer, and the largest that can be bound for a shader
+     * to read. */
+    uint64_t max_buffer;
+    uint64_t max_binding;
+    uint64_t max_uniform;
+    uint32_t max_storage_buffers;
+    uint32_t max_groups;
+    /* The last number given to a buffer or to a column's contents. */
+    uint64_t serial;
+    /* How many component columns, over all tables, are not ON_CPU. */
+    uint64_t current;
+    /* Where columns are copied to be read back. */
+    Buffer readback;
+    /* Whether anything has been submitted since the last wait. */
+    bool pending;
+    /* Set while the device is released, which reports it lost. */
+    bool finishing;
+    /* Working space: a snapshot put together in CPU memory, and the
+     * description of a snapshot's contents. */
+    unsigned char *bytes;
+    uint64_t bytes_capacity;
+    uint64_t *contents;
+    uint32_t contents_capacity;
+    /* Why the last block refused runs on the CPU. */
+    char reason[200];
+} gpu;
+
+/* ---- Sanitizers ---------------------------------------------------------- */
+
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define MN_GPU_LEAK_CHECKED
+#endif
+#elif defined(__SANITIZE_ADDRESS__)
+#define MN_GPU_LEAK_CHECKED
+#endif
+
+#ifdef MN_GPU_LEAK_CHECKED
+/* Read by LeakSanitizer. A GPU driver is a library that releasing the
+ * device unloads, and some leave memory allocated behind them. A leak is
+ * passed over when its allocation came through code that is no longer
+ * loaded when the program ends; every other leak is still reported. */
+const char *__lsan_default_suppressions(void);
+const char *__lsan_default_suppressions(void) {
+    return "leak:<unknown module>\n";
+}
+
+/* Keeps the table of suppressions used off standard error. */
+const char *__lsan_default_options(void);
+const char *__lsan_default_options(void) { return "print_suppressions=0"; }
+#endif
+
+/* ---- Failures ------------------------------------------------------------ */
+
+static _Noreturn void gpu_fail(const char *format, ...)
+    __attribute__((format(printf, 1, 2)));
+
+static _Noreturn void gpu_fail(const char *format, ...) {
+    fflush(stdout);
+    fputs("midnight: GPU error: ", stderr);
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputc('\n', stderr);
+    mn_leave(70);
+}
+
+static WGPUStringView view(const char *text) {
+    return (WGPUStringView){text, WGPU_STRLEN};
+}
+
+/* The length of a string view's text without the white space at its end. */
+static int view_length(WGPUStringView text) {
+    if (!text.data) return 0;
+    size_t length = text.length == WGPU_STRLEN ? strlen(text.data) : text.length;
+    while (length > 0 && (text.data[length - 1] == '\n' ||
+                          text.data[length - 1] == ' ')) {
+        length--;
+    }
+    return length > INT32_MAX ? INT32_MAX : (int)length;
+}
+
+static void on_error(WGPUDevice const *device, WGPUErrorType type,
+                     WGPUStringView message, void *unused1, void *unused2) {
+    (void)device;
+    (void)type;
+    (void)unused1;
+    (void)unused2;
+    gpu_fail("%.*s", view_length(message), message.data ? message.data : "");
+}
+
+static void on_lost(WGPUDevice const *device, WGPUDeviceLostReason reason,
+                    WGPUStringView message, void *unused1, void *unused2) {
+    (void)device;
+    (void)reason;
+    (void)unused1;
+    (void)unused2;
+    if (gpu.finishing) return;
+    gpu_fail("the device was lost: %.*s", view_length(message),
+             message.data ? message.data : "");
+}
+
+/* ---- Buffers ------------------------------------------------------------- */
+
+static uint64_t round4(uint64_t bytes) { return (bytes + 3) & ~(uint64_t)3; }
+
+static void buffer_drop(Buffer *buffer) {
+    if (buffer->handle) {
+        wgpuBufferDestroy(buffer->handle);
+        wgpuBufferRelease(buffer->handle);
+    }
+    buffer->handle = NULL;
+    buffer->size = 0;
+    buffer->serial = 0;
+}
+
+/* Replaces `buffer` with a new, zeroed buffer of `size` bytes. */
+static void buffer_make(Buffer *buffer, uint64_t size, WGPUBufferUsage usage) {
+    buffer_drop(buffer);
+    WGPUBufferDescriptor descriptor = {0};
+    descriptor.usage = usage;
+    descriptor.size = size;
+    buffer->handle = wgpuDeviceCreateBuffer(gpu.device, &descriptor);
+    if (!buffer->handle) {
+        gpu_fail("can't create a buffer of %llu bytes", (unsigned long long)size);
+    }
+    buffer->size = size;
+    buffer->serial = ++gpu.serial;
+}
+
+/* Writes `bytes` bytes at the start of a buffer, and zeros up to the next
+ * whole word. */
+static void buffer_write(const Buffer *buffer, const void *data,
+                         uint64_t bytes) {
+    uint64_t whole = bytes & ~(uint64_t)3;
+    if (whole != 0) {
+        wgpuQueueWriteBuffer(gpu.queue, buffer->handle, 0, data, (size_t)whole);
+    }
+    if (bytes != whole) {
+        unsigned char last[4] = {0, 0, 0, 0};
+        memcpy(last, (const unsigned char *)data + whole, (size_t)(bytes - whole));
+        wgpuQueueWriteBuffer(gpu.queue, buffer->handle, whole, last, 4);
+    }
+}
+
+static void submit(WGPUCommandEncoder encoder) {
+    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
+    wgpuQueueSubmit(gpu.queue, 1, &commands);
+    wgpuCommandBufferRelease(commands);
+    wgpuCommandEncoderRelease(encoder);
+    gpu.pending = true;
+}
+
+void mn_gpu_device_wait(void) {
+    if (!gpu.pending) return;
+    wgpuDevicePoll(gpu.device, true, NULL);
+    gpu.pending = false;
+}
+
+static void on_map(WGPUMapAsyncStatus status, WGPUStringView message,
+                   void *done, void *unused) {
+    (void)message;
+    (void)unused;
+    *(int *)done = status == WGPUMapAsyncStatus_Success ? 1 : -1;
+}
+
+/* Waits for everything submitted, then returns the first `bytes` bytes of
+ * a readback buffer. Unmap the buffer when they have been read. */
+static const void *buffer_read(const Buffer *buffer, uint64_t bytes) {
+    int done = 0;
+    WGPUBufferMapCallbackInfo callback = {0};
+    callback.mode = WGPUCallbackMode_AllowProcessEvents;
+    callback.callback = on_map;
+    callback.userdata1 = &done;
+    wgpuBufferMapAsync(buffer->handle, WGPUMapMode_Read, 0, (size_t)bytes,
+                       callback);
+    while (done == 0) wgpuDevicePoll(gpu.device, true, NULL);
+    gpu.pending = false;
+    if (done < 0) gpu_fail("can't read a buffer back");
+    return wgpuBufferGetConstMappedRange(buffer->handle, 0, (size_t)bytes);
+}
+
+/* ---- Column copies ------------------------------------------------------- */
+
+static void *column_data(const MnTable *table, const Column *column) {
+    if (column->component == MN_GPU_ENTITIES) return table->entities;
+    return table->columns[column->component];
+}
+
+static const char *component_name(uint32_t component) {
+    if (component == MN_GPU_ENTITIES) return "Entity";
+    return mn_world.program->components[component].name;
+}
+
+static Column *column_find(const MnTable *table, uint32_t component) {
+    const struct MnGpuTable *copies = table->gpu;
+    if (!copies) return NULL;
+    for (uint32_t i = 0; i < copies->count; i++) {
+        if (copies->columns[i].component == component) return &copies->columns[i];
+    }
+    return NULL;
+}
+
+/* The GPU copy of a column a block names, created if new. The address is
+ * good until the next call for the same table. */
+static Column *column_for(MnTable *table, const MnGpuColumn *named) {
+    Column *column = column_find(table, named->component);
+    if (column) return column;
+    struct MnGpuTable *copies = table->gpu;
+    if (!copies) {
+        copies = mn_calloc(1, sizeof *copies);
+        table->gpu = copies;
+    }
+    if (copies->count == copies->capacity) {
+        uint32_t capacity = copies->capacity ? copies->capacity * 2 : 4;
+        copies->columns =
+            mn_realloc(copies->columns, (size_t)capacity * sizeof(Column));
+        copies->capacity = capacity;
+    }
+    column = &copies->columns[copies->count++];
+    memset(column, 0, sizeof *column);
+    column->component = named->component;
+    column->size = named->size;
+    column->where = ON_CPU;
+    return column;
+}
+
+/* Records which copy of a column is current, and keeps mn_gpu_active true
+ * exactly while some component column has a current GPU copy. */
+static void column_set(MnTable *table, Column *column, uint8_t where) {
+    bool was = column->where != ON_CPU;
+    bool is = where != ON_CPU;
+    column->where = where;
+    if (was == is) return;
+    bool counted = column->component != MN_GPU_ENTITIES;
+    if (is) {
+        table->gpu->current++;
+        if (counted) gpu.current++;
+    } else {
+        table->gpu->current--;
+        if (counted) gpu.current--;
+    }
+    mn_gpu_active = gpu.current != 0;
+}
+
+/* Makes the GPU copy current: copies the column up if only the CPU copy
+ * is, into a buffer that has room for the table's rows. */
+static void column_upload(MnTable *table, Column *column) {
+    if (column->where != ON_CPU) return;
+    uint64_t bytes = (uint64_t)table->count * column->size;
+    uint64_t need = round4(bytes);
+    if (column->buffer.size < need) {
+        uint64_t roomy = round4((uint64_t)table->capacity * column->size);
+        buffer_make(&column->buffer, roomy <= gpu.max_binding ? roomy : need,
+                    COLUMN_USAGE);
+    }
+    buffer_write(&column->buffer, column_data(table, column), bytes);
+    column->version = ++gpu.serial;
+    column_set(table, column, ON_BOTH);
+    if (column->component != MN_GPU_ENTITIES) mn_gpu_uploads++;
+}
+
+/* Copies columns of one table whose GPU copy is the only current one back
+ * to the table's arrays, in as few submissions as the largest buffer
+ * allows. Both copies are current afterwards. */
+static void columns_download(MnTable *table, Column **columns, uint32_t count) {
+    uint64_t rows = table->count;
+    uint32_t first = 0;
+    while (first < count) {
+        uint64_t total = 0;
+        uint32_t end = first;
+        while (end < count) {
+            uint64_t bytes = round4(rows * columns[end]->size);
+            if (end > first && total + bytes > gpu.max_buffer) break;
+            total += bytes;
+            end++;
+        }
+        if (total != 0) {
+            if (gpu.readback.size < total) {
+                buffer_make(&gpu.readback, total, READBACK_USAGE);
+            }
+            WGPUCommandEncoder encoder =
+                wgpuDeviceCreateCommandEncoder(gpu.device, NULL);
+            uint64_t offset = 0;
+            for (uint32_t i = first; i < end; i++) {
+                uint64_t bytes = round4(rows * columns[i]->size);
+                wgpuCommandEncoderCopyBufferToBuffer(
+                    encoder, columns[i]->buffer.handle, 0, gpu.readback.handle,
+                    offset, bytes);
+                offset += bytes;
+            }
+            submit(encoder);
+            const unsigned char *from = buffer_read(&gpu.readback, total);
+            for (uint32_t i = first; i < end; i++) {
+                uint64_t bytes = rows * columns[i]->size;
+                memcpy(column_data(table, columns[i]), from, (size_t)bytes);
+                from += round4(bytes);
+            }
+            wgpuBufferUnmap(gpu.readback.handle);
+            mn_gpu_downloads += end - first;
+        }
+        for (uint32_t i = first; i < end; i++) {
+            column_set(table, columns[i], ON_BOTH);
+        }
+        first = end;
+    }
+}
+
+void mn_gpu_sync(MnTable *table, uint32_t component, bool write) {
+    Column *column = column_find(table, component);
+    if (!column) return;
+    if (column->where == ON_GPU) columns_download(table, &column, 1);
+    if (write) column_set(table, column, ON_CPU);
+}
+
+void mn_gpu_reclaim(MnTable *table) {
+    struct MnGpuTable *copies = table->gpu;
+    if (!copies || copies->current == 0) return;
+    Column *batch[16];
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < copies->count; i++) {
+        if (copies->columns[i].where != ON_GPU) continue;
+        batch[count++] = &copies->columns[i];
+        if (count == 16) {
+            columns_download(table, batch, count);
+            count = 0;
+        }
+    }
+    if (count != 0) columns_download(table, batch, count);
+    for (uint32_t i = 0; i < copies->count; i++) {
+        column_set(table, &copies->columns[i], ON_CPU);
+    }
+}
+
+/* ---- Blocks -------------------------------------------------------------- */
+
+/* What a block runs one table of its outer query with. */
+typedef struct Target {
+    Buffer uniform;
+    WGPUBindGroup group;
+    /* The serial of the buffer at each binding of `group`. */
+    uint64_t *serials;
+} Target;
+
+/* The snapshot of one inner column, when it is a copy. */
+typedef struct Snapshot {
+    Buffer buffer;
+    /* What the buffer holds: for each table with rows, in the query's
+     * order, the table's id, its row count and its column's version. */
+    uint64_t *contents;
+    uint32_t content_count;
+    uint32_t content_capacity;
+} Snapshot;
+
+/* What the device keeps for a block. */
+typedef struct Block {
+    WGPUBindGroupLayout layout;
+    WGPUComputePipeline pipeline;
+    /* The uniform words, the outer columns, the inner columns and the
+     * error word. */
+    uint32_t binding_count;
+    /* One per table of the outer query, in the query's order. */
+    Target *targets;
+    uint32_t target_count;
+    /* One per inner column. */
+    Snapshot *snapshots;
+    uint32_t snapshot_count;
+    /* The error word, and where it is copied to be read. */
+    Buffer error;
+    Buffer error_read;
+    /* Working space: the buffer for each binding of the table being run. */
+    Buffer *bound;
+    WGPUBindGroupEntry *entries;
+} Block;
+
+static bool block_writes(const MnGpuBlock *block, uint32_t component) {
+    for (uint32_t i = 0; i < block->outer_count; i++) {
+        const MnGpuColumn *column = &block->outer_columns[i];
+        if (column->component == component && column->write) return true;
+    }
+    return false;
+}
+
+static uint32_t block_storage_buffers(const MnGpuBlock *block) {
+    return block->outer_count + block->inner_count + (block->fallible ? 1 : 0);
+}
+
+/* Why the device cannot run the block as its tables are now, in
+ * gpu.reason, or NULL when it can. */
+static const char *block_unfit(const MnGpuBlock *block) {
+    char *reason = gpu.reason;
+    size_t room = sizeof gpu.reason;
+    uint32_t storage = block_storage_buffers(block);
+    if (storage > gpu.max_storage_buffers) {
+        snprintf(reason, room,
+                 "it binds %u storage buffers and the device binds at most %u",
+                 (unsigned)storage, (unsigned)gpu.max_storage_buffers);
+        return reason;
+    }
+    uint64_t uniform_bytes = (uint64_t)block->uniform_words * 4;
+    if (uniform_bytes > gpu.max_uniform) {
+        snprintf(reason, room,
+                 "its resources and constants take %llu bytes and the device "
+                 "binds at most %llu",
+                 (unsigned long long)uniform_bytes,
+                 (unsigned long long)gpu.max_uniform);
+        return reason;
+    }
+    const MnQuery *query = block->outer;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        uint64_t rows = query->tables[t]->count;
+        if ((rows + 63) / 64 > gpu.max_groups && gpu.max_groups < MAX_GROUPS) {
+            snprintf(reason, room,
+                     "a table has %llu rows and the device runs at most %llu "
+                     "in one dispatch",
+                     (unsigned long long)rows,
+                     (unsigned long long)gpu.max_groups * 64);
+            return reason;
+        }
+        for (uint32_t i = 0; i < block->outer_count; i++) {
+            const MnGpuColumn *column = &block->outer_columns[i];
+            uint64_t bytes = round4(rows * column->size);
+            if (bytes <= gpu.max_binding) continue;
+            snprintf(reason, room,
+                     "%s takes %llu bytes in one table and the device binds "
+                     "at most %llu",
+                     component_name(column->component),
+                     (unsigned long long)bytes,
+                     (unsigned long long)gpu.max_binding);
+            return reason;
+        }
+    }
+    query = block->inner;
+    if (!query) return NULL;
+    uint64_t rows = 0;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        rows += query->tables[t]->count;
+    }
+    if (rows > UINT32_MAX) mn_out_of_memory();
+    for (uint32_t i = 0; i < block->inner_count; i++) {
+        const MnGpuColumn *column = &block->inner_columns[i];
+        uint64_t bytes = round4(rows * column->size);
+        if (bytes <= gpu.max_binding) continue;
+        snprintf(reason, room,
+                 "its nested query reads %llu bytes of %s and the device "
+                 "binds at most %llu",
+                 (unsigned long long)bytes, component_name(column->component),
+                 (unsigned long long)gpu.max_binding);
+        return reason;
+    }
+    return NULL;
+}
+
+/* Makes the CPU copy of every column the block uses current, and the only
+ * current one for those it writes. */
+static void block_to_cpu(const MnGpuBlock *block) {
+    MnQuery *query = block->outer;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        for (uint32_t i = 0; i < block->outer_count; i++) {
+            const MnGpuColumn *column = &block->outer_columns[i];
+            mn_sync(table, column->component, column->write);
+        }
+    }
+    query = block->inner;
+    if (!query) return;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        for (uint32_t i = 0; i < block->inner_count; i++) {
+            mn_sync(table, block->inner_columns[i].component, false);
+        }
+    }
+}
+
+/* Builds the block's pipeline. Its bind group layout is written out from
+ * the block's description, in the order midnight_rt.h gives. */
+static Block *block_make(const MnGpuBlock *block) {
+    Block *state = mn_calloc(1, sizeof *state);
+    uint32_t count = 1 + block_storage_buffers(block);
+    state->binding_count = count;
+    state->bound = mn_calloc(count, sizeof(Buffer));
+    state->entries = mn_calloc(count, sizeof(WGPUBindGroupEntry));
+    state->snapshot_count = block->inner_count;
+    state->snapshots = mn_calloc(block->inner_count, sizeof(Snapshot));
+
+    WGPUBindGroupLayoutEntry *entries =
+        mn_calloc(count, sizeof(WGPUBindGroupLayoutEntry));
+    for (uint32_t i = 0; i < count; i++) {
+        entries[i].binding = i;
+        entries[i].visibility = WGPUShaderStage_Compute;
+        entries[i].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
+    }
+    entries[0].buffer.type = WGPUBufferBindingType_Uniform;
+    for (uint32_t i = 0; i < block->outer_count; i++) {
+        if (block->outer_columns[i].write) {
+            entries[1 + i].buffer.type = WGPUBufferBindingType_Storage;
+        }
+    }
+    if (block->fallible) {
+        entries[count - 1].buffer.type = WGPUBufferBindingType_Storage;
+    }
+    WGPUBindGroupLayoutDescriptor layout = {0};
+    layout.label = view(block->system);
+    layout.entryCount = count;
+    layout.entries = entries;
+    state->layout = wgpuDeviceCreateBindGroupLayout(gpu.device, &layout);
+    free(entries);
+
+    WGPUPipelineLayoutDescriptor pipeline_layout = {0};
+    pipeline_layout.label = view(block->system);
+    pipeline_layout.bindGroupLayoutCount = 1;
+    pipeline_layout.bindGroupLayouts = &state->layout;
+    WGPUPipelineLayout bindings =
+        wgpuDeviceCreatePipelineLayout(gpu.device, &pipeline_layout);
+
+    WGPUShaderSourceWGSL source = {0};
+    source.chain.sType = WGPUSType_ShaderSourceWGSL;
+    source.code = view(block->wgsl);
+    WGPUShaderModuleDescriptor module = {0};
+    module.nextInChain = &source.chain;
+    module.label = view(block->system);
+    WGPUShaderModule shader = wgpuDeviceCreateShaderModule(gpu.device, &module);
+
+    WGPUComputePipelineDescriptor pipeline = {0};
+    pipeline.label = view(block->system);
+    pipeline.layout = bindings;
+    pipeline.compute.module = shader;
+    pipeline.compute.entryPoint = view("main");
+    state->pipeline = wgpuDeviceCreateComputePipeline(gpu.device, &pipeline);
+    if (!state->layout || !bindings || !shader || !state->pipeline) {
+        gpu_fail("can't build the pipeline of %s (each %u)", block->system,
+                 (unsigned)block->each);
+    }
+    wgpuShaderModuleRelease(shader);
+    wgpuPipelineLayoutRelease(bindings);
+
+    if (block->fallible) {
+        buffer_make(&state->error, 4, COLUMN_USAGE);
+        buffer_make(&state->error_read, 4, READBACK_USAGE);
+    }
+    return state;
+}
+
+void mn_gpu_device_forget(void *block_state) {
+    Block *state = block_state;
+    if (!state) return;
+    for (uint32_t t = 0; t < state->target_count; t++) {
+        Target *target = &state->targets[t];
+        if (target->group) wgpuBindGroupRelease(target->group);
+        buffer_drop(&target->uniform);
+        free(target->serials);
+    }
+    for (uint32_t i = 0; i < state->snapshot_count; i++) {
+        buffer_drop(&state->snapshots[i].buffer);
+        free(state->snapshots[i].contents);
+    }
+    buffer_drop(&state->error);
+    buffer_drop(&state->error_read);
+    wgpuComputePipelineRelease(state->pipeline);
+    wgpuBindGroupLayoutRelease(state->layout);
+    free(state->targets);
+    free(state->snapshots);
+    free(state->bound);
+    free(state->entries);
+    free(state);
+}
+
+/* Makes the snapshot of inner column `i` ready in GPU memory and returns
+ * the buffer that holds it. A column the block does not write, in the only
+ * table with rows, stands for itself. Anything else is a copy of each
+ * table's column, one after another, made again only when a column's
+ * contents or the rows have changed: by commands added to `encoder` when
+ * every table's bytes end at a word, and from CPU memory otherwise. */
+static Buffer snapshot_ready(const MnGpuBlock *block, Block *state, uint32_t i,
+                             uint64_t rows, MnTable *only,
+                             WGPUCommandEncoder encoder) {
+    const MnGpuColumn *named = &block->inner_columns[i];
+    MnQuery *query = block->inner;
+    if (only && !block_writes(block, named->component)) {
+        Column *column = column_for(only, named);
+        column_upload(only, column);
+        return column->buffer;
+    }
+
+    Snapshot *snapshot = &state->snapshots[i];
+    uint64_t bytes = rows * named->size;
+    uint64_t need = bytes == 0 ? 4 : round4(bytes);
+    if (snapshot->buffer.size < need) {
+        uint64_t roomy = snapshot->buffer.size * 2;
+        if (roomy > gpu.max_binding) roomy = gpu.max_binding;
+        buffer_make(&snapshot->buffer, roomy > need ? roomy : need,
+                    SNAPSHOT_USAGE);
+        snapshot->content_count = 0;
+    }
+
+    if (gpu.contents_capacity < query->table_count) {
+        gpu.contents = mn_realloc(
+            gpu.contents, (size_t)query->table_count * 3 * sizeof(uint64_t));
+        gpu.contents_capacity = query->table_count;
+    }
+    uint32_t count = 0;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        Column *column = column_for(table, named);
+        column_upload(table, column);
+        gpu.contents[count++] = table->id;
+        gpu.contents[count++] = table->count;
+        gpu.contents[count++] = column->version;
+    }
+    if (count == snapshot->content_count &&
+        (count == 0 || memcmp(gpu.contents, snapshot->contents,
+                              count * sizeof(uint64_t)) == 0)) {
+        return snapshot->buffer;
+    }
+    if (snapshot->content_capacity < count) {
+        snapshot->contents =
+            mn_realloc(snapshot->contents, count * sizeof(uint64_t));
+        snapshot->content_capacity = count;
+    }
+    if (count != 0) {
+        memcpy(snapshot->contents, gpu.contents, count * sizeof(uint64_t));
+    }
+    snapshot->content_count = count;
+
+    if (named->size % 4 == 0) {
+        uint64_t offset = 0;
+        for (uint32_t t = 0; t < query->table_count; t++) {
+            MnTable *table = query->tables[t];
+            if (table->count == 0) continue;
+            uint64_t part = (uint64_t)table->count * named->size;
+            wgpuCommandEncoderCopyBufferToBuffer(
+                encoder, column_for(table, named)->buffer.handle, 0,
+                snapshot->buffer.handle, offset, part);
+            offset += part;
+        }
+        return snapshot->buffer;
+    }
+
+    if (gpu.bytes_capacity < need) {
+        gpu.bytes = mn_realloc(gpu.bytes, (size_t)need);
+        gpu.bytes_capacity = need;
+    }
+    unsigned char *out = gpu.bytes;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        Column *column = column_for(table, named);
+        if (column->where == ON_GPU) columns_download(table, &column, 1);
+        size_t part = (size_t)table->count * named->size;
+        memcpy(out, column_data(table, column), part);
+        out += part;
+    }
+    if (bytes != 0) buffer_write(&snapshot->buffer, gpu.bytes, bytes);
+    return snapshot->buffer;
+}
+
+/* Points the target's bind group at the buffers in state->bound, building
+ * it again when any of them is not the one it was built from. */
+static void target_bind(Block *state, Target *target) {
+    uint32_t count = state->binding_count;
+    if (!target->serials) target->serials = mn_calloc(count, sizeof(uint64_t));
+    bool same = target->group != NULL;
+    for (uint32_t i = 0; i < count; i++) {
+        if (target->serials[i] != state->bound[i].serial) same = false;
+        target->serials[i] = state->bound[i].serial;
+    }
+    if (same) return;
+    if (target->group) wgpuBindGroupRelease(target->group);
+    memset(state->entries, 0, count * sizeof(WGPUBindGroupEntry));
+    for (uint32_t i = 0; i < count; i++) {
+        state->entries[i].binding = i;
+        state->entries[i].buffer = state->bound[i].handle;
+        state->entries[i].size = state->bound[i].size;
+    }
+    WGPUBindGroupDescriptor group = {0};
+    group.layout = state->layout;
+    group.entryCount = count;
+    group.entries = state->entries;
+    target->group = wgpuDeviceCreateBindGroup(gpu.device, &group);
+    if (!target->group) gpu_fail("can't bind the buffers of a block");
+}
+
+const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
+                              void **block_state) {
+    if (!gpu.device) return "no device";
+    const char *reason = block_unfit(block);
+    if (reason) {
+        block_to_cpu(block);
+        return reason;
+    }
+    Block *state = *block_state;
+    if (!state) {
+        state = block_make(block);
+        *block_state = state;
+    }
+    Buffer *bound = state->bound;
+    WGPUCommandEncoder encoder =
+        wgpuDeviceCreateCommandEncoder(gpu.device, NULL);
+
+    uint64_t rows = 0;
+    if (block->inner) {
+        MnQuery *inner = block->inner;
+        uint32_t populated = 0;
+        MnTable *only = NULL;
+        for (uint32_t t = 0; t < inner->table_count; t++) {
+            MnTable *table = inner->tables[t];
+            if (table->count == 0) continue;
+            rows += table->count;
+            populated++;
+            only = table;
+        }
+        if (populated != 1) only = NULL;
+        for (uint32_t i = 0; i < block->inner_count; i++) {
+            bound[1 + block->outer_count + i] =
+                snapshot_ready(block, state, i, rows, only, encoder);
+        }
+    }
+    uniform[1] = (uint32_t)rows;
+    if (block->fallible) {
+        uint32_t none = UINT32_MAX;
+        wgpuQueueWriteBuffer(gpu.queue, state->error.handle, 0, &none, 4);
+        bound[state->binding_count - 1] = state->error;
+    }
+
+    MnQuery *outer = block->outer;
+    if (state->target_count < outer->table_count) {
+        state->targets = mn_realloc(
+            state->targets, (size_t)outer->table_count * sizeof(Target));
+        memset(state->targets + state->target_count, 0,
+               (outer->table_count - state->target_count) * sizeof(Target));
+        state->target_count = outer->table_count;
+    }
+    size_t uniform_bytes = (size_t)block->uniform_words * 4;
+    WGPUComputePassEncoder pass =
+        wgpuCommandEncoderBeginComputePass(encoder, NULL);
+    wgpuComputePassEncoderSetPipeline(pass, state->pipeline);
+    for (uint32_t t = 0; t < outer->table_count; t++) {
+        MnTable *table = outer->tables[t];
+        if (table->count == 0) continue;
+        Target *target = &state->targets[t];
+        if (!target->uniform.handle) {
+            buffer_make(&target->uniform, uniform_bytes, UNIFORM_USAGE);
+        }
+        bound[0] = target->uniform;
+        for (uint32_t i = 0; i < block->outer_count; i++) {
+            Column *column = column_for(table, &block->outer_columns[i]);
+            column_upload(table, column);
+            bound[1 + i] = column->buffer;
+        }
+        target_bind(state, target);
+        uniform[0] = table->count;
+        wgpuQueueWriteBuffer(gpu.queue, target->uniform.handle, 0, uniform,
+                             uniform_bytes);
+
+        /* Row r is run by invocation (r % MN_GPU_ROW_SPAN, r /
+         * MN_GPU_ROW_SPAN). */
+        uint64_t groups = ((uint64_t)table->count + 63) / 64;
+        uint32_t across = groups < MAX_GROUPS ? (uint32_t)groups : MAX_GROUPS;
+        uint32_t down = (uint32_t)((groups + MAX_GROUPS - 1) / MAX_GROUPS);
+        wgpuComputePassEncoderSetBindGroup(pass, 0, target->group, 0, NULL);
+        wgpuComputePassEncoderDispatchWorkgroups(pass, across, down, 1);
+
+        for (uint32_t i = 0; i < block->outer_count; i++) {
+            if (!block->outer_columns[i].write) continue;
+            Column *column = column_for(table, &block->outer_columns[i]);
+            column->version = ++gpu.serial;
+            column_set(table, column, ON_GPU);
+        }
+    }
+    wgpuComputePassEncoderEnd(pass);
+    wgpuComputePassEncoderRelease(pass);
+    if (block->fallible) {
+        wgpuCommandEncoderCopyBufferToBuffer(encoder, state->error.handle, 0,
+                                             state->error_read.handle, 0, 4);
+    }
+    submit(encoder);
+
+    if (block->fallible) {
+        uint32_t lowest;
+        memcpy(&lowest, buffer_read(&state->error_read, 4), 4);
+        wgpuBufferUnmap(state->error_read.handle);
+        if (lowest != UINT32_MAX) {
+            const MnGpuSite *site = &block->sites[lowest];
+            mn_panic(site->loc, "%s", site->message);
+        }
+    }
+    return NULL;
+}
+
+/* ---- The device ---------------------------------------------------------- */
+
+static void on_adapter(WGPURequestAdapterStatus status, WGPUAdapter adapter,
+                       WGPUStringView message, void *out, void *unused) {
+    (void)message;
+    (void)unused;
+    if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter *)out = adapter;
+}
+
+static void on_device(WGPURequestDeviceStatus status, WGPUDevice device,
+                      WGPUStringView message, void *out, void *unused) {
+    (void)message;
+    (void)unused;
+    if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice *)out = device;
+}
+
+static const char *backend_name(WGPUBackendType backend) {
+    switch (backend) {
+    case WGPUBackendType_Vulkan:
+        return "Vulkan";
+    case WGPUBackendType_Metal:
+        return "Metal";
+    case WGPUBackendType_D3D12:
+        return "Direct3D 12";
+    default:
+        return "another backend";
+    }
+}
+
+const char *mn_gpu_device_start(bool software) {
+    WGPUInstanceExtras extras = {0};
+    extras.chain.sType = (WGPUSType)WGPUSType_InstanceExtras;
+    extras.backends = WGPUInstanceBackend_Primary;
+    WGPUInstanceDescriptor instance = {0};
+    instance.nextInChain = &extras.chain;
+    gpu.instance = wgpuCreateInstance(&instance);
+    if (!gpu.instance) return NULL;
+
+    WGPUAdapter adapter = NULL;
+    WGPURequestAdapterOptions options = {0};
+    options.featureLevel = WGPUFeatureLevel_Core;
+    options.powerPreference = WGPUPowerPreference_HighPerformance;
+    WGPURequestAdapterCallbackInfo adapter_callback = {0};
+    adapter_callback.mode = WGPUCallbackMode_AllowSpontaneous;
+    adapter_callback.callback = on_adapter;
+    adapter_callback.userdata1 = &adapter;
+    wgpuInstanceRequestAdapter(gpu.instance, &options, adapter_callback);
+    wgpuInstanceProcessEvents(gpu.instance);
+
+    WGPULimits limits = {0};
+    if (adapter) {
+        WGPUAdapterInfo info = {0};
+        wgpuAdapterGetInfo(adapter, &info);
+        snprintf(gpu.name, sizeof gpu.name, "%.*s (%s)",
+                 view_length(info.device), info.device.data ? info.device.data : "",
+                 backend_name(info.backendType));
+        bool usable = info.adapterType != WGPUAdapterType_CPU || software;
+        wgpuAdapterInfoFreeMembers(info);
+        if (usable && wgpuAdapterGetLimits(adapter, &limits) == WGPUStatus_Success) {
+            WGPUDeviceDescriptor device = {0};
+            device.requiredLimits = &limits;
+            device.deviceLostCallbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
+            device.deviceLostCallbackInfo.callback = on_lost;
+            device.uncapturedErrorCallbackInfo.callback = on_error;
+            WGPURequestDeviceCallbackInfo device_callback = {0};
+            device_callback.mode = WGPUCallbackMode_AllowSpontaneous;
+            device_callback.callback = on_device;
+            device_callback.userdata1 = &gpu.device;
+            wgpuAdapterRequestDevice(adapter, &device, device_callback);
+            wgpuInstanceProcessEvents(gpu.instance);
+        }
+        wgpuAdapterRelease(adapter);
+    }
+    if (!gpu.device) {
+        wgpuInstanceRelease(gpu.instance);
+        gpu.instance = NULL;
+        return NULL;
+    }
+    gpu.queue = wgpuDeviceGetQueue(gpu.device);
+    gpu.max_buffer = limits.maxBufferSize;
+    gpu.max_binding = limits.maxStorageBufferBindingSize < limits.maxBufferSize
+                          ? limits.maxStorageBufferBindingSize
+                          : limits.maxBufferSize;
+    gpu.max_binding &= ~(uint64_t)3;
+    gpu.max_uniform = limits.maxUniformBufferBindingSize;
+    gpu.max_storage_buffers = limits.maxStorageBuffersPerShaderStage;
+    if (gpu.max_storage_buffers >= limits.maxBindingsPerBindGroup) {
+        gpu.max_storage_buffers = limits.maxBindingsPerBindGroup - 1;
+    }
+    gpu.max_groups = limits.maxComputeWorkgroupsPerDimension;
+    return gpu.name;
+}
+
+void mn_gpu_device_finish(void) {
+    if (!gpu.device) return;
+    mn_gpu_device_wait();
+    for (uint32_t t = 0; t < mn_world.table_count; t++) {
+        MnTable *table = mn_world.tables[t];
+        struct MnGpuTable *copies = table->gpu;
+        if (!copies) continue;
+        for (uint32_t i = 0; i < copies->count; i++) {
+            buffer_drop(&copies->columns[i].buffer);
+        }
+        free(copies->columns);
+        free(copies);
+        table->gpu = NULL;
+    }
+    buffer_drop(&gpu.readback);
+    free(gpu.bytes);
+    free(gpu.contents);
+    gpu.bytes = NULL;
+    gpu.contents = NULL;
+    gpu.current = 0;
+    mn_gpu_active = false;
+
+    gpu.finishing = true;
+    wgpuQueueRelease(gpu.queue);
+    wgpuDeviceRelease(gpu.device);
+    wgpuInstanceRelease(gpu.instance);
+    gpu.queue = NULL;
+    gpu.device = NULL;
+    gpu.instance = NULL;
+}
