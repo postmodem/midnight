@@ -3,8 +3,9 @@
 # counts), a function that returns nothing, a `while` whose condition calls
 # a function, an `if` and a `case` used for a struct value, an `if` whose
 # branches run statements before their value (and change a variable that an
-# operand to their left has already read), and a block that uses none of its
-# parameters.
+# operand to their left has already read), a division that a conditional
+# operator, an `&&` or an `||` keeps from running when it would fail, and a
+# block that uses none of its parameters.
 struct Pair
   a: Int32
   b: Int32
@@ -17,6 +18,7 @@ component Slot
   looped: Int32
   chosen: Int32
   ordered: Int32
+  guarded: Int32
 end
 
 component Idle
@@ -76,6 +78,10 @@ gpu system work
       n = 200
       n + 1
     end + n
+
+    slot.guarded = slot.n == 2 ? 0 : 60 / (slot.n - 2)
+    slot.guarded += 1000 if slot.n != 2 && 60 / (slot.n - 2) > 0
+    slot.guarded += 10000 if slot.n == 2 || 60 / (slot.n - 2) < 0
   end
 end
 
@@ -84,9 +90,9 @@ gpu system rest
   end
 end
 
-spawn Slot(1, Pair(0, 0), 0, 0, 0, 0)
-spawn Slot(2, Pair(0, 0), 0, 0, 0, 0)
-spawn Slot(3, Pair(0, 0), 0, 0, 0, 0)
+spawn Slot(1, Pair(0, 0), 0, 0, 0, 0, 0)
+spawn Slot(2, Pair(0, 0), 0, 0, 0, 0, 0)
+spawn Slot(3, Pair(0, 0), 0, 0, 0, 0, 0)
 spawn Idle(5)
 World.tick
 each Slot do |slot|

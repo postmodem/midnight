@@ -539,6 +539,56 @@ fn a_program_without_gpu_systems_is_unchanged() {
     }
 }
 
+const GUARDED: &str = "\
+component Cell
+  n: Int32
+  out: Int32
+end
+
+gpu system guard
+  each Cell do |cell|
+    cell.out = cell.n == 0 ? 0 : 60 / cell.n
+    cell.out += 1 if cell.n != 0 && 60 / cell.n > 1
+    cell.out += cell.n > 5 ? 2 : 3
+  end
+end
+";
+
+/// A shader's `select` evaluates both sides, and a shader compiler may
+/// evaluate both sides of `&&`. So an operation that can fail is put under
+/// an `if` wherever the source evaluates it conditionally; a side that
+/// can't fail is left to the target.
+#[test]
+fn an_operation_that_can_fail_runs_only_when_the_source_runs_it() {
+    let shader = &shaders(GUARDED)[0];
+    assert_seq(
+        shader,
+        &[
+            "var t0: i32;",
+            "if (cell_0.f_n == 0i) {",
+            "t0 = 0i;",
+            "} else {",
+            "t0 = g32_div_checked(60i, cell_0.f_n, 0u);",
+            "}",
+            "cell_0.f_out = t0;",
+            "var t1: bool = cell_0.f_n != 0i;",
+            "if (t1) {",
+            "t1 = g32_div_checked(60i, cell_0.f_n, 1u) > 1i;",
+            "}",
+        ],
+    );
+    assert_has(
+        shader,
+        "cell_0.f_out = cell_0.f_out + select(3i, 2i, cell_0.f_n > 5i);",
+    );
+    let c = emit_c("gpu_guarded", GUARDED);
+    assert_has(&c, "t0 = g32_div_checked(g, 60, cell_0.f_n, 0u);");
+    assert_has(
+        &c,
+        "cell_0.f_out = cell_0.f_out + ((cell_0.f_n > 5) ? 2 : 3);",
+    );
+}
+
 /// A shader compiler rejects a constant expression that overflows, so
 /// arithmetic on literals is done here, at 32 bits.
 #[test]

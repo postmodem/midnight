@@ -206,6 +206,36 @@ impl Expr {
             _ => false,
         }
     }
+
+    /// Whether evaluating the expression can record a failure: it names a
+    /// site.
+    pub fn can_fail(&self) -> bool {
+        match self {
+            Expr::Site(_) => true,
+            Expr::I32(_)
+            | Expr::U32(_)
+            | Expr::Hex(_)
+            | Expr::F32(_)
+            | Expr::F32Bits(_)
+            | Expr::Bool(_)
+            | Expr::Var(_)
+            | Expr::Uniform(..)
+            | Expr::Key
+            | Expr::Draws
+            | Expr::Load(_) => false,
+            Expr::Field(inner, _)
+            | Expr::Unary(_, inner)
+            | Expr::Cast(_, inner)
+            | Expr::Bits(_, inner) => inner.can_fail(),
+            Expr::Binary(_, lhs, rhs) => lhs.can_fail() || rhs.can_fail(),
+            Expr::Select { cond, then, else_ } => {
+                cond.can_fail() || then.can_fail() || else_.can_fail()
+            }
+            Expr::Math(_, args) | Expr::Call(_, args) | Expr::Construct(_, args) => {
+                args.iter().any(Expr::can_fail)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

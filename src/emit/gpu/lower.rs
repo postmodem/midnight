@@ -741,8 +741,13 @@ impl<'l, 'a> BodyCx<'l, 'a> {
         self.out.push(Stmt::Discard(value.e));
     }
 
+    /// An `if` statement. With nothing in either branch, only the
+    /// condition is evaluated.
     fn push_if(&mut self, cond: Expr, then: Vec<Stmt>, else_: Vec<Stmt>) {
         if then.is_empty() && else_.is_empty() {
+            if !cond.is_literal() {
+                self.out.push(Stmt::Discard(cond));
+            }
             return;
         }
         if then.is_empty() {
@@ -1148,8 +1153,11 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 }
                 let (mut then, first) = self.capture(|cx| cx.block_value(then));
                 let (mut else_, second) = self.capture(|cx| cx.block_value(else_));
+                // A select evaluates both sides, so it only stands for an
+                // `if` whose sides need no statements and can't fail.
                 let scalar = !matches!(ty, Ty::Entity | Ty::Record(_));
-                if scalar && then.is_empty() && else_.is_empty() {
+                let eager = !first.e.can_fail() && !second.e.can_fail();
+                if scalar && eager && then.is_empty() && else_.is_empty() {
                     return Val {
                         fixed: cond.fixed && first.fixed && second.fixed,
                         e: choose(cond.e, first.e, second.e),
@@ -1199,13 +1207,14 @@ impl<'l, 'a> BodyCx<'l, 'a> {
     }
 
     /// `&&` (with `and`) and `||`. The right operand is lowered apart:
-    /// when it needs statements of its own, they run only when the left
-    /// operand does not decide the result.
+    /// when it needs statements of its own or can fail, it is evaluated
+    /// under an `if`, only when the left operand does not decide the
+    /// result. Otherwise both targets may evaluate it either way.
     fn short_circuit(&mut self, lhs: &'a TExpr, rhs: &'a TExpr, and: bool) -> Val {
         let left = self.expr(lhs);
         let (stmts, right) = self.capture(|cx| cx.expr(rhs));
         let op = if and { BinOp::And } else { BinOp::Or };
-        if stmts.is_empty() {
+        if stmts.is_empty() && !right.e.can_fail() {
             return Val {
                 fixed: left.fixed && right.fixed,
                 e: logic(op, left.e, right.e),
@@ -1238,8 +1247,11 @@ impl<'l, 'a> BodyCx<'l, 'a> {
         match op {
             TBinOp::Eq | TBinOp::Ne => {
                 let (left, right) = (self.settle(left), self.settle(right));
-                let equal = self.lo.equal(ty, left.e, right.e);
-                let e = if op == TBinOp::Eq { equal } else { not(equal) };
+                let e = match (op, ty) {
+                    (TBinOp::Eq, _) => self.lo.equal(ty, left.e, right.e),
+                    (_, Type::Entity | Type::Record(_)) => not(self.lo.equal(ty, left.e, right.e)),
+                    _ => compare(BinOp::Ne, left.e, right.e),
+                };
                 Val {
                     e,
                     ty: Ty::Bool,
