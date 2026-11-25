@@ -18,10 +18,14 @@
 //! | block 0 and what belongs to it     | `Gb0`, `Gb0_cpu`, `Gb0_fill`, `Gb0_wgsl`, `Gb0_outer`, `Gb0_inner` |
 //! | outer and inner columns            | `c0`, `c1`, … and `s0`, `s1`, … |
 //! | the run's row, the snapshot's row  | `row`, `j`                    |
+//! | uniform word 5                     | `u.w5` in a shader; in C `u5` in a block and `g->u[5]` in a function |
+//! | the state of `rand`, the error word | `g_key`, `g_draws`, `g_error` in a shader; `g->key`, `g->draws`, `g->error` in C |
+//! | temporaries                        | `t0`, `k1`, …                 |
 //!
-//! Locals keep the names they have in ordinary code (`pos_3`), which end
-//! in their id; no other name here does. Every field has the prefix `f_`
-//! because WGSL reserves many plain words (`target`, `filter`, `mod`).
+//! Locals keep the names they have in ordinary code (`pos_3`); the id at
+//! the end keeps them apart from the names made up here and from the words
+//! either target reserves. Every field has the prefix `f_` because WGSL
+//! reserves many plain words (`target`, `filter`, `mod`).
 
 pub(super) mod c;
 mod helpers;
