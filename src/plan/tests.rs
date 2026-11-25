@@ -914,7 +914,7 @@ end
 }
 
 #[test]
-fn top_level_setup_before_the_first_tick_does_not_count() {
+fn top_level_setup_before_the_loop_that_ticks_does_not_count() {
     assert_plan(
         "
 def populate(n: Int)
@@ -929,15 +929,34 @@ each Position do |pos|
 end
 first = spawn Position(1.0, 1.0)
 puts first[Position].x
-World.tick
-World.tick
+2.times do
+  World.tick
+end
 ",
         &[],
     );
 }
 
 #[test]
-fn top_level_code_after_the_first_tick_counts() {
+fn top_level_code_after_the_loop_that_ticks_does_not_count() {
+    assert_plan(
+        "
+e = spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
+100.times do
+  World.tick
+end
+each Position do |pos|
+  puts pos.x
+end
+e[Position].x = 0.0
+e.despawn
+",
+        &[],
+    );
+}
+
+#[test]
+fn top_level_code_between_ticks_outside_a_loop_does_not_count() {
     assert_plan(
         "
 e = spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
@@ -946,7 +965,7 @@ puts e[Position].x
 World.tick
 puts e[Position].x
 ",
-        &["download  Position  move -> top level"],
+        &[],
     );
     assert_plan(
         "
@@ -954,6 +973,33 @@ spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
 World.run
 each Position do |pos|
   puts pos.x
+end
+",
+        &[],
+    );
+}
+
+#[test]
+fn every_loop_around_the_tick_counts_and_the_code_after_each_does_not() {
+    assert_plan(
+        "
+e = spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
+3.times do
+  10.times do
+    World.tick
+  end
+  e[Velocity].dx = 0.0
+end
+puts e[Position].x
+",
+        &["upload    Velocity  top level -> move"],
+    );
+    assert_plan(
+        "
+e = spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
+3.times do
+  World.run
+  puts e[Position].x
 end
 ",
         &["download  Position  move -> top level"],
@@ -978,7 +1024,56 @@ end
 }
 
 #[test]
-fn a_tick_inside_a_called_function_starts_the_count() {
+fn a_loop_in_a_called_function_counts_like_one_at_the_top_level() {
+    assert_plan(
+        "
+def total_x -> Float
+  sum = 0.0
+  each Position do |pos|
+    sum += pos.x
+  end
+  sum
+end
+
+def simulate(ticks: Int)
+  puts total_x
+  ticks.times do
+    World.tick
+  end
+  puts total_x
+end
+
+simulate(10)
+",
+        &[],
+    );
+    assert_plan(
+        "
+def total_x -> Float
+  sum = 0.0
+  each Position do |pos|
+    sum += pos.x
+  end
+  sum
+end
+
+def simulate(ticks: Int)
+  ticks.times do
+    World.tick
+    puts total_x
+  end
+end
+
+puts total_x
+simulate(10)
+puts total_x
+",
+        &["download  Position  move -> top level"],
+    );
+}
+
+#[test]
+fn a_loop_that_ticks_through_a_called_function_counts() {
     assert_plan(
         "
 def total_x -> Float

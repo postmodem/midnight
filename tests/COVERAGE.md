@@ -12,7 +12,7 @@ reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
 Counts: 207 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-243 in `tests/fail`, 60 in `tests/panic`, 9 in `tests/plan`.
+243 in `tests/fail`, 60 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
 
@@ -463,7 +463,8 @@ the rule for where a column lives.
 | Case | Files |
 | --- | --- |
 | Data that only GPU systems use stays on the GPU: an empty plan | `plan/stays_on_gpu` |
-| Spawns at the top level before the first tick are not part of a tick | `plan/stays_on_gpu`, `plan/top_level` |
+| Top-level code before the loop that ticks is not part of a tick | `plan/stays_on_gpu`, `plan/top_level` |
+| Top-level code after the loop that ticks is not part of a tick | `plan/after_ticks` |
 | A CPU system that reads what a GPU system writes: one download, no upload | `plan/reader` |
 | A component a GPU system only reads is never downloaded | `plan/reader`, `plan/writer`, `plan/nested_each` |
 | A CPU system that writes what a GPU system reads: an upload | `plan/writer`, `plan/nested_each` |

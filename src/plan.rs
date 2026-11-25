@@ -20,8 +20,10 @@
 //! Systems run in source order. An ordinary system is one step, with the
 //! functions it calls: what it needs is made current as it starts and what
 //! it writes or changes takes effect as it ends. A GPU system is one step
-//! per block. Top-level code that runs between ticks is a last step named
-//! `top level`. Every statement is taken to run.
+//! per block. Top-level code inside a loop that reaches `World.tick` or
+//! `World.run` runs between ticks and is a last step named `top level`;
+//! the code before and after such a loop runs once and is no part of a
+//! tick. Every statement is taken to run.
 //!
 //! The plan is the list of one tick in steady state: ticks are followed
 //! from a world that is current on the CPU until one ends as it began.
@@ -361,17 +363,18 @@ struct Walker<'p> {
     /// The components used so far, by id, in the order of their first use.
     order: Vec<usize>,
     /// Whether the code being visited is recorded. A system's always is.
-    /// The top level's is from its first `World.tick` or `World.run` on, or
-    /// from the start of the first loop that contains one: before that it
-    /// is setting up the world.
+    /// The top level's is inside a loop that reaches a `World.tick` or
+    /// `World.run`: the code before and after such a loop runs once, not
+    /// between ticks.
     counting: bool,
     /// Functions whose bodies have been visited while counting.
     counted: Vec<bool>,
     /// Functions whose bodies have been visited while not counting.
     entered: Vec<bool>,
-    /// Set while only looking for a `World.tick`: `counting` then says
-    /// whether one has been found.
+    /// Set while only looking for a `World.tick`.
     probing: bool,
+    /// Whether a `World.tick` or `World.run` has been visited.
+    ticked: bool,
 }
 
 impl<'p> Walker<'p> {
@@ -385,6 +388,7 @@ impl<'p> Walker<'p> {
             counted: vec![false; program.funcs.len()],
             entered: vec![false; program.funcs.len()],
             probing: false,
+            ticked: false,
         }
     }
 
@@ -430,15 +434,18 @@ impl<'p> Walker<'p> {
         let mut probe = Walker::new(self.program, self.on_gpu, false);
         probe.probing = true;
         probe.stmt(stmt);
-        probe.counting
+        probe.ticked
     }
 
-    /// Starts counting at a loop that contains a tick: all of its body runs
-    /// between ticks.
-    fn enter_loop(&mut self, stmt: &Stmt) {
+    /// Starts counting at a loop that reaches a tick: all of its body runs
+    /// between ticks. Returns whether the code around the loop counts, for
+    /// the caller to restore when the loop has been visited.
+    fn enter_loop(&mut self, stmt: &Stmt) -> bool {
+        let outside = self.counting;
         if !self.counting && !self.probing && self.ticks(stmt) {
             self.counting = true;
         }
+        outside
     }
 
     fn call(&mut self, func: FuncId) {
@@ -485,31 +492,36 @@ impl<'p> Walker<'p> {
             }
             StmtKind::Break | StmtKind::Next => {}
             StmtKind::While { cond, body } => {
-                self.enter_loop(stmt);
+                let outside = self.enter_loop(stmt);
                 self.expr(cond);
                 self.block(body);
+                self.counting = outside;
             }
             StmtKind::Count { from, to, body, .. } => {
-                self.enter_loop(stmt);
                 self.expr(from);
                 self.expr(to);
+                let outside = self.enter_loop(stmt);
                 self.block(body);
+                self.counting = outside;
             }
             StmtKind::ListEach { list, body, .. } => {
-                self.enter_loop(stmt);
                 self.expr(list);
+                let outside = self.enter_loop(stmt);
                 self.block(body);
+                self.counting = outside;
             }
             StmtKind::Each { query, body, .. } => {
-                self.enter_loop(stmt);
+                let outside = self.enter_loop(stmt);
                 for (component, write) in components(query) {
                     self.read(component, write);
                 }
                 self.block(body);
+                self.counting = outside;
             }
             StmtKind::On { body, .. } => {
-                self.enter_loop(stmt);
+                let outside = self.enter_loop(stmt);
                 self.block(body);
+                self.counting = outside;
             }
             StmtKind::Puts(args) | StmtKind::Print(args) => {
                 for arg in args {
@@ -529,7 +541,7 @@ impl<'p> Walker<'p> {
             | ExprKind::EntityNone
             | ExprKind::WorldStop
             | ExprKind::WorldCount(_) => {}
-            ExprKind::WorldTick | ExprKind::WorldRun => self.counting = true,
+            ExprKind::WorldTick | ExprKind::WorldRun => self.ticked = true,
             ExprKind::Read(place)
             | ExprKind::ListPop { list: place }
             | ExprKind::ListClear { list: place } => self.place(place),
