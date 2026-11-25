@@ -157,6 +157,8 @@ typedef struct MnTable {
      * that component, or UINT32_MAX when not looked up yet. */
     uint32_t *add_edges;
     uint32_t *remove_edges;
+    /* The table's GPU column copies, or NULL when it has none. */
+    struct MnGpuTable *gpu;
 } MnTable;
 
 /* The runtime may add fields after the ones listed here. */

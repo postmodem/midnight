@@ -28,8 +28,10 @@ Usage:
   midnight --version | --help
 
 Environment:
-  MIDNIGHT_CC       the C compiler to use (default: cc)
-  MIDNIGHT_CFLAGS   extra flags for the C compiler
+  MIDNIGHT_CC          the C compiler to use (default: cc)
+  MIDNIGHT_CFLAGS      extra flags for the C compiler
+  MIDNIGHT_GPU_FLAGS   flags that build and link the GPU runtime against
+                       wgpu-native; without them GPU systems run on the CPU
 ";
 
 /// Exit status for a program with errors.
@@ -117,7 +119,7 @@ fn run(args: &Args) -> u8 {
         print!("{}", emit::emit_wgsl(&program, &sources));
         return 0;
     }
-    let Some(c_source) = compile(&args.file, args.command == "check") else {
+    let Some((c_source, gpu)) = compile(&args.file, args.command == "check") else {
         return FAILURE;
     };
     match args.command.as_str() {
@@ -131,7 +133,7 @@ fn run(args: &Args) -> u8 {
                 .out
                 .clone()
                 .unwrap_or_else(|| default_output(&args.file));
-            match driver::build(&c_source, &out, args.debug) {
+            match driver::build(&c_source, &out, args.debug, gpu) {
                 Ok(()) => 0,
                 Err(message) => {
                     eprintln!("{message}");
@@ -139,7 +141,7 @@ fn run(args: &Args) -> u8 {
                 }
             }
         }
-        "run" => match driver::run(&c_source, args.debug) {
+        "run" => match driver::run(&c_source, args.debug, gpu) {
             Ok(status) => status,
             Err(message) => {
                 eprintln!("{message}");
@@ -150,14 +152,16 @@ fn run(args: &Args) -> u8 {
     }
 }
 
-/// Runs the front end and, unless `check_only`, the emitter. Prints
+/// Runs the front end and, unless `check_only`, the emitter. Returns the
+/// generated C and whether the program declares a GPU system. Prints
 /// diagnostics and returns `None` when the program has errors.
-fn compile(path: &Path, check_only: bool) -> Option<String> {
+fn compile(path: &Path, check_only: bool) -> Option<(String, bool)> {
     let (program, sources) = check_file(path)?;
     if check_only {
-        return Some(String::new());
+        return Some((String::new(), false));
     }
-    Some(emit::emit(&program, &sources))
+    let gpu = program.systems.iter().any(|system| system.gpu);
+    Some((emit::emit(&program, &sources), gpu))
 }
 
 /// Runs the front end. Prints diagnostics and returns `None` when the

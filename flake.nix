@@ -34,6 +34,27 @@
         ];
       };
 
+      # MIDNIGHT_GPU_FLAGS: what builds and links runtime/midnight_gpu.c.
+      # wgpu-native opens the Vulkan loader by name, so on Linux the
+      # program itself is made to need it.
+      gpuFlagsFor =
+        pkgs:
+        lib.concatStringsSep " " (
+          [
+            "-I${lib.getDev pkgs.wgpu-native}/include"
+            "-L${lib.getLib pkgs.wgpu-native}/lib"
+            "-lwgpu_native"
+            "-Wl,-rpath,${lib.getLib pkgs.wgpu-native}/lib"
+          ]
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+            "-L${lib.getLib pkgs.vulkan-loader}/lib"
+            "-Wl,--no-as-needed"
+            "-lvulkan"
+            "-Wl,--as-needed"
+            "-Wl,-rpath,${lib.getLib pkgs.vulkan-loader}/lib"
+          ]
+        );
+
       midnightFor =
         pkgs:
         pkgs.rustPlatform.buildRustPackage {
@@ -48,12 +69,14 @@
           # no others.
           preCheck = ''
             export MIDNIGHT_CC=${lib.getExe' pkgs.clang "clang"}
+            export MIDNIGHT_GPU_FLAGS="${gpuFlagsFor pkgs}"
             export NIX_HARDENING_ENABLE=
           '';
 
           postInstall = ''
             wrapProgram $out/bin/midnight \
               --set-default MIDNIGHT_CC ${lib.getExe' pkgs.clang "clang"} \
+              --set-default MIDNIGHT_GPU_FLAGS "${gpuFlagsFor pkgs}" \
               --set NIX_HARDENING_ENABLE ""
           '';
 
@@ -79,6 +102,7 @@
           runtimeEnv = {
             BENCH_SRC = "${src}";
             MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+            MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
             NIX_HARDENING_ENABLE = "";
           };
           text = builtins.readFile ./bench/bench.sh;
@@ -114,6 +138,7 @@
             pkgs.nixfmt
           ];
           MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+          MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
           hardeningDisable = [ "all" ];
         };
       });
