@@ -392,12 +392,45 @@ pub fn fold(expr: &Expr, known: &[Option<Folded>]) -> Option<Folded> {
     }
 }
 
-/// `Int` arithmetic that wraps and can't fail.
+/// `Int` arithmetic that can't fail, with the result the runtime gives:
+/// `+`, `-`, `*` and `**` wrap, `/` rounds toward negative infinity and
+/// `%` takes the sign of the divisor. `None` for a zero divisor and for a
+/// negative exponent.
 pub fn fold_int(op: BinOp, a: i64, b: i64) -> Option<i64> {
     match op {
         BinOp::Add => Some(a.wrapping_add(b)),
         BinOp::Sub => Some(a.wrapping_sub(b)),
         BinOp::Mul => Some(a.wrapping_mul(b)),
+        BinOp::Div if b != 0 => {
+            let quotient = a.wrapping_div(b);
+            let remainder = a.wrapping_rem(b);
+            if remainder != 0 && (remainder < 0) != (b < 0) {
+                Some(quotient.wrapping_sub(1))
+            } else {
+                Some(quotient)
+            }
+        }
+        BinOp::Mod if b != 0 => {
+            let remainder = a.wrapping_rem(b);
+            if remainder != 0 && (remainder < 0) != (b < 0) {
+                Some(remainder.wrapping_add(b))
+            } else {
+                Some(remainder)
+            }
+        }
+        BinOp::Pow if b >= 0 => {
+            let mut result: i64 = 1;
+            let mut factor = a;
+            let mut left = b;
+            while left != 0 {
+                if left & 1 != 0 {
+                    result = result.wrapping_mul(factor);
+                }
+                factor = factor.wrapping_mul(factor);
+                left >>= 1;
+            }
+            Some(result)
+        }
         _ => None,
     }
 }

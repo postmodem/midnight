@@ -484,6 +484,46 @@ fn arithmetic_and_conversions() {
     check("arithmetic", &c);
 }
 
+/// What is worked out here is what `mn_int_div`, `mn_int_mod` and
+/// `mn_int_pow` give, and nothing that fails is.
+#[test]
+fn constant_int_arithmetic_matches_the_runtime() {
+    let fold = super::analysis::fold_int;
+    let (min, max) = (i64::MIN, i64::MAX);
+    for (a, b, quotient, remainder) in [
+        (7, 2, 3, 1),
+        (-7, 2, -4, 1),
+        (7, -2, -4, -1),
+        (-7, -2, 3, -1),
+        (6, 3, 2, 0),
+        (-6, 3, -2, 0),
+        (0, -5, 0, 0),
+        (5, -1, -5, 0),
+        (min, -1, min, 0),
+        (min, 2, min / 2, 0),
+        (max, min, -1, -1),
+    ] {
+        assert_eq!(fold(BinOp::Div, a, b), Some(quotient), "{a} / {b}");
+        assert_eq!(fold(BinOp::Mod, a, b), Some(remainder), "{a} % {b}");
+    }
+    for (a, b, power) in [
+        (2, 10, 1024),
+        (-3, 3, -27),
+        (7, 0, 1),
+        (0, 0, 1),
+        (2, 63, min),
+        (2, 64, 0),
+        (3, 41, 3_i64.wrapping_pow(41)),
+        (-1, max, -1),
+    ] {
+        assert_eq!(fold(BinOp::Pow, a, b), Some(power), "{a} ** {b}");
+    }
+    assert_eq!(fold(BinOp::Div, 1, 0), None);
+    assert_eq!(fold(BinOp::Mod, 1, 0), None);
+    assert_eq!(fold(BinOp::Pow, 2, -1), None);
+    assert_eq!(fold(BinOp::Lt, 1, 2), None);
+}
+
 // ---- Strings ----
 
 fn string_program() -> Program {

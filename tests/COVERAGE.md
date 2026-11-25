@@ -11,8 +11,8 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 234 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-325 in `tests/fail`, 71 in `tests/panic`, 10 in `tests/plan`.
+Counts: 235 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+325 in `tests/fail`, 72 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
 
@@ -395,6 +395,7 @@ programs written from the specification.
 | `Float` is 32 bits: literals out of range, products that overflow or vanish, 16777217 | `gpu_float_literals`, `gpu_functions` |
 | `to_i`, `floor`, `ceil`, `round`: saturation, 0 for NaN, halves away from zero; `nan?` | `gpu_float_to_int` |
 | `Int` `/` floors and `%` takes the divisor's sign, by a variable and by a constant; the smallest `Int` by -1 | `gpu_div_mod` |
+| `/` and `%` by constants made by `/`, `%` and `**`: a constant has its 64-bit value, wrapped on the way in; the same operators between constants in the block work at 32 bits | `gpu_constant_divisors` |
 | `Float` `%` takes the divisor's sign | `gpu_div_mod` |
 | `abs`, `clamp`, `min`, `max`, `to_f`, `round(digits)`, the `Math` functions, `**` on `Float` with either sign of base | `gpu_numbers`, `gpu_float_literals` |
 | A function computes at 32 bits when a GPU block calls it and at 64 bits otherwise | `gpu_functions`, `gpu_float_literals`, `gpu_int_wrap` |
@@ -652,6 +653,7 @@ the rule for where a column lives.
 | `World.run` during a tick | in a system, under `World.tick` | `panic/world_run_in_system` | `World.run called while a tick is in progress` |
 | | in a system, under `World.run` | `panic/world_run_in_system_during_run` | `World.run called while a tick is in progress` |
 | A failure in a GPU system (the message names no value) | `Int` `/` by zero | `panic/gpu_division_by_zero` | `division by zero` |
+| | `Int` `/` by a constant that is not zero but wraps to zero on the way in | `panic/gpu_constant_divisor_wraps` | `division by zero` |
 | | `Int` `%` by zero, in the nested `each` | `panic/gpu_modulo_by_zero` | `modulo by zero` |
 | | `Int` `**` with a negative exponent | `panic/gpu_negative_exponent` | `negative exponent` |
 | | `rand(n)` with `n <= 0` | `panic/gpu_rand_not_positive` | `rand: the argument must be positive` |

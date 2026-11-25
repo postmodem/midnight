@@ -618,3 +618,72 @@ fn literals_are_folded_at_32_bits() {
         Expr::Binary(BinOp::Add, ..)
     ));
 }
+
+const DIVISORS: &str = "\
+W = 64
+H = W / 4
+ODD = H % 5 + 2 ** 3
+WRAPS = 65536 * 65536 / 1
+
+component Cell
+  n: Int32
+  q: Int32
+end
+
+gpu system split
+  each Cell do |cell|
+    cell.q = cell.n / H + cell.n % ODD + cell.n / (W / 8)
+  end
+end
+
+gpu system wrapped
+  each Cell do |cell|
+    cell.q = cell.n / WRAPS
+  end
+end
+";
+
+/// A constant made by `/`, `%` or `**` that can't fail is known here, and
+/// so is such an operation on two constants in a block. A division by one
+/// that is not zero is no site, and a block without sites has no error
+/// word. A constant has its 64-bit value wrapped to 32 bits: one that
+/// wraps to zero is still a site.
+#[test]
+fn a_division_by_a_known_constant_is_not_checked() {
+    let (program, sources) = compile(DIVISORS);
+    let cx = Cx::new(&program, &sources);
+    let lowered = lower(&program, &cx.folded, cx.gpu.wide.clone());
+    assert!(lowered.uniforms.entries.is_empty());
+    let sites: Vec<(u32, &str)> = lowered
+        .sites
+        .iter()
+        .map(|site| (sources.line(site.span), site.message.as_str()))
+        .collect();
+    assert_eq!(sites, [(19, "division by zero")]);
+    assert!(!lowered.blocks[0].uses.fails);
+    assert!(lowered.blocks[1].uses.fails);
+
+    let split = wgsl::module(&lowered, &lowered.blocks[0]);
+    assert_has(
+        &split,
+        "(g32_div(cell_0.f_n, 16i) + g32_mod(cell_0.f_n, 9i)) + g32_div(cell_0.f_n, 8i);",
+    );
+    assert_lacks(&split, "g_error");
+    let wrapped = wgsl::module(&lowered, &lowered.blocks[1]);
+    assert_has(&wrapped, "g32_div_checked(cell_0.f_n, 0i, 0u);");
+
+    let c = emit_c("gpu_divisors", DIVISORS);
+    assert_lacks(&c, "C_H");
+    assert_seq(
+        &c,
+        &[".wgsl = Gb0_wgsl,", ".fallible = false,", ".sites = NULL,"],
+    );
+    assert_seq(
+        &c,
+        &[
+            ".wgsl = Gb1_wgsl,",
+            ".fallible = true,",
+            ".sites = gpu_sites,",
+        ],
+    );
+}
