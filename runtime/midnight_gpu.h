@@ -48,10 +48,12 @@ extern uint64_t mn_gpu_waits;
  * there is none. */
 const char *mn_gpu_device_start(bool software);
 
-/* Runs a block's shader over every table its outer query matches and
- * returns NULL; a failing operation is reported as mn_gpu_run reports it.
- * Both queries are up to date and `uniform` holds the block's words from 2
- * up; words 0 and 1 are overwritten.
+/* Records a block's shader over every table its outer query matches and
+ * returns NULL. The work is submitted later, unless the block is
+ * `fallible`: then it is submitted at once, the program waits for it, and
+ * a failing operation is reported as mn_gpu_run reports it. Both queries
+ * are up to date and `uniform` holds the block's words from 2 up; words 0
+ * and 1 are overwritten.
  *
  * When the block cannot run on the device, makes the CPU copy of every
  * column it uses current, and the only current one for those it writes,
@@ -67,7 +69,11 @@ void mn_gpu_device_forget(void *state);
  * Call before the table's rows change. */
 void mn_gpu_reclaim(MnTable *table);
 
-/* Returns when the device has finished everything submitted to it. */
+/* Submits the work recorded so far without waiting. */
+void mn_gpu_device_submit(void);
+
+/* Submits the work recorded so far, and returns when the device has
+ * finished everything submitted to it. */
 void mn_gpu_device_wait(void);
 
 /* Releases every column copy and the device. Call after

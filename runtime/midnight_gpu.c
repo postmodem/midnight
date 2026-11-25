@@ -36,6 +36,8 @@ typedef struct Buffer {
     WGPUBuffer handle;
     uint64_t size;
     uint64_t serial;
+    /* The serial of the last command encoder that named the buffer. */
+    uint64_t used;
 } Buffer;
 
 enum { ON_CPU, ON_GPU, ON_BOTH };
@@ -79,6 +81,12 @@ static struct {
     uint64_t current;
     /* Where columns are copied to be read back. */
     Buffer readback;
+    /* The command encoder that records work until it is submitted, and
+     * the compute pass open in it; NULL when there is none. Each encoder
+     * gets a serial of its own. */
+    WGPUCommandEncoder encoder;
+    WGPUComputePassEncoder pass;
+    uint64_t encoder_serial;
     /* Whether anything has been submitted since the last wait. */
     bool pending;
     /* Set while the device is released, which reports it lost. */
@@ -216,14 +224,22 @@ static void on_lost(WGPUDevice const *device, WGPUDeviceLostReason reason,
 
 static uint64_t round4(uint64_t bytes) { return (bytes + 3) & ~(uint64_t)3; }
 
+/* Whether the open command encoder names the buffer. */
+static bool buffer_in_use(const Buffer *buffer) {
+    return gpu.encoder && buffer->used == gpu.encoder_serial;
+}
+
+/* Releases a buffer. One that the open encoder names is not destroyed: it
+ * lives until the encoder's work is done. */
 static void buffer_drop(Buffer *buffer) {
     if (buffer->handle) {
-        wgpuBufferDestroy(buffer->handle);
+        if (!buffer_in_use(buffer)) wgpuBufferDestroy(buffer->handle);
         wgpuBufferRelease(buffer->handle);
     }
     buffer->handle = NULL;
     buffer->size = 0;
     buffer->serial = 0;
+    buffer->used = 0;
 }
 
 /* Replaces `buffer` with a new, zeroed buffer of `size` bytes. */
@@ -240,28 +256,85 @@ static void buffer_make(Buffer *buffer, uint64_t size, WGPUBufferUsage usage) {
     buffer->serial = ++gpu.serial;
 }
 
-/* Writes `bytes` bytes at the start of a buffer, and zeros up to the next
- * whole word. */
-static void buffer_write(const Buffer *buffer, const void *data,
-                         uint64_t bytes) {
-    uint64_t whole = bytes & ~(uint64_t)3;
-    if (whole != 0) {
-        wgpuQueueWriteBuffer(gpu.queue, buffer->handle, 0, data, (size_t)whole);
-    }
-    if (bytes != whole) {
-        unsigned char last[4] = {0, 0, 0, 0};
-        memcpy(last, (const unsigned char *)data + whole, (size_t)(bytes - whole));
-        wgpuQueueWriteBuffer(gpu.queue, buffer->handle, whole, last, 4);
-    }
+/* ---- Recording and submitting -------------------------------------------- */
+
+/* Opens a command encoder if none is open. */
+static void encoder_open(void) {
+    if (gpu.encoder) return;
+    gpu.encoder = wgpuDeviceCreateCommandEncoder(gpu.device, NULL);
+    if (!gpu.encoder) gpu_fail("can't create a command encoder");
+    gpu.encoder_serial = ++gpu.serial;
 }
 
-static void submit(WGPUCommandEncoder encoder) {
-    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
+/* Records that the open encoder names a buffer. */
+static void buffer_use(Buffer *buffer) { buffer->used = gpu.encoder_serial; }
+
+/* Ends the open compute pass, if there is one. */
+static void pass_end(void) {
+    if (!gpu.pass) return;
+    wgpuComputePassEncoderEnd(gpu.pass);
+    wgpuComputePassEncoderRelease(gpu.pass);
+    gpu.pass = NULL;
+}
+
+/* The open compute pass, begun if there is none. */
+static WGPUComputePassEncoder pass_open(void) {
+    encoder_open();
+    if (!gpu.pass) {
+        gpu.pass = wgpuCommandEncoderBeginComputePass(gpu.encoder, NULL);
+    }
+    return gpu.pass;
+}
+
+/* Records a copy of `bytes` bytes, a multiple of 4, from one buffer to
+ * another. */
+static void buffer_copy(Buffer *from, uint64_t from_offset, Buffer *to,
+                        uint64_t to_offset, uint64_t bytes) {
+    pass_end();
+    encoder_open();
+    wgpuCommandEncoderCopyBufferToBuffer(gpu.encoder, from->handle, from_offset,
+                                         to->handle, to_offset, bytes);
+    buffer_use(from);
+    buffer_use(to);
+}
+
+/* Submits the open encoder, if there is one, without waiting. */
+static void encoder_submit(void) {
+    if (!gpu.encoder) return;
+    pass_end();
+    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(gpu.encoder, NULL);
     wgpuQueueSubmit(gpu.queue, 1, &commands);
     mn_gpu_submissions++;
     wgpuCommandBufferRelease(commands);
-    wgpuCommandEncoderRelease(encoder);
+    wgpuCommandEncoderRelease(gpu.encoder);
+    gpu.encoder = NULL;
     gpu.pending = true;
+}
+
+void mn_gpu_device_submit(void) { encoder_submit(); }
+
+/* Writes `bytes` bytes, a multiple of 4, at `offset` in a buffer through
+ * the queue. Such a write takes effect before every command of the next
+ * submission, whenever it was made, so the open encoder is submitted first
+ * when it names the buffer. */
+static void queue_write(Buffer *buffer, uint64_t offset, const void *data,
+                        uint64_t bytes) {
+    if (bytes == 0) return;
+    if (buffer_in_use(buffer)) encoder_submit();
+    wgpuQueueWriteBuffer(gpu.queue, buffer->handle, offset, data, (size_t)bytes);
+}
+
+/* Writes `bytes` bytes at `offset`, a multiple of 4, and zeros up to the
+ * next whole word. */
+static void buffer_write(Buffer *buffer, uint64_t offset, const void *data,
+                         uint64_t bytes) {
+    uint64_t whole = bytes & ~(uint64_t)3;
+    queue_write(buffer, offset, data, whole);
+    if (bytes != whole) {
+        unsigned char last[4] = {0, 0, 0, 0};
+        memcpy(last, (const unsigned char *)data + whole, (size_t)(bytes - whole));
+        queue_write(buffer, offset + whole, last, 4);
+    }
 }
 
 static uint64_t now_ns(void) {
@@ -292,6 +365,7 @@ static void on_work_done(WGPUQueueWorkDoneStatus status, void *done,
 }
 
 void mn_gpu_device_wait(void) {
+    encoder_submit();
     if (!gpu.pending) return;
     int done = 0;
     WGPUQueueWorkDoneCallbackInfo callback = {0};
@@ -313,7 +387,8 @@ static void on_map(WGPUMapAsyncStatus status, WGPUStringView message,
 }
 
 /* Waits for everything submitted, then returns the first `bytes` bytes of
- * a readback buffer. Unmap the buffer when they have been read. */
+ * a readback buffer. The copies into it must have been submitted. Unmap
+ * the buffer when they have been read. */
 static const void *buffer_read(const Buffer *buffer, uint64_t bytes) {
     int done = 0;
     WGPUBufferMapCallbackInfo callback = {0};
@@ -403,7 +478,7 @@ static void column_upload(MnTable *table, Column *column) {
         buffer_make(&column->buffer, roomy <= gpu.max_binding ? roomy : need,
                     COLUMN_USAGE);
     }
-    buffer_write(&column->buffer, column_data(table, column), bytes);
+    buffer_write(&column->buffer, 0, column_data(table, column), bytes);
     column->version = ++gpu.serial;
     column_set(table, column, ON_BOTH);
     if (column->component != MN_GPU_ENTITIES) mn_gpu_uploads++;
@@ -435,17 +510,13 @@ static void columns_download(MnTable *table, Column **columns, uint32_t count) {
                 buffer_make(&gpu.readback, roomy > total ? roomy : total,
                             READBACK_USAGE);
             }
-            WGPUCommandEncoder encoder =
-                wgpuDeviceCreateCommandEncoder(gpu.device, NULL);
             uint64_t offset = 0;
             for (uint32_t i = first; i < end; i++) {
                 uint64_t bytes = round4(rows * columns[i]->size);
-                wgpuCommandEncoderCopyBufferToBuffer(
-                    encoder, columns[i]->buffer.handle, 0, gpu.readback.handle,
-                    offset, bytes);
+                buffer_copy(&columns[i]->buffer, 0, &gpu.readback, offset, bytes);
                 offset += bytes;
             }
-            submit(encoder);
+            encoder_submit();
             const unsigned char *from = buffer_read(&gpu.readback, total);
             for (uint32_t i = first; i < end; i++) {
                 uint64_t bytes = rows * columns[i]->size;
@@ -753,17 +824,16 @@ void mn_gpu_device_forget(void *block_state) {
  * the buffer that holds it. A column the block does not write, in the only
  * table with rows, stands for itself. Anything else is a copy of each
  * table's column, one after another, made again only when a column's
- * contents or the rows have changed: by commands added to `encoder` when
- * every table's bytes end at a word, and from CPU memory otherwise. */
-static Buffer snapshot_ready(const MnGpuBlock *block, Block *state, uint32_t i,
-                             uint64_t rows, MnTable *only,
-                             WGPUCommandEncoder encoder) {
+ * contents or the rows have changed: by copies in GPU memory when every
+ * table's bytes end at a word, and from CPU memory otherwise. */
+static Buffer *snapshot_ready(const MnGpuBlock *block, Block *state,
+                              uint32_t i, uint64_t rows, MnTable *only) {
     const MnGpuColumn *named = &block->inner_columns[i];
     MnQuery *query = block->inner;
     if (only && !block_writes(block, named->component)) {
         Column *column = column_for(only, named);
         column_upload(only, column);
-        return column->buffer;
+        return &column->buffer;
     }
 
     Snapshot *snapshot = &state->snapshots[i];
@@ -795,7 +865,7 @@ static Buffer snapshot_ready(const MnGpuBlock *block, Block *state, uint32_t i,
     if (count == snapshot->content_count &&
         (count == 0 || memcmp(gpu.contents, snapshot->contents,
                               count * sizeof(uint64_t)) == 0)) {
-        return snapshot->buffer;
+        return &snapshot->buffer;
     }
     if (snapshot->content_capacity < count) {
         snapshot->contents =
@@ -813,12 +883,11 @@ static Buffer snapshot_ready(const MnGpuBlock *block, Block *state, uint32_t i,
             MnTable *table = query->tables[t];
             if (table->count == 0) continue;
             uint64_t part = (uint64_t)table->count * named->size;
-            wgpuCommandEncoderCopyBufferToBuffer(
-                encoder, column_for(table, named)->buffer.handle, 0,
-                snapshot->buffer.handle, offset, part);
+            buffer_copy(&column_for(table, named)->buffer, 0, &snapshot->buffer,
+                        offset, part);
             offset += part;
         }
-        return snapshot->buffer;
+        return &snapshot->buffer;
     }
 
     if (gpu.bytes_capacity < need) {
@@ -835,8 +904,8 @@ static Buffer snapshot_ready(const MnGpuBlock *block, Block *state, uint32_t i,
         memcpy(out, column_data(table, column), part);
         out += part;
     }
-    if (bytes != 0) buffer_write(&snapshot->buffer, gpu.bytes, bytes);
-    return snapshot->buffer;
+    if (bytes != 0) buffer_write(&snapshot->buffer, 0, gpu.bytes, bytes);
+    return &snapshot->buffer;
 }
 
 /* Points the bind group of the block's table `t` at the buffers in
@@ -890,14 +959,12 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         *block_state = state;
     }
     Buffer *bound = state->bound;
-    WGPUCommandEncoder encoder =
-        wgpuDeviceCreateCommandEncoder(gpu.device, NULL);
 
     uint64_t rows = 0;
+    MnTable *only = NULL;
     if (block->inner) {
         MnQuery *inner = block->inner;
         uint32_t populated = 0;
-        MnTable *only = NULL;
         for (uint32_t t = 0; t < inner->table_count; t++) {
             MnTable *table = inner->tables[t];
             if (table->count == 0) continue;
@@ -908,13 +975,13 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         if (populated != 1) only = NULL;
         for (uint32_t i = 0; i < block->inner_count; i++) {
             bound[1 + block->outer_count + i] =
-                snapshot_ready(block, state, i, rows, only, encoder);
+                *snapshot_ready(block, state, i, rows, only);
         }
     }
     uniform[1] = (uint32_t)rows;
     if (block->fallible) {
         uint32_t none = UINT32_MAX;
-        wgpuQueueWriteBuffer(gpu.queue, state->error.handle, 0, &none, 4);
+        queue_write(&state->error, 0, &none, 4);
         bound[state->binding_count - 1] = state->error;
     }
 
@@ -935,10 +1002,10 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         state->uniform_words = mn_calloc((size_t)size, 1);
     }
     bound[0] = state->uniforms;
+
+    /* Every table's columns and uniform words are made ready before the
+     * dispatches are recorded. */
     size_t uniform_end = 0;
-    WGPUComputePassEncoder pass =
-        wgpuCommandEncoderBeginComputePass(encoder, NULL);
-    wgpuComputePassEncoderSetPipeline(pass, state->pipeline);
     for (uint32_t t = 0; t < outer->table_count; t++) {
         MnTable *table = outer->tables[t];
         if (table->count == 0) continue;
@@ -948,40 +1015,49 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
             bound[1 + i] = column->buffer;
         }
         target_bind(block, state, t);
-        Target *target = &state->targets[t];
         uniform[0] = table->count;
         memcpy((char *)state->uniform_words + t * stride, uniform,
                (size_t)block->uniform_words * 4);
         uniform_end = (t + 1) * stride;
+    }
+    queue_write(&state->uniforms, 0, state->uniform_words, uniform_end);
 
+    WGPUComputePassEncoder pass = pass_open();
+    wgpuComputePassEncoderSetPipeline(pass, state->pipeline);
+    buffer_use(&state->uniforms);
+    if (block->fallible) buffer_use(&state->error);
+    for (uint32_t i = 0; i < block->inner_count; i++) {
+        const MnGpuColumn *named = &block->inner_columns[i];
+        if (only && !block_writes(block, named->component)) {
+            buffer_use(&column_find(only, named->component)->buffer);
+        } else {
+            buffer_use(&state->snapshots[i].buffer);
+        }
+    }
+    for (uint32_t t = 0; t < outer->table_count; t++) {
+        MnTable *table = outer->tables[t];
+        if (table->count == 0) continue;
         /* Row r is run by invocation (r % MN_GPU_ROW_SPAN, r /
          * MN_GPU_ROW_SPAN). */
         uint64_t groups = ((uint64_t)table->count + 63) / 64;
         uint32_t across = groups < MAX_GROUPS ? (uint32_t)groups : MAX_GROUPS;
         uint32_t down = (uint32_t)((groups + MAX_GROUPS - 1) / MAX_GROUPS);
-        wgpuComputePassEncoderSetBindGroup(pass, 0, target->group, 0, NULL);
+        wgpuComputePassEncoderSetBindGroup(pass, 0, state->targets[t].group, 0,
+                                           NULL);
         wgpuComputePassEncoderDispatchWorkgroups(pass, across, down, 1);
 
         for (uint32_t i = 0; i < block->outer_count; i++) {
+            Column *column = column_find(table, block->outer_columns[i].component);
+            buffer_use(&column->buffer);
             if (!block->outer_columns[i].write) continue;
-            Column *column = column_for(table, &block->outer_columns[i]);
             column->version = ++gpu.serial;
             column_set(table, column, ON_GPU);
         }
     }
-    wgpuComputePassEncoderEnd(pass);
-    wgpuComputePassEncoderRelease(pass);
-    if (uniform_end != 0) {
-        wgpuQueueWriteBuffer(gpu.queue, state->uniforms.handle, 0,
-                             state->uniform_words, uniform_end);
-    }
-    if (block->fallible) {
-        wgpuCommandEncoderCopyBufferToBuffer(encoder, state->error.handle, 0,
-                                             state->error_read.handle, 0, 4);
-    }
-    submit(encoder);
 
     if (block->fallible) {
+        buffer_copy(&state->error, 0, &state->error_read, 0, 4);
+        encoder_submit();
         uint32_t lowest;
         memcpy(&lowest, buffer_read(&state->error_read, 4), 4);
         wgpuBufferUnmap(state->error_read.handle);

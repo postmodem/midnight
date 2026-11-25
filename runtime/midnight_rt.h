@@ -776,6 +776,12 @@ typedef struct MnGpuBlock {
 
 void mn_gpu_run(MnGpuBlock *block);
 
+/* Hands the GPU work recorded so far to the device without waiting for
+ * it. Generated code calls it after the last block of a GPU system that an
+ * ordinary system follows in the tick, so that the device works while the
+ * ordinary system runs. */
+void mn_gpu_submit(void);
+
 /* True exactly while the GPU copy of some component column, of any table,
  * is current, alone or together with the CPU copy. A GPU copy that is no
  * longer current does not count, and neither does the copy of a table's

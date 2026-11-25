@@ -514,7 +514,43 @@ fn ordinary_code_syncs_what_gpu_blocks_name() {
     assert_has(main, "= mn_get(first_0, 1, sizeof(T_Other), ");
     assert_seq(
         function_text(&c, "static void S_drift(void)"),
-        &["static void S_drift(void) {", "mn_gpu_run(&Gb0);", "}"],
+        &[
+            "static void S_drift(void) {",
+            "mn_gpu_run(&Gb0);",
+            "mn_gpu_submit();",
+            "}",
+        ],
+    );
+}
+
+/// A GPU system submits its work when an ordinary system follows it, and
+/// only then: the next GPU system records into the same submission, and
+/// the end of the tick submits after the last system.
+#[test]
+fn a_gpu_system_submits_before_an_ordinary_system() {
+    let c = emit_c(
+        "gpu_submit",
+        "component Body\n  x: Float32\nend\n\n\
+         gpu system a\n  each Body do |body|\n    body.x += 1.0\n  end\nend\n\n\
+         gpu system b\n  each Body do |body|\n    body.x += 2.0\n  end\n  each Body do |body|\n    body.x *= 2.0\n  end\nend\n\n\
+         system c\n  each Body do |body|\n    puts body.x\n  end\nend\n\n\
+         gpu system d\n  each Body do |body|\n    body.x -= 1.0\n  end\nend\n\n\
+         spawn Body(1.0)\nWorld.tick\n",
+    );
+    let a = function_text(&c, "static void S_a(void)");
+    assert_lacks(a, "mn_gpu_submit();");
+    assert_seq(
+        function_text(&c, "static void S_b(void)"),
+        &[
+            "mn_gpu_run(&Gb1);",
+            "mn_gpu_run(&Gb2);",
+            "mn_gpu_submit();",
+            "}",
+        ],
+    );
+    assert_lacks(
+        function_text(&c, "static void S_d(void)"),
+        "mn_gpu_submit();",
     );
 }
 

@@ -1785,6 +1785,12 @@ void mn_gpu_run(MnGpuBlock *block) {
     }
 }
 
+void mn_gpu_submit(void) {
+#ifdef MN_GPU
+    mn_gpu_device_submit();
+#endif
+}
+
 #ifdef MN_GPU_SYSTEMS
 /* Reads MIDNIGHT_GPU, chooses the device and prints the `info` line. */
 static void gpu_start(void) {

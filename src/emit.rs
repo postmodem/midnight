@@ -249,16 +249,21 @@ impl<'a> Cx<'a> {
             let _ = writeln!(defs, "{line}\n{header} {{\n{body}}}\n");
         }
         let lowered = gpu::lower(prog, &self.folded, self.gpu.wide.clone());
-        for system in &prog.systems {
+        for (index, system) in prog.systems.iter().enumerate() {
             let header = format!("static void {}(void)", names::system(&system.name));
             let body = if system.gpu {
-                // A GPU system runs its blocks in order.
-                lowered
+                // A GPU system runs its blocks in order, and hands them to
+                // the device when an ordinary system follows it.
+                let mut body: String = lowered
                     .blocks
                     .iter()
                     .filter(|block| std::ptr::eq(block.system, system.name.as_str()))
                     .map(|block| format!("    mn_gpu_run(&{});\n", gpu::c::block_name(block.id)))
-                    .collect()
+                    .collect();
+                if prog.systems.get(index + 1).is_some_and(|next| !next.gpu) {
+                    body.push_str("    mn_gpu_submit();\n");
+                }
+                body
             } else {
                 FnCx::new(&mut self, &system.body, Type::Void).function(&system.body)
             };
