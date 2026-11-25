@@ -802,3 +802,47 @@ fn an_int_from_outside_is_checked_when_the_words_are_filled() {
     assert_has(&c, "2147483647");
     assert_lacks(&c, "C_EDGE");
 }
+
+const NESTED: &str = "\
+component Item
+  id: Int32
+  seen: Int32
+end
+
+gpu system count
+  each Item do |me|
+    seen = 0
+    each Item do |other|
+      next if other.id == me.id
+      seen += 1
+    end
+    me.seen = seen
+  end
+end
+
+gpu system first
+  each Item do |me|
+    each Item do |other|
+      me.seen = other.id
+      break
+    end
+  end
+end
+";
+
+/// The nested `each` runs eight rows per round of its loop and then the
+/// rest, each copy of its body in a `loop` that a `next` leaves with
+/// `break`. A body with a `break` keeps the plain loop.
+#[test]
+fn the_nested_each_runs_eight_rows_per_round() {
+    let shaders = shaders(NESTED);
+    let rounds = &shaders[0];
+    assert_has(rounds, "let j_whole = u.w1 & ~7u;");
+    assert_has(rounds, "for (; j < j_whole; ) {");
+    assert_eq!(rounds.matches("j = j + 1u;").count(), 8, "{rounds}");
+    assert_eq!(rounds.matches("loop {").count(), 8, "{rounds}");
+    assert_has(rounds, "for (; j < u.w1; j = j + 1u) {");
+    let plain = &shaders[1];
+    assert!(!plain.contains("j_whole"), "{plain}");
+    assert_has(plain, "for (var j: u32 = 0u; j < u.w1; j = j + 1u) {");
+}

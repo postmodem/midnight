@@ -1,0 +1,38 @@
+# A nested `each` over 21 rows: a device runs its body for eight rows per
+# round of the loop, twice, then for the five left. `next` stands in the
+# body directly and inside an `if`, and the order of the rows shows in a
+# sum that weighs each by its place.
+component Item
+  id: Int32
+  seen: Int32
+  order: Int32
+  odd: Int32
+end
+
+gpu system look
+  each Item do |me|
+    seen = 0
+    order = 0
+    odd = 0
+    each Item do |other|
+      next if other.id == me.id
+      seen += 1
+      order = (order * 3 + other.id) % 1000003
+      if other.id % 2 == 1
+        next if other.id > 15
+        odd += other.id
+      end
+    end
+    me.seen = seen
+    me.order = order
+    me.odd = odd
+  end
+end
+
+21.times do |i|
+  spawn Item(i, 0, 0, 0)
+end
+World.tick
+each Item do |item|
+  puts item
+end

@@ -177,6 +177,48 @@ fn leaves(stmts: &[Stmt]) -> bool {
     )
 }
 
+/// Rows of the nested `each` per round of its loop.
+const UNROLL: u32 = 8;
+
+/// Whether the body of the nested `each` can be printed several times per
+/// round: nothing in it leaves the loop, and no `next` sits in a `Once`.
+fn unrollable(body: &[Stmt]) -> bool {
+    body.iter().all(|stmt| match stmt {
+        Stmt::Break | Stmt::Return(_) => false,
+        Stmt::If(_, then, else_) => unrollable(then) && unrollable(else_),
+        Stmt::Once(inner) => !continues(inner),
+        _ => true,
+    })
+}
+
+/// Whether a `Continue` for the enclosing loop is among these statements.
+fn continues(stmts: &[Stmt]) -> bool {
+    stmts.iter().any(|stmt| match stmt {
+        Stmt::Continue => true,
+        Stmt::If(_, then, else_) => continues(then) || continues(else_),
+        Stmt::Once(inner) => continues(inner),
+        _ => false,
+    })
+}
+
+/// The body with each `next` made a `Break` out of a `Once` around the
+/// body, or `None` when it has no `next`.
+fn without_next(body: &[Stmt]) -> Option<Vec<Stmt>> {
+    fn rewrite(stmts: &[Stmt]) -> Vec<Stmt> {
+        stmts
+            .iter()
+            .map(|stmt| match stmt {
+                Stmt::Continue => Stmt::Break,
+                Stmt::If(cond, then, else_) => {
+                    Stmt::If(cond.clone(), rewrite(then), rewrite(else_))
+                }
+                other => other.clone(),
+            })
+            .collect()
+    }
+    continues(body).then(|| rewrite(body))
+}
+
 impl Printer<'_, '_> {
     fn line(&mut self, text: &str) {
         for _ in 0..self.indent {
@@ -474,6 +516,49 @@ impl Printer<'_, '_> {
                 self.line(&format!("        {last} = {var} != {to};"));
                 self.line(&format!("        {var} = {var} {step} {one};"));
                 self.line("    }");
+                self.line("}");
+                self.indent -= 1;
+                self.line("}");
+            }
+            Stmt::For {
+                var,
+                ty,
+                from,
+                op,
+                to,
+                down,
+                guard: None,
+                body,
+            } if var == INNER_ROW && unrollable(body) => {
+                // The nested `each`: eight rows per round, then the rest
+                // one at a time, in the same order.
+                let to = self.expr(to);
+                self.line("{");
+                self.indent += 1;
+                self.line(&format!(
+                    "var {var}: {} = {};",
+                    self.ty(*ty),
+                    self.top(from)
+                ));
+                self.line(&format!("let {var}_whole = {to} & ~{}u;", UNROLL - 1));
+                self.line(&format!("for (; {var} < {var}_whole; ) {{"));
+                self.indent += 1;
+                let copy = without_next(body);
+                for _ in 0..UNROLL {
+                    match &copy {
+                        Some(copy) => self.stmt(&Stmt::Once(copy.clone())),
+                        None => {
+                            self.line("{");
+                            self.block(body);
+                            self.line("}");
+                        }
+                    }
+                    self.line(&format!("{var} = {var} + 1u;"));
+                }
+                self.indent -= 1;
+                self.line("}");
+                self.line(&format!("for (; {var} < {to}; {var} = {var} + 1u) {{"));
+                self.block(body);
                 self.line("}");
                 self.indent -= 1;
                 self.line("}");

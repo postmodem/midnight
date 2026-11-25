@@ -11,7 +11,7 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 248 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+Counts: 249 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 334 in `tests/fail`, 78 in `tests/panic`, 12 in `tests/plan`.
 
 ## A first program, The model
@@ -384,6 +384,7 @@ by the program itself.
 | The gravity system of the specification | `gpu_gravity` |
 | The nested `each` sees every entity as it was when the outer `each` began | `gpu_snapshot`, `gpu_tables`, `gpu_with_cpu_systems` |
 | A run sees its own writes through the outer parameter and its old values through the nested one | `gpu_snapshot_own_row` |
+| The nested `each` over more rows than a device runs per round of its loop, with `next` directly in its body and inside an `if` | `gpu_nested_rounds` |
 | The outer and the nested query each match several tables | `gpu_tables` |
 | Structural changes between ticks: spawns that grow tables and make new ones, despawns, adds and removes, on tables GPU blocks use | `gpu_churn`, `gpu_stress` |
 | Queries that match no table, then some, then none again, outer and nested | `gpu_empty_queries` |
