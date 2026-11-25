@@ -961,10 +961,28 @@ unless `n` divides 4,294,967,296. A `rand(n)` that fails draws no number.
 - A GPU gives the same result from run to run on the same machine and
   driver.
 - Between a GPU and the CPU, or between two different GPUs, `Float` results
-  agree closely but not to the last bit. A GPU is allowed small differences
-  in division, in `Math.sqrt` and the other `Math` functions and in `**`,
-  and may combine a multiplication and an addition into one operation.
-  Compare such results with a tolerance.
+  agree closely but not to the last bit. `+`, `-` and `*` on their own
+  are rounded as on the CPU. Beyond that, a GPU may:
+  - compute `/`, `Math.sqrt` and `1.0 / Math.sqrt(x)` to within 2 units
+    in the last place, the other `Math` functions and `**` less exactly
+    still, and `Math.sin`, `Math.cos` and `Math.tan` closely only for
+    arguments between -π and π;
+  - combine a multiplication and an addition or subtraction into one
+    operation with a single rounding, and in a sum of products choose
+    which product to combine;
+  - rearrange arithmetic as exact algebra allows, for example computing
+    `a * b + b * c` as `b * (a + c)`;
+  - treat a subnormal number, one of magnitude below about 1.18e-38, as
+    zero of the same sign, whether it is a value the block reads, a
+    result it stores or a step in between: with `x` equal to 1.0e-20,
+    `x * x * 1.0e20` may be 0.0 on a GPU and 1.0e-20 on the CPU;
+  - give 0 for a division by a number of magnitude 2 ** 126 (about
+    8.5e37) or more, and NaN for an infinity divided by one.
+
+  Compare such results with a tolerance. Where a result is the difference
+  of nearly equal values, such as `a * b - c` with `a * b` close to `c`,
+  the two sides may differ by as much as the rounding of the values that
+  were subtracted, which can be far larger than the result itself.
 - `Int` arithmetic, `rand` and `rand(n)` give the same results everywhere.
 - On a GPU, a comparison with NaN and a `Math` function outside its domain
   (`Math.sqrt` of a negative number, `Math.log` of zero or less) may give
