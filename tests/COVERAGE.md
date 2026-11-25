@@ -4,14 +4,15 @@ This checklist maps each section and table row of
 [`docs/language.md`](../docs/language.md) to the test programs that exercise
 it. Names without a directory are `tests/run/NAME.12am` (with `NAME.out`);
 `fail/NAME` is `tests/fail/NAME.12am` (with `NAME.err`); `panic/NAME` is
-`tests/panic/NAME.12am` (with `NAME.err`).
+`tests/panic/NAME.12am` (with `NAME.err`); `plan/NAME` is
+`tests/plan/NAME.12am` (with `NAME.plan`).
 
 Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
 Counts: 207 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-243 in `tests/fail`, 60 in `tests/panic`.
+243 in `tests/fail`, 60 in `tests/panic`, 9 in `tests/plan`.
 
 ## A first program, The model
 
@@ -453,6 +454,34 @@ Syntax errors are in `fail/syntax_*`: `syntax_unexpected_token`,
 | --- | --- |
 | `refcount` | Strings and lists copied, modified and dropped through locals, struct fields, component fields, resource fields, events (read and discarded unread), queued commands (spawn and add inside `each`, also for entities despawned in the same batch), despawned entities, lists of strings, of lists and of structs with strings, arguments and return values, early `return` / `break` / `next` with live locals, replaced components (`add` of a present one, `e[C] = …`), removed components, reassigned variables, `pop` / `delete_at` / `clear` |
 | `layout` | A component with a `Float`, a `Float32`, an `Int16`, a `UInt8`, a `Bool` and an enum field (`Body`, with the enum `Kind`), spawned, queried, modified and printed |
+
+## Transfer plans
+
+What `midnight plan` prints. Each expected plan was worked out by hand from
+the rule for where a column lives.
+
+| Case | Files |
+| --- | --- |
+| Data that only GPU systems use stays on the GPU: an empty plan | `plan/stays_on_gpu` |
+| Spawns at the top level before the first tick are not part of a tick | `plan/stays_on_gpu`, `plan/top_level` |
+| A CPU system that reads what a GPU system writes: one download, no upload | `plan/reader` |
+| A component a GPU system only reads is never downloaded | `plan/reader`, `plan/writer`, `plan/nested_each` |
+| A CPU system that writes what a GPU system reads: an upload | `plan/writer`, `plan/nested_each` |
+| A CPU system that writes what a GPU system writes: an upload and a download | `plan/writer`, `plan/functions` |
+| A download comes from the last GPU system to write; consecutive GPU systems transfer nothing | `plan/writer`, `plan/nested_each` |
+| A nested `each` over a component its block writes is no transfer | `plan/nested_each` |
+| A component named only by a nested `each` has a GPU copy | `plan/nested_each` |
+| What called functions do counts as the system's | `plan/functions` |
+| `e[C]`, read and written | `plan/functions`, `plan/top_level` |
+| `World.count` and `has?` read no column | `plan/functions` |
+| `spawn` changes the components it lists: `on spawn` | `plan/spawn` |
+| `despawn` changes every component with a GPU copy: `on despawn` | `plan/despawn` |
+| `add` and `remove` change every component with a GPU copy: `on add`, `on remove` | `plan/add_remove` |
+| A marked download before an unmarked one of the same component: both are listed | `plan/despawn` |
+| A structural change that finds the CPU copy current downloads nothing | `plan/add_remove` |
+| Components with no GPU copy never appear | `plan/despawn`, `plan/spawn` |
+| Top-level code in the loop that ticks is the step `top level` | `plan/top_level` |
+| Columns are lined up within a plan | `plan/despawn`, `plan/add_remove`, `plan/writer` |
 
 ## Runtime errors
 

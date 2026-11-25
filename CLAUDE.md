@@ -66,6 +66,9 @@ command that needs it.
   comments that state the intent the `.err` is reviewed against.
 - `tests/panic/NAME.12am` with `NAME.err`: must compile, then stop with
   status 1 and exactly that run-time error.
+- `tests/plan/NAME.12am` with `NAME.plan`: `midnight plan` must print exactly
+  that, with status 0. Each program begins with an `# expect:` comment that
+  states the intent the `.plan` is reviewed against.
 - `examples/NAME.12am` with `NAME.out`: as `tests/run`.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
   diagnostic and run-time error has a test; keep it that way when the

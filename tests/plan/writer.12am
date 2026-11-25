@@ -1,0 +1,49 @@
+# expect: three transfers. `steer` writes Velocity on the CPU before `move`
+# reads it on the GPU: an upload every tick, and no download because no GPU
+# block writes Velocity. `wrap` writes Position, which the GPU systems write
+# too: `move` uploads what `wrap` left, and `wrap` downloads what `settle`,
+# the last GPU writer, left. `settle` runs on the GPU straight after `move`
+# and costs nothing.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+system steer
+  each Velocity do |vel|
+    vel.dx *= 0.99
+    vel.dy -= 9.8 * Time.dt
+  end
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+gpu system settle
+  each Position do |pos|
+    if pos.y < 0.0
+      pos.y = 0.0
+    end
+  end
+end
+
+system wrap
+  each Position do |pos|
+    pos.x -= 100.0 if pos.x > 100.0
+  end
+end
+
+spawn Position(0.0, 10.0), Velocity(3.0, 0.0)
+10.times do
+  World.tick
+end
