@@ -1,0 +1,37 @@
+# Comparisons in a strict GPU system are IEEE: with a NaN only `!=` holds,
+# -0.0 equals 0.0, and a subnormal equals zero. `min`, `max` and `clamp`
+# follow from them and return one of their operands unchanged.
+component Row
+  a: Float32
+  b: Float32
+  results: Int32 = 0
+  low: Float32 = 0
+  high: Float32 = 0
+  clamped: Float32 = 0
+end
+
+def bit(test: Bool, value: Int) -> Int
+  test ? value : 0
+end
+
+strict gpu system compare
+  each Row do |r|
+    r.results = bit(r.a == r.b, 1) + bit(r.a != r.b, 2) + bit(r.a < r.b, 4) + bit(r.a <= r.b, 8) + bit(r.a > r.b, 16) + bit(r.a >= r.b, 32)
+    r.low = min(r.a, r.b)
+    r.high = max(r.a, r.b)
+    r.clamped = r.a.clamp(-1.0, r.b)
+  end
+end
+
+zero = 0.0
+nan = zero / zero
+infinity = 1.0 / zero
+[[1.0, 2.0], [2.0, 1.0], [1.0, 1.0], [nan, 1.0], [1.0, nan], [nan, nan], [-0.0, 0.0], [0.0, -0.0],
+ [1.0e-40, 0.0], [-1.0e-40, 0.0], [1.0e-40, -1.0e-40], [1.0e-40, 2.0e-40], [infinity, infinity],
+ [-infinity, infinity], [-5.0, 3.0], [0.5, nan], [-3.0e38, -3.0e38]].each do |pair|
+  spawn Row(pair[0], pair[1])
+end
+World.tick
+each Row do |r|
+  puts "#{r.a} #{r.b}: #{r.results} #{r.low} #{r.high} #{r.clamped}"
+end

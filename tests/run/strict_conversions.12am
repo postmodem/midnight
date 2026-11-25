@@ -1,0 +1,41 @@
+# Conversions and the operations built on them in a strict GPU system.
+# `to_f` of an `Int` above 2^24 in magnitude is correctly rounded, ties to
+# even; `to_i`, `floor`, `ceil` and `round` are as at 32 bits, a subnormal
+# counting as zero; `%` and `round(digits)` are their formulas, every step
+# strict.
+component Row
+  n: Int32
+  x: Float32
+  as_float: Float32 = 0
+  truncated: Int32 = 0
+  floored: Int32 = 0
+  raised: Int32 = 0
+  rounded: Int32 = 0
+  remainder: Float32 = 0
+  digits: Float32 = 0
+  tens: Float32 = 0
+end
+
+strict gpu system convert
+  each Row do |r|
+    r.as_float = r.n.to_f
+    r.truncated = r.x.to_i
+    r.floored = r.x.floor
+    r.raised = r.x.ceil
+    r.rounded = r.x.round
+    r.remainder = r.x % 0.7
+    r.digits = r.x.round(2)
+    r.tens = r.x.round(-1)
+  end
+end
+
+zero = 0.0
+ints = [0, 1, -1, 16777216, 16777217, 16777219, -16777217, 33554435, 2147483647, -2147483647 - 1, 123456789, -987654321, 1000000001]
+floats = [2.5, -2.5, 0.49999997, -0.5, 1.0e-40, -1.0e-40, 3000000000.0, -3000000000.0, 7.775, 12345.678, zero / zero, 1.0 / zero, -1.0 / zero]
+ints.each_with_index do |n, i|
+  spawn Row(n, floats[i])
+end
+World.tick
+each Row do |r|
+  puts "#{r.n} #{r.as_float} | #{r.x} #{r.truncated} #{r.floored} #{r.raised} #{r.rounded} #{r.remainder} #{r.digits} #{r.tens}"
+end

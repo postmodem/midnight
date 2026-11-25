@@ -462,6 +462,25 @@ by the program itself.
 | Names that WGSL or C reserve, as fields, locals, parameters, functions and types | `gpu_names` |
 | Run-time errors in a GPU system | `panic/gpu_*` (see [Runtime errors](#runtime-errors)) |
 
+### What strict GPU systems compute
+
+The expected outputs are the C implementation's, run with subnormals
+flushed, and were checked by hand against IEEE single precision under the
+rules of a strict GPU system. The bit helpers of strict code (comparisons,
+`trunc`, `floor`, `ceil`, `to_f`) were compared with C's own operations on
+every input. Every program holds on every device exactly, with no
+tolerance.
+
+| Rule | Files |
+| --- | --- |
+| `+`, `-`, `*` each rounded on their own: no fused `a * b + c` at cancellation, no fused product in `a * a + b * b`, no factored `a * b + b * c`; `x - x` and `x * 0.0` NaN for an infinity and a NaN; `-0.0 + 0.0` is `0.0`; `-x` and `x.abs` change only the sign; `x ** 2.0` is `x * x` | `strict_arithmetic` |
+| `/` and `Math.sqrt` correctly rounded, with IEEE's special cases, divisors at and above 2^126, and quotients over the range | `strict_div_sqrt` |
+| A subnormal operand is zero with its sign in arithmetic, comparisons and `floor`; a result below 2^-126 after rounding is zero with its sign; a product just below 2^-126 that rounds to it is 2^-126; a copy, `-x` and `x.abs` keep the bits; two literals with a subnormal product give `0.0` and `-0.0` | `strict_subnormals` |
+| Comparisons with NaN, -0.0, subnormals and infinities; `min`, `max` and `clamp` | `strict_compare` |
+| `to_f` of `Int`s above 2^24, ties to even; `to_i`, `floor`, `ceil`, `round` with subnormals, out of range and NaN; `%` and `round(digits)` | `strict_conversions` |
+| A function called from a strict and from an ordinary GPU system means the strict thing in the first only | `strict_both_kinds` |
+| `rand` and `rand(n)` in a strict system | `strict_rand` |
+
 ## Events
 
 | Rule | Files |

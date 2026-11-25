@@ -50,6 +50,8 @@ pub struct Column {
 pub struct Block<'a> {
     /// The system's name.
     pub system: &'a str,
+    /// The system is strict.
+    pub strict: bool,
     /// The `each` statement.
     pub span: Span,
     /// Which `each` of the system, from 1.
@@ -94,14 +96,23 @@ impl Lowered<'_> {
     }
 }
 
-/// The name of the 32-bit form of a function.
-pub fn func_name(prog: &Program, id: usize) -> String {
-    format!("G{}", names::func(prog, id))
+/// The prefix of the names of plain or strict code.
+fn prefix(strict: bool) -> &'static str {
+    if strict { "S" } else { "G" }
+}
+
+/// The name of the 32-bit form of a function, in plain or strict code.
+pub fn func_name(prog: &Program, id: usize, strict: bool) -> String {
+    format!("{}{}", prefix(strict), names::func(prog, id))
 }
 
 /// The name of the function that compares two values of a record.
-fn eq_name(prog: &Program, record: usize) -> String {
-    format!("Geq_{}", names::sanitize(&prog.records[record].name))
+fn eq_name(prog: &Program, record: usize, strict: bool) -> String {
+    format!(
+        "{}eq_{}",
+        prefix(strict),
+        names::sanitize(&prog.records[record].name)
+    )
 }
 
 /// The outer loop's row variable and the nested loop's.
@@ -116,8 +127,9 @@ pub fn lower<'a>(prog: &'a Program, folded: &[Option<Folded>], wide: Vec<bool>) 
         uniforms: Uniforms::new(),
         sites: Vec::new(),
         library: Library::default(),
-        wanted: vec![false; prog.funcs.len()],
+        wanted: vec![[false; 2]; prog.funcs.len()],
         waiting: Vec::new(),
+        strict: false,
     };
     let mut drafts = Vec::new();
     for system in prog.systems.iter().filter(|system| system.gpu) {
@@ -125,8 +137,8 @@ pub fn lower<'a>(prog: &'a Program, folded: &[Option<Folded>], wide: Vec<bool>) 
             drafts.push(lower.draft(system, index as u32 + 1, stmt));
         }
     }
-    while let Some(id) = lower.waiting.pop() {
-        let func = lower.function(id);
+    while let Some((id, strict)) = lower.waiting.pop() {
+        let func = lower.function(id, strict);
         lower.library.add(func);
     }
     let blocks = drafts
@@ -164,9 +176,12 @@ struct Lower<'a> {
     /// In the order they were found.
     sites: Vec<Site>,
     library: Library,
-    /// By function: its 32-bit form is in the library or waiting.
-    wanted: Vec<bool>,
-    waiting: Vec<usize>,
+    /// By function, plain and strict: its 32-bit form is in the library or
+    /// waiting.
+    wanted: Vec<[bool; 2]>,
+    waiting: Vec<(usize, bool)>,
+    /// The code being lowered is strict.
+    strict: bool,
 }
 
 /// A block whose body is lowered but whose use of `rand`, of the uniform
@@ -174,6 +189,7 @@ struct Lower<'a> {
 /// it calls.
 struct Draft<'a> {
     system: &'a str,
+    strict: bool,
     span: Span,
     each: u32,
     outer_query: &'a Query,
@@ -317,16 +333,29 @@ impl<'a> Lower<'a> {
     /// The name of a function's 32-bit form, which is lowered later if it
     /// has not been asked for before.
     fn user_fn(&mut self, id: FuncId) -> String {
-        if !self.wanted[id.0] {
-            self.wanted[id.0] = true;
-            self.waiting.push(id.0);
+        let mode = usize::from(self.strict);
+        if !self.wanted[id.0][mode] {
+            self.wanted[id.0][mode] = true;
+            self.waiting.push((id.0, self.strict));
         }
-        func_name(self.prog, id.0)
+        func_name(self.prog, id.0, self.strict)
+    }
+
+    /// `F32` operations as the code being lowered has them.
+    fn f(&self) -> helpers::F {
+        helpers::F {
+            strict: self.strict,
+        }
+    }
+
+    /// A helper's name in the code being lowered.
+    fn helper_name(&self, name: &str) -> String {
+        helpers::in_mode(name, self.strict)
     }
 
     /// The function that compares two values of a record, field by field.
     fn record_eq(&mut self, record: usize) -> String {
-        let name = eq_name(self.prog, record);
+        let name = eq_name(self.prog, record, self.strict);
         if self.library.has(&name) {
             return name;
         }
@@ -348,6 +377,7 @@ impl<'a> Lower<'a> {
             params: vec![param("a"), param("b")],
             ret: Ty::Bool,
             body: vec![Stmt::Return(Some(result))],
+            strict: self.strict,
         });
         name
     }
@@ -363,12 +393,24 @@ impl<'a> Lower<'a> {
                 let name = self.record_eq(record.0);
                 call(&name, vec![a, b])
             }
-            _ => compare(BinOp::Eq, a, b),
+            _ => self.compare(ty, BinOp::Eq, a, b),
         }
     }
 
-    /// The 32-bit form of a function.
-    fn function(&mut self, id: usize) -> Func {
+    /// A comparison of two values of a type: of `Float`s by the rules of
+    /// strict code there.
+    fn compare(&mut self, ty: &Type, op: BinOp, a: Expr, b: Expr) -> Expr {
+        if self.strict && value_ty(ty) == Ty::F32 {
+            helpers::require(&mut self.library, helpers::CMP);
+            self.f().cmp(op, a, b)
+        } else {
+            compare(op, a, b)
+        }
+    }
+
+    /// The 32-bit form of a function, in plain or strict code.
+    fn function(&mut self, id: usize, strict: bool) -> Func {
+        self.strict = strict;
         let prog = self.prog;
         let func = &prog.funcs[id];
         let ret = value_ty(&func.ret);
@@ -397,10 +439,11 @@ impl<'a> Lower<'a> {
             })
             .collect();
         Func {
-            name: func_name(prog, id),
+            name: func_name(prog, id, strict),
             params,
             ret,
             body: cx.out,
+            strict,
         }
     }
 
@@ -414,6 +457,7 @@ impl<'a> Lower<'a> {
         else {
             unreachable!("the checker lets the body of a GPU system hold only `each` blocks");
         };
+        self.strict = system.strict;
         let mut cx = BodyCx::new(self, &system.body);
         cx.block = Some(InBlock {
             paths: local_paths(body),
@@ -431,6 +475,7 @@ impl<'a> Lower<'a> {
         let block = cx.block.take().expect("set above");
         Draft {
             system: &system.name,
+            strict: system.strict,
             span: stmt.span,
             each,
             outer_query: query,
@@ -493,6 +538,7 @@ impl<'a> Lower<'a> {
             .unwrap_or(HEADER.len() as u32);
         Block {
             system: draft.system,
+            strict: draft.strict,
             span: draft.span,
             each: draft.each,
             id,
@@ -1130,6 +1176,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     (TUnOp::Neg, Expr::I32(literal)) => Expr::I32(literal.wrapping_neg()),
                     (TUnOp::Neg, e) => match e.as_f32() {
                         Some(literal) => float(-literal),
+                        None if ty == Ty::F32 => self.lo.f().neg(e),
                         None => unary(UnOp::Neg, e),
                     },
                     (TUnOp::Not, e) => not(e),
@@ -1150,12 +1197,25 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             ExprKind::Or { lhs, rhs } => self.short_circuit(lhs, rhs, false),
             // An `Int` literal made `Float` need not fit in 32 bits.
             ExprKind::IntToFloat(inner) if let ExprKind::Int(literal) = inner.kind => {
-                Val::literal(float(literal as f64 as f32), ty)
+                let value = if self.lo.strict {
+                    literal as f32
+                } else {
+                    literal as f64 as f32
+                };
+                Val::literal(float(value), ty)
             }
             ExprKind::IntToFloat(inner) => {
                 let value = self.expr(inner);
+                // Up to 2^24 in magnitude, every `Int` is a `Float`, and the
+                // targets' conversion is exact.
+                const EXACT: i64 = 1 << 24;
+                let (low, high) = int_range(inner, &self.lo.folded);
                 let e = match value.e {
                     Expr::I32(literal) => float(literal as f32),
+                    e if self.lo.strict && (low < -EXACT || high > EXACT) => {
+                        helpers::require(&mut self.lo.library, helpers::TO_F);
+                        call(helpers::TO_F, vec![e])
+                    }
                     e => Expr::Cast(Ty::F32, Box::new(e)),
                 };
                 Val {
@@ -1273,9 +1333,13 @@ impl<'l, 'a> BodyCx<'l, 'a> {
     /// type of the left one.
     fn binary(&mut self, op: TBinOp, ty: &Type, left: Val, right: Val, span: Span) -> Val {
         let fixed = left.fixed && right.fixed;
+        let f = self.lo.f();
         let simple = |op: BinOp, ty: Ty, left: Val, right: Val| {
             let e = match ty {
                 Ty::I32 => int_arith(op, left.e, right.e),
+                // Strict code computes nothing here: Rust's `f32` keeps
+                // subnormals.
+                _ if f.strict => f.arith(op, left.e, right.e),
                 _ => float_arith(op, left.e, right.e),
             };
             Val { e, ty, fixed }
@@ -1286,7 +1350,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 let e = match (op, ty) {
                     (TBinOp::Eq, _) => self.lo.equal(ty, left.e, right.e),
                     (_, Type::Entity | Type::Record(_)) => not(self.lo.equal(ty, left.e, right.e)),
-                    _ => compare(BinOp::Ne, left.e, right.e),
+                    _ => self.lo.compare(ty, BinOp::Ne, left.e, right.e),
                 };
                 Val {
                     e,
@@ -1302,7 +1366,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     _ => BinOp::Ge,
                 };
                 Val {
-                    e: compare(op, left.e, right.e),
+                    e: self.lo.compare(ty, op, left.e, right.e),
                     ty: Ty::Bool,
                     fixed,
                 }
@@ -1358,8 +1422,14 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     }
                 }
                 Type::Float => match op {
+                    TBinOp::Div if f.strict => {
+                        self.helper(helpers::DIV_F, vec![left, right], Ty::F32)
+                    }
                     TBinOp::Div => simple(BinOp::Div, Ty::F32, left, right),
-                    TBinOp::Mod => self.helper(helpers::FMOD, vec![left, right], Ty::F32),
+                    TBinOp::Mod => {
+                        let name = self.lo.helper_name(helpers::FMOD);
+                        self.helper(&name, vec![left, right], Ty::F32)
+                    }
                     // A square is a product, which is exact.
                     TBinOp::Pow if right.e == Expr::F32(2.0) => {
                         let left = self.once(left);
@@ -1395,11 +1465,13 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 let low = self.once(values.remove(1)).e;
                 let value = self.once(values.remove(0)).e;
                 let above = choose(
-                    compare(BinOp::Gt, value.clone(), high.clone()),
+                    self.lo
+                        .compare(&expr.ty, BinOp::Gt, value.clone(), high.clone()),
                     high,
                     value.clone(),
                 );
-                let e = choose(compare(BinOp::Lt, value, low.clone()), low, above);
+                let below = self.lo.compare(&expr.ty, BinOp::Lt, value, low.clone());
+                let e = choose(below, low, above);
                 Val { e, ty, fixed }
             }
             Builtin::IntMin | Builtin::FloatMin | Builtin::IntMax | Builtin::FloatMax => {
@@ -1410,20 +1482,37 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 };
                 let right = self.once(values.remove(1)).e;
                 let left = self.once(values.remove(0)).e;
-                let e = choose(compare(op, left.clone(), right.clone()), left, right);
+                let first = self.lo.compare(&expr.ty, op, left.clone(), right.clone());
+                let e = choose(first, left, right);
                 Val { e, ty, fixed }
             }
+            Builtin::FloatAbs if self.lo.strict => Val {
+                e: self.lo.f().abs(values.remove(0).e),
+                ty,
+                fixed,
+            },
             Builtin::FloatAbs => self.math(MathFn::Abs, values),
-            Builtin::FloatToI => self.helper(helpers::TO_I, values, ty),
-            Builtin::FloatFloor => self.helper(helpers::FLOOR, values, ty),
-            Builtin::FloatCeil => self.helper(helpers::CEIL, values, ty),
-            Builtin::FloatRound => self.helper(helpers::ROUND, values, ty),
-            Builtin::FloatRoundDigits => self.helper(helpers::ROUND_DIGITS, values, ty),
+            Builtin::FloatToI
+            | Builtin::FloatFloor
+            | Builtin::FloatCeil
+            | Builtin::FloatRound
+            | Builtin::FloatRoundDigits => {
+                let name = match op {
+                    Builtin::FloatToI => helpers::TO_I,
+                    Builtin::FloatFloor => helpers::FLOOR,
+                    Builtin::FloatCeil => helpers::CEIL,
+                    Builtin::FloatRound => helpers::ROUND,
+                    _ => helpers::ROUND_DIGITS,
+                };
+                let name = self.lo.helper_name(name);
+                self.helper(&name, values, ty)
+            }
             Builtin::FloatNan => Val {
                 e: helpers::is_nan(values.remove(0).e),
                 ty,
                 fixed,
             },
+            Builtin::Sqrt if self.lo.strict => self.helper(helpers::SQRT_F, values, ty),
             Builtin::Sqrt => self.math(MathFn::Sqrt, values),
             Builtin::Sin => self.math(MathFn::Sin, values),
             Builtin::Cos => self.math(MathFn::Cos, values),

@@ -1,0 +1,37 @@
+# A function called from a strict GPU system and from one that is not means
+# the strict thing in the first and the ordinary thing in the second: here
+# its product is subnormal, which only the strict system makes zero. Without
+# a device both run on the CPU.
+component Loose
+  x: Float32
+end
+
+component Exact
+  x: Float32
+end
+
+def shrink(v: Float) -> Float
+  v * 1.0e-30
+end
+
+gpu system loose
+  each Loose do |l|
+    l.x = shrink(l.x)
+  end
+end
+
+strict gpu system exact
+  each Exact do |e|
+    e.x = shrink(e.x)
+  end
+end
+
+spawn Loose(1.0e-10)
+spawn Exact(1.0e-10)
+World.tick
+each Loose do |l|
+  puts "loose #{l.x}"
+end
+each Exact do |e|
+  puts "exact #{e.x}"
+end

@@ -1,0 +1,22 @@
+# `rand` in a strict GPU system follows the seed as in any GPU system, and
+# arithmetic on its result is strict.
+component Drop
+  x: Float32 = 0
+  n: Int32 = 0
+end
+
+strict gpu system scatter
+  each Drop do |d|
+    d.x = rand * 10.0 - 5.0
+    d.n = rand(6) + 1
+  end
+end
+
+srand(42)
+8.times do
+  spawn Drop()
+end
+World.tick
+each Drop do |d|
+  puts "#{d.x} #{d.n}"
+end

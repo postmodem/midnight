@@ -21,6 +21,7 @@ use crate::tir::{Compact, Program, Type};
 
 use super::super::Cx;
 use super::super::names;
+use super::helpers;
 use super::ir::{BinOp, Cell, Expr, Func, MathFn, Stmt, Storage, Ty, UnOp, Uses, closure};
 use super::layout::{Source, gpu_struct};
 use super::lower::{Block, Column, INNER_ROW, Lowered, ROW};
@@ -80,6 +81,10 @@ const CLOSE: &str = "\
 
 ";
 
+/// The first line of a strict function: the compiler may not fold or move
+/// floating-point operations as if subnormals were kept.
+const FENV_ACCESS: &str = "#pragma STDC FENV_ACCESS ON";
+
 /// The name of a block's `MnGpuBlock`.
 pub fn block_name(id: u32) -> String {
     format!("Gb{id}")
@@ -128,14 +133,20 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
         out: String::new(),
         indent: 0,
     };
-    for func in &gpu.library.funcs {
+    let funcs: Vec<&Func> = gpu
+        .library
+        .funcs
+        .iter()
+        .filter(|func| !helpers::SHADER_ONLY.contains(&func.name.as_str()))
+        .collect();
+    for func in &funcs {
         let header = printer.header(func);
         let _ = writeln!(out, "{header};");
     }
-    if !gpu.library.funcs.is_empty() {
+    if !funcs.is_empty() {
         out.push('\n');
     }
-    for func in &gpu.library.funcs {
+    for func in &funcs {
         printer.function(func);
     }
     out.push_str(&printer.out);
@@ -507,6 +518,7 @@ impl Printer<'_, '_> {
     fn expr(&self, expr: &Expr) -> String {
         match expr {
             Expr::Unary(..) | Expr::Binary(..) => format!("({})", self.top(expr)),
+            Expr::Opaque(_, inner) => self.expr(inner),
             _ => self.top(expr),
         }
     }
@@ -576,12 +588,21 @@ impl Printer<'_, '_> {
                 };
                 format!("{name}({})", self.args(args, false))
             }
+            // In strict code `/` and `sqrt` are the hardware's, which flush
+            // subnormals while a strict block runs.
+            Expr::Call(name, args) if name == helpers::DIV_F => {
+                format!("({} / {})", self.expr(&args[0]), self.expr(&args[1]))
+            }
+            Expr::Call(name, args) if name == helpers::SQRT_F => {
+                format!("sqrtf({})", self.top(&args[0]))
+            }
             Expr::Call(name, args) => {
                 format!("{name}({})", self.args(args, self.state.contains(name)))
             }
             Expr::Construct(ty, args) => {
                 format!("({}){{{}}}", self.ty(*ty), self.args(args, false))
             }
+            Expr::Opaque(_, inner) => self.top(inner),
         }
     }
 
@@ -788,6 +809,9 @@ impl Printer<'_, '_> {
     fn function(&mut self, func: &Func) {
         let header = self.header(func);
         self.line(&format!("{header} {{"));
+        if func.strict {
+            self.line(FENV_ACCESS);
+        }
         self.block(&func.body);
         self.line("}");
         self.out.push('\n');
@@ -800,6 +824,9 @@ impl Printer<'_, '_> {
         let name = block_name(block.id);
         self.line(&format!("static void {name}_cpu(const MnGpuRun *run) {{"));
         self.indent = 1;
+        if block.strict {
+            self.line(FENV_ACCESS);
+        }
         self.line("const uint32_t rows = run->uniform[0];");
         let state = direct.rand_state
             || direct.fails
@@ -838,11 +865,17 @@ impl Printer<'_, '_> {
             };
             self.line(&format!("const {cty} *s{index} = run->inner[{index}];"));
         }
+        if block.strict {
+            self.line("const uint64_t fp_state = mn_strict_enter();");
+        }
         self.line(&format!(
             "for (uint32_t {ROW} = 0; {ROW} < rows; {ROW}++) {{"
         ));
         self.block(&block.body);
         self.line("}");
+        if block.strict {
+            self.line("mn_strict_leave(fp_state);");
+        }
         self.indent = 0;
         self.line("}");
         self.out.push('\n');

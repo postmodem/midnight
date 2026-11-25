@@ -1,0 +1,46 @@
+# `+`, `-` and `*` in a strict GPU system: each rounded on its own, never
+# fused or rearranged. Row 1 is built so that a fused `a * b + c` gives
+# 2^-24 instead of 0, `a * a + b * b` differs with either product fused, and
+# `b * (a + c)` differs from `a * b + b * c`. `x - x` and `x * 0.0` are NaN
+# for an infinity and a NaN, `x + 0.0` turns -0.0 into 0.0, and `-x` and
+# `x.abs` change only the sign.
+component Row
+  a: Float32
+  b: Float32
+  c: Float32
+  fused: Float32 = 0
+  squares: Float32 = 0
+  factored: Float32 = 0
+  cancel: Float32 = 0
+  zero: Float32 = 0
+  plus: Float32 = 0
+  negated: Float32 = 0
+  magnitude: Float32 = 0
+  square: Float32 = 0
+end
+
+strict gpu system arithmetic
+  each Row do |r|
+    r.fused = r.a * r.b + r.c
+    r.squares = r.a * r.a + r.b * r.b
+    r.factored = r.a * r.b + r.b * r.c
+    r.cancel = r.a - r.a
+    r.zero = r.a * 0.0
+    r.plus = r.a + 0.0
+    r.negated = -r.a
+    r.magnitude = r.a.abs
+    r.square = r.c ** 2.0
+  end
+end
+
+zero = 0.0
+spawn Row(1.000244140625, 1.000244140625, -1.00048828125)
+spawn Row(1.0000001192092896, 0.9999998807907104, 3.0000002384185791)
+spawn Row(1.0 / zero, 2.0, 3.0)
+spawn Row(zero / zero, 2.0, 3.0)
+spawn Row(-0.0, -0.0, -0.0)
+spawn Row(-3.5, 0.1, 16777217.0)
+World.tick
+each Row do |r|
+  puts "#{r.fused} #{r.squares} #{r.factored} #{r.cancel} #{r.zero} #{r.plus} #{r.negated} #{r.magnitude} #{r.square}"
+end

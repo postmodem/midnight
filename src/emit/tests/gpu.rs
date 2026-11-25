@@ -1131,3 +1131,69 @@ fn a_store_whose_range_fits_is_not_checked() {
     }
     assert_eq!(shaders.len(), 19);
 }
+
+const STRICT: &str = "\
+component Body
+  x: Float32
+  y: Float32
+  below: Bool
+end
+
+def scale(v: Float) -> Float
+  v * 0.5
+end
+
+strict gpu system exact
+  each Body do |b|
+    b.y = b.x * b.y + 1.0 * 2.0
+    b.below = b.x < b.y
+    b.y = scale(b.y) / b.x
+  end
+end
+
+gpu system loose
+  each Body do |b|
+    b.x = scale(b.x) / b.y + 1.0 * 2.0
+  end
+end
+";
+
+/// In a strict block every operand of `+`, `-` and `*` passes through the
+/// zeros of `mn_z`, literals included and nothing folded; comparisons and
+/// `/` are helpers in the shader. A block that is not strict has none of
+/// that.
+#[test]
+fn a_strict_shader_hides_its_operands() {
+    let shaders = shaders(STRICT);
+    let (exact, loose) = (&shaders[0], &shaders[1]);
+    assert!(exact.contains("@group(0) @binding(2) var<storage, read> mn_z: array<u32, 2>;"));
+    assert!(exact.contains(
+        "bitcast<f32>(bitcast<u32>(1.0f) ^ mn_z[0]) * bitcast<f32>(bitcast<u32>(2.0f) ^ mn_z[1])"
+    ));
+    assert!(exact.contains("s32_cmp(b_0.f_x, b_0.f_y) < 0i"));
+    assert!(exact.contains("fn s32_div(a: f32, b: f32) -> f32"));
+    assert!(exact.contains("fn SF_scale(v_0: f32) -> f32"));
+    assert!(!loose.contains("mn_z"));
+    assert!(!loose.contains("s32_"));
+    assert!(loose.contains("fn GF_scale(v_0: f32) -> f32"));
+    assert!(loose.contains(" + 2.0f;"));
+}
+
+/// The C of a strict block runs with subnormals flushed, keeps `/` as the
+/// hardware's, and each strict function asks the compiler not to assume
+/// the default floating-point environment. A function both kinds of
+/// system call has a form for each.
+#[test]
+fn strict_c_flushes_subnormals_around_the_block() {
+    let c = emit_c("strict", STRICT);
+    assert!(c.contains("const uint64_t fp_state = mn_strict_enter();"));
+    assert!(c.contains("mn_strict_leave(fp_state);"));
+    assert_eq!(c.matches("mn_strict_enter").count(), 1);
+    assert!(c.contains(
+        "static float SF_scale(float v_0) {\n#pragma STDC FENV_ACCESS ON\n    return v_0 * 0.5f;"
+    ));
+    assert!(c.contains("static float GF_scale(float v_0) {\n    return v_0 * 0.5f;"));
+    assert!(c.contains("(t0 / b_0.f_x)"));
+    assert!(!c.contains("static float s32_div"));
+    assert!(c.contains("(b_0.f_x * b_0.f_y) + (1.0f * 2.0f)"));
+}

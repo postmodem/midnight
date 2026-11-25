@@ -780,6 +780,35 @@ typedef struct MnGpuBlock {
 
 void mn_gpu_run(MnGpuBlock *block);
 
+/* The C implementation of a strict block calls mn_strict_enter before its
+ * first row and mn_strict_leave with what it returned after its last. In
+ * between, the CPU counts a subnormal operand of a floating-point operation
+ * as zero and gives zero with its sign for a result below the smallest
+ * normal number; mn_strict_leave restores the state from before. Defined
+ * for x86-64 and AArch64. */
+#if defined(__x86_64__)
+#include <xmmintrin.h>
+static inline uint64_t mn_strict_enter(void) {
+    unsigned int saved = _mm_getcsr();
+    _mm_setcsr(saved | 0x8040u); /* flush to zero (bit 15), denormals are zero (bit 6) */
+    return saved;
+}
+static inline void mn_strict_leave(uint64_t saved) {
+    _mm_setcsr((unsigned int)saved);
+}
+#elif defined(__aarch64__)
+static inline uint64_t mn_strict_enter(void) {
+    uint64_t saved;
+    __asm__ volatile("mrs %0, fpcr" : "=r"(saved));
+    uint64_t strict = saved | (UINT64_C(1) << 24); /* FZ */
+    __asm__ volatile("msr fpcr, %0" : : "r"(strict));
+    return saved;
+}
+static inline void mn_strict_leave(uint64_t saved) {
+    __asm__ volatile("msr fpcr, %0" : : "r"(saved));
+}
+#endif
+
 /* Hands the GPU work recorded so far to the device without waiting for
  * it. Generated code calls it after the last block of a GPU system that an
  * ordinary system follows in the tick, so that the device works while the

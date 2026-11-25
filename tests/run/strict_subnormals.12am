@@ -1,0 +1,66 @@
+# Subnormal numbers in a strict GPU system. An operand below 2^-126 counts as
+# zero with its sign, in arithmetic, comparisons and conversions; a result is
+# rounded to 24 bits and is zero with its sign when that is below 2^-126.
+# A product of two normal numbers just below 2^-126 that rounds to 2^-126 is
+# 2^-126. A copy keeps the bits, and so do `-x` and `x.abs`. Two literals
+# whose product is subnormal give 0.0 with its sign.
+component Row
+  a: Float32
+  b: Float32
+  copy: Float32 = 0
+  negated: Float32 = 0
+  magnitude: Float32 = 0
+  sum: Float32 = 0
+  product: Float32 = 0
+  quotient: Float32 = 0
+  root: Float32 = 0
+  is_zero: Bool = false
+  below: Bool = false
+  floored: Int32 = 0
+end
+
+component Literal
+  positive: Float32 = 1
+  negative: Float32 = 1
+  boundary: Float32 = 0
+end
+
+strict gpu system flush
+  each Row do |r|
+    r.copy = r.a
+    r.negated = -r.a
+    r.magnitude = r.a.abs
+    r.sum = r.a + r.b
+    r.product = r.a * r.b
+    r.quotient = r.a / r.b
+    r.root = Math.sqrt(r.a)
+    r.is_zero = r.a == 0.0
+    r.below = r.a < 0.0
+    r.floored = r.a.floor
+  end
+  each Literal do |l|
+    l.positive = 1.0e-30 * 1.0e-10
+    l.negative = -1.0e-30 * 1.0e-10
+    l.boundary = 0.88218581676483154 * 1.332479295443361e-38
+  end
+end
+
+smallest = 1.1754943508222875e-38
+spawn Row(1.0e-40, 1.0)
+spawn Row(-1.0e-40, 1.0)
+spawn Row(1.0e-40, 1.0e-40)
+spawn Row(1.0e-20, 1.0e-20)
+spawn Row(-1.0e-20, 1.0e-20)
+spawn Row(smallest, 0.5)
+spawn Row(smallest, 1.0e-45)
+spawn Row(smallest * 1.5, -smallest)
+spawn Row(0.9999999403953552, smallest)
+spawn Row(-0.6188775897026062, 1.8993971500912414e-38)
+spawn Literal()
+World.tick
+each Row do |r|
+  puts "#{r.a} #{r.b}: #{r.copy} #{r.negated} #{r.magnitude} #{r.sum} #{r.product} #{r.quotient} #{r.root} #{r.is_zero} #{r.below} #{r.floored}"
+end
+each Literal do |l|
+  puts "#{l.positive} #{l.negative} #{l.boundary}"
+end

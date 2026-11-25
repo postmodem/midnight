@@ -2,9 +2,9 @@
 //!
 //! A module declares, in this order: the uniform words, the types the
 //! block uses, its bindings (the uniform words, each outer column, each
-//! inner column, then the error word if the block can fail), the state of
-//! `rand`, the functions the block reaches, and the entry point `main`,
-//! which runs one row.
+//! inner column, the error word if the block can fail, then the two zeros
+//! `mn_z` if it is strict), the state of `rand`, the functions the block
+//! reaches, and the entry point `main`, which runs one row.
 //!
 //! A column is an `array<u32>` holding the bytes of the C array. A field
 //! is read from the word that holds it by shifting and masking, and a
@@ -107,6 +107,9 @@ pub fn module(gpu: &Lowered, block: &Block) -> String {
     }
     if block.uses.fails {
         bind(p, "var<storage, read_write> g_error: atomic<u32>;");
+    }
+    if block.uses.opaque {
+        bind(p, "var<storage, read> mn_z: array<u32, 2>;");
     }
     if block.uses.rand_state {
         p.line("var<private> g_key: u32;");
@@ -305,6 +308,10 @@ impl Printer<'_, '_> {
             }
             Expr::Call(name, args) => format!("{name}({})", self.args(args)),
             Expr::Construct(ty, args) => format!("{}({})", self.ty(*ty), self.args(args)),
+            Expr::Opaque(side, inner) => format!(
+                "bitcast<f32>(bitcast<u32>({}) ^ mn_z[{side}])",
+                self.top(inner)
+            ),
         }
     }
 

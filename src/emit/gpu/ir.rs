@@ -181,6 +181,10 @@ pub enum Expr {
     Call(String, Vec<Expr>),
     /// A record or entity value from its fields in order.
     Construct(Ty, Vec<Expr>),
+    /// An `F32` operand of `+`, `-` or `*` in strict code: the same value,
+    /// which the shader compiler can neither see through nor prove equal to
+    /// another. Side 0 is a left operand, side 1 a right one.
+    Opaque(u32, Box<Expr>),
 }
 
 impl Expr {
@@ -234,7 +238,8 @@ impl Expr {
             Expr::Field(inner, _)
             | Expr::Unary(_, inner)
             | Expr::Cast(_, inner)
-            | Expr::Bits(_, inner) => inner.can_fail(),
+            | Expr::Bits(_, inner)
+            | Expr::Opaque(_, inner) => inner.can_fail(),
             Expr::Binary(_, lhs, rhs) => lhs.can_fail() || rhs.can_fail(),
             Expr::Select { cond, then, else_ } => {
                 cond.can_fail() || then.can_fail() || else_.can_fail()
@@ -305,6 +310,9 @@ pub struct Func {
     pub params: Vec<Param>,
     pub ret: Ty,
     pub body: Vec<Stmt>,
+    /// Strict code: its `F32` arithmetic follows the rules of a strict GPU
+    /// system.
+    pub strict: bool,
 }
 
 /// The 32-bit form of a record: the same fields in source order, each
@@ -356,6 +364,8 @@ pub struct Uses {
     /// It reads or sets `Key` or `Draws`.
     pub rand_state: bool,
     pub fails: bool,
+    /// It has an [`Expr::Opaque`].
+    pub opaque: bool,
 }
 
 impl Uses {
@@ -366,6 +376,7 @@ impl Uses {
         self.uniforms.extend(&other.uniforms);
         self.rand_state |= other.rand_state;
         self.fails |= other.fails;
+        self.opaque |= other.opaque;
     }
 
     /// Whether the code needs the per-run state C passes as `g`.
@@ -400,6 +411,10 @@ impl Uses {
             Expr::Key | Expr::Draws => self.rand_state = true,
             Expr::Load(cell) => self.ty(cell.storage.ty()),
             Expr::Unary(_, inner) | Expr::Cast(_, inner) | Expr::Bits(_, inner) => self.expr(inner),
+            Expr::Opaque(_, inner) => {
+                self.opaque = true;
+                self.expr(inner);
+            }
             Expr::Binary(_, lhs, rhs) => {
                 self.expr(lhs);
                 self.expr(rhs);
@@ -522,6 +537,10 @@ pub fn cast(ty: Ty, expr: Expr) -> Expr {
 
 pub fn bits(ty: Ty, expr: Expr) -> Expr {
     Expr::Bits(ty, Box::new(expr))
+}
+
+pub fn opaque(side: u32, expr: Expr) -> Expr {
+    Expr::Opaque(side, Box::new(expr))
 }
 
 pub fn call(name: &str, args: Vec<Expr>) -> Expr {

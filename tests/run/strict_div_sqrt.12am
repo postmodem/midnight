@@ -1,0 +1,39 @@
+# `/` and `Math.sqrt` in a strict GPU system: correctly rounded, with the
+# special cases of IEEE, a divisor at or above 2^126 (whose quotient can be
+# subnormal, and so zero), and an operand or result below 2^-126 as zero
+# with its sign. The table rows sweep quotients and roots of values spread
+# over the range.
+component Row
+  a: Float32
+  b: Float32
+  quotient: Float32 = 0
+  root: Float32 = 0
+end
+
+strict gpu system divide
+  each Row do |r|
+    r.quotient = r.a / r.b
+    r.root = Math.sqrt(r.a)
+  end
+end
+
+zero = 0.0
+infinity = 1.0 / zero
+specials = [
+  [1.0, 3.0], [2.0, 3.0], [10.0, 7.0], [-1.0, 0.0], [1.0, -0.0], [0.0, 0.0], [infinity, infinity],
+  [-infinity, 2.0], [5.0, infinity], [-0.0, 5.0], [2.0, 1.0e38], [3.0e38, 2.0e38], [1.0, 3.0e38],
+  [1.0e-38, 1.0], [1.0e-40, 2.0], [-1.0e-40, -2.0], [1.0, 1.0e-40], [-4.0, 2.0], [16777215.0, 16777213.0],
+  [0.1, 0.3], [1.0e-37, 10.0], [2.0, 1.7014118e38]
+]
+specials.each do |pair|
+  spawn Row(pair[0], pair[1])
+end
+x = 1.0e-30
+24.times do |i|
+  spawn Row(x, 7.0 - i * 0.37)
+  x *= 1234.5678
+end
+World.tick
+each Row do |r|
+  puts "#{r.a} / #{r.b} = #{r.quotient}, sqrt #{r.root}"
+end
