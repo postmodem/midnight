@@ -1,0 +1,5 @@
+error: constant `STEPS` can't be read in a GPU system
+  --> tests/fail/gpu_constant_list.12am:12:5
+   |
+12 |     STEPS.each do |step|
+   |     ^^^^^ it is a `[Float]`; a GPU system reads numbers, `Bool`s, enums, entities and structs of those

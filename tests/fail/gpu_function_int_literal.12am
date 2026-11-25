@@ -1,0 +1,16 @@
+# expect: 4294967296 does not fit in 32 bits, in a function called from a GPU system
+# at: line 9, the literal `4294967296`; note at line 14, the call `wrap(body.n)`
+
+component Body
+  n: Int32
+end
+
+def wrap(n: Int) -> Int
+  n % 4294967296
+end
+
+gpu system wrap_all
+  each Body do |body|
+    body.n = wrap(body.n)
+  end
+end

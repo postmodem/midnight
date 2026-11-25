@@ -1,0 +1,5 @@
+error: `add` is not allowed in a GPU system
+  --> tests/fail/gpu_add.12am:12:5
+   |
+12 |     e.add(Frozen) if body.x < 0
+   |     ^^^^^^^^^^^^^ structural changes are made on the CPU; make this one in an ordinary system

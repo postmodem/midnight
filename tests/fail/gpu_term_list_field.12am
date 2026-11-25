@@ -1,0 +1,13 @@
+# expect: `Trail` can't be a term of an `each` in a GPU system, because its field `points` is a `[Float32]`
+# at: line 10, the term `Trail`
+
+component Trail
+  points: [Float32]
+  x: Float32
+end
+
+gpu system move
+  each Trail do |trail|
+    trail.x += 1
+  end
+end

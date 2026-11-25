@@ -1,0 +1,5 @@
+error: `print` is not allowed in a GPU system
+  --> tests/fail/gpu_output_print.12am:10:5
+   |
+10 |     print "#{body.x} "
+   |     ^^^^^^^^^^^^^^^^^^ the GPU can't write output; print from an ordinary system

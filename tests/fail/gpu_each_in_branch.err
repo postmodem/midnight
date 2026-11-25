@@ -1,0 +1,5 @@
+error: nested `each` inside a branch in a GPU system
+  --> tests/fail/gpu_each_in_branch.12am:11:7
+   |
+11 |       each Body do |b|
+   |       ^^^^^^^^^^^^^^^^ a GPU block holds one nested `each`, directly inside it; put the test inside the `each`

@@ -1,0 +1,5 @@
+error: `Label` values are not allowed in a GPU system
+  --> tests/fail/gpu_struct_with_string.12am:15:13
+   |
+15 |     label = Label("body", 1)
+   |             ^^^^^^^^^^^^^^^^ its field `text` is a `String`; the GPU works on numbers, `Bool`s, enums, entities and structs of those

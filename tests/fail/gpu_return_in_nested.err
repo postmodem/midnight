@@ -1,0 +1,11 @@
+error: `return` is not allowed in a GPU system
+  --> tests/fail/gpu_return_in_nested.12am:11:7
+   |
+11 |       return if b.x > a.x
+   |       ^^^^^^ runs have no order, so there is nothing to stop; `next` ends the run for one entity
+
+error: `return` is not allowed in a GPU system
+  --> tests/fail/gpu_return_in_nested.12am:14:7
+   |
+14 |       return
+   |       ^^^^^^ runs have no order, so there is nothing to stop; `next` ends the run for one entity

@@ -1,0 +1,5 @@
+error: `Motion` can't be a term of an `each` in a GPU system
+  --> tests/fail/gpu_term_struct_field.12am:15:8
+   |
+15 |   each Motion do |motion|
+   |        ^^^^^^ its fields `velocity.x` and `velocity.y` are `Float`s, 64 bits wide; the GPU holds numbers of at most 32 bits, so declare them `Float32`

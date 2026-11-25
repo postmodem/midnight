@@ -1,0 +1,5 @@
+error: can't assign to `Stats.total` in a GPU system
+  --> tests/fail/gpu_write_resource.12am:14:5
+   |
+14 |     Stats.total += body.x
+   |     ^^^^^^^^^^^ resources are read-only there: a GPU system writes only to the component parameters of its outer `each`

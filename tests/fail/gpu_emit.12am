@@ -1,0 +1,16 @@
+# expect: `emit` is not allowed in a GPU system
+# at: line 14, the statement `emit Escaped(e)`
+
+component Body
+  x: Float32
+end
+
+event Escaped
+  who: Entity
+end
+
+gpu system watch
+  each Entity, Body do |e, body|
+    emit Escaped(e) if body.x > 100
+  end
+end

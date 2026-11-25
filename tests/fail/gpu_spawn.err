@@ -1,0 +1,5 @@
+error: `spawn` is not allowed in a GPU system
+  --> tests/fail/gpu_spawn.12am:11:7
+   |
+11 |       spawn Body(0)
+   |       ^^^^^^^^^^^^^ structural changes are made on the CPU; make this one in an ordinary system

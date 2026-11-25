@@ -1,0 +1,5 @@
+error: can't call `Label.width` in a GPU system
+  --> tests/fail/gpu_call_method_receiver.12am:21:15
+   |
+21 |     body.x += LABEL.width
+   |               ^^^^^^^^^^^ its receiver is a `Label`, whose field `text` is a `String`; a function called from a GPU system takes and returns numbers, `Bool`s, enums, entities and structs of those

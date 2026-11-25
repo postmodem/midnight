@@ -1,0 +1,10 @@
+error: `each` is not allowed in a function called from a GPU system
+  --> tests/fail/gpu_function_each.12am:10:3
+   |
+10 |   each Body do |body|
+   |   ^^^^^^^^^^^^^^^^^^^ the only queries of a GPU system are its own `each` blocks
+note: GPU system `normalize` calls `heaviest` here
+  --> tests/fail/gpu_function_each.12am:19:15
+   |
+19 |     body.x /= heaviest
+   |               --------

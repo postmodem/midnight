@@ -1,0 +1,27 @@
+# expect: call to recursive function `Vec2.+` in a GPU system, when `+=` calls the operator: `Vec2.+` calls `Vec2.doubled`, which calls `Vec2.+`
+# at: line 25, the statement `motion.velocity += motion.push`
+
+struct Vec2
+  x: Float32
+  y: Float32
+
+  def +(other: Vec2) -> Vec2
+    return other.doubled if x == 0
+    Vec2(x + other.x, y + other.y)
+  end
+
+  def doubled -> Vec2
+    self + self
+  end
+end
+
+component Motion
+  velocity: Vec2
+  push: Vec2
+end
+
+gpu system accelerate
+  each Motion do |motion|
+    motion.velocity += motion.push
+  end
+end

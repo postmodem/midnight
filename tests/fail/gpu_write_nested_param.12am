@@ -1,0 +1,14 @@
+# expect: can't assign to `b.x` in a GPU system: `b` is a parameter of the nested `each`
+# at: line 11, the place `b.x`
+
+component Body
+  x: Float32
+end
+
+gpu system push
+  each Body do |a|
+    each Body do |b|
+      b.x += a.x
+    end
+  end
+end

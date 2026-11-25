@@ -1,0 +1,10 @@
+error: `puts` is not allowed in a function called from a GPU system
+ --> tests/fail/gpu_function_puts.12am:9:3
+  |
+9 |   puts x
+  |   ^^^^^^ the GPU can't write output; print from an ordinary system
+note: GPU system `first` calls `checked` here
+  --> tests/fail/gpu_function_puts.12am:15:14
+   |
+15 |     body.x = checked(body.x)
+   |              ---------------

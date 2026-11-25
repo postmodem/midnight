@@ -1,0 +1,16 @@
+# expect: statement outside `each` in a GPU system, once for each statement
+# at: line 9, the assignment `gravity = 9.8`; line 13, the `if`
+
+component Body
+  x: Float32
+end
+
+gpu system fall
+  gravity = 9.8
+  each Body do |body|
+    body.x -= 1
+  end
+  if Time.tick > 100
+    World.stop
+  end
+end

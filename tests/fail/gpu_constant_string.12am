@@ -1,0 +1,14 @@
+# expect: constant `TITLE` can't be read in a GPU system, because it is a `String`
+# at: line 12, the name `TITLE`
+
+component Body
+  x: Float32
+end
+
+TITLE = "run"
+
+gpu system title
+  each Body do |body|
+    body.x += TITLE.length
+  end
+end

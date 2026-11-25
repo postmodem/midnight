@@ -1,0 +1,14 @@
+# expect: `remove` is not allowed in a GPU system
+# at: line 12, the expression `e.remove(Frozen)`
+
+component Body
+  x: Float32
+end
+
+tag Frozen
+
+gpu system thaw
+  each Entity, Body, with: Frozen do |e, body|
+    e.remove(Frozen) if body.x > 0
+  end
+end

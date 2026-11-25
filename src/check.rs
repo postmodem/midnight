@@ -18,6 +18,7 @@
 
 mod decls;
 mod exprs;
+mod gpu;
 mod members;
 mod stmts;
 mod util;
@@ -680,6 +681,7 @@ impl<'a> Checker<'a> {
                 span: f.decl.span,
             });
         }
+        let system_decls: Vec<&ast::SystemDecl> = self.systems.iter().map(|s| s.decl).collect();
         let mut systems: Vec<tir::System> = self
             .systems
             .into_iter()
@@ -767,7 +769,7 @@ impl<'a> Checker<'a> {
             })
             .collect();
 
-        Ok(tir::Program {
+        let mut program = tir::Program {
             records,
             enums,
             components: self.components,
@@ -777,6 +779,12 @@ impl<'a> Checker<'a> {
             funcs,
             systems,
             main,
-        })
+        };
+        let errors = gpu::check(&mut program, &system_decls);
+        if errors.is_empty() {
+            Ok(program)
+        } else {
+            Err(errors)
+        }
     }
 }

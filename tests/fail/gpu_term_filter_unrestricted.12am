@@ -1,0 +1,20 @@
+# expect: only the term `Position` is reported; `Named` and `Trail`, which hold a string and a list, are fine in `with:` and `without:`
+# at: line 17, the term `Position`
+
+component Position
+  x: Float
+end
+
+component Named
+  name: String
+end
+
+component Trail
+  points: [Float]
+end
+
+gpu system move
+  each Entity, Position, with: Named, without: Trail do |e, pos|
+    pos.x += 1
+  end
+end

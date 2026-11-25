@@ -1,0 +1,12 @@
+# expect: `print` is not allowed in a GPU system; the interpolated string is part of the same report
+# at: line 10, the statement `print "#{body.x} "`
+
+component Body
+  x: Float32
+end
+
+gpu system report
+  each Body do |body|
+    print "#{body.x} "
+  end
+end

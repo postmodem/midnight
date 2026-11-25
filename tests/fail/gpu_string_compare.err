@@ -1,0 +1,11 @@
+error: `String` values are not allowed in a GPU system
+  --> tests/fail/gpu_string_compare.12am:10:19
+   |
+10 |     body.x = 0 if "a" == "b"
+   |                   ^^^ the GPU works on numbers, `Bool`s, enums, entities and structs of those
+
+error: `String` values are not allowed in a GPU system
+  --> tests/fail/gpu_string_compare.12am:10:26
+   |
+10 |     body.x = 0 if "a" == "b"
+   |                          ^^^ the GPU works on numbers, `Bool`s, enums, entities and structs of those

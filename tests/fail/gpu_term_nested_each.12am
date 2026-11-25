@@ -1,0 +1,18 @@
+# expect: `Mass` can't be a term of an `each` in a GPU system, as a term of the nested `each` and when it is only read
+# at: line 14, the term `Mass`
+
+component Body
+  x: Float32
+end
+
+component Mass
+  kg: Float
+end
+
+gpu system pull
+  each Body do |a|
+    each Body, Mass do |b, mass|
+      a.x += b.x * 0.001
+    end
+  end
+end

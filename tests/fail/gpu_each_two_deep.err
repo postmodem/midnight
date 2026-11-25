@@ -1,0 +1,5 @@
+error: `each` nested two deep in a GPU system
+  --> tests/fail/gpu_each_two_deep.12am:11:7
+   |
+11 |       each Body do |c|
+   |       ^^^^^^^^^^^^^^^^ a GPU block holds one nested `each`, directly inside it, and that one holds none

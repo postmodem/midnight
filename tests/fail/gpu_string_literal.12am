@@ -1,0 +1,14 @@
+# expect: `String` values are not allowed in a GPU system; the later use of `name` is quiet
+# at: line 10, the literal `"body"`
+
+component Body
+  x: Float32
+end
+
+gpu system label
+  each Body do |body|
+    name = "body"
+    other = name
+    body.x += 1
+  end
+end

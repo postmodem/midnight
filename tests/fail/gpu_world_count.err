@@ -1,0 +1,11 @@
+error: `World.count` is not allowed in a GPU system
+  --> tests/fail/gpu_world_count.12am:10:15
+   |
+10 |     body.x /= World.count(Body)
+   |               ^^^^^^^^^^^^^^^^^ the only queries of a GPU system are its `each` blocks; count in an ordinary system and keep the result in a resource
+
+error: `World.count` is not allowed in a GPU system
+  --> tests/fail/gpu_world_count.12am:11:15
+   |
+11 |     body.x /= World.count
+   |               ^^^^^^^^^^^ the only queries of a GPU system are its `each` blocks; count in an ordinary system and keep the result in a resource

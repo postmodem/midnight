@@ -1,0 +1,5 @@
+error: `Mass` can't be a term of an `each` in a GPU system
+  --> tests/fail/gpu_term_nested_each.12am:14:16
+   |
+14 |     each Body, Mass do |b, mass|
+   |                ^^^^ its field `kg` is a `Float`, 64 bits wide; the GPU holds numbers of at most 32 bits, so declare it `Float32`

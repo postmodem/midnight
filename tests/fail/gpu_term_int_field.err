@@ -1,0 +1,5 @@
+error: `Health` can't be a term of an `each` in a GPU system
+  --> tests/fail/gpu_term_int_field.12am:10:8
+   |
+10 |   each Health do |health|
+   |        ^^^^^^ its field `hp` is an `Int`, 64 bits wide; the GPU holds numbers of at most 32 bits, so declare it `Int32`

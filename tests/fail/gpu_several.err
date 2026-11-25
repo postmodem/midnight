@@ -1,0 +1,23 @@
+error: `entity[Health]` is not allowed in a GPU system
+  --> tests/fail/gpu_several.12am:18:10
+   |
+18 |     hp = chase.target[Health].hp
+   |          ^^^^^^^^^^^^^^^^^^^^ a GPU system reaches components through its queries; make `Health` a term of an `each`
+
+error: `puts` is not allowed in a GPU system
+  --> tests/fail/gpu_several.12am:19:5
+   |
+19 |     puts hp
+   |     ^^^^^^^ the GPU can't write output; print from an ordinary system
+
+error: can't assign to `Stats.total` in a GPU system
+  --> tests/fail/gpu_several.12am:20:5
+   |
+20 |     Stats.total += hp
+   |     ^^^^^^^^^^^ resources are read-only there: a GPU system writes only to the component parameters of its outer `each`
+
+error: `return` is not allowed in a GPU system
+  --> tests/fail/gpu_several.12am:21:5
+   |
+21 |     return if hp == 0
+   |     ^^^^^^ runs have no order, so there is nothing to stop; `next` ends the run for one entity

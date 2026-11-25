@@ -1,0 +1,5 @@
+error: GPU system `idle` has no `each`
+ --> tests/fail/gpu_no_each.12am:4:12
+  |
+4 | gpu system idle
+  |            ^^^^ the body of a GPU system is one or more `each` blocks

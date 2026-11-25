@@ -1,0 +1,5 @@
+error: `entity[Body]` is not allowed in a GPU system
+  --> tests/fail/gpu_index_component.12am:14:14
+   |
+14 |     body.x = chase.target[Body].x
+   |              ^^^^^^^^^^^^^^^^^^ a GPU system reaches components through its queries; make `Body` a term of an `each`

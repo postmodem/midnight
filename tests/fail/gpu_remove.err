@@ -1,0 +1,5 @@
+error: `remove` is not allowed in a GPU system
+  --> tests/fail/gpu_remove.12am:12:5
+   |
+12 |     e.remove(Frozen) if body.x > 0
+   |     ^^^^^^^^^^^^^^^^ structural changes are made on the CPU; make this one in an ordinary system

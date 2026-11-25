@@ -1,0 +1,18 @@
+# expect: `Label` values are not allowed in a GPU system, because the field `text` is a `String`
+# at: line 15, the constructor `Label("body", 1)`
+
+component Body
+  x: Float32
+end
+
+struct Label
+  text: String
+  size: Int
+end
+
+gpu system label
+  each Body do |body|
+    label = Label("body", 1)
+    body.x += label.size
+  end
+end

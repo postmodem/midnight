@@ -1,0 +1,17 @@
+# expect: `return` is not allowed in a GPU system, inside the nested `each` and inside a loop too
+# at: line 11, the keyword `return`; line 14, the keyword `return`
+
+component Body
+  x: Float32
+end
+
+gpu system settle
+  each Body do |a|
+    each Body do |b|
+      return if b.x > a.x
+    end
+    3.times do
+      return
+    end
+  end
+end

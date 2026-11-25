@@ -1,0 +1,10 @@
+error: `World.count` is not allowed in a function called from a GPU system
+ --> tests/fail/gpu_function_world_count.12am:9:7
+  |
+9 |   x / World.count(Body)
+  |       ^^^^^^^^^^^^^^^^^ the only queries of a GPU system are its `each` blocks; count in an ordinary system and keep the result in a resource
+note: GPU system `spread` calls `share` here
+  --> tests/fail/gpu_function_world_count.12am:14:14
+   |
+14 |     body.x = share(body.x)
+   |              -------------

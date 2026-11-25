@@ -1,0 +1,5 @@
+error: constant `TITLE` can't be read in a GPU system
+  --> tests/fail/gpu_constant_string.12am:12:15
+   |
+12 |     body.x += TITLE.length
+   |               ^^^^^ it is a `String`; a GPU system reads numbers, `Bool`s, enums, entities and structs of those

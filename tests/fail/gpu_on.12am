@@ -1,0 +1,18 @@
+# expect: `on` is not allowed in a GPU system
+# at: line 14, the `on` statement
+
+component Body
+  x: Float32
+end
+
+event Push
+  dx: Float
+end
+
+gpu system pushed
+  each Body do |body|
+    on Push do |push|
+      body.x += push.dx
+    end
+  end
+end

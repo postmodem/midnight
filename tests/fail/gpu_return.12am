@@ -1,0 +1,13 @@
+# expect: `return` is not allowed in a GPU system
+# at: line 10, the keyword `return`
+
+component Body
+  x: Float32
+end
+
+gpu system settle
+  each Body do |body|
+    return if body.x < 0
+    body.x -= 1
+  end
+end

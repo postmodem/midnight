@@ -1,0 +1,5 @@
+error: can't assign to `b` in a GPU system
+  --> tests/fail/gpu_write_nested_param_whole.12am:11:7
+   |
+11 |       b = Body(a.x)
+   |       ^ `b` is a parameter of the nested `each`, which is read-only: a GPU system writes only to the component parameters of its outer `each`

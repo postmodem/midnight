@@ -1,0 +1,14 @@
+# expect: `World.stop`, `World.tick` and `World.run` are not allowed in a GPU system
+# at: line 10, `World.stop`; line 11, `World.tick`; line 12, `World.run`
+
+component Body
+  x: Float32
+end
+
+gpu system control
+  each Body do |body|
+    World.stop if body.x > 100
+    World.tick if body.x > 200
+    World.run if body.x > 300
+  end
+end

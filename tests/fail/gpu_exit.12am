@@ -1,0 +1,12 @@
+# expect: `exit` is not allowed in a GPU system
+# at: line 10, the call `exit(1)`
+
+component Body
+  x: Float32
+end
+
+gpu system guard
+  each Body do |body|
+    exit(1) if body.x.nan?
+  end
+end

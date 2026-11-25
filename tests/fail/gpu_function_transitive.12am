@@ -1,0 +1,29 @@
+# expect: `despawn` is not allowed in a function called from a GPU system, reached through another function and a method
+# at: line 18, the expression `e.despawn`; note at line 27, the call `settle(e, body.x)`, saying it goes through `settle` and `Limit.apply`
+
+component Body
+  x: Float32
+end
+
+struct Limit
+  max: Float = 100
+
+  def apply(e: Entity, x: Float) -> Float
+    remove_far(e, x)
+    min(x, max)
+  end
+end
+
+def remove_far(e: Entity, x: Float)
+  e.despawn if x > 1000
+end
+
+def settle(e: Entity, x: Float) -> Float
+  Limit().apply(e, x)
+end
+
+gpu system settle_all
+  each Entity, Body do |e, body|
+    body.x = settle(e, body.x)
+  end
+end

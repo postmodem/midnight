@@ -1,0 +1,21 @@
+# expect: can't call `name_of` in a function called from a GPU system, because it returns a `String`
+# at: line 13, the call `name_of(x)`; note at line 19, the call `checked(body.x)`
+
+component Body
+  x: Float32
+end
+
+def name_of(x: Float) -> String
+  "x"
+end
+
+def checked(x: Float) -> Float
+  name_of(x)
+  x
+end
+
+gpu system check
+  each Body do |body|
+    body.x = checked(body.x)
+  end
+end

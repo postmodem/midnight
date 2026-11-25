@@ -1,0 +1,5 @@
+error: call to recursive function `even?` in a GPU system
+  --> tests/fail/gpu_recursion_mutual.12am:21:25
+   |
+21 |     body.x = -body.x if even?(body.n)
+   |                         ^^^^^^^^^^^^^ `even?` calls `odd?`, which calls `even?`; a function called from a GPU system must not recurse
