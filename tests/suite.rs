@@ -196,11 +196,17 @@ fn example_programs() {
 
 #[test]
 fn benchmarks_compile() {
-    let sources: Vec<PathBuf> = ["examples/bench.12am", "bench/churn.12am"]
-        .iter()
-        .map(PathBuf::from)
-        .filter(|path| path.exists())
-        .collect();
+    let sources: Vec<PathBuf> = [
+        "examples/bench.12am",
+        "bench/churn.12am",
+        "bench/gpu_gravity.12am",
+        "bench/gpu_move.12am",
+        "bench/gpu_move_read.12am",
+    ]
+    .iter()
+    .map(PathBuf::from)
+    .filter(|path| path.exists())
+    .collect();
     let dir = scratch("bench");
     let jobs: Vec<(&PathBuf, Mode)> = sources
         .iter()

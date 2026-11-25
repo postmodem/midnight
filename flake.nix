@@ -107,6 +107,25 @@
           };
           text = builtins.readFile ./bench/bench.sh;
         };
+
+      benchGpuFor =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "midnight-bench-gpu";
+          runtimeInputs = [
+            (midnightFor pkgs)
+            pkgs.gawk
+            pkgs.gnugrep
+            pkgs.gnused
+            pkgs.coreutils
+          ];
+          runtimeEnv = {
+            BENCH_SRC = "${src}";
+            MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+            MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
+          };
+          text = builtins.readFile ./bench/bench-gpu.sh;
+        };
     in
     {
       packages = forAllSystems (pkgs: {
@@ -123,6 +142,11 @@
           type = "app";
           program = lib.getExe (benchFor pkgs);
           meta.description = "Time bench.12am against a hand-written C baseline, then churn.12am";
+        };
+        bench-gpu = {
+          type = "app";
+          program = lib.getExe (benchGpuFor pkgs);
+          meta.description = "Time GPU systems on the GPU and on the CPU: gravity on 16,384 bodies, then a move of one million entities";
         };
       });
 
