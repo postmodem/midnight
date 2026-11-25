@@ -14,17 +14,49 @@
 //! - `examples/NAME.12am` + `NAME.out`: as `tests/run`. `examples/bench.12am`
 //!   and `bench/churn.12am` are only compiled.
 //!
+//! Every program above runs with `MIDNIGHT_GPU=off`, so GPU systems run
+//! their CPU implementation.
+//!
 //! Set `UPDATE_EXPECT=1` to write the expected files from the actual
 //! output instead of comparing.
+//!
+//! # GPU mode
+//!
+//! `gpu_programs` and `gpu_stats_match_plan` do nothing unless
+//! `MIDNIGHT_TEST_GPU` names where GPU systems are to run:
+//!
+//! - `software`: on Mesa's `llvmpipe`, release and debug builds.
+//!   `MIDNIGHT_TEST_SOFTWARE_ICD` is the path of its Vulkan driver file.
+//! - `hardware`: on the machine's hardware device, release builds.
+//!
+//! `gpu_programs` runs every program of `tests/run`, `tests/panic` and
+//! `examples` that declares a GPU system. Standard output must match
+//! `NAME.out`: exactly, or, when the program has a `# tolerance: T` line,
+//! with each `Float` within `T * max(1, |expected|)` of the expected one and
+//! everything else exact. A `tests/panic` program must exit 1 with exactly
+//! `NAME.err`. A run in which there is no device, or in which a GPU block
+//! runs on the CPU, fails.
+//!
+//! `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
+//! `MIDNIGHT_GPU=stats` and compares the uploads and downloads of every tick
+//! after the first with what `midnight plan` lists.
+//!
+//! The compiler is the one cargo built, or `MIDNIGHT_BIN` when that is set.
+//! Programs are found relative to the working directory, which must be the
+//! repository root.
 
+use std::collections::BTreeSet;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const MIDNIGHT: &str = env!("CARGO_BIN_EXE_midnight");
 const STRICT_CFLAGS: &str = "-Wall -Wextra -Werror";
 const MODES: [Mode; 2] = [Mode::Release, Mode::Debug];
+
+/// The program whose `stats` lines are compared with its plan.
+const STATS_PROGRAM: &str = "tests/run/gpu_transfers.12am";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Mode {
@@ -32,8 +64,62 @@ enum Mode {
     Debug,
 }
 
+/// Where GPU systems run in GPU mode.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Device {
+    Software,
+    Hardware,
+}
+
+impl Device {
+    /// The device `MIDNIGHT_TEST_GPU` names, or `None` outside GPU mode.
+    fn from_env() -> Option<Device> {
+        match std::env::var("MIDNIGHT_TEST_GPU").ok().as_deref() {
+            None | Some("") => None,
+            Some("software") => {
+                software_driver();
+                Some(Device::Software)
+            }
+            Some("hardware") => Some(Device::Hardware),
+            Some(other) => {
+                panic!("MIDNIGHT_TEST_GPU is `{other}`: expected `software` or `hardware`")
+            }
+        }
+    }
+
+    fn modes(self) -> &'static [Mode] {
+        match self {
+            Device::Software => &MODES,
+            Device::Hardware => &[Mode::Release],
+        }
+    }
+}
+
+/// The path of the Vulkan driver file that offers `llvmpipe`.
+fn software_driver() -> std::ffi::OsString {
+    std::env::var_os("MIDNIGHT_TEST_SOFTWARE_ICD").expect(
+        "MIDNIGHT_TEST_GPU=software needs MIDNIGHT_TEST_SOFTWARE_ICD, the path of \
+         llvmpipe's Vulkan driver file; the dev shell sets it",
+    )
+}
+
 fn update_expect() -> bool {
     std::env::var_os("UPDATE_EXPECT").is_some()
+}
+
+/// A command that runs the compiler.
+fn midnight() -> Command {
+    match std::env::var_os("MIDNIGHT_BIN") {
+        Some(path) => Command::new(path),
+        None => Command::new(env!("CARGO_BIN_EXE_midnight")),
+    }
+}
+
+/// A command that runs a compiled program with no GPU device.
+fn on_cpu(exe: &Path) -> Command {
+    let mut command = Command::new(exe);
+    command.env("MIDNIGHT_GPU", "off");
+    command
 }
 
 /// The `.12am` files directly inside `dir`, sorted. Empty if it is missing.
@@ -94,7 +180,7 @@ fn report(kind: &str, total: usize, failures: Vec<String>) {
 }
 
 fn build(source: &Path, exe: &Path, mode: Mode) -> Result<(), String> {
-    let mut command = Command::new(MIDNIGHT);
+    let mut command = midnight();
     command.arg("build").arg(source).arg("-o").arg(exe);
     if mode == Mode::Debug {
         command.arg("--debug");
@@ -144,7 +230,7 @@ fn expect(expected_path: &Path, actual: &str, what: &str) -> Result<(), String> 
 fn run_ok(dir: &Path, source: &Path, mode: Mode) -> Result<(), String> {
     let exe = exe_path(dir, source, mode);
     build(source, &exe, mode)?;
-    let output: Output = Command::new(&exe).output().expect("run program");
+    let output: Output = on_cpu(&exe).output().expect("run program");
     let label = format!("{} ({mode:?})", source.display());
     if output.status.code() != Some(0) {
         return Err(format!(
@@ -185,13 +271,17 @@ fn run_programs() {
     run_ok_all("run", &programs("tests/run"));
 }
 
-#[test]
-fn example_programs() {
-    let sources: Vec<PathBuf> = programs("examples")
+/// The examples that have an expected output.
+fn examples() -> Vec<PathBuf> {
+    programs("examples")
         .into_iter()
         .filter(|path| path.file_name().is_some_and(|name| name != "bench.12am"))
-        .collect();
-    run_ok_all("examples", &sources);
+        .collect()
+}
+
+#[test]
+fn example_programs() {
+    run_ok_all("examples", &examples());
 }
 
 #[test]
@@ -217,7 +307,7 @@ fn benchmarks_compile() {
 fn fail_programs() {
     let sources = programs("tests/fail");
     let failures = for_each_parallel(&sources, |source| {
-        let output = Command::new(MIDNIGHT)
+        let output = midnight()
             .arg("check")
             .arg(source)
             .output()
@@ -244,7 +334,7 @@ fn fail_programs() {
 fn plan_programs() {
     let sources = programs("tests/plan");
     let failures = for_each_parallel(&sources, |source| {
-        let output = Command::new(MIDNIGHT)
+        let output = midnight()
             .arg("plan")
             .arg(source)
             .output()
@@ -278,7 +368,7 @@ fn panic_programs() {
     let failures = for_each_parallel(&jobs, |(source, mode)| {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
-        let output = Command::new(&exe).output().expect("run program");
+        let output = on_cpu(&exe).output().expect("run program");
         let label = format!("{} ({mode:?})", source.display());
         if output.status.code() != Some(1) {
             return Err(format!(
@@ -316,7 +406,7 @@ fn move_example_is_the_first_program_in_the_reference() {
 /// largest alignment rounds up to 24.
 #[test]
 fn mixed_component_is_as_small_as_its_fields_allow() {
-    let output = Command::new(MIDNIGHT)
+    let output = midnight()
         .args(["emit-c", "tests/run/layout.12am"])
         .output()
         .expect("run midnight");
@@ -334,4 +424,525 @@ fn mixed_component_is_as_small_as_its_fields_allow() {
         .expect("run the C compiler");
     let _ = std::fs::remove_dir_all(&dir);
     assert!(compiled.status.success(), "{}", text(&compiled.stderr));
+}
+
+/// Writes a line to standard error past the test harness's capture, so it
+/// shows when the test passes.
+fn note(line: &str) {
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
+
+/// Whether the program at `source` declares a GPU system.
+fn declares_gpu_system(source: &Path) -> bool {
+    std::fs::read_to_string(source)
+        .is_ok_and(|program| program.lines().any(|line| line.starts_with("gpu system ")))
+}
+
+/// The tolerance a program states in a `# tolerance: T` line, if it has
+/// one.
+fn stated_tolerance(program: &str) -> Result<Option<f64>, String> {
+    let Some(stated) = program
+        .lines()
+        .find_map(|line| line.strip_prefix("# tolerance:"))
+    else {
+        return Ok(None);
+    };
+    match stated.trim().parse::<f64>() {
+        Ok(tolerance) if tolerance.is_finite() && tolerance > 0.0 => Ok(Some(tolerance)),
+        _ => Err(format!("`# tolerance:{stated}` is not a positive number")),
+    }
+}
+
+/// Splits a line of output at its `Float`s: the text around them, one piece
+/// more than there are `Float`s, and the `Float`s. A `Float` is digits with
+/// a fraction, an exponent or both, as the language prints one, with a `-`
+/// in front when it is negative. Digits that continue a name or have
+/// neither part are text.
+fn split_floats(line: &str) -> (Vec<&str>, Vec<&str>) {
+    let bytes = line.as_bytes();
+    let digits = |mut at: usize| {
+        while bytes.get(at).is_some_and(u8::is_ascii_digit) {
+            at += 1;
+        }
+        at
+    };
+    let (mut texts, mut floats) = (Vec::new(), Vec::new());
+    let (mut text_start, mut at) = (0, 0);
+    while at < bytes.len() {
+        let start = at;
+        let whole = if bytes[start] == b'-' {
+            start + 1
+        } else {
+            start
+        };
+        let mut end = digits(whole);
+        let in_name =
+            start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_');
+        if end == whole || in_name {
+            at += 1;
+            continue;
+        }
+        let mut float = false;
+        if bytes.get(end) == Some(&b'.') && digits(end + 1) > end + 1 {
+            end = digits(end + 1);
+            float = true;
+        }
+        if bytes.get(end) == Some(&b'e') {
+            let sign = matches!(bytes.get(end + 1), Some(b'+' | b'-'));
+            let exponent = end + 1 + usize::from(sign);
+            if digits(exponent) > exponent {
+                end = digits(exponent);
+                float = true;
+            }
+        }
+        if float {
+            texts.push(&line[text_start..start]);
+            floats.push(&line[start..end]);
+            text_start = end;
+        }
+        at = end;
+    }
+    texts.push(&line[text_start..]);
+    (texts, floats)
+}
+
+/// Compares what a program printed with its expected output. With no
+/// tolerance the two must be equal. With one they must have the same
+/// lines, every `Float` within `tolerance * max(1, |expected|)` of the
+/// expected one, and everything else equal. Returns the largest difference
+/// between two `Float`s, as a multiple of `max(1, |expected|)`.
+fn compare_output(expected: &str, actual: &str, tolerance: Option<f64>) -> Result<f64, String> {
+    if expected == actual {
+        return Ok(0.0);
+    }
+    let differs = |number: usize, expected: &str, actual: &str| {
+        Err(format!(
+            "line {number}: expected `{expected}`, got `{actual}`"
+        ))
+    };
+    if expected.split('\n').count() != actual.split('\n').count() {
+        let (expected_count, actual_count) = (expected.lines().count(), actual.lines().count());
+        return Err(if expected_count == actual_count {
+            "the end of the last line differs".to_string()
+        } else {
+            format!("{actual_count} lines, expected {expected_count}")
+        });
+    }
+    let mut largest: f64 = 0.0;
+    let lines = expected.split('\n').zip(actual.split('\n'));
+    for (index, (expected, actual)) in lines.enumerate() {
+        if expected == actual {
+            continue;
+        }
+        let Some(tolerance) = tolerance else {
+            return differs(index + 1, expected, actual);
+        };
+        let (expected_texts, expected_floats) = split_floats(expected);
+        let (actual_texts, actual_floats) = split_floats(actual);
+        if expected_texts != actual_texts {
+            return differs(index + 1, expected, actual);
+        }
+        for (expected, actual) in expected_floats.iter().zip(&actual_floats) {
+            let (e, a): (f64, f64) = (expected.parse().unwrap(), actual.parse().unwrap());
+            let difference = (a - e).abs() / e.abs().max(1.0);
+            if difference.is_nan() || difference > tolerance {
+                return Err(format!(
+                    "line {}: {actual} is not within {tolerance} of {expected}",
+                    index + 1
+                ));
+            }
+            largest = largest.max(difference);
+        }
+    }
+    Ok(largest)
+}
+
+/// What a program did when it ran on a device.
+struct DeviceRun {
+    status: Option<i32>,
+    stdout: String,
+    /// Standard error without the lines `MIDNIGHT_GPU` asks for.
+    stderr: String,
+    /// The device the `info` line names.
+    device: String,
+    /// The uploads and downloads of each `stats` line, tick 0 first.
+    ticks: Vec<(u64, u64)>,
+}
+
+/// Reads `N: U uploads, D downloads`, what a `stats` line says after
+/// `tick`: the tick, the uploads and the downloads.
+fn parse_stats(line: &str) -> Option<(usize, u64, u64)> {
+    let (tick, counts) = line.split_once(": ")?;
+    let (uploads, downloads) = counts.split_once(", ")?;
+    let count = |text: &str, unit: &str| {
+        let (number, word) = text.split_once(' ')?;
+        (word.strip_suffix('s').unwrap_or(word) == unit)
+            .then(|| number.parse::<u64>().ok())
+            .flatten()
+    };
+    Some((
+        tick.parse().ok()?,
+        count(uploads, "upload")?,
+        count(downloads, "download")?,
+    ))
+}
+
+/// Runs a compiled program with its GPU systems on `device`, asking for
+/// the `info` lines and, with `stats`, the `stats` lines. Fails when the
+/// program finds no such device or runs a GPU block on the CPU.
+fn run_on_device(exe: &Path, device: Device, stats: bool) -> Result<DeviceRun, String> {
+    let mut command = Command::new(exe);
+    let mut words = vec!["info"];
+    if stats {
+        words.push("stats");
+    }
+    if device == Device::Software {
+        words.push("software");
+        command
+            .env("VK_DRIVER_FILES", software_driver())
+            .env_remove("VK_ADD_DRIVER_FILES");
+    }
+    command.env("MIDNIGHT_GPU", words.join(","));
+    let output = command.output().expect("run program");
+
+    let mut run = DeviceRun {
+        status: output.status.code(),
+        stdout: text(&output.stdout),
+        stderr: String::new(),
+        device: String::new(),
+        ticks: Vec::new(),
+    };
+    for line in text(&output.stderr).split_inclusive('\n') {
+        let Some(said) = line.strip_prefix("midnight: gpu: ") else {
+            run.stderr.push_str(line);
+            continue;
+        };
+        let said = said.trim_end();
+        if let Some(counts) = said.strip_prefix("tick ") {
+            match parse_stats(counts) {
+                Some((tick, uploads, downloads)) if tick == run.ticks.len() => {
+                    run.ticks.push((uploads, downloads));
+                }
+                _ => return Err(format!("unexpected `stats` line: {said}")),
+            }
+        } else if said == "no device" {
+            return Err(format!("no {device:?} device").to_lowercase());
+        } else if said.contains(" runs on the CPU: ") {
+            return Err(said.to_string());
+        } else {
+            run.device = said.to_string();
+        }
+    }
+    if run.device.is_empty() {
+        return Err(format!(
+            "no `info` line\n--- stderr\n{}---",
+            text(&output.stderr)
+        ));
+    }
+    if device == Device::Software && !run.device.contains("llvmpipe") {
+        return Err(format!("the device is {}, not llvmpipe", run.device));
+    }
+    Ok(run)
+}
+
+/// Builds a program in one mode and runs it on `device`. One that `stops`
+/// must exit 1 with exactly `NAME.err`; any other must exit 0, print
+/// `NAME.out` within the tolerance it states, and print nothing else to
+/// standard error. Returns the device and the largest difference from
+/// `NAME.out`.
+fn run_gpu_program(
+    dir: &Path,
+    source: &Path,
+    stops: bool,
+    mode: Mode,
+    device: Device,
+) -> Result<(String, f64), String> {
+    let exe = exe_path(dir, source, mode);
+    build(source, &exe, mode)?;
+    let label = format!("{} ({mode:?})", source.display());
+    let read = |path: &Path| {
+        std::fs::read_to_string(path)
+            .map_err(|error| format!("{label}: can't read {}: {error}", path.display()))
+    };
+    let run =
+        run_on_device(&exe, device, false).map_err(|message| format!("{label}: {message}"))?;
+    let (status, expected_stderr) = if stops {
+        (1, read(&source.with_extension("err"))?)
+    } else {
+        (0, String::new())
+    };
+    if run.status != Some(status) {
+        return Err(format!(
+            "{label}: exited with {:?}, expected {status}\n--- stdout\n{}--- stderr\n{}---",
+            run.status, run.stdout, run.stderr
+        ));
+    }
+    if run.stderr != expected_stderr {
+        return Err(format!(
+            "{label}: standard error differs\n--- expected\n{expected_stderr}--- actual\n{}---",
+            run.stderr
+        ));
+    }
+    if stops {
+        return Ok((run.device, 0.0));
+    }
+    let tolerance =
+        stated_tolerance(&read(source)?).map_err(|message| format!("{label}: {message}"))?;
+    let out_path = source.with_extension("out");
+    let expected = read(&out_path)?;
+    match compare_output(&expected, &run.stdout, tolerance) {
+        Ok(difference) => Ok((run.device, difference)),
+        Err(message) => Err(format!(
+            "{label}: standard output differs from {}: {message}\n\
+             --- expected\n{expected}--- actual\n{}---",
+            out_path.display(),
+            run.stdout
+        )),
+    }
+}
+
+#[test]
+fn gpu_programs() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let groups = [
+        ("gpu-run", programs("tests/run"), false),
+        ("gpu-examples", examples(), false),
+        ("gpu-panic", programs("tests/panic"), true),
+    ];
+    let mut dirs = Vec::new();
+    let mut jobs = Vec::new();
+    for (name, sources, stops) in &groups {
+        dirs.push(scratch(name));
+        for source in sources.iter().filter(|source| declares_gpu_system(source)) {
+            for mode in device.modes() {
+                jobs.push((dirs.len() - 1, source, *stops, *mode));
+            }
+        }
+    }
+    assert!(
+        !jobs.is_empty(),
+        "no program with a GPU system under tests/ and examples/ of the working directory"
+    );
+    let devices = Mutex::new(BTreeSet::new());
+    let inexact = Mutex::new(BTreeSet::new());
+    let failures = for_each_parallel(&jobs, |(dir, source, stops, mode)| {
+        let (name, difference) = run_gpu_program(&dirs[*dir], source, *stops, *mode, device)?;
+        devices.lock().unwrap().insert(name);
+        if difference > 0.0 {
+            inexact.lock().unwrap().insert(format!(
+                "gpu_programs: {} ({mode:?}) is {difference:.6} from the expected output, within its tolerance",
+                source.display()
+            ));
+        }
+        Ok(())
+    });
+    for dir in &dirs {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    report("runs on a device", jobs.len(), failures);
+    let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
+    note(&format!(
+        "gpu_programs: {} runs of {} programs on {}",
+        jobs.len(),
+        jobs.len() / device.modes().len(),
+        devices.join(" and ")
+    ));
+    for line in inexact.into_inner().unwrap() {
+        note(&line);
+    }
+}
+
+#[test]
+fn gpu_stats_match_plan() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let source = Path::new(STATS_PROGRAM);
+    let output = midnight()
+        .arg("plan")
+        .arg(source)
+        .output()
+        .expect("run midnight");
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let plan = text(&output.stdout);
+    let mut planned = (0, 0);
+    for line in plan.lines() {
+        assert!(
+            !line.contains("   on "),
+            "{STATS_PROGRAM}: the plan has a transfer that not every tick performs\n{plan}"
+        );
+        match line.split_whitespace().next() {
+            Some("upload") => planned.0 += 1,
+            Some("download") => planned.1 += 1,
+            _ => panic!("{STATS_PROGRAM}: unexpected line in the plan\n{plan}"),
+        }
+    }
+    assert!(planned != (0, 0), "{STATS_PROGRAM}: the plan is empty");
+
+    let dir = scratch("gpu-stats");
+    let devices = Mutex::new(BTreeSet::new());
+    let failures = for_each_parallel(device.modes(), |mode| {
+        let exe = exe_path(&dir, source, *mode);
+        build(source, &exe, *mode)?;
+        let label = format!("{STATS_PROGRAM} ({mode:?})");
+        let run =
+            run_on_device(&exe, device, true).map_err(|message| format!("{label}: {message}"))?;
+        if run.status != Some(0) || run.ticks.len() < 2 {
+            return Err(format!(
+                "{label}: exited with {:?} after {} ticks\n--- stderr\n{}---",
+                run.status,
+                run.ticks.len(),
+                run.stderr
+            ));
+        }
+        for (tick, counts) in run.ticks.iter().enumerate().skip(1) {
+            if *counts != planned {
+                return Err(format!(
+                    "{label}: tick {tick} made {} uploads and {} downloads; \
+                     the plan lists {} and {}\n{plan}",
+                    counts.0, counts.1, planned.0, planned.1
+                ));
+            }
+        }
+        devices.lock().unwrap().insert(run.device);
+        Ok(())
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs with stats", device.modes().len(), failures);
+    let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
+    note(&format!(
+        "gpu_stats_match_plan: uploads {} and downloads {} in every tick after the first on {}",
+        planned.0,
+        planned.1,
+        devices.join(" and ")
+    ));
+}
+
+#[test]
+fn floats_are_split_from_the_text_around_them() {
+    assert_eq!(
+        split_floats("Vec2(x: 7.5, y: -7.75)"),
+        (vec!["Vec2(x: ", ", y: ", ")"], vec!["7.5", "-7.75"])
+    );
+    assert_eq!(
+        split_floats("1e+20 1.5e-07 2.5e3"),
+        (vec!["", " ", " ", ""], vec!["1e+20", "1.5e-07", "2.5e3"])
+    );
+    assert_eq!(
+        split_floats("3-1.5 took 0.25s"),
+        (vec!["3-", " took ", "s"], vec!["1.5", "0.25"])
+    );
+    // Whole numbers, digits in a name and words are text.
+    for text in ["7 -12 2236", "Float32 x1.5 v_2.5", "NaN -Infinity", "1. e5"] {
+        assert_eq!(split_floats(text), (vec![text], vec![]));
+    }
+}
+
+#[test]
+fn equal_output_matches_with_and_without_a_tolerance() {
+    let text = "Ints(power: 2236)\n2.5 -7.0\n";
+    assert_eq!(compare_output(text, text, None), Ok(0.0));
+    assert_eq!(compare_output(text, text, Some(0.002)), Ok(0.0));
+    assert_eq!(compare_output("", "", None), Ok(0.0));
+}
+
+#[test]
+fn without_a_tolerance_floats_must_be_equal() {
+    assert!(compare_output("1.25\n", "1.251\n", None).is_err());
+    assert!(compare_output("0.0\n", "-0.0\n", None).is_err());
+}
+
+#[test]
+fn floats_within_the_tolerance_match() {
+    let within = |expected, actual| compare_output(expected, actual, Some(0.002));
+    assert!(within("0.02 0.011\n", "0.021 0.009\n").is_ok());
+    assert!(within("x: 0.745, y: -0.359\n", "x: 0.746, y: -0.36\n").is_ok());
+    assert!(within("0.0\n", "-0.0\n").is_ok());
+    assert!(within("0.001\n", "-0.001\n").is_ok());
+    assert!(within("1.5e-07\n", "0.0\n").is_ok());
+    assert!(within("0.02\n", "0.023\n").is_err());
+    assert!(within("-1.279\n", "1.279\n").is_err());
+    assert!(within("0.5 0.5\n", "0.5 0.503\n").is_err());
+}
+
+#[test]
+fn the_tolerance_grows_with_the_expected_number() {
+    let within = |expected, actual| compare_output(expected, actual, Some(0.002));
+    assert!(within("250.0\n", "250.4\n").is_ok());
+    assert!(within("250.0\n", "250.6\n").is_err());
+    assert!(within("-250.0\n", "-250.4\n").is_ok());
+    assert!(within("1e+20\n", "1.001e+20\n").is_ok());
+    assert!(within("1e+20\n", "1.01e+20\n").is_err());
+}
+
+#[test]
+fn the_largest_difference_is_returned() {
+    let difference = compare_output("1.0 4.0\n0.5\n", "1.0 4.004\n0.5005\n", Some(0.002)).unwrap();
+    assert!((difference - 0.001).abs() < 1e-9, "{difference}");
+}
+
+#[test]
+fn everything_but_floats_must_be_equal_within_a_tolerance() {
+    let within = |expected, actual| compare_output(expected, actual, Some(0.02));
+    // Whole numbers.
+    assert!(within("power: 531585\n", "power: 531586\n").is_err());
+    assert!(within("-3 1\n", "3 1\n").is_err());
+    // A whole number against a `Float`.
+    assert!(within("2.0\n", "2\n").is_err());
+    // Words, names and spacing.
+    assert!(within("true 1.5\n", "false 1.5\n").is_err());
+    assert!(within("Vec2(x: 1.0)\n", "Vec3(x: 1.0)\n").is_err());
+    assert!(within("1.0 2.0\n", "1.0  2.0\n").is_err());
+    assert!(within("NaN\n", "0.0\n").is_err());
+    assert!(within("Infinity\n", "-Infinity\n").is_err());
+}
+
+#[test]
+fn the_count_of_floats_and_of_lines_must_be_equal() {
+    let within = |expected, actual| compare_output(expected, actual, Some(0.02));
+    assert!(within("1.0 2.0\n", "1.0\n").is_err());
+    assert!(within("1.0\n", "1.0 2.0\n").is_err());
+    assert_eq!(
+        within("1.0\n2.0\n", "1.0\n"),
+        Err("1 lines, expected 2".to_string())
+    );
+    assert_eq!(
+        within("1.0\n", "1.0\n2.0\n"),
+        Err("2 lines, expected 1".to_string())
+    );
+    assert!(within("1.0\n", "1.0").is_err());
+    assert!(within("1.0\n", "1.0\n\n").is_err());
+    assert!(compare_output("a\n", "a\nb\n", None).is_err());
+}
+
+#[test]
+fn a_difference_names_its_line() {
+    assert_eq!(
+        compare_output("a\n1.0\n", "a\n1.5\n", Some(0.002)),
+        Err("line 2: 1.5 is not within 0.002 of 1.0".to_string())
+    );
+    assert_eq!(
+        compare_output("a\nb\n", "a\nc\n", None),
+        Err("line 2: expected `b`, got `c`".to_string())
+    );
+}
+
+#[test]
+fn a_program_states_its_tolerance_in_a_comment() {
+    let program = "# tolerance: 0.002\n# Gravity.\ncomponent Body\nend\n";
+    assert_eq!(stated_tolerance(program), Ok(Some(0.002)));
+    assert_eq!(stated_tolerance("# Gravity.\nputs 1\n"), Ok(None));
+    assert!(stated_tolerance("# tolerance: small\n").is_err());
+    assert!(stated_tolerance("# tolerance: -1\n").is_err());
+    assert!(stated_tolerance("# tolerance: 0\n").is_err());
+}
+
+#[test]
+fn stats_lines_are_read() {
+    assert_eq!(parse_stats("0: 3 uploads, 1 download"), Some((0, 3, 1)));
+    assert_eq!(parse_stats("12: 1 upload, 0 downloads"), Some((12, 1, 0)));
+    assert_eq!(parse_stats("0: 3 uploads"), None);
+    assert_eq!(parse_stats("0: 3 downloads, 1 upload"), None);
 }
