@@ -88,29 +88,37 @@ command that needs it.
   implementation, so the suite needs no device and is exact.
 - GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe) or
   `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU), the tests
-  `gpu_programs`, `gpu_stats_match_plan` and `gpu_driver_finds_its_parts`
-  also run, on release and debug builds. Without it they do nothing.
-  `checks.gpu` is the software mode in the build sandbox; `apps.gpu-test`
-  is the hardware mode.
+  `gpu_programs`, `gpu_stats_match_plan`, `gpu_stats_match_expected` and
+  `gpu_driver_finds_its_parts` also run, on release and debug builds.
+  Without it they do nothing. `checks.gpu` is the software mode in the
+  build sandbox; `apps.gpu-test` is the hardware mode.
   - `gpu_programs` runs every program of `tests/run`, `tests/panic` and
-    `examples` that declares a GPU system on the device. Output must match
-    `NAME.out`: exactly, or, when the program has a `# tolerance: T` line,
-    each `Float` within `T * max(1, |expected|)` and everything else, whole
-    numbers included, exactly. A panic program must stop with status 1 and
-    exactly `NAME.err`. A run that finds no device, or runs a GPU block on
-    the CPU, fails.
+    `examples` that declares a GPU system on the device, as it is and
+    again with `MIDNIGHT_GPU=rows`, which makes every row travel alone.
+    Output must match `NAME.out`: exactly, or, when the program has a
+    `# tolerance: T` line, each `Float` within `T * max(1, |expected|)` and
+    everything else, whole numbers included, exactly. A panic program must
+    stop with status 1 and exactly `NAME.err`. A run that finds no device,
+    or runs a GPU block on the CPU, fails.
   - `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
     `MIDNIGHT_GPU=stats` and requires every tick but the first and the last
-    to make the uploads and downloads `midnight plan` lists. The last line
-    also counts what the code after the loop transfers.
+    to make the uploads and downloads `midnight plan` lists, and no row
+    up or down: its plan has no `rows` line. The last line also counts what
+    the code after the loop transfers.
+  - `gpu_stats_match_expected` runs every program of `tests/run` that has
+    a `NAME.stats` file with `MIDNIGHT_GPU=stats` and requires exactly those
+    lines; with a `NAME.rows.stats` file, also with `stats,rows`. The counts
+    are the same on every device. Its programs use tables of 200,000 rows
+    of 8 bytes where rows are to travel alone: smaller arrays always move
+    whole.
   - `gpu_driver_finds_its_parts` builds a stand-in Vulkan driver that opens
     another library by name, and requires that library to be found through
     the driver's runpath. A debug build has a `dlopen` of its own in
     `midnight_gpu.c` for this: AddressSanitizer's would make the dynamic
     loader search the executable's runpath, and a driver such as NVIDIA's
     would not start.
-  - The first two print the device they ran on. GPU mode never rewrites
-    expected files.
+  - The first three print the device they ran on. In GPU mode
+    `UPDATE_EXPECT=1` rewrites `.stats` files and no others.
   - The dev shell sets `MIDNIGHT_TEST_SOFTWARE_ICD`, the Vulkan driver file
     the software mode passes to programs as `VK_DRIVER_FILES`.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,

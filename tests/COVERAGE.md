@@ -5,14 +5,15 @@ This checklist maps each section and table row of
 it. Names without a directory are `tests/run/NAME.12am` (with `NAME.out`);
 `fail/NAME` is `tests/fail/NAME.12am` (with `NAME.err`); `panic/NAME` is
 `tests/panic/NAME.12am` (with `NAME.err`); `plan/NAME` is
-`tests/plan/NAME.12am` (with `NAME.plan`).
+`tests/plan/NAME.12am` (with `NAME.plan`). A program of `tests/run` with a
+`NAME.stats` file has its `MIDNIGHT_GPU=stats` lines checked on a device.
 
 Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 252 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-334 in `tests/fail`, 80 in `tests/panic`, 12 in `tests/plan`.
+Counts: 262 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+334 in `tests/fail`, 81 in `tests/panic`, 15 in `tests/plan`.
 
 ## A first program, The model
 
@@ -439,7 +440,10 @@ by the program itself.
 | `World.tick` returns when the GPU has finished the tick's work | not observable from a program's output; not covered |
 | A GPU system between ordinary systems that read and write the same components, and top-level code between ticks | `gpu_with_cpu_systems`, `gpu_index_from_cpu` |
 | On a device, the uploads and downloads `MIDNIGHT_GPU=stats` counts in a tick are the ones `midnight plan` lists; a column no ordinary code uses moves once | `gpu_transfers` |
-| `e[C]` in ordinary code on a component a GPU block names, read, written and replaced | `gpu_index_from_cpu`, `gpu_entity_term` |
+| `e[C]` in ordinary code on a component a GPU block names, read, written and replaced | `gpu_index_from_cpu`, `gpu_entity_term`, `gpu_rows_poke` |
+| The second block of a GPU system fails: nothing after it runs, not the next block, not the ordinary system after it | `panic/gpu_second_block_fails` |
+| A GPU system of several blocks, one with a nested `each` over two tables and one that can fail, before an ordinary system that reads their results | `gpu_batch` |
+| Rows moved in GPU memory, then written by `e[C]`, a spawn and a whole upload before the next GPU system: the writes land after the moves | `gpu_queue_order` |
 | A block that uses none of its parameters | `gpu_statements` |
 | Names that WGSL or C reserve, as fields, locals, parameters, functions and types | `gpu_names` |
 | Run-time errors in a GPU system | `panic/gpu_*` (see [Runtime errors](#runtime-errors)) |
@@ -559,6 +563,7 @@ by the program itself.
 | A component's fields are ordered to minimise padding; `Bool` and enum fields take one byte | `layout` (the size is asserted by a separate harness step) |
 | A component a GPU block writes is rounded up to a multiple of 4 bytes; one that GPU blocks only read keeps its size | `gpu_odd_row_size`, `gpu_field_types` (the generated C asserts the size and every offset of each component a GPU block names); the unit tests `a_written_component_is_whole_words` and `a_read_only_column_can_have_rows_of_any_size` in `src/emit/tests/gpu.rs` |
 | What a GPU system costs: the fixed cost of a block, the cost of a transfer, the copy a nested `each` reads | not observable from a program's output; `nix run .#bench-gpu` measures the first two |
+| What moves, row by row, and how often the program waits for the GPU | see [What moves](#what-moves) |
 | A store of a value the compiler can bound within the field is not an operation that can fail: each rule, and the nearest case that does not fit | the unit test `a_store_whose_range_fits_is_not_checked` in `src/emit/tests/gpu.rs`; `gpu_narrow_ranges` (values at the ends of each range, no check left in the shader), `panic/gpu_store_clamp_too_wide`, `panic/gpu_store_mod_too_wide` |
 | The other layout and cost facts (tables, 20 bytes per entity, tags take no space, costs of operations) | not observable from a program's output; not covered |
 
@@ -591,6 +596,29 @@ Syntax errors are in `fail/syntax_*`: `syntax_unexpected_token`,
 | `refcount` | Strings and lists copied, modified and dropped through locals, struct fields, component fields, resource fields, events (read and discarded unread), queued commands (spawn and add inside `each`, also for entities despawned in the same batch), despawned entities, lists of strings, of lists and of structs with strings, arguments and return values, early `return` / `break` / `next` with live locals, replaced components (`add` of a present one, `e[C] = …`), removed components, reassigned variables, `pop` / `delete_at` / `clear` |
 | `layout` | A component with a `Float`, a `Float32`, an `Int16`, a `UInt8`, a `Bool` and an enum field (`Body`, with the enum `Kind`), spawned, queried, modified and printed |
 
+## What moves
+
+The cost rules of "The transfer plan" and "What a GPU system costs". A
+program's output does not depend on them; the `.stats` files count them on a
+device, the same on every device, and `gpu_programs` runs every GPU program
+again with `MIDNIGHT_GPU=rows`, where every row travels alone, against the
+same expected output. The tables of the `gpu_rows_*` programs hold 200,000
+rows of 8 bytes, enough for rows to travel alone.
+
+| Rule | Files |
+| --- | --- |
+| A query term that is read: the array comes back, once per loop for every table and column, behind one wait | `gpu_batch`, `gpu_overwrite_gpu` (`nudge` reads five columns), `gpu_transfers` |
+| A query term that can be assigned: uploaded later only after a tick in which an assignment ran, also when the loop is left by `break` or `return` | `gpu_rare_assign`, `gpu_transfers`; the unit test `a_loop_left_early_reports_what_it_wrote` in `src/emit/tests/gpu.rs` |
+| An overwritten parameter, each rule and the nearest cases that are not: a field left out, a field read before the last is assigned, a read first, a compound assignment, an assignment in a branch, `break`, `return`, `e[C]` in a called function, a nested `each` that uses the component | `gpu_overwrite_cpu`, `gpu_overwrite_gpu`, `plan/overwrite_cpu`, `plan/overwrite_gpu`; the unit tests in `src/check/tests/overwrite.rs` |
+| `e[C]`: a read brings one row back, a part written brings it back and sends it, a whole written only sends it; the same row read twice is one round trip | `gpu_rows_poke` |
+| The charge: a fourth row read of a 1,600,000-byte column in one tick brings the column, three before it come alone; with `rows` all four come alone; small arrays always travel whole | `gpu_rows_poke` (`.stats`, `.rows.stats`), `gpu_rows_add_remove` (its tagged table) |
+| `spawn` sends the new row with the next block, from an `each` and from the top level | `gpu_rows_spawn` |
+| `despawn`: of the last row, of a row in the tail, of a row to send, of a row written in part, from an `each` and from the top level; a row only the GPU copy has is moved in GPU memory | `gpu_rows_despawn`, `gpu_queue_order` |
+| `add` and `remove` bring back the rows they move; several queued in one `each` come back behind one wait; `add` of a component the entity has sends the row | `gpu_rows_add_remove` (`.stats`, `.rows.stats`) |
+| A table that outgrows its buffer while only the GPU copy is current: the rows are copied to the new buffer in GPU memory | `gpu_rows_grow` |
+| Consecutive blocks share one submission; a block that can fail waits; an ordinary system after a GPU system gets the work submitted without a wait | `gpu_batch`; the unit test `a_gpu_system_submits_before_an_ordinary_system` in `src/emit/tests/gpu.rs` |
+| A write to a buffer that recorded work uses goes in after that work | `gpu_queue_order`, `gpu_rows_grow` |
+
 ## Transfer plans
 
 What `midnight plan` prints. Each expected plan was worked out by hand from
@@ -609,19 +637,19 @@ the rule for where a column lives.
 | A nested `each` over a component its block writes is no transfer | `plan/nested_each` |
 | A component named only by a nested `each` has a GPU copy | `plan/nested_each` |
 | What called functions do counts as the system's | `plan/functions` |
-| `e[C]`, read and written | `plan/functions`, `plan/top_level` |
+| `e[C]`, read, written in part and replaced: `rows` lines | `plan/entity_component`, `plan/functions`, `plan/top_level` |
+| A component a GPU block or an ordinary loop overwrites: no upload, no download | `plan/overwrite_gpu`, `plan/overwrite_cpu` |
 | `World.count` and `has?` read no column | `plan/functions` |
-| `spawn` changes every component of the table it spawns into, and no other table: `on spawn` | `plan/spawn`, the unit test `spawn_changes_every_component_of_the_table_it_makes_and_no_other` in `src/plan/tests.rs` |
-| `despawn` changes every component with a GPU copy: `on despawn` | `plan/despawn` |
-| `add` and `remove` change every component with a GPU copy: `on add`, `on remove` | `plan/add_remove` |
-| A marked download before an unmarked one of the same component: both are listed | `plan/despawn` |
-| The plan shown in the reference | `plan/despawn` |
-| `with:` and `without:` filters read no column | `plan/add_remove` (`freeze` filters on Heat, and its download is marked `on add`) |
+| `spawn` sends the new rows of the table it spawns into, and no other table: `rows on spawn` | `plan/spawn`, the unit test `spawn_sends_the_new_rows_of_the_table_it_makes_and_no_other` in `src/plan/tests.rs` |
+| `despawn` sends a row where both copies are current and moves it in GPU memory where only the GPU copy is: `rows on despawn` | `plan/despawn`, the unit test `despawn_sends_a_row_where_both_copies_are_current` in `src/plan/tests.rs` |
+| `add` and `remove` bring back the row where only the GPU copy is current and send it: `rows on add`, `rows on remove` | `plan/add_remove` |
+| A `rows` download leaves the GPU copy the only current one: a later reader still downloads | `plan/add_remove`, `plan/entity_component` |
+| The plan shown in the reference | the test `the_reference_shows_the_plan_of_its_example` in `tests/suite.rs`; `plan/despawn` |
+| `with:` and `without:` filters read no column | `plan/add_remove` (`freeze` filters on Heat, and its download is marked `rows on add`) |
 | A term whose parameter the body never uses needs no column, in a GPU block or in ordinary code | `plan/untouched_terms` |
 | Queries that `with:` and `without:` keep apart share no table and transfer nothing; tables that `add` makes count | `plan/filtered_tables` |
 | The mark names the first structural change of a system that touches the component | the unit test `the_first_structural_change_of_a_system_is_named` in `src/plan/tests.rs` |
 | Ticks written out one after another, with code between them, are not followed | the unit test `top_level_code_between_ticks_outside_a_loop_does_not_count` in `src/plan/tests.rs` |
-| A structural change that finds the CPU copy current downloads nothing | `plan/add_remove` |
 | Components with no GPU copy never appear | `plan/despawn`, `plan/spawn` |
 | Top-level code in the loop that ticks is the step `top level` | `plan/top_level` |
 | Columns are lined up within a plan | `plan/despawn`, `plan/add_remove`, `plan/writer` |

@@ -1,7 +1,8 @@
 # 0003 — Moving less: rows in place of columns, one submission in place of many
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0002
+- **Tested on:** x86_64-linux, 2026-11-25
 
 ## Goal
 
@@ -596,3 +597,120 @@ All run on x86_64-linux. Criteria 3, 4 and 9 need a hardware GPU.
     lists on 0.2.7.
 11. The reference says 0.3 and `midnight --version` 0.3.0, and every
     command in the README works as written.
+
+## Outcome
+
+Implemented as specified, in the seven slices, with the differences listed
+under "Differences from the design". All eleven criteria pass on
+x86_64-linux: an RTX 5090 (driver 595.71.05) beside a Ryzen 9 9950X3D,
+`wgpu-native` 27.0.4.0, clang 21.1.8, and Mesa's `llvmpipe` for software
+Vulkan.
+
+### Acceptance criteria
+
+| #  | Result |
+| -- | ------ |
+| 1  | `nix flake check` passes; `checks.gpu` runs `gpu_programs` (74 programs, release and debug, each as it is and with `rows`), `gpu_stats_match_plan`, `gpu_stats_match_expected` and `gpu_driver_finds_its_parts` on `llvmpipe` in the sandbox. `nix run .#gpu-test` passes the same four on the RTX 5090. |
+| 2  | Against `786e399` (0.2.7), no `.out` or `.err` file of `tests/` or `examples/` differs; eleven new ones were added. `gpu_transfers.12am` now assigns in every tick (`pos.x -= pos.x > 20 ? 20 : 0`) and prints what it printed. |
+| 3  | Every count of the table, in every tick but the first three and the last of each program. `nix run .#bench-gpu` now checks this itself and fails otherwise. `gpu_tag` makes 2 submissions a tick. |
+| 4  | See the table below. Every target is met, and no other row is more than 10 % slower than 0.2.7; the largest drift is the move on the CPU, 0.097 to 0.103. |
+| 5  | `nix run .#bench`: ratio 1.00 (0.2.7 in the same session: 1.03). |
+| 6  | `tests/plan/spawn`, `despawn`, `add_remove` and `top_level` print exactly the plans under "Tests". The reference's example prints the two lines under "The language"; the new test `the_reference_shows_the_plan_of_its_example` checks it. |
+| 7  | `gpu_programs` runs every program a second time with `rows`, on both devices, in both build modes, and all pass. |
+| 8  | `gpu_stats_match_expected` passes on both devices in both build modes, with ten programs (below). |
+| 9  | `gpu_rows_poke`, tick 5: 3 rows down and 1 download without `rows`, 4 rows down with it; both are expected files (`gpu_rows_poke.stats`, `gpu_rows_poke.rows.stats`). |
+| 10 | `ldd` on the release build of `examples/hello.12am` lists `libm.so.6`, `libc.so.6` and the loader, as on 0.2.7. |
+| 11 | The reference says 0.3 and `midnight --version` prints `midnight 0.3.0`. Every command in the README was run as written, `./move` built into a scratch directory. |
+
+### Measured
+
+`RUNS=5 nix run .#bench-gpu`, fastest of 5, ms per tick, with nothing else
+running. The 0.2.7 column is the same script and the same programs, built
+by 0.2.7 from a worktree, run in the same session just before.
+
+| Row | 0.2.7 GPU | 0.3.0 GPU | 0.2.7 CPU | 0.3.0 CPU |
+| --- | --------- | --------- | --------- | --------- |
+| Gravity, 16,384 bodies | 0.836 | 0.840 | 354.9 | 354.2 |
+| Gravity, 65,536 bodies | 3.643 | 3.652 | | |
+| Move 1,000,000, data stays (`gpu_move`) | 0.039 | 0.028 | 0.097 | 0.103 |
+| Move 1,000,000, read each tick (`gpu_move_read`) | 0.803 | 0.823 | 0.505 | 0.513 |
+| `gpu_block` | 0.0228 | 0.0236 | 0.0 | 0.0 |
+| `gpu_blocks8` | 0.1394 | 0.0465 | 0.0003 | 0.0003 |
+| `gpu_fallible` | 0.0299 | 0.0293 | 0.0011 | 0.0011 |
+| `gpu_read_tables` | 1.9812 | 0.1469 | 0.0038 | 0.0039 |
+| `gpu_poke` | 0.8703 | 0.0460 | 0.0999 | 0.0971 |
+| `gpu_spawn` | 1.3210 | 0.0311 | 0.0966 | 0.0997 |
+| `gpu_despawn` | 1.3385 | 0.0343 | 0.1021 | 0.1021 |
+| `gpu_tag` | 1.3407 | 0.0570 | 0.1010 | 0.0978 |
+| `gpu_rare_write` | 1.1686 | 0.5855 | 0.4530 | 0.2866 |
+| `gpu_overwrite` | 0.8743 | 0.0731 | 0.1666 | 0.1667 |
+
+`nix run .#bench` in the same session: `bench.12am` 0.284 against
+`baseline.c` 0.285 ms per tick (0.2.7: 0.286 against 0.278); churn, in
+operations per second, spawn 83.1 million (87.6), lookup 281 million (176),
+add 36.8 million (23.3), remove 58.7 million (56.7), despawn 125 million
+(130).
+
+Where the planning estimates were off: `gpu_rare_write` comes to 0.59, not
+0.75 (its CPU run also got faster, 0.45 to 0.29: the loop with the flag
+compiles to a faster loop), and `gpu_blocks8` to 0.047, not 0.04. The rest
+are within the estimates' precision.
+
+### The `.stats` programs
+
+`gpu_rows_spawn`, `gpu_rows_despawn`, `gpu_rows_add_remove`,
+`gpu_rows_poke`, `gpu_rows_grow`, `gpu_overwrite_cpu`, `gpu_overwrite_gpu`,
+`gpu_rare_assign`, `gpu_batch` and `gpu_queue_order`, each with a `.stats`
+file that was recorded in slice 1 on 0.2.7's behaviour and changed in the
+diff of each slice that followed. Each line of the final files was checked
+by hand against the design. Two things they show that the design did not
+spell out:
+
+- A small table travels whole. In `gpu_rows_add_remove` the tagged table
+  holds a few rows, so its columns always move whole and its rows count
+  nothing; `gpu_rows_add_remove.rows.stats` shows the same program with
+  every row alone.
+- A buffer that grows makes the next write to it a submission of its own:
+  the copy of the old rows into the new buffer is recorded, and the tail
+  written after it is a queue write to a buffer the open encoder names
+  (`gpu_rows_grow`, tick 1, 3 submissions).
+
+### Differences from the design
+
+- **Names in the contracts.** `midnight_rt.h`: an ordinary `each` calls
+  `mn_gpu_use(query, uses, count)` with `MnUse { component, use }` and
+  `MN_USE_READ`, `MN_USE_ASSIGN`, `MN_USE_OVERWRITE`, guarded by
+  `mn_gpu_only` (the second flag) or, when a use overwrites, by
+  `mn_gpu_active`; it reports a written table with `mn_wrote`;
+  `mn_get_synced` takes `MN_ROW_READ`, `MN_ROW_PART` or `MN_ROW_WHOLE` and
+  calls `mn_gpu_row`; `mn_gpu_submit` hands the work over after a GPU
+  system. `mn_sync` and `mn_gpu_sync` are gone. `midnight_gpu.h`:
+  `mn_gpu_leave` (a row is about to leave a table), `mn_gpu_want_row` and
+  `mn_gpu_fetch` (the rows a move needs, one round trip for a queue),
+  `mn_gpu_device_submit`, `mn_gpu_rows` and the counters.
+- **The queue's round trip does not look up destination tables.** Finding
+  them could create a table that applying the queue would not (an entity
+  despawned earlier in the queue), and table ids decide query order. An
+  `add` is taken to move the row when the entity's table lacks one of the
+  components, a `remove` when it has one; the columns of the components a
+  `remove` drops are not brought back.
+- **The checker's pass** is a module of its own, `src/check/overwrite.rs`,
+  run after the GPU checks; it matches its results to `each` statements by
+  their source span. In the plan, a step's first use of a component decides
+  whether it overwrites, an `e[C]` included: an `e[C]` read before an
+  overwriting loop in the same system keeps the download.
+- **`NAME.rows.stats`.** `gpu_stats_match_expected` also runs a program with
+  `stats,rows` when it has such a file. Criterion 9's half with `rows` is
+  checked this way, and the tagged table of `gpu_rows_add_remove`.
+- **Expected `.stats` files are written by `UPDATE_EXPECT=1` in GPU mode**,
+  the only expected files GPU mode writes. `CLAUDE.md` says so.
+- **Plan programs.** Besides the four changed ones: `plan/overwrite_cpu`,
+  `plan/overwrite_gpu` and `plan/entity_component`. The overwritten cases on
+  each side are two run programs, `gpu_overwrite_cpu` and
+  `gpu_overwrite_gpu`, one component per case, and the checker has unit
+  tests for each rule.
+- **`bench-gpu` checks criterion 3** and the flake's GPU test list names
+  `gpu_stats_match_expected`.
+- **Rows marked and the tail exist from slice 5.** The bookkeeping for the
+  tail was written with `e[C]`'s rows, so slice 6 only stopped bringing
+  columns back and added the moves.

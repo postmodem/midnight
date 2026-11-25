@@ -164,6 +164,7 @@ adapter. `MIDNIGHT_GPU` changes that. It is a comma-separated list of:
 | `software` | Accept an adapter that computes on the CPU (Mesa's `llvmpipe`) when there is no hardware one. |
 | `info`     | Print one line to standard error naming the device in use, or `no device`, and one line for each `each` of a GPU system that runs on the CPU, with the reason. |
 | `stats`    | Print one line to standard error for each tick: what its systems and the top-level code after it move between CPU and GPU memory, and how often they hand work to the device and wait for it. |
+| `rows`     | Move every row on its own, whatever it costs, where a program would otherwise move a whole array because the rows cost more. For tests. |
 
 ```sh
 MIDNIGHT_GPU=info,stats nix run . -- run tests/plan/reader.12am
@@ -172,17 +173,20 @@ MIDNIGHT_GPU=info,stats nix run . -- run tests/plan/reader.12am
 A word that is not in the table is reported once, when the program starts.
 In a `stats` line one upload or download is one component array of one
 table. Rows up and rows down are rows of component arrays moved on their
-own. Submissions and waits count every submission of work to the device and
-every wait for it. The first line is `tick 0`. A line is printed when the next tick
-starts, or when the program ends, so it counts what top-level code
-transfers after the tick, as `midnight plan` does; the last line also counts
-the code after the loop that ticks.
+own. Handles, uniform words, error words and the copies a nested `each`
+reads are not counted in these four. Submissions and waits count every
+submission of work to the device and every wait for it. The first line is
+`tick 0`. A line is printed when the next tick starts, or when the program
+ends, so it counts what top-level code transfers after the tick, as
+`midnight plan` does; the last line also counts the code after the loop
+that ticks.
 
 With no device, because none was found or `off` is set, every GPU system runs
 on the CPU. A single `each` also does when it needs more than the device
 offers, such as an array larger than the largest buffer the device binds.
 An error from the device after start-up prints `midnight: GPU error: …` and
-ends the program with status 70.
+ends the program with status 70. It is reported when the work is handed to
+the device, which can be later in the tick than the block that caused it.
 
 ## Benchmarks
 
@@ -206,12 +210,15 @@ each; the two must agree within a relative 0.00001. It runs gravity among
 65,536 bodies on the GPU only. It then moves one million entities three ways and
 prints the time per tick of each: on the CPU; on the GPU with the data left
 there; and on the GPU with a CPU system reading the result in every tick.
-It then prints, on the GPU and on the CPU, the time per tick of six costs:
+It then prints, on the GPU and on the CPU, the time per tick of ten costs:
 one block, eight blocks, a block that can fail, a reader over 64 tables, one
-`e[C]` and one `spawn` a tick. "On the CPU" is the same program with
-`MIDNIGHT_GPU=off`. Last, it prints
-the transfer plan of the two GPU cases beside the transfers
-`MIDNIGHT_GPU=stats` counted, and fails if they differ. On a machine with no
+`e[C]` read and write, one `spawn`, one `despawn` and one `add` of a tag a
+tick, a loop that assigns only under a condition, and a component both
+sides assign whole. "On the CPU" is the same program with
+`MIDNIGHT_GPU=off`. Last, it prints the transfer plan of the two GPU cases
+beside the transfers `MIDNIGHT_GPU=stats` counted, and checks what
+`MIDNIGHT_GPU=stats` counts in a tick for the move programs and the ten
+costs; it fails if any of that differs. On a machine with no
 hardware GPU it prints the CPU times only; `MIDNIGHT_GPU=software` in the
 environment lets the GPU runs use software Vulkan. The programs are in
 `bench/`.
@@ -241,9 +248,11 @@ MIDNIGHT_TEST_GPU=software cargo test    # in the dev shell, on software Vulkan
 nix run .#gpu-test                       # the packaged compiler, on the machine's GPU
 ```
 
-Every program runs as a release and as a debug build. A run that finds no
-device, or runs a GPU system on the CPU, fails. The
-software mode points programs at the Vulkan driver file named in
+Every program runs as a release and as a debug build, as it is and with
+`MIDNIGHT_GPU=rows`. A run that finds no device, or runs a GPU system on the
+CPU, fails. A program of `tests/run` with a `NAME.stats` file must also
+print exactly those `stats` lines, and with a `NAME.rows.stats` file, those
+lines with `rows` as well. The software mode points programs at the Vulkan driver file named in
 `MIDNIGHT_TEST_SOFTWARE_ICD`, which the dev shell sets to Mesa's `llvmpipe`.
 The suite tests the compiler cargo built, or the one `MIDNIGHT_BIN` names.
 
@@ -257,7 +266,8 @@ runtime/        midnight_rt.h, midnight_rt.c; midnight_gpu.h, midnight_gpu.c
                 for programs with a GPU system
 docs/           language.md
 examples/       programs with their expected output
-tests/run/      programs that must print exactly NAME.out
+tests/run/      programs that must print exactly NAME.out, and on a device the
+                `stats` lines in NAME.stats when there is one
 tests/fail/     programs that must be rejected with exactly NAME.err
 tests/panic/    programs that must stop with the run-time error in NAME.err
 tests/plan/     programs whose transfer plan must be exactly NAME.plan
@@ -268,14 +278,16 @@ specs/          one spec per change
 `tests/COVERAGE.md` maps each section of the reference to the tests that
 exercise it. After a deliberate change to a diagnostic,
 `UPDATE_EXPECT=1 cargo test` rewrites the expected files; review the diff
-before committing it.
+before committing it. With `MIDNIGHT_TEST_GPU` set it rewrites the `.stats`
+files, the only expected files that come from a device.
 
 ## Status
 
-Midnight 0.2 is the language core and GPU systems. It is tested on
+Midnight 0.3 is the language core, GPU systems, and the rules that move
+only what is needed between CPU and GPU memory. It is tested on
 `x86_64-linux`, GPU systems on an NVIDIA device and on Mesa's software
 Vulkan; the flake also offers `aarch64-linux`, `x86_64-darwin` and
-`aarch64-darwin`, which evaluate but have not been run. What 0.2 leaves out
+`aarch64-darwin`, which evaluate but have not been run. What 0.3 leaves out
 is listed at the end of the reference.
 
 ## License

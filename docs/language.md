@@ -1,9 +1,11 @@
 # The Midnight language
 
-This document describes Midnight 0.2: the language core specified by
-[`specs/0001-language-core.md`](../specs/0001-language-core.md) and the GPU
+This document describes Midnight 0.3: the language core specified by
+[`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
 systems specified by
-[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md). It is the
+[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), and what moves
+between CPU and GPU memory, specified by
+[`specs/0003-moving-less.md`](../specs/0003-moving-less.md). It is the
 reference for what a program means. Where the compiler and this document
 disagree, one of them has a bug.
 
@@ -383,7 +385,7 @@ iteration. This holds for every loop form, including `each` and `on`. The
 one exception is the `each` of a [GPU system](#gpu-systems), which `break`
 cannot leave.
 
-Blocks are not values in 0.2. `do |…| … end` is accepted only by the loop
+Blocks are not values in 0.3. `do |…| … end` is accepted only by the loop
 forms in this document.
 
 ## Functions
@@ -985,17 +987,76 @@ The data of a component that some GPU block names as a term can be in two
 places, CPU memory and GPU memory, and at any moment one copy or both are
 current, table by table. A GPU block needs the GPU copy of every component
 whose query parameter it uses, in the tables its queries reach, and leaves
-the ones it writes current on the GPU only. Ordinary code (a query term
-whose parameter it uses, `e[C]`, a structural change) needs the CPU copy,
-and leaves what it writes or changes current on the CPU only. A term whose
-parameter the body never uses only picks the tables. When the copy that is
-needed is not current, the data is copied first: an **upload** to the GPU
-or a **download** from it. Reading leaves both copies current. `with:` and
-`without:` filters, `has?` and `World.count` need neither copy.
+the ones it writes current on the GPU only. Ordinary code needs the CPU
+copy, and leaves what it writes current on the CPU only. A term whose
+parameter the body never uses only picks the tables. `with:` and `without:`
+filters, `has?` and `World.count` need neither copy.
 
-Systems run in a fixed order, so the transfers follow from the source.
-`midnight plan FILE` prints the transfers of one tick, as ticks are once the
-program has settled, one line per transfer in the order they happen:
+When the copy that is needed is not current, the data is copied first: an
+**upload** to GPU memory or a **download** from it. How much is copied
+depends on what the code does:
+
+| Ordinary code                                       | Needs in CPU memory        | Moves, when only the GPU copy is current |
+| --------------------------------------------------- | -------------------------- | ---------------------------------------- |
+| A query term whose parameter is read                | the array, in each table   | a download of the array                  |
+| A query term whose parameter is assigned            | the array                  | the download; the array is uploaded later only if an assignment ran |
+| A query term whose parameter is overwritten         | nothing                    | nothing                                  |
+| `e[C]`, read                                        | the entity's row           | one row down                             |
+| `e[C].f = v`, `e[C].f += v`                         | the entity's row           | one row down, and one row up for the next block |
+| `e[C] = v`, and `e.add(C(v))` when `e` has a `C`    | nothing                    | one row up for the next block            |
+| `spawn`                                             | nothing                    | the new row up                           |
+| `despawn`                                           | nothing                    | at most one row up per component         |
+| `add`, `remove` that move the entity to another table | the entity's row         | one row down, the row up in its new table, at most one more row up, per component |
+
+A row up is also what an `e[C]` write, a `spawn` and the others cost when
+both copies are current. When rows would cost more than the array, the
+array moves instead: see [What a GPU system costs](#what-a-gpu-system-costs).
+Reading an array leaves both copies current. Bringing back rows does not:
+the GPU copy is still the only current one, and the next query term that
+reads the component downloads the array.
+
+**Overwritten.** A parameter of an `each` is overwritten when the block
+begins by assigning it whole, or by assigning every one of its fields,
+before anything can read it:
+
+```ruby
+each Force do |force|
+  force = Force(0.0, 0.0)
+end
+
+each Position, Screen do |pos, screen|
+  scale = Config.scale
+  screen.x = pos.x * scale
+  screen.y = pos.y * scale
+end
+```
+
+Exactly:
+
+1. The body starts with a run of plain statements (declarations of locals,
+   assignments, calls) that are not inside a branch or a loop. Among them
+   the parameter is assigned as a whole, or each field of the component is
+   assigned as a whole. `p.v.x = 1` assigns part of the field `v` and does
+   not count.
+2. No expression in that run, up to the last of those assignments, reads
+   the parameter. A compound assignment reads.
+3. In an ordinary `each`, nothing in the whole body can reach the component
+   another way: no `e[C]` with that component, no query with it as a term
+   whose parameter is used, and no call of a function that contains either,
+   directly or through other functions. The body has no `break` that leaves
+   this `each` and no `return`: the entities not visited would keep values
+   that were never brought back.
+4. In a GPU block, the nested `each` does not use the component.
+
+What the component held before is then never needed: a GPU block that
+overwrites it needs no upload, and an ordinary loop no download. This is a
+rule about cost; a program means the same whether or not a parameter is
+overwritten.
+
+**The plan.** Systems run in a fixed order, so the transfers follow from
+the source. `midnight plan FILE` prints the transfers of one tick, as ticks
+are once the program has settled, one line per transfer in the order they
+happen:
 
 ```ruby
 component Position
@@ -1039,58 +1100,58 @@ end
 ```
 
 ```
-upload    Position  reap -> move     on despawn
-upload    Velocity  reap -> move     on despawn
-download  Position  move -> reap     on despawn
+upload    Velocity  reap -> move     rows on despawn
 download  Position  move -> report
 ```
 
 A line gives the direction, the component, and two systems: the one that
-left the other copy as the only current one, and the one that needs the
-copy.
+left the other copy as the only current one, or left rows to send, and the
+one that needs the copy. A line stands for one transfer per table that both
+systems reach.
 
-- **A line with no mark** happens in every tick. Here `report` reads what
-  `move` wrote.
-- **A line marked `on spawn`, `on add`, `on remove` or `on despawn`** is what
-  a structural change adds. It happens only when that operation has run: a
-  download in the same tick, an upload in the next. A structural change
-  needs the CPU copy and leaves it the only current one: `spawn` for every
-  component of the table it spawns into, the other three for every
-  component with a GPU copy, in every table.
-  Here a despawn makes `reap` download `Position`, and `move` upload both
-  components in the tick after. In a tick with a marked download, an
-  unmarked download of the same component later in the tick does not
-  happen: `report` finds the CPU copy current. When a system makes several
-  kinds of structural change, the mark names the first that touches the
-  component.
+- **A line with no mark** copies the whole array, in every tick. Here
+  `report` reads what `move` wrote.
+- **A line marked `rows`** moves only the rows concerned: the row an `e[C]`
+  names, the rows a structural change adds or moves. It moves the whole
+  array when that is cheaper, and nothing in a tick where no row changed.
+- **`rows on spawn`, `rows on add`, `rows on remove`, `rows on despawn`**
+  are `rows` lines that happen only in a tick where that operation ran.
+  Every line a structural change causes is a `rows` line. When a system
+  makes several kinds of structural change, the mark names the first that
+  touches the component.
 - **`top level`** stands for top-level code that runs between ticks: the
   body of a loop that calls `World.tick` or `World.run`. It is the last
   step of a tick. Code before and after such a loop runs once and is no
   part of a tick.
 
+Here `reap` despawns. `Position` is current only on the GPU, so the row
+that takes the despawned entity's place is moved in GPU memory and nothing
+travels. `Velocity` is current on both sides: the row is moved in CPU
+memory and that one row is sent with the next `move`. `report` downloads
+`Position` in every tick. `Age` has no GPU copy and never appears.
+
 An empty plan means that the data the GPU systems use stays in GPU memory.
-`Age` has no GPU copy and never appears.
+The plan has no upload of a component a GPU block overwrites and no
+download of one an ordinary loop overwrites.
 
 The plan has limits:
 
 - Every statement of every system is taken to run, so a transfer that an
-  `if` makes rare is listed like one that happens in every tick. An `if`
-  makes a transfer rare only for `e[C]` and structural changes. A query
-  `each` that can assign through a parameter counts as writing that
-  component in every table it reaches, whether or not an assignment runs:
-  the copy it leaves current is the CPU's, and a GPU block that needs the
-  component next uploads it.
+  `if` makes rare is listed like one that happens in every tick. When the
+  program runs, an `if` makes every kind of transfer rare: an `e[C]` or a
+  structural change that does not run moves nothing, and a query `each`
+  causes an upload only after a tick in which an assignment through the
+  parameter ran.
 - It is worked out for two ticks, one in which no structural change runs
   and one in which every structural change runs. A tick in which only some
   of them run is not listed.
 - Top-level code counts only inside a loop that ticks. Ticks written out
   one after another, with code between them, are not followed.
-- A line stands for one transfer per table that both systems reach, and
-  at run time a structural change brings back only the tables whose rows
-  it changes. The tables are those the program's `spawn`s make and its
-  `add`s and `remove`s make of them; a query reaches a table through its
-  terms and its `with:` and `without:`. Two queries that can share no table
-  transfer nothing between them.
+- The tables are those the program's `spawn`s make and its `add`s and
+  `remove`s make of them; a query reaches a table through its terms and its
+  `with:` and `without:`. Two queries that can share no table transfer
+  nothing between them. At run time only the tables that have rows, or
+  whose rows changed, transfer anything.
 - The first ticks, in which everything a GPU block needs is uploaded for
   the first time, are not listed. Neither are the entity handles a block
   needs for an `Entity` term or for `rand`, or the copy the nested `each`
@@ -1272,9 +1333,11 @@ read keeps its size.
 | `spawn`, `despawn`                          | Constant time per component.            |
 | `add`, `remove`                             | Moves the entity's row to another table, copying every component it has. |
 | A query nested in a query                   | The product of the two.                 |
-| A GPU block                                 | A fixed cost for each table its query matches, whatever the number of entities. |
+| A GPU block                                 | A fixed cost for each table its query matches, whatever the number of entities; less for each further block that runs before ordinary code does. |
 | An upload or a download                     | A copy of a whole array, for each table that holds the component. |
-| An operation that can fail, in a GPU block  | One word read back from the GPU each time the block runs. |
+| A row moved on its own between CPU and GPU memory | About as much as 25,000 bytes of an array copied whole. |
+| Anything brought back from the GPU          | A wait for the GPU, about as much as 400,000 bytes of an array copied whole; everything one loop needs comes back behind one wait. |
+| An operation that can fail, in a GPU block  | One word read back from the GPU, and a wait, each time the block runs. |
 
 What follows from this:
 
@@ -1313,33 +1376,57 @@ not: moving the data costs more than the arithmetic saves.
 Measured on an RTX 5090 beside a Ryzen 9 9950X3D:
 
 - A GPU block costs about 0.02 ms each time it runs, whatever the number of
-  entities up to a million, and each further block in a tick about
-  0.016 ms. A block with an operation that can fail costs about 0.03 ms.
+  entities up to a million, and each further block before ordinary code
+  runs about 0.003 ms. A block with an operation that can fail costs about
+  0.03 ms.
 - A transfer costs about 0.04 to 0.06 ms per megabyte, an upload a little
-  more than a download.
+  more than a download. Anything brought back costs a wait of about
+  0.02 ms besides.
+- One `e[C]` read and one write, one `spawn`, one `despawn` or one `add` of
+  a tag a tick, on a table of a million entities that a GPU block keeps in
+  GPU memory, adds 0.003 to 0.03 ms to the tick. An ordinary loop that
+  reads two components over 64 tables of 100 entities brings back all 128
+  arrays behind one wait: 0.15 ms a tick.
 - Moving entities (`pos.x += vel.dx * Time.dt`, on two pairs of `Float32`)
   is faster on the GPU from roughly 200,000 entities when the data stays
   there: a million take 0.10 ms per tick on the CPU and 0.03 ms on the GPU.
   When an ordinary system reads the result in every tick the GPU is slower
   at every number of entities measured, up to four million: a million then
-  take 0.81 ms per tick, against 0.50 ms for the same two systems on the
+  take 0.82 ms per tick, against 0.51 ms for the same two systems on the
   CPU.
-- Gravity among 16,384 bodies, every body against every other, takes 0.83 ms
-  per tick on the GPU and 355 ms on one CPU thread; among 65,536 bodies,
+- Gravity among 16,384 bodies, every body against every other, takes 0.84 ms
+  per tick on the GPU and 354 ms on one CPU thread; among 65,536 bodies,
   3.7 ms on the GPU.
 
-`nix run .#bench-gpu` measures these, and the costs of blocks, failures,
-readers, `e[C]` and `spawn`, on the machine it runs on.
+`nix run .#bench-gpu` measures these, and the other costs it lists, on the
+machine it runs on.
+
+**Rows or the array.** Between two blocks that use a column, ordinary code
+moves its rows one at a time until they would cost more than the array:
+each row moved, and each of the two copies of a row moved inside GPU
+memory, counts as 25,000 bytes, each wait that brings rows of the column
+back as 400,000, and when the total would pass the size of the array in
+that table, the array moves whole instead. So an array under 25,000 bytes
+always moves whole, and a row comes back on its own only from an array of
+at least 425,000 bytes. The numbers are fixed, not measured when the
+program runs: a program moves the same things on every machine. The rows a
+table gains count nothing: they are sent in one piece, however many.
 
 What follows from this:
 
 - **Read the plan.** Every unmarked line of `midnight plan` is a copy of
-  whole arrays in every tick. See [The transfer plan](#the-transfer-plan).
+  whole arrays in every tick, and every `rows` download is a wait for the
+  GPU. See [The transfer plan](#the-transfer-plan).
 - **Split components by side.** A field that ordinary code needs in every
   tick belongs in a component of its own, so that only its array travels.
-- **Make structural changes sparingly where GPU systems work.** A structural
-  change brings every array of the tables it changes back to CPU memory, and
-  the next GPU block uploads what it needs again.
+- **Look at a few entities with `e[C]`, at many with a query.** A query
+  term brings back the whole array of every table it reaches; `e[C]` brings
+  back one row, behind a wait of its own. So `e[C]` is the cheaper way to
+  look at a few entities of a large table, and the query term the cheaper
+  way to look at many.
+- **Assign a component whole when you compute it.** A loop that overwrites
+  a parameter, as [The transfer plan](#the-transfer-plan) defines it,
+  needs nothing from the other side, whichever side runs it.
 - **Keep operations that can fail out of blocks that run in every tick.**
   Reading the result back makes the program wait for the block. `Float`
   arithmetic cannot fail, and neither can a store into an `Int32` field, a
@@ -1405,7 +1492,7 @@ and its message names no value; the last error in the list is reported
 when the `each` begins. See
 [Runtime errors in a GPU system](#runtime-errors-in-a-gpu-system).
 
-There are no exceptions to catch in 0.2.
+There are no exceptions to catch in 0.3.
 
 ## Grammar
 
@@ -1490,7 +1577,7 @@ document. The `NL` after `do |…|`, and the one after the last statement of a
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.2
+## Not in 0.3
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,

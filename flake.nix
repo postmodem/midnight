@@ -119,6 +119,7 @@
           names = [
             "gpu_programs"
             "gpu_stats_match_plan"
+            "gpu_stats_match_expected"
             "gpu_driver_finds_its_parts"
           ];
           list = lib.concatStringsSep " " names;

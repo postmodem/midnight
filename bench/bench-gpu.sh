@@ -8,7 +8,8 @@
 # (default 3) and its fastest run counts. The gravity checksums of the GPU
 # and the CPU must agree within GRAVITY_TOLERANCE, relative. Then the
 # transfers `midnight plan` lists for the two move programs are compared
-# with the ones MIDNIGHT_GPU=stats counts.
+# with the ones MIDNIGHT_GPU=stats counts, and what it counts in a tick is
+# checked for the move programs and the programs of COSTS.
 #
 # The words of MIDNIGHT_GPU in the environment apply to the GPU runs, so
 # MIDNIGHT_GPU=software lets them use a software adapter. BENCH_SRC is the
@@ -200,4 +201,43 @@ echo
 echo "Transfers per tick: planned (midnight plan) and counted (MIDNIGHT_GPU=stats)"
 transfers gpu_move 0
 transfers gpu_move_read 1
+
+# Checks what MIDNIGHT_GPU=stats counts for program $1 in every tick but
+# the first three and the last. $2 lists the uploads, downloads, rows up,
+# rows down, submissions and waits each tick must count, with - for a count
+# left open.
+counts() {
+  local name=$1 expected=$2
+  run_once "$name.counts" "$name" "${words}stats"
+  sed -n 's/^midnight: gpu: tick [0-9]*: //p' "$work/$name.counts.err" | sed '1,3d;$d' |
+    awk -F', ' '{ line = ""; for (i = 1; i <= NF; i++) { split($i, w, " "); line = line (i > 1 ? " " : "") w[1] } print line }' \
+      >"$work/$name.numbers"
+  local ticks wrong
+  ticks=$(wc -l <"$work/$name.numbers")
+  wrong=$(awk -v want="$expected" 'BEGIN { n = split(want, w, " ") }
+    { for (i = 1; i <= n; i++) if (w[i] != "-" && w[i] != $i) { print; next } }' "$work/$name.numbers" | sort | uniq -c | sed 's/^/    /')
+  if [ "$ticks" -gt 0 ] && [ -z "$wrong" ]; then
+    printf '  %-16s %-18s in each of %s ticks\n' "$name" "$expected" "$ticks"
+  else
+    printf '  %-16s expected %s in each of %s ticks; counted:\n' "$name" "$expected" "$ticks"
+    echo "$wrong"
+    status=1
+  fi
+}
+
+if [ -n "$device" ]; then
+  echo
+  echo "Counted per tick (uploads, downloads, rows up, rows down, submissions, waits)"
+  counts gpu_move "0 0 0 0 1 1"
+  counts gpu_move_read "0 1 0 0 2 1"
+  counts gpu_blocks8 "0 0 0 0 1 1"
+  counts gpu_fallible "0 0 0 0 1 1"
+  counts gpu_read_tables "0 128 0 0 2 1"
+  counts gpu_poke "0 0 1 1 2 2"
+  counts gpu_spawn "0 0 2 0 1 1"
+  counts gpu_despawn "0 0 1 0 1 1"
+  counts gpu_tag "0 0 3 1 - 2"
+  counts gpu_rare_write "0 1 0 0 2 1"
+  counts gpu_overwrite "0 0 0 0 1 1"
+fi
 exit "$status"

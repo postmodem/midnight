@@ -412,6 +412,32 @@ fn move_example_is_the_first_program_in_the_reference() {
     assert_eq!(example, &reference[start..end]);
 }
 
+/// The program under "The plan" in the reference prints the plan shown
+/// right after it.
+#[test]
+fn the_reference_shows_the_plan_of_its_example() {
+    let reference = std::fs::read_to_string("docs/language.md").expect("read the reference");
+    let section = &reference[reference.find("**The plan.**").expect("the plan's part")..];
+    let block = |text: &str, opening: &str| {
+        let start = text.find(opening).expect("a code block") + opening.len();
+        let end = start + text[start..].find("```").expect("the block's end");
+        (text[start..end].to_string(), end + 3)
+    };
+    let (program, after) = block(section, "```ruby\n");
+    let (shown, _) = block(&section[after..], "```\n");
+    let dir = scratch("reference-plan");
+    let source = dir.join("example.12am");
+    std::fs::write(&source, program).expect("write the example");
+    let output = midnight()
+        .arg("plan")
+        .arg(&source)
+        .output()
+        .expect("run midnight");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert_eq!(text(&output.stdout), shown);
+}
+
 /// The component in `tests/run/layout.12am` has a `Float`, a `Float32`, an
 /// `Int16`, a `UInt8`, a `Bool` and an enum: 17 bytes of fields, which the
 /// largest alignment rounds up to 24.
