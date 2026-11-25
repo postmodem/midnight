@@ -190,10 +190,15 @@ nix run .#bench-gpu
 ```
 
 runs gravity among 16,384 bodies on the GPU and on the CPU and prints the
-time per tick of each. It then moves one million entities three ways and
+time per tick of each, and a checksum of the bodies after four ticks from
+each; the two must agree within a relative 0.00001. It runs gravity among
+65,536 bodies on the GPU only. It then moves one million entities three ways and
 prints the time per tick of each: on the CPU; on the GPU with the data left
 there; and on the GPU with a CPU system reading the result in every tick.
-"On the CPU" is the same program with `MIDNIGHT_GPU=off`. Last, it prints
+It then prints, on the GPU and on the CPU, the time per tick of six costs:
+one block, eight blocks, a block that can fail, a reader over 64 tables, one
+`e[C]` and one `spawn` a tick. "On the CPU" is the same program with
+`MIDNIGHT_GPU=off`. Last, it prints
 the transfer plan of the two GPU cases beside the transfers
 `MIDNIGHT_GPU=stats` counted, and fails if they differ. On a machine with no
 hardware GPU it prints the CPU times only; `MIDNIGHT_GPU=software` in the
@@ -245,8 +250,7 @@ tests/run/      programs that must print exactly NAME.out
 tests/fail/     programs that must be rejected with exactly NAME.err
 tests/panic/    programs that must stop with the run-time error in NAME.err
 tests/plan/     programs whose transfer plan must be exactly NAME.plan
-bench/          baseline.c, churn.12am, bench.sh; gpu_gravity.12am,
-                gpu_move.12am, gpu_move_read.12am, bench-gpu.sh
+bench/          baseline.c, churn.12am, bench.sh; gpu_*.12am, bench-gpu.sh
 specs/          one spec per change
 ```
 

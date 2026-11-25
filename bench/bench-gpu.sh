@@ -1,23 +1,35 @@
 # Builds and runs the GPU benchmarks.
 #
-# bench/gpu_gravity.12am, bench/gpu_move.12am and bench/gpu_move_read.12am
-# each run on the GPU and on the CPU. "On the CPU" is the same program with
-# MIDNIGHT_GPU=off, which runs the C implementation of its GPU system on one
-# thread, as a machine with no GPU does. Each runs RUNS times (default 3)
-# and its fastest run counts. Then the transfers `midnight plan` lists for
-# the two move programs are compared with the ones MIDNIGHT_GPU=stats
-# counts.
+# bench/gpu_gravity.12am, bench/gpu_move.12am, bench/gpu_move_read.12am and
+# the programs of COSTS each run on the GPU and on the CPU. "On the CPU" is
+# the same program with MIDNIGHT_GPU=off, which runs the C implementation of
+# its GPU system on one thread, as a machine with no GPU does.
+# bench/gpu_gravity_64k.12am runs on the GPU only. Each runs RUNS times
+# (default 3) and its fastest run counts. The gravity checksums of the GPU
+# and the CPU must agree within GRAVITY_TOLERANCE, relative. Then the
+# transfers `midnight plan` lists for the two move programs are compared
+# with the ones MIDNIGHT_GPU=stats counts.
 #
 # The words of MIDNIGHT_GPU in the environment apply to the GPU runs, so
 # MIDNIGHT_GPU=software lets them use a software adapter. BENCH_SRC is the
 # directory that holds bench/.
 
 runs=${RUNS:-3}
+# The cost programs, each with what it measures.
+COSTS=(
+  "gpu_block:one block a tick, 1,000 entities"
+  "gpu_blocks8:eight blocks a tick, 1,000 entities"
+  "gpu_fallible:one block that can fail"
+  "gpu_read_tables:a reader of 2 components, 64 tables"
+  "gpu_poke:one e[C] read and write a tick"
+  "gpu_spawn:one spawn a tick into 1,000,000"
+)
+GRAVITY_TOLERANCE=0.00001
 words=${MIDNIGHT_GPU:+$MIDNIGHT_GPU,}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-for name in gpu_gravity gpu_move gpu_move_read; do
+for name in gpu_gravity gpu_gravity_64k gpu_move gpu_move_read "${COSTS[@]%%:*}"; do
   midnight build "$BENCH_SRC/bench/$name.12am" -o "$work/$name"
 done
 
@@ -73,6 +85,15 @@ if [ -n "$device" ]; then
   run_best move_gpu gpu_move "${words}info"
   run_best read_gpu gpu_move_read "${words}info"
 fi
+for cost in "${COSTS[@]%%:*}"; do
+  run_best "${cost}_cpu" "$cost" off
+  if [ -n "$device" ]; then
+    run_best "${cost}_gpu" "$cost" "${words}info"
+  fi
+done
+if [ -n "$device" ]; then
+  run_best gravity64_gpu gpu_gravity_64k "${words}info"
+fi
 
 echo
 echo "Gravity: $(value gravity_cpu bodies) bodies, each pulled by every body; fastest of $runs runs"
@@ -83,6 +104,11 @@ row "CPU" gravity_cpu "  ($(value gravity_cpu ticks) ticks)"
 if [ -n "$device" ]; then
   awk -v cpu="$(value gravity_cpu ms_per_tick)" -v gpu="$(value gravity_gpu ms_per_tick)" \
     'BEGIN { printf "%-31s %10.1f (CPU time / GPU time)\n", "ratio", cpu / gpu }'
+fi
+echo "checksum $(value gravity_cpu checksum) (CPU)"
+if [ -n "$device" ]; then
+  echo "checksum $(value gravity_gpu checksum) (GPU)"
+  row "GPU, $(value gravity64_gpu bodies) bodies" gravity64_gpu "  ($(value gravity64_gpu ticks) ticks)"
 fi
 
 echo
@@ -108,8 +134,27 @@ fi
 
 status=0
 
-# Prints the plan of program $1 and what `stats` counted in each tick after
-# the first. Both must come to $2 downloads and no upload.
+if [ -n "$device" ] && ! awk -v cpu="$(value gravity_cpu checksum)" -v gpu="$(value gravity_gpu checksum)" -v t="$GRAVITY_TOLERANCE" \
+  'BEGIN { d = cpu - gpu; if (d < 0) d = -d; m = cpu < 0 ? -cpu : cpu; exit !(d <= t * m) }'; then
+  echo "the gravity checksums differ by more than $GRAVITY_TOLERANCE of the CPU's"
+  status=1
+fi
+
+echo
+echo "Costs: fastest of $runs runs"
+printf '%-40s %12s %12s\n' "" "GPU ms/tick" "CPU ms/tick"
+for cost in "${COSTS[@]}"; do
+  name=${cost%%:*}
+  gpu="-"
+  if [ -n "$device" ]; then
+    gpu=$(value "${name}_gpu" ms_per_tick)
+  fi
+  printf '%-40s %12s %12s\n' "${cost#*:}" "$gpu" "$(value "${name}_cpu" ms_per_tick)"
+done
+
+# Prints the plan of program $1 and what `stats` counted in each tick but
+# the first and the last, whose line also counts the code after the loop.
+# Both must come to $2 downloads and no upload.
 transfers() {
   local name=$1 downloads=$2 expected counted ticks
   expected="0 uploads, $downloads downloads"
@@ -135,14 +180,14 @@ transfers() {
     return
   fi
   run_once "$name.stats" "$name" "${words}stats"
-  sed -n 's/^midnight: gpu: tick [0-9]*: //p' "$work/$name.stats.err" | tail -n +2 >"$work/$name.ticks"
+  sed -n 's/^midnight: gpu: tick [0-9]*: //p' "$work/$name.stats.err" | sed '1d;$d' >"$work/$name.ticks"
   ticks=$(wc -l <"$work/$name.ticks")
   counted=$(sort -u "$work/$name.ticks")
   if [ "$counted" = "$expected" ]; then
-    echo "  counted  $counted in each of the $ticks ticks after the first"
+    echo "  counted  $counted in each of the $ticks ticks but the first and the last"
   else
     sort "$work/$name.ticks" | uniq -c | sed 's/^ *\([0-9]*\) \(.*\)$/  counted  \2 in \1 ticks/'
-    echo "  expected $expected in each of the $ticks ticks after the first"
+    echo "  expected $expected in each of the $ticks ticks but the first and the last"
     status=1
   fi
 }

@@ -1,0 +1,62 @@
+# One GPU block writes two components of 6,400 entities in 64 tables of
+# 100; an ordinary system reads both in every tick. Prints the time per
+# tick.
+TABLES = 64
+ROWS = 100
+TICKS = 500
+
+component A
+  x: Float32
+end
+
+component B
+  y: Float32
+end
+
+tag T0
+tag T1
+tag T2
+tag T3
+tag T4
+tag T5
+
+resource Total
+  s: Float = 0
+end
+
+gpu system move
+  each A, B do |a, b|
+    a.x += 1.0
+    b.y += 1.0
+  end
+end
+
+system read
+  sum = 0.0
+  each A, B do |a, b|
+    sum += a.x + b.y
+  end
+  Total.s = sum
+end
+
+(TABLES * ROWS).times do |i|
+  t = i % TABLES
+  e = spawn A(0), B(0)
+  e.add(T0) if t % 2 == 1
+  e.add(T1) if (t / 2) % 2 == 1
+  e.add(T2) if (t / 4) % 2 == 1
+  e.add(T3) if (t / 8) % 2 == 1
+  e.add(T4) if (t / 16) % 2 == 1
+  e.add(T5) if (t / 32) % 2 == 1
+end
+
+World.tick
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"
+puts "checksum: #{Total.s}"

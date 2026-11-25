@@ -1,0 +1,27 @@
+# One GPU block per tick over 1,000 entities whose data stays on the GPU:
+# what a block costs when it does almost nothing. Prints the time per tick.
+ENTITIES = 1000
+TICKS = 5000
+
+component A
+  v: Float32
+end
+
+gpu system work
+  each A do |a|
+    a.v += 1.0
+  end
+end
+
+ENTITIES.times do |i|
+  spawn A(i)
+end
+
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"

@@ -1,0 +1,61 @@
+# Eight GPU blocks per tick over 1,000 entities whose data stays on the
+# GPU: compared with bench/gpu_block.12am, what each further block costs.
+# Prints the time per tick.
+ENTITIES = 1000
+TICKS = 5000
+
+component A
+  v: Float32
+end
+
+component B
+  v: Float32
+end
+
+component C
+  v: Float32
+end
+
+component D
+  v: Float32
+end
+
+gpu system work
+  each A do |a|
+    a.v += 1.0
+  end
+  each B do |b|
+    b.v += 1.0
+  end
+  each C do |c|
+    c.v += 1.0
+  end
+  each D do |d|
+    d.v += 1.0
+  end
+  each A, B do |a, b|
+    a.v += b.v
+  end
+  each B, C do |b, c|
+    b.v += c.v
+  end
+  each C, D do |c, d|
+    c.v += d.v
+  end
+  each D, A do |d, a|
+    d.v += a.v
+  end
+end
+
+ENTITIES.times do |i|
+  spawn A(i), B(i), C(i), D(i)
+end
+
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"

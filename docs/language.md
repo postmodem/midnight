@@ -1325,8 +1325,8 @@ Measured on an RTX 5090 beside a Ryzen 9 9950X3D:
 - Gravity among 16,384 bodies, every body against every other, takes 1.33 ms
   per tick on the GPU and 356 ms on one CPU thread.
 
-`nix run .#bench-gpu` measures the gravity and the million entities on the
-machine it runs on.
+`nix run .#bench-gpu` measures these, and the costs of blocks, failures,
+readers, `e[C]` and `spawn`, on the machine it runs on.
 
 What follows from this:
 

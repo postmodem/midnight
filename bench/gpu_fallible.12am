@@ -1,0 +1,32 @@
+# One GPU block with an operation that can fail (a division by a resource
+# field) over 1,000 entities: compared with bench/gpu_block.12am, what
+# reading the error back costs. Prints the time per tick.
+ENTITIES = 1000
+TICKS = 5000
+
+component A
+  v: Int32
+end
+
+resource Config
+  d: Int = 3
+end
+
+gpu system work
+  each A do |a|
+    a.v = a.v / Config.d + 7
+  end
+end
+
+ENTITIES.times do |i|
+  spawn A(i)
+end
+
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"

@@ -1,0 +1,77 @@
+# The gravity system of examples/nbody.12am on 65,536 bodies: 4.3 billion
+# pair calculations per tick. Prints the time per tick, and a checksum of
+# the bodies after the first CHECK_TICKS ticks, which a device and the CPU
+# compute alike up to rounding.
+#
+# bench/bench-gpu.sh runs it on the GPU only: on one CPU thread a tick
+# takes about six seconds.
+
+BODIES = 65_536
+
+# Ticks run before the clock starts; the checksum is taken after them.
+CHECK_TICKS = 4
+
+# Ticks are timed until BUDGET seconds have passed, and at most MAX_TICKS of
+# them, so that the same program suits a GPU that takes a millisecond per
+# tick and a CPU that takes a third of a second.
+MAX_TICKS = 50
+BUDGET = 2.0
+
+SOFTENING = 0.001
+
+component Body
+  x: Float32
+  y: Float32
+  vx: Float32
+  vy: Float32
+  mass: Float32
+end
+
+gpu system gravity
+  each Body do |a|
+    ax = 0.0
+    ay = 0.0
+    each Body do |b|
+      dx = b.x - a.x
+      dy = b.y - a.y
+      d2 = dx * dx + dy * dy + SOFTENING
+      pull = b.mass / (d2 * Math.sqrt(d2))
+      ax += dx * pull
+      ay += dy * pull
+    end
+    a.vx += ax * Time.dt
+    a.vy += ay * Time.dt
+    a.x += a.vx * Time.dt
+    a.y += a.vy * Time.dt
+  end
+end
+
+# The bodies start at rest, scattered over a square, and weigh 1 together.
+# `rand` gives the same numbers in every run.
+BODIES.times do
+  spawn Body(rand * 2 - 1, rand * 2 - 1, 0.0, 0.0, 1.0 / BODIES)
+end
+
+# The first tick uploads the bodies and builds the shader's pipeline, so it
+# runs before the clock starts, with the others the checksum covers.
+CHECK_TICKS.times do
+  World.tick
+end
+checksum = 0.0
+each Body do |body|
+  checksum += body.x + body.y * 2 + (body.vx.abs + body.vy.abs) * 1000
+end
+
+ticks = 0
+start = clock
+while ticks < MAX_TICKS && clock - start < BUDGET
+  World.tick
+  ticks += 1
+end
+seconds = clock - start
+
+puts "bodies: #{World.count(Body)}"
+puts "ticks: #{ticks}"
+puts "seconds: #{seconds.round(6)}"
+puts "ms_per_tick: #{(seconds * 1000 / ticks).round(3)}"
+puts "checksum: #{checksum}"

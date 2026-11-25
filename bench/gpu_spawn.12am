@@ -1,0 +1,36 @@
+# One GPU block moves a million entities; after every tick, top-level code
+# spawns one more into the same table. Prints the time per tick.
+ENTITIES = 1_000_000
+TICKS = 300
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+ENTITIES.times do |i|
+  spawn Position(i % 1000, i / 1000), Velocity((i % 7 - 3) * 0.5, (i % 5 - 2) * 0.25)
+end
+
+Time.dt = 1.0 / 64
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+  spawn Position(0, 0), Velocity(1, 1)
+end
+seconds = clock - start
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"
