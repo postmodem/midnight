@@ -1,0 +1,10 @@
+error: resource field `Config.mask` can't be read in a function called from a GPU system
+  --> tests/fail/gpu_function_resource_uint32.12am:13:7
+   |
+13 |   n % Config.mask
+   |       ^^^^^^^^^^^ it is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`
+note: GPU system `mark` calls `masked` here
+  --> tests/fail/gpu_function_resource_uint32.12am:18:14
+   |
+18 |     body.n = masked(body.n)
+   |              --------------

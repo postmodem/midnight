@@ -415,3 +415,180 @@ end
         "outer(body.x)"
     );
 }
+
+/// Why GPU code has no `UInt32`, as every label about one says it.
+const UNSIGNED: &str = "which the signed 32-bit `Int` of a GPU system can't hold";
+
+#[test]
+fn a_uint32_field_beside_gpu_code_checks() {
+    // A GPU block reads the other fields of a resource that has a
+    // `UInt32`, filters by a component that has one, and calls a function
+    // that ordinary code calls too. Ordinary code uses the `UInt32` fields
+    // and the struct that has one.
+    ok("\
+struct Stamp
+  serial: UInt32
+  weight: Int32
+end
+resource Counter
+  total: UInt32 = 0
+  step: Int = 3
+end
+component Body
+  n: Int32
+end
+component Seen
+  stamp: Stamp
+end
+def weigh(stamp: Stamp) -> Int
+  stamp.weight * 2
+end
+def twice(n: Int) -> Int
+  n * 2
+end
+gpu system advance
+  each Body, with: Seen do |body|
+    body.n += twice(Counter.step)
+  end
+end
+system count
+  each Body, Seen do |body, seen|
+    Counter.total += twice(body.n)
+    seen.stamp = Stamp(Counter.total, weigh(seen.stamp))
+  end
+end
+");
+}
+
+#[test]
+fn a_uint32_field_does_not_reach_gpu_code() {
+    // A resource field, a struct inside a resource field, a constant, a
+    // constructor, a parameter, a return value and a receiver. The
+    // argument of a call that can't be made is not reported again.
+    let whose = |ty: &str, path: &str| {
+        format!(
+            "a `{ty}`, whose field `{path}` is a `UInt32`, {UNSIGNED}; declare that field `Int32`"
+        )
+    };
+    let direct = format!("it is a `UInt32`, {UNSIGNED}; declare it `Int32`");
+    let in_resource = format!("it is {}", whose("Grid", "cell.mask"));
+    let in_constant = format!("it is {}", whose("Cell", "mask"));
+    let built = format!("its field `cell.mask` is a `UInt32`, {UNSIGNED}; declare it `Int32`");
+    let taken = format!("its parameter `cell` is {}", whose("Cell", "mask"));
+    let returned = format!("it returns {}", whose("Cell", "mask"));
+    let receiver = format!("its receiver is {}", whose("Cell", "mask"));
+    assert_errors(
+        "\
+component Body
+  n: Int32
+end
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+
+  def older -> Int
+    age + 1
+  end
+end
+struct Grid
+  width: Int = 0
+  cell: Cell = Cell()
+end
+resource Board
+  grid: Grid = Grid()
+  mask: UInt32 = 0
+  width: Int = 8
+end
+HOME = Cell(1, 2)
+def age_of(cell: Cell) -> Int
+  cell.age
+end
+def fresh(age: Int) -> Cell
+  Cell(0, age)
+end
+gpu system mark
+  each Body do |body|
+    body.n = Board.width
+    body.n += Board.mask
+    body.n += Board.grid.width
+    body.n += HOME.age
+    body.n += Grid().width
+    body.n += age_of(HOME)
+    body.n += fresh(1).age
+    body.n += HOME.older
+  end
+end
+",
+        &[
+            (
+                "resource field `Board.mask` can't be read in a GPU system",
+                "Board.mask",
+                &direct,
+            ),
+            (
+                "resource field `Board.grid` can't be read in a GPU system",
+                "Board.grid",
+                &in_resource,
+            ),
+            (
+                "constant `HOME` can't be read in a GPU system",
+                "HOME",
+                &in_constant,
+            ),
+            (
+                "`Grid` values are not allowed in a GPU system",
+                "Grid()",
+                &built,
+            ),
+            (
+                "can't call `age_of` in a GPU system",
+                "age_of(HOME)",
+                &taken,
+            ),
+            ("can't call `fresh` in a GPU system", "fresh(1)", &returned),
+            (
+                "can't call `Cell.older` in a GPU system",
+                "HOME.older",
+                &receiver,
+            ),
+        ],
+    );
+}
+
+#[test]
+fn the_first_field_that_cannot_exist_is_named() {
+    let unsigned = format!("its field `id` is a `UInt32`, {UNSIGNED}; declare it `Int32`");
+    assert_errors(
+        "\
+component Body
+  n: Int32
+end
+struct Tagged
+  id: UInt32 = 0
+  name: String = \"\"
+end
+struct Named
+  name: String = \"\"
+  id: UInt32 = 0
+end
+gpu system mark
+  each Body do |body|
+    tagged = Tagged()
+    named = Named()
+  end
+end
+",
+        &[
+            (
+                "`Tagged` values are not allowed in a GPU system",
+                "Tagged()",
+                &unsigned,
+            ),
+            (
+                "`Named` values are not allowed in a GPU system",
+                "Named()",
+                "its field `name` is a `String`; the GPU works on numbers, `Bool`s, enums, entities and structs of those",
+            ),
+        ],
+    );
+}

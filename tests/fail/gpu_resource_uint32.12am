@@ -1,0 +1,19 @@
+# expect: resource field `Config.mask` can't be read in a GPU system, because it is a `UInt32`; hint to declare it `Int32`; `Config.scale` is fine
+# at: line 17, the place `Config.mask`
+
+component Body
+  x: Float32
+  n: Int32
+end
+
+resource Config
+  mask: UInt32 = 7
+  scale: Float = 2
+end
+
+gpu system scale
+  each Body do |body|
+    body.x *= Config.scale
+    body.n += Config.mask
+  end
+end

@@ -1,0 +1,5 @@
+error: `Cell` values are not allowed in a GPU system
+  --> tests/fail/gpu_struct_with_uint32.12am:15:12
+   |
+15 |     cell = Cell(body.n, 1)
+   |            ^^^^^^^^^^^^^^^ its field `mask` is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`

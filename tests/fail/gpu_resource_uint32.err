@@ -1,0 +1,5 @@
+error: resource field `Config.mask` can't be read in a GPU system
+  --> tests/fail/gpu_resource_uint32.12am:17:15
+   |
+17 |     body.n += Config.mask
+   |               ^^^^^^^^^^^ it is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`

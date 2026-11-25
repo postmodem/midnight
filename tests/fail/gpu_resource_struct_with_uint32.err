@@ -1,0 +1,5 @@
+error: resource field `Config.cell` can't be read in a GPU system
+  --> tests/fail/gpu_resource_struct_with_uint32.12am:19:15
+   |
+19 |     body.n += Config.cell.age
+   |               ^^^^^^^^^^^ it is a `Cell`, whose field `mask` is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare that field `Int32`
