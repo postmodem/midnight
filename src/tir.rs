@@ -166,6 +166,8 @@ pub struct Program {
 #[derive(Clone, Debug)]
 pub struct Record {
     pub name: String,
+    /// What the record was declared as. No backend reads it yet.
+    #[allow(dead_code)]
     pub kind: RecordKind,
     /// In source order, which is the order of construction and of `to_s`.
     /// An event may have none.

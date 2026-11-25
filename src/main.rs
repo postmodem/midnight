@@ -1,7 +1,5 @@
 //! The `midnight` command.
 
-#![allow(dead_code)]
-
 mod ast;
 mod check;
 mod diag;

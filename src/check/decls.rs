@@ -173,7 +173,6 @@ impl<'a> Checker<'a> {
         };
         self.records.push(RecordInfo {
             name,
-            span: decl.name.span,
             kind,
             decl,
             fields: Vec::new(),

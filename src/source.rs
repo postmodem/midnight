@@ -103,10 +103,6 @@ impl SourceMap {
         &self.files[id.0 as usize]
     }
 
-    pub fn files(&self) -> &[SourceFile] {
-        &self.files
-    }
-
     /// 1-based line on which a span starts.
     pub fn line(&self, span: Span) -> u32 {
         self.file(span.file).line_of(span.start)

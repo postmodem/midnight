@@ -73,15 +73,6 @@ impl Lv {
             None => format!("&{}", self.c),
         }
     }
-
-    /// The lvalue as the operand of a cast or a member access.
-    pub fn operand(&self) -> String {
-        if self.prec > ATOM {
-            format!("({})", self.c)
-        } else {
-            self.c.clone()
-        }
-    }
 }
 
 /// The C expression that reads storage of type `ty` through lvalue `c` as

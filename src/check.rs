@@ -83,8 +83,6 @@ enum FnSym {
 
 struct RecordInfo<'a> {
     name: String,
-    /// The name in the declaration.
-    span: Span,
     kind: tir::RecordKind,
     decl: &'a ast::RecordDecl,
     fields: Vec<FieldInfo<'a>>,

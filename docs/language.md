@@ -394,8 +394,8 @@ end
 - Parameter types are required. Parameters are read-only.
 - The value of the last expression is the return value. `return` exits early.
 - The return type may be left out; it is then inferred from the body. A
-  function that calls itself, directly or through other functions, must
-  declare it.
+  function whose value depends on a call to itself, directly or through
+  other functions, must declare it.
 - A function with no parameters is declared without parentheses and may be
   called without them: `greet` or `greet()`. Calls with arguments use
   parentheses: `clamp(x, 0, 1)`. The same holds for methods.
@@ -706,7 +706,7 @@ Every value has `to_s`:
 | Type          | `to_s`                                                  |
 | ------------- | ------------------------------------------------------- |
 | `Int`         | `42`                                                    |
-| `Float`       | The shortest text that reads back as the same number, always with a fractional part: `1.0`, `0.1`, `1e+20`. Also `Infinity`, `-Infinity`, `NaN`. |
+| `Float`       | The shortest text that reads back as the same number, always with a fractional part: `1.0`, `0.1`, `1e+20`. Exponent form is used below `0.00001` and from `1e+16` up. Also `Infinity`, `-Infinity`, `NaN`. |
 | `Bool`        | `true`, `false`                                         |
 | `String`      | The string itself.                                      |
 | `Entity`      | `Entity(3v1)`: index and generation. `Entity(none)`.    |
@@ -814,7 +814,7 @@ match it and reads only the arrays of the components named as terms.
 
 **Memory per entity** is the size of its components plus 20 bytes. A
 component's size is the size of its fields, which the compiler orders to
-minimise padding. `Bool` and enum fields take one byte. Tags take none.
+minimise padding (construction and `to_s` keep the declared order). `Bool` and enum fields take one byte. Tags take none.
 Strings and lists take 8 bytes in the component and keep their contents
 elsewhere.
 
@@ -957,7 +957,9 @@ place       = postfix
 and `ASSIGN_OP` is one of `= += -= *= /= %=`. A place that is a bare `IDENT`
 not yet in scope creates the variable.
 A `do_block` after a call is accepted only for the loop forms listed in this
-document.
+document. The `NL` after `do |…|`, and the one after the last statement of a
+block, may be left out when the block goes on along the same line:
+`xs.length.times do |i| xs[i] *= 2 end`.
 
 ## Not in 0.1
 
