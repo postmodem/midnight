@@ -287,7 +287,10 @@ on compute-bound blocks.
   `/` and `sqrt` on the device: `sqrt` for every one of the 2 ** 32 bit
   patterns, `/` for 2 ** 28 pairs (random bits, edge values, and quotients
   next to a midpoint). Every result
-  must equal the CPU's `/` and `sqrtf` under FTZ and DAZ.
+  must equal the CPU's `/` and `sqrtf` under FTZ and DAZ. Those sizes are
+  for `MIDNIGHT_TEST_GPU=hardware`. With `software` (llvmpipe, and so
+  `nix flake check`) it takes 2 ** 24 inputs of each, the edge values and
+  midpoint cases included.
 - `tests/fail`: `strict system`, each `Math` function and `**` in a strict
   system, and one reached through a function.
 - `tests/plan`: one program with a strict and a non-strict GPU system.
@@ -328,7 +331,8 @@ and RADV on the Ryzen's iGPU (`VK_DRIVER_FILES` set to Mesa's
    exactly its expected output on each of the three devices, in release and
    debug, as it is and with `MIDNIGHT_GPU=rows`, and with
    `MIDNIGHT_GPU=off`.
-4. `gpu_strict_div_sqrt` passes on each of the three devices.
+4. `gpu_strict_div_sqrt` passes at full size on the 5090 and on RADV,
+   and at its software size on llvmpipe.
 5. The start-up check passes on each of the three devices (`info` shows no
    strict block on the CPU). With `MIDNIGHT_GPU=strict-cpu`, every strict
    program prints the same output and `info` names the reason.
