@@ -1072,7 +1072,12 @@ An empty plan means that the data the GPU systems use stays in GPU memory.
 The plan has limits:
 
 - Every statement of every system is taken to run, so a transfer that an
-  `if` makes rare is listed like one that happens in every tick.
+  `if` makes rare is listed like one that happens in every tick. An `if`
+  makes a transfer rare only for `e[C]` and structural changes. A query
+  `each` that can assign through a parameter counts as writing that
+  component in every table it reaches, whether or not an assignment runs:
+  the copy it leaves current is the CPU's, and a GPU block that needs the
+  component next uploads it.
 - It is worked out for two ticks, one in which no structural change runs
   and one in which every structural change runs. A tick in which only some
   of them run is not listed.
