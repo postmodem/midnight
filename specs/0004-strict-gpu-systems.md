@@ -101,9 +101,12 @@ which hold on every device and on the CPU:
 - **Subnormals count as zero.** An operand of `+`, `-`, `*`, `/`, `%`,
   `Math.sqrt`, a comparison or a conversion whose magnitude is below
   2 ** -126 (about 1.18e-38) is zero with its sign. A result of `+`, `-`,
-  `*`, `/` or `Math.sqrt` whose exact value is below 2 ** -126 in
-  magnitude is zero with its sign, even where rounding would have given
-  2 ** -126. A value that is only copied, stored, passed or returned keeps
+  `*`, `/` or `Math.sqrt` is rounded to 24 bits first; if it is then below
+  2 ** -126 in magnitude, it is zero with its sign. A product whose exact
+  value lies just below 2 ** -126 and rounds to it is 2 ** -126. (Only a
+  product can do that: a sum below 2 ** -126 is exact, and a quotient or a
+  root of normal numbers never lies that close below a power of two.) A
+  value that is only copied, stored, passed or returned keeps
   its bits, and so does `-x` and `x.abs`, which change only the sign.
 - **`+`, `-` and `*`** are each rounded to nearest, ties to even, on their
   own. They are never combined into one operation with a single rounding,
@@ -259,12 +262,12 @@ for the tests.
 - `Math` functions agree nowhere.
 
 The subnormal boundary:
-128 products whose exact value lies just below 2 ** -126. The 5090,
-llvmpipe, RADV and the Ryzen 9950X3D with FTZ and DAZ set all give zero
-with the sign, the same bits on every row, including the 64 that would
-round up to 2 ** -126. That is flushing before rounding, the rule the
-language adopts. QEMU's maintainers model x86 FTZ as flushing after
-rounding; Intel CPUs were not tried.
+64 products of two normal numbers whose exact value lies in
+[2 ** -126 (1 - 2 ** -25), 2 ** -126), which rounds to 2 ** -126 at 24
+bits. The 5090, llvmpipe, RADV and the Ryzen 9950X3D with FTZ and DAZ set
+all give 2 ** -126 with the sign on every row: they flush after rounding,
+the rule the language adopts. A product with a subnormal operand is zero
+on all four. Intel CPUs were not tried.
 
 On Metal, `wgpu-hal` 27 compiles shaders with `MTLCompileOptions` whose
 math mode it never sets, so Metal's default applies, historically fast
@@ -385,7 +388,7 @@ and RADV on the Ryzen's iGPU (`VK_DRIVER_FILES` set to Mesa's
   allows, which matters on Metal, where it may be worse than the 2 ULP
   seen here.
 - **`%` stays the same formula**, now exact because its steps are.
-- **Flush before rounding**, because all four targets measured do it.
+- **Flush after rounding**, because all four targets measured do it.
 - **`Math` functions and `**` are compile errors** in a strict system
   until a later spec writes them as helpers, which print to C and WGSL
   alike.
