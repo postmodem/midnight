@@ -11,7 +11,7 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 251 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+Counts: 252 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 334 in `tests/fail`, 80 in `tests/panic`, 12 in `tests/plan`.
 
 ## A first program, The model
@@ -415,6 +415,7 @@ by the program itself.
 | `abs`, `clamp`, `min`, `max`, `to_f`, `round(digits)`, the `Math` functions, `**` on `Float` with either sign of base | `gpu_numbers`, `gpu_float_literals` |
 | `**` on `Float`: a zero exponent, a zero base with an exponent of either sign, a negative base with a whole, a fractional and an infinite exponent, a base of 1 with an infinite and a NaN exponent, a base of -1 with an infinite exponent | `gpu_float_power` |
 | `/` and `%` by a literal power of two: the quotient rounds toward negative infinity and the remainder takes the divisor's sign, for negative values and at the ends of the range | `gpu_power_of_two_divisors` |
+| Release and debug builds give the same `Float` results for `**` and the `Math` functions, of fields and of constants, in a GPU system and in ordinary code; `x ** 2.0` is `x * x` | `float_modes_agree` |
 | `%` on `Float` by zero is NaN | `gpu_float_power` |
 | `%` on `Float` where rounding to 32 bits shows (`1000000.3125 % 0.1`), and beyond a quotient of 16,777,216 | not covered: the CPU and a GPU are allowed different results |
 | `Math::PI` and `Math::E` | `gpu_replace_component` |

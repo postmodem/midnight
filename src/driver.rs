@@ -18,6 +18,25 @@ const DEBUG_FLAGS: &[&str] = &[
     "-DMN_DEBUG",
 ];
 
+/// Flags for both modes: the C compiler may not compute the inexact `libm`
+/// functions itself, so a release build gives what a debug build gives.
+const MATH_FLAGS: &[&str] = &[
+    "-fno-builtin-pow",
+    "-fno-builtin-powf",
+    "-fno-builtin-sin",
+    "-fno-builtin-sinf",
+    "-fno-builtin-cos",
+    "-fno-builtin-cosf",
+    "-fno-builtin-tan",
+    "-fno-builtin-tanf",
+    "-fno-builtin-atan2",
+    "-fno-builtin-atan2f",
+    "-fno-builtin-exp",
+    "-fno-builtin-expf",
+    "-fno-builtin-log",
+    "-fno-builtin-logf",
+];
+
 /// Flags for the machine `midnight` runs on, in both modes.
 #[cfg(target_arch = "x86_64")]
 const TARGET_FLAGS: &[&str] = &["-march=x86-64-v3"];
@@ -92,6 +111,7 @@ fn compile_in(
     command.arg("-std=c11");
     command.args(if debug { DEBUG_FLAGS } else { RELEASE_FLAGS });
     command.args(TARGET_FLAGS);
+    command.args(MATH_FLAGS);
     if let Ok(extra) = std::env::var("MIDNIGHT_CFLAGS") {
         command.args(extra.split_whitespace());
     }

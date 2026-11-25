@@ -121,7 +121,10 @@ On x86-64 both modes add `-march=x86-64-v3`, so a built program needs a
 CPU with AVX2 and FMA: Intel since 2013 (not every low-end Pentium and
 Celeron) and AMD since 2015. `MIDNIGHT_CFLAGS=-march=x86-64` builds for
 any x86-64 CPU. `-ffp-contract=off` keeps a `Float` result the same
-whichever level a program is built for.
+whichever level a program is built for. Both modes also add
+`-fno-builtin-` for `pow`, `sin`, `cos`, `tan`, `atan2`, `exp` and `log`
+and their `float` forms, so that the C compiler does not compute them
+itself and a release build gives the results of a debug build.
 
 The checks the language defines (list bounds, missing components, division
 by zero) are on in both modes. A debug build also counts live string and list

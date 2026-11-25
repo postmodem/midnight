@@ -1,0 +1,42 @@
+# tolerance: 0.00001
+# Release and debug builds give the same `Float` results for `**` and the
+# `Math` functions, of field values and of constants, in a GPU system and in
+# ordinary code. `x ** 2.0` is `x * x`. A device computes the `Math`
+# functions its own way, hence the tolerance.
+component Probe
+  x: Float32
+  square: Float32
+  sine: Float32
+  cosine: Float32
+  tangent: Float32
+  angle: Float32
+  e: Float32
+  ln: Float32
+end
+
+gpu system probe
+  each Probe do |p|
+    p.square = p.x ** 2.0
+    p.sine = Math.sin(-0.520069122)
+    p.cosine = Math.cos(4.4930315)
+    p.tangent = Math.tan(p.x * 0.01)
+    p.angle = Math.atan2(p.x, 3.0)
+    p.e = Math.exp(6.23199654)
+    p.ln = Math.log(308.333313)
+  end
+end
+
+spawn Probe(27.8794746, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+spawn Probe(104.570366, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+World.tick
+each Probe do |p|
+  puts p
+end
+
+x = 27.8794746
+puts x ** 2.0
+puts x ** 1.5
+puts Math.sin(-0.520069122)
+puts Math.cos(4.4930315)
+puts Math.exp(6.23199654)
+puts Math.log(308.333313)

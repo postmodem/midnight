@@ -802,6 +802,12 @@ impl<'a> FnCx<'a, '_> {
                     BinOp::Mod => {
                         Val::lazy(format!("mn_float_mod({}, {})", left.c, right.c), ATOM, dep)
                     }
+                    // A square is a product, which is exact.
+                    _ if right.c == names::float_lit(2.0) => {
+                        let left = self.stabilize(left, &Type::Float);
+                        let c = format!("{} * {}", left.p(MUL), left.p(UNARY));
+                        Val::lazy(c, MUL, left.dep)
+                    }
                     _ => Val::lazy(format!("pow({}, {})", left.c, right.c), ATOM, dep),
                 },
                 Type::String => {

@@ -260,6 +260,7 @@ struct InBlock<'a> {
 
 /// A value: an expression without effects, and whether an assignment to
 /// a local can change what it gives.
+#[derive(Clone)]
 struct Val {
     e: Expr,
     ty: Ty,
@@ -1352,6 +1353,11 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 Type::Float => match op {
                     TBinOp::Div => simple(BinOp::Div, Ty::F32, left, right),
                     TBinOp::Mod => self.helper(helpers::FMOD, vec![left, right], Ty::F32),
+                    // A square is a product, which is exact.
+                    TBinOp::Pow if right.e == Expr::F32(2.0) => {
+                        let left = self.once(left);
+                        simple(BinOp::Mul, Ty::F32, left.clone(), left)
+                    }
                     _ => self.helper(helpers::FPOW, vec![left, right], Ty::F32),
                 },
                 _ => unreachable!("arithmetic on a type that has none in GPU code"),

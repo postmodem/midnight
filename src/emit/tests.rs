@@ -470,7 +470,7 @@ fn arithmetic_and_conversions() {
     );
     assert_has(&c, "mn_float_to_i(x_2) + mn_float_floor(x_2)");
     assert_has(&c, "mn_float_mod(x_2, 3.0)");
-    assert_has(&c, "pow(x_2, 2.0)");
+    assert_has(&c, "x_2 * x_2");
     assert_has(&c, "(double)a_0 * 2.0");
     assert_has(&c, "(x_2 < -1.5 ? x_2 : -1.5)");
     assert_has(
