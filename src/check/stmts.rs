@@ -8,7 +8,7 @@ use crate::tir::{self, BinOp, ExprKind, LocalId, StmtKind, Type};
 
 use super::{
     BUILTIN_NAMES, BodyKind, Checker, FLOAT_TO_INT, Global, Mode, ReadOnly, Resolved, Ret, RetSite,
-    TypeUse, mk, util,
+    TypeUse, mk, util, walk,
 };
 
 /// How a block ends.
@@ -713,15 +713,24 @@ impl Checker<'_> {
             })
             .collect();
         self.cx.query_eaches += 1;
-        let (locals, body, _) = self.loop_body("the `each`", specs, body);
+        let (locals, mut body, _) = self.loop_body("the `each`", specs, body);
         self.cx.query_eaches -= 1;
         if !count_ok {
             return None;
         }
         let mut query = checked.finish()?;
-        for (term, local) in query.terms.iter_mut().zip(&locals) {
-            if let tir::Term::Component { write, .. } = term {
+        let mut named = vec![false; locals.len()];
+        walk::block(&mut body, &mut |node| {
+            if let walk::Node::Local(id) = node
+                && let Some(at) = locals.iter().position(|local| *local == id)
+            {
+                named[at] = true;
+            }
+        });
+        for ((term, local), named) in query.terms.iter_mut().zip(&locals).zip(named) {
+            if let tir::Term::Component { write, touched, .. } = term {
                 *write = self.cx.meta[local.0].written;
+                *touched = named;
             }
         }
         Some(StmtKind::Each {

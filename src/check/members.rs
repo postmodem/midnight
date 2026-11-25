@@ -1097,6 +1097,7 @@ impl Checker<'_> {
                     .map(|component| tir::Term::Component {
                         component,
                         write: false,
+                        touched: false,
                     })
             };
             checked.ok &= resolved.is_some() && !repeated;

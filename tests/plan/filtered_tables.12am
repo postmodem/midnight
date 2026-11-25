@@ -1,0 +1,46 @@
+# expect: an unmarked download of P to `report_frozen`, and the transfers an
+# `add` brings. `bump` writes P only in tables with the tag Hot, and
+# `report_cold` reads P only in tables without it, so they share no table and
+# nothing moves between them. `report_frozen` reads P in tables with Frozen;
+# `heat` makes Frozen entities Hot with `add`, so a table with both exists and
+# its P comes back every tick. The `add` downloads P to `heat` and uploads it
+# to `bump` in the tick after. The spawned tables alone (P with Hot, P alone,
+# P with Frozen) would give no line.
+
+component P
+  x: Int32
+end
+
+tag Hot
+tag Frozen
+
+gpu system bump
+  each P, with: Hot do |p|
+    p.x += 1
+  end
+end
+
+system report_cold
+  each P, without: Hot do |p|
+    puts p.x
+  end
+end
+
+system report_frozen
+  each P, with: Frozen do |p|
+    puts p.x
+  end
+end
+
+system heat
+  each Entity, with: Frozen do |e|
+    e.add(Hot) if Time.tick == 2
+  end
+end
+
+spawn P(1), Hot
+spawn P(10)
+spawn P(20), Frozen
+5.times do
+  World.tick
+end

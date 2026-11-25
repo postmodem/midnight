@@ -1,10 +1,12 @@
 //! Visits every statement and expression of a typed tree, parents first.
 
-use crate::tir::{Block, Expr, ExprKind, Place, PlaceKind, Stmt, StmtKind};
+use crate::tir::{Block, Expr, ExprKind, LocalId, Place, PlaceKind, Stmt, StmtKind};
 
 pub(super) enum Node<'t> {
     Stmt(&'t mut Stmt),
     Expr(&'t mut Expr),
+    /// A local that a place starts from.
+    Local(LocalId),
 }
 
 pub(super) type Visit<'f> = &'f mut dyn FnMut(Node<'_>);
@@ -136,10 +138,8 @@ pub(super) fn expr(e: &mut Expr, f: Visit<'_>) {
 
 fn place(p: &mut Place, f: Visit<'_>) {
     match &mut p.kind {
-        PlaceKind::Local(_)
-        | PlaceKind::Const(_)
-        | PlaceKind::ResourceField(..)
-        | PlaceKind::Time(_) => {}
+        PlaceKind::Local(id) => f(Node::Local(*id)),
+        PlaceKind::Const(_) | PlaceKind::ResourceField(..) | PlaceKind::Time(_) => {}
         PlaceKind::Component { entity, .. } => expr(entity, f),
         PlaceKind::Field { base, .. } => place(base, f),
         PlaceKind::Index { base, index } => {

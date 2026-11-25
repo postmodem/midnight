@@ -147,7 +147,9 @@ impl Dump<'_> {
             .iter()
             .map(|term| match term {
                 tir::Term::Entity => "Entity".to_string(),
-                tir::Term::Component { component, write } => {
+                tir::Term::Component {
+                    component, write, ..
+                } => {
                     format!(
                         "{}{}",
                         self.component(*component),

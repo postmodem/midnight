@@ -474,8 +474,12 @@ impl<'a> FnCx<'a, '_> {
                         entities.push(param);
                     }
                 }
-                Term::Component { component, write } => {
-                    if !self.usage.touched[param.0] {
+                Term::Component {
+                    component,
+                    write,
+                    touched,
+                } => {
+                    if !touched {
                         continue;
                     }
                     let record = prog.components[component.0]

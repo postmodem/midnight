@@ -980,10 +980,12 @@ README says how the device is chosen and how to see where each block runs.
 
 The data of a component that some GPU block names as a term can be in two
 places, CPU memory and GPU memory, and at any moment one copy or both are
-current. A GPU block needs the GPU copy of every component its queries
-name, and leaves the ones it writes current on the GPU only. Ordinary code
-(a query term, `e[C]`, a structural change) needs the CPU copy, and leaves
-what it writes or changes current on the CPU only. When the copy that is
+current, table by table. A GPU block needs the GPU copy of every component
+whose query parameter it uses, in the tables its queries reach, and leaves
+the ones it writes current on the GPU only. Ordinary code (a query term
+whose parameter it uses, `e[C]`, a structural change) needs the CPU copy,
+and leaves what it writes or changes current on the CPU only. A term whose
+parameter the body never uses only picks the tables. When the copy that is
 needed is not current, the data is copied first: an **upload** to the GPU
 or a **download** from it. Reading leaves both copies current. `with:` and
 `without:` filters, `has?` and `World.count` need neither copy.
@@ -1026,6 +1028,11 @@ system report
     puts pos.x
   end
 end
+
+spawn Position(0.0, 0.0), Velocity(1.0, 1.0), Age(0)
+5.times do
+  World.tick
+end
 ```
 
 ```
@@ -1044,8 +1051,9 @@ copy.
 - **A line marked `on spawn`, `on add`, `on remove` or `on despawn`** is what
   a structural change adds. It happens only when that operation has run: a
   download in the same tick, an upload in the next. A structural change
-  needs the CPU copy and leaves it the only current one: `spawn` for the
-  components it lists, the other three for every component with a GPU copy.
+  needs the CPU copy and leaves it the only current one: `spawn` for every
+  component of the table it spawns into, the other three for every
+  component with a GPU copy, in every table.
   Here a despawn makes `reap` download `Position`, and `move` upload both
   components in the tick after. In a tick with a marked download, an
   unmarked download of the same component later in the tick does not
@@ -1069,9 +1077,12 @@ The plan has limits:
   of them run is not listed.
 - Top-level code counts only inside a loop that ticks. Ticks written out
   one after another, with code between them, are not followed.
-- A line stands for one transfer per table that holds the component, and at
-  run time a structural change brings back only the tables whose rows it
-  changes.
+- A line stands for one transfer per table that both systems reach, and
+  at run time a structural change brings back only the tables whose rows
+  it changes. The tables are those the program's `spawn`s make and its
+  `add`s and `remove`s make of them; a query reaches a table through its
+  terms and its `with:` and `without:`. Two queries that can share no table
+  transfer nothing between them.
 - The first ticks, in which everything a GPU block needs is uploaded for
   the first time, are not listed. Neither are the entity handles a block
   needs for an `Entity` term or for `rand`, or the copy the nested `each`

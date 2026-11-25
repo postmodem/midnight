@@ -632,11 +632,16 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                         unused: !self.usage.read[param.0],
                     });
                 }
-                Term::Component { component, write } => {
-                    let block = self.block.as_ref().expect("an `each` is in a block");
-                    let Some(paths) = block.paths.get(&param.0) else {
+                Term::Component {
+                    component,
+                    write,
+                    touched,
+                } => {
+                    if !touched {
                         continue;
-                    };
+                    }
+                    let block = self.block.as_ref().expect("an `each` is in a block");
+                    let paths = &block.paths[&param.0];
                     assert!(
                         !inner || !*write,
                         "the checker rejects a write to a parameter of a nested `each`"

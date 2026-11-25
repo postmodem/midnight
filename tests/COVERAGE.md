@@ -11,8 +11,8 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 240 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-333 in `tests/fail`, 75 in `tests/panic`, 10 in `tests/plan`.
+Counts: 243 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+334 in `tests/fail`, 77 in `tests/panic`, 12 in `tests/plan`.
 
 ## A first program, The model
 
@@ -599,12 +599,14 @@ the rule for where a column lives.
 | What called functions do counts as the system's | `plan/functions` |
 | `e[C]`, read and written | `plan/functions`, `plan/top_level` |
 | `World.count` and `has?` read no column | `plan/functions` |
-| `spawn` changes the components it lists: `on spawn` | `plan/spawn` |
+| `spawn` changes every component of the table it spawns into, and no other table: `on spawn` | `plan/spawn`, the unit test `spawn_changes_every_component_of_the_table_it_makes_and_no_other` in `src/plan/tests.rs` |
 | `despawn` changes every component with a GPU copy: `on despawn` | `plan/despawn` |
 | `add` and `remove` change every component with a GPU copy: `on add`, `on remove` | `plan/add_remove` |
 | A marked download before an unmarked one of the same component: both are listed | `plan/despawn` |
 | The plan shown in the reference | `plan/despawn` |
 | `with:` and `without:` filters read no column | `plan/add_remove` (`freeze` filters on Heat, and its download is marked `on add`) |
+| A term whose parameter the body never uses needs no column, in a GPU block or in ordinary code | `plan/untouched_terms` |
+| Queries that `with:` and `without:` keep apart share no table and transfer nothing; tables that `add` makes count | `plan/filtered_tables` |
 | The mark names the first structural change of a system that touches the component | the unit test `the_first_structural_change_of_a_system_is_named` in `src/plan/tests.rs` |
 | Ticks written out one after another, with code between them, are not followed | the unit test `top_level_code_between_ticks_outside_a_loop_does_not_count` in `src/plan/tests.rs` |
 | A structural change that finds the CPU copy current downloads nothing | `plan/add_remove` |

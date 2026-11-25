@@ -66,7 +66,10 @@ impl Plan {
                     return;
                 };
                 for term in &query.terms {
-                    let Term::Component { component, write } = term else {
+                    let Term::Component {
+                        component, write, ..
+                    } = term
+                    else {
                         continue;
                     };
                     plan.named[component.0] = true;

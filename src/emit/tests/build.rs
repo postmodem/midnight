@@ -515,7 +515,11 @@ pub fn query(
             .into_iter()
             .map(|term| match term {
                 None => Term::Entity,
-                Some((component, write)) => Term::Component { component, write },
+                Some((component, write)) => Term::Component {
+                    component,
+                    write,
+                    touched: true,
+                },
             })
             .collect(),
         with,

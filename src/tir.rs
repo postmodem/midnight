@@ -416,6 +416,10 @@ pub enum Term {
         /// Whether the body assigns through this term's parameter. A term
         /// that is only read can be a `const` column.
         write: bool,
+        /// Whether the body names this term's parameter at all. The column
+        /// of a term that is not touched is neither made current nor
+        /// transferred: the term only picks the tables.
+        touched: bool,
     },
 }
 

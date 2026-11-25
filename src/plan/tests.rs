@@ -25,6 +25,8 @@ gpu system move
     pos.y += vel.dy * Time.dt
   end
 end
+
+spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
 ";
 
 /// The rendered plan of `text`, which must have no errors.
@@ -148,23 +150,33 @@ fn every_short_tick_settles_and_its_marked_transfers_are_the_added_ones() {
                 .map(|(who, &kind)| Step {
                     who,
                     gpu: kinds[kind].0,
-                    uses: vec![(0, kinds[kind].1)],
+                    uses: vec![Used {
+                        component: 0,
+                        filter: Filter::any(0),
+                        uses: kinds[kind].1,
+                    }],
                 })
                 .collect();
+            let shapes = Shapes {
+                spawned: vec![vec![0]],
+                ..Shapes::default()
+            };
+            let table_kinds = Kinds::new(&steps, &shapes);
             for changes in [false, true] {
-                let mut columns = vec![Current::Cpu {
+                let start = Current::Cpu {
                     by: steps.len(),
                     cause: None,
-                }];
+                };
+                let mut columns: Columns = vec![vec![(1, start)]];
                 let settled = (0..TICK_LIMIT).any(|_| {
                     let before = columns.clone();
-                    tick(&steps, &mut columns, changes);
+                    tick(&steps, &table_kinds, &mut columns, changes);
                     columns == before
                 });
                 assert!(settled, "steps {order:?}, changes {changes}");
             }
-            let quiet = steady_tick(&steps, 1, steps.len(), false);
-            let changed = steady_tick(&steps, 1, steps.len(), true);
+            let quiet = steady_tick(&steps, &table_kinds, 1, steps.len(), false);
+            let changed = steady_tick(&steps, &table_kinds, 1, steps.len(), true);
             assert!(quiet.iter().all(|t| t.cause.is_none()), "steps {order:?}");
             for t in &changed {
                 let also_quiet = quiet
@@ -227,6 +239,8 @@ gpu system move
     pos.x += 1.0
   end
 end
+
+spawn Position(0.0)
 ";
     assert_eq!(plan_of(text), "download  Position  move -> report\n");
 }
@@ -253,6 +267,8 @@ gpu system move
     pos.x += vel.dx
   end
 end
+
+spawn Position(0.0), Velocity(1.0)
 ";
     assert_eq!(plan_of(text), "upload    Velocity  steer -> move\n");
 }
@@ -408,6 +424,8 @@ system nudge
     pos.x -= 0.5
   end
 end
+
+spawn Heat(0.0), Position(0.0)
 ";
     assert_eq!(
         plan_of(text),
@@ -568,7 +586,23 @@ end
 }
 
 #[test]
-fn spawn_changes_the_components_it_lists() {
+fn spawn_changes_every_component_of_the_table_it_makes_and_no_other() {
+    assert_plan(
+        "
+component Label
+  id: Int
+end
+
+system emitter
+  spawn Position(0.0, 0.0), Velocity(1.0, 0.0), Label(1)
+end
+",
+        &[
+            "upload    Position  emitter -> move   on spawn",
+            "upload    Velocity  emitter -> move   on spawn",
+            "download  Position  move -> emitter   on spawn",
+        ],
+    );
     assert_plan(
         "
 component Label
@@ -579,10 +613,7 @@ system emitter
   spawn Position(0.0, 0.0), Label(1)
 end
 ",
-        &[
-            "upload    Position  emitter -> move   on spawn",
-            "download  Position  move -> emitter   on spawn",
-        ],
+        &[],
     );
     assert_plan(
         "
@@ -595,18 +626,6 @@ system emitter
 end
 ",
         &[],
-    );
-}
-
-#[test]
-fn spawn_of_a_component_the_gpu_only_reads_uploads_it() {
-    assert_plan(
-        "
-system emitter
-  spawn Velocity(1.0, 0.0)
-end
-",
-        &["upload    Velocity  emitter -> move   on spawn"],
     );
 }
 
@@ -829,6 +848,8 @@ system report
     puts pos.x
   end
 end
+
+spawn Position(0.0)
 ";
     assert_eq!(
         plan_of(text),
@@ -862,6 +883,8 @@ system drift
     a.x += 1.0
   end
 end
+
+spawn Attractor(0.0, 1.0)
 ",
         &["upload    Attractor  drift -> attract"],
     );

@@ -95,11 +95,12 @@ pub struct Transfer {
 /// those of a tick in which no structural change runs, and, marked with
 /// their cause, those that a tick has besides when every one runs.
 pub fn plan(program: &Program) -> Vec<Transfer> {
-    let steps = steps(program);
+    let (steps, shapes) = steps(program);
     let columns = program.components.len();
     let top_level = program.systems.len();
-    let mut transfers = steady_tick(&steps, columns, top_level, false);
-    let changed = steady_tick(&steps, columns, top_level, true);
+    let kinds = Kinds::new(&steps, &shapes);
+    let mut transfers = steady_tick(&steps, &kinds, columns, top_level, false);
+    let changed = steady_tick(&steps, &kinds, columns, top_level, true);
     transfers.extend(changed.into_iter().filter(|t| t.cause.is_some()));
     transfers.sort_by_key(|t| t.at);
     let name = |step: usize| match program.systems.get(step) {
@@ -154,14 +155,192 @@ struct Uses {
     change: Option<Structural>,
 }
 
+/// The tables a use reaches: those that have every component in
+/// `require` and none in `exclude`. With `exact`, only the table whose
+/// components are `require`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Filter {
+    require: Vec<usize>,
+    exclude: Vec<usize>,
+    exact: bool,
+}
+
+impl Filter {
+    /// Every table that holds `component`.
+    fn any(component: usize) -> Filter {
+        Filter {
+            require: vec![component],
+            ..Filter::default()
+        }
+    }
+
+    /// The tables of a query: its component terms, touched or not, and its
+    /// filters.
+    fn query(query: &Query) -> Filter {
+        let mut require: Vec<usize> = query
+            .terms
+            .iter()
+            .filter_map(|term| match *term {
+                Term::Entity => None,
+                Term::Component { component, .. } => Some(component.0),
+            })
+            .collect();
+        require.extend(query.with.iter().map(|c| c.0));
+        Filter {
+            require,
+            exclude: query.without.iter().map(|c| c.0).collect(),
+            exact: false,
+        }
+    }
+
+    /// Whether it reaches a kind of table, given as the set of `kinds`
+    /// components it holds.
+    fn reaches(&self, kind: u32, kinds: &Kinds) -> bool {
+        let require = kinds.mask(&self.require);
+        let exclude = kinds.mask(&self.exclude);
+        if self.exact {
+            kind == require
+        } else {
+            kind & require == require && kind & exclude == 0
+        }
+    }
+}
+
+/// The components that tell tables apart in a plan: those that some use
+/// requires or excludes, at most `KINDS_LIMIT` of them. Leaving one out
+/// only widens the uses that name it. A kind of table is the set of them
+/// it holds, as a mask.
+struct Kinds {
+    ids: Vec<usize>,
+    /// The kinds of table the program can make: those it spawns, and those
+    /// its `add`s and `remove`s make of them.
+    possible: Vec<u32>,
+}
+
+/// The sets of components the program spawns, adds and removes, by id.
+#[derive(Default)]
+struct Shapes {
+    spawned: Vec<Vec<usize>>,
+    added: Vec<Vec<usize>>,
+    removed: Vec<Vec<usize>>,
+}
+
+const KINDS_LIMIT: usize = 12;
+
+impl Kinds {
+    fn new(steps: &[Step], shapes: &Shapes) -> Kinds {
+        let mut ids = Vec::new();
+        for step in steps {
+            for used in &step.uses {
+                for &id in used.filter.require.iter().chain(&used.filter.exclude) {
+                    if ids.len() < KINDS_LIMIT && !ids.contains(&id) {
+                        ids.push(id);
+                    }
+                }
+            }
+        }
+        let mut kinds = Kinds {
+            ids,
+            possible: Vec::new(),
+        };
+        let mut possible: Vec<u32> = shapes.spawned.iter().map(|s| kinds.mask(s)).collect();
+        possible.sort_unstable();
+        possible.dedup();
+        let added: Vec<u32> = shapes.added.iter().map(|s| kinds.mask(s)).collect();
+        let removed: Vec<u32> = shapes.removed.iter().map(|s| kinds.mask(s)).collect();
+        let mut at = 0;
+        while at < possible.len() {
+            let kind = possible[at];
+            let made = added.iter().map(|a| kind | a);
+            for next in made
+                .chain(removed.iter().map(|r| kind & !r))
+                .collect::<Vec<_>>()
+            {
+                if !possible.contains(&next) {
+                    possible.push(next);
+                }
+            }
+            at += 1;
+        }
+        kinds.possible = possible;
+        kinds
+    }
+
+    fn mask(&self, components: &[usize]) -> u32 {
+        components
+            .iter()
+            .filter_map(|c| self.ids.iter().position(|id| id == c))
+            .fold(0, |mask, bit| mask | 1 << bit)
+    }
+
+    /// The kinds of table the program can make that hold `component`.
+    fn holding(&self, component: usize) -> impl Iterator<Item = u32> + '_ {
+        let own = self.mask(&[component]);
+        self.possible
+            .iter()
+            .copied()
+            .filter(move |kind| kind & own == own)
+    }
+}
+
+/// What a step does with one component in the tables of `filter`.
+struct Used {
+    component: usize,
+    filter: Filter,
+    uses: Uses,
+}
+
 /// An ordinary system, one block of a GPU system, or the top level.
 struct Step {
     /// The system's index, or the number of systems for the top level.
     who: usize,
     gpu: bool,
-    /// The components the step uses, by id, in the order it first uses
-    /// them.
-    uses: Vec<(usize, Uses)>,
+    /// In the order the step first uses each component and filter.
+    uses: Vec<Used>,
+}
+
+impl Step {
+    /// The components the step uses, in the order of first use.
+    fn components(&self) -> Vec<usize> {
+        let mut order = Vec::new();
+        for used in &self.uses {
+            if !order.contains(&used.component) {
+                order.push(used.component);
+            }
+        }
+        order
+    }
+
+    /// What the step does with `component` in tables of one kind.
+    fn uses_in(&self, component: usize, kind: u32, kinds: &Kinds) -> Uses {
+        let mut uses = Uses::default();
+        for used in &self.uses {
+            if used.component == component && used.filter.reaches(kind, kinds) {
+                uses.read |= used.uses.read;
+                uses.write |= used.uses.write;
+                if uses.change.is_none() {
+                    uses.change = used.uses.change;
+                }
+            }
+        }
+        uses
+    }
+}
+
+/// Adds what a use does to a step's list.
+fn add_use(list: &mut Vec<Used>, component: usize, filter: Filter, apply: impl FnOnce(&mut Uses)) {
+    let at = list
+        .iter()
+        .position(|used| used.component == component && used.filter == filter);
+    let at = at.unwrap_or_else(|| {
+        list.push(Used {
+            component,
+            filter,
+            uses: Uses::default(),
+        });
+        list.len() - 1
+    });
+    apply(&mut list[at].uses);
 }
 
 /// Which copy of a component's column is current.
@@ -180,6 +359,7 @@ enum Current {
     Both,
 }
 
+#[derive(PartialEq, Eq)]
 struct RawTransfer {
     /// Where in the tick it happens: the step's position and the
     /// component's position in the step.
@@ -191,11 +371,15 @@ struct RawTransfer {
     cause: Option<Structural>,
 }
 
+/// The state of every column: by component, then by kind of table.
+type Columns = Vec<Vec<(u32, Current)>>;
+
 /// The transfers of a tick that ends as it began, with or without the
 /// structural changes. Ticks are followed from a world of `columns`
 /// components that the top level has left current on the CPU.
 fn steady_tick(
     steps: &[Step],
+    kinds: &Kinds,
     columns: usize,
     top_level: usize,
     changes: bool,
@@ -204,11 +388,13 @@ fn steady_tick(
         by: top_level,
         cause: None,
     };
-    let mut columns = vec![start; columns];
+    let mut columns: Columns = (0..columns)
+        .map(|component| kinds.holding(component).map(|kind| (kind, start)).collect())
+        .collect();
     let mut transfers = Vec::new();
     for _ in 0..TICK_LIMIT {
         let before = columns.clone();
-        transfers = tick(steps, &mut columns, changes);
+        transfers = tick(steps, kinds, &mut columns, changes);
         if columns == before {
             break;
         }
@@ -217,70 +403,93 @@ fn steady_tick(
 }
 
 /// Runs every step once, with or without its structural changes, and
-/// returns the transfers that needed.
-fn tick(steps: &[Step], columns: &mut [Current], changes: bool) -> Vec<RawTransfer> {
+/// returns the transfers that needed. Transfers that tables of several
+/// kinds need alike are listed once.
+fn tick(steps: &[Step], kinds: &Kinds, columns: &mut Columns, changes: bool) -> Vec<RawTransfer> {
     let mut transfers = Vec::new();
     for (step_at, step) in steps.iter().enumerate() {
-        for (use_at, &(component, uses)) in step.uses.iter().enumerate() {
+        for (use_at, component) in step.components().into_iter().enumerate() {
             let at = (step_at, use_at);
-            let column = &mut columns[component];
-            let plain = uses.read || uses.write;
-            let change = if changes { uses.change } else { None };
-            if !plain && change.is_none() {
-                continue;
-            }
-            if step.gpu {
-                if let Current::Cpu { by, cause } = *column {
-                    transfers.push(RawTransfer {
-                        at,
-                        direction: Direction::Upload,
-                        component,
-                        from: by,
-                        to: step.who,
-                        cause,
-                    });
-                    *column = Current::Both;
+            for (kind, column) in columns[component].iter_mut() {
+                let uses = step.uses_in(component, *kind, kinds);
+                if let Some(transfer) = visit(step, at, component, uses, column, changes)
+                    && !transfers.contains(&transfer)
+                {
+                    transfers.push(transfer);
                 }
-                if uses.write {
-                    *column = Current::Gpu { by: step.who };
-                }
-                continue;
-            }
-            if let Current::Gpu { by } = *column {
-                transfers.push(RawTransfer {
-                    at,
-                    direction: Direction::Download,
-                    component,
-                    from: by,
-                    to: step.who,
-                    cause: if plain { None } else { change },
-                });
-                *column = Current::Both;
-            }
-            if uses.write {
-                *column = Current::Cpu {
-                    by: step.who,
-                    cause: None,
-                };
-            } else if change.is_some() {
-                let written = matches!(*column, Current::Cpu { cause: None, .. });
-                *column = Current::Cpu {
-                    by: step.who,
-                    cause: if written { None } else { change },
-                };
             }
         }
     }
     transfers
 }
 
-/// The steps of one tick, in order. They use only components that have a
-/// GPU copy.
-fn steps(program: &Program) -> Vec<Step> {
+/// What one step does to the column of one component in tables of one
+/// kind, and the transfer that needs.
+fn visit(
+    step: &Step,
+    at: (usize, usize),
+    component: usize,
+    uses: Uses,
+    column: &mut Current,
+    changes: bool,
+) -> Option<RawTransfer> {
+    let plain = uses.read || uses.write;
+    let change = if changes { uses.change } else { None };
+    if !plain && change.is_none() {
+        return None;
+    }
+    let mut transfer = None;
+    if step.gpu {
+        if let Current::Cpu { by, cause } = *column {
+            transfer = Some(RawTransfer {
+                at,
+                direction: Direction::Upload,
+                component,
+                from: by,
+                to: step.who,
+                cause,
+            });
+            *column = Current::Both;
+        }
+        if uses.write {
+            *column = Current::Gpu { by: step.who };
+        }
+        return transfer;
+    }
+    if let Current::Gpu { by } = *column {
+        transfer = Some(RawTransfer {
+            at,
+            direction: Direction::Download,
+            component,
+            from: by,
+            to: step.who,
+            cause: if plain { None } else { change },
+        });
+        *column = Current::Both;
+    }
+    if uses.write {
+        *column = Current::Cpu {
+            by: step.who,
+            cause: None,
+        };
+    } else if change.is_some() {
+        let written = matches!(*column, Current::Cpu { cause: None, .. });
+        *column = Current::Cpu {
+            by: step.who,
+            cause: if written { None } else { change },
+        };
+    }
+    transfer
+}
+
+/// The steps of one tick, in order, and what the program spawns, adds and
+/// removes anywhere. The steps use only components that have a GPU copy.
+fn steps(program: &Program) -> (Vec<Step>, Shapes) {
+    let mut shapes = Shapes::default();
     let mut on_gpu = vec![false; program.components.len()];
     for system in program.systems.iter().filter(|system| system.gpu) {
         for block in gpu_blocks(&system.body.block) {
-            for (component, _) in block {
+            for (component, _, _) in block {
                 on_gpu[component.0] = true;
             }
         }
@@ -290,15 +499,12 @@ fn steps(program: &Program) -> Vec<Step> {
     for (who, system) in program.systems.iter().enumerate() {
         if system.gpu {
             for block in gpu_blocks(&system.body.block) {
-                let mut uses: Vec<(usize, Uses)> = Vec::new();
-                for (component, write) in block {
-                    let at = uses.iter().position(|(used, _)| *used == component.0);
-                    let at = at.unwrap_or_else(|| {
-                        uses.push((component.0, Uses::default()));
-                        uses.len() - 1
+                let mut uses = Vec::new();
+                for (component, write, filter) in block {
+                    add_use(&mut uses, component.0, filter, |uses| {
+                        uses.read = true;
+                        uses.write |= write;
                     });
-                    uses[at].1.read = true;
-                    uses[at].1.write |= write;
                 }
                 steps.push(Step {
                     who,
@@ -309,46 +515,58 @@ fn steps(program: &Program) -> Vec<Step> {
         } else {
             let mut walker = Walker::new(program, &on_gpu, true);
             walker.block(&system.body.block);
+            walker.shapes_into(&mut shapes);
             steps.push(Step {
                 who,
                 gpu: false,
-                uses: walker.finish(),
+                uses: walker.uses,
             });
         }
     }
     let mut walker = Walker::new(program, &on_gpu, false);
     walker.block(&program.main.block);
+    walker.shapes_into(&mut shapes);
     steps.push(Step {
         who: program.systems.len(),
         gpu: false,
-        uses: walker.finish(),
+        uses: walker.uses,
     });
-    steps
+    (steps, shapes)
 }
 
 /// For each GPU block of a GPU system's body, the components of its outer
 /// query with whether the block writes them, then those of the nested
-/// queries directly inside it, which it only reads.
-fn gpu_blocks(body: &Block) -> impl Iterator<Item = Vec<(ComponentId, bool)>> + '_ {
+/// queries directly inside it, which it only reads; each with the tables
+/// its query reaches. A term whose parameter the block never names is left
+/// out: the block does not need its column.
+fn gpu_blocks(body: &Block) -> impl Iterator<Item = Vec<(ComponentId, bool, Filter)>> + '_ {
     body.stmts.iter().filter_map(|stmt| {
         let StmtKind::Each { query, body, .. } = &stmt.kind else {
             return None;
         };
-        let mut terms: Vec<(ComponentId, bool)> = components(query).collect();
+        let mut terms: Vec<(ComponentId, bool, Filter)> = components(query).collect();
         for inner in &body.stmts {
             if let StmtKind::Each { query, .. } = &inner.kind {
-                terms.extend(components(query).map(|(component, _)| (component, false)));
+                terms.extend(
+                    components(query).map(|(component, _, filter)| (component, false, filter)),
+                );
             }
         }
         Some(terms)
     })
 }
 
-/// The component terms of a query, with whether each is written.
-fn components(query: &Query) -> impl Iterator<Item = (ComponentId, bool)> + '_ {
-    query.terms.iter().filter_map(|term| match *term {
-        Term::Entity => None,
-        Term::Component { component, write } => Some((component, write)),
+/// The touched component terms of a query, with whether each is written
+/// and the tables the query reaches.
+fn components(query: &Query) -> impl Iterator<Item = (ComponentId, bool, Filter)> + '_ {
+    let filter = Filter::query(query);
+    query.terms.iter().filter_map(move |term| match *term {
+        Term::Component {
+            component,
+            write,
+            touched: true,
+        } => Some((component, write, filter.clone())),
+        _ => None,
     })
 }
 
@@ -358,10 +576,10 @@ struct Walker<'p> {
     program: &'p Program,
     /// Which components have a GPU copy, by component id.
     on_gpu: &'p [bool],
-    /// By component id.
-    uses: Vec<Uses>,
-    /// The components used so far, by id, in the order of their first use.
-    order: Vec<usize>,
+    /// What the visited code does, in the order of first use.
+    uses: Vec<Used>,
+    /// What the visited code spawns, adds and removes, counted or not.
+    shapes: Shapes,
     /// Whether the code being visited is recorded. A system's always is.
     /// The top level's is inside a loop that reaches a `World.tick` or
     /// `World.run`: the code before and after such a loop runs once, not
@@ -382,8 +600,8 @@ impl<'p> Walker<'p> {
         Walker {
             program,
             on_gpu,
-            uses: vec![Uses::default(); program.components.len()],
-            order: Vec::new(),
+            uses: Vec::new(),
+            shapes: Shapes::default(),
             counting,
             counted: vec![false; program.funcs.len()],
             entered: vec![false; program.funcs.len()],
@@ -392,31 +610,27 @@ impl<'p> Walker<'p> {
         }
     }
 
-    /// What the visited code uses, in the order of first use.
-    fn finish(self) -> Vec<(usize, Uses)> {
-        let uses = self.uses;
-        self.order.into_iter().map(|c| (c, uses[c])).collect()
+    fn shapes_into(&self, shapes: &mut Shapes) {
+        shapes.spawned.extend(self.shapes.spawned.iter().cloned());
+        shapes.added.extend(self.shapes.added.iter().cloned());
+        shapes.removed.extend(self.shapes.removed.iter().cloned());
     }
 
-    fn record(&mut self, component: ComponentId, apply: impl FnOnce(&mut Uses)) {
+    fn record(&mut self, component: ComponentId, filter: Filter, apply: impl FnOnce(&mut Uses)) {
         if self.counting && self.on_gpu[component.0] {
-            let uses = &mut self.uses[component.0];
-            if *uses == Uses::default() {
-                self.order.push(component.0);
-            }
-            apply(uses);
+            add_use(&mut self.uses, component.0, filter, apply);
         }
     }
 
-    fn read(&mut self, component: ComponentId, write: bool) {
-        self.record(component, |uses| {
+    fn read(&mut self, component: ComponentId, write: bool, filter: Filter) {
+        self.record(component, filter, |uses| {
             uses.read = true;
             uses.write |= write;
         });
     }
 
-    fn change(&mut self, component: ComponentId, change: Structural) {
-        self.record(component, |uses| {
+    fn change(&mut self, component: ComponentId, change: Structural, filter: Filter) {
+        self.record(component, filter, |uses| {
             uses.change.get_or_insert(change);
         });
     }
@@ -424,7 +638,7 @@ impl<'p> Walker<'p> {
     /// A change that moves or removes a whole row.
     fn change_row(&mut self, change: Structural) {
         for component in 0..self.on_gpu.len() {
-            self.change(ComponentId(component), change);
+            self.change(ComponentId(component), change, Filter::any(component));
         }
     }
 
@@ -512,8 +726,8 @@ impl<'p> Walker<'p> {
             }
             StmtKind::Each { query, body, .. } => {
                 let outside = self.enter_loop(stmt);
-                for (component, write) in components(query) {
-                    self.read(component, write);
+                for (component, write, filter) in components(query) {
+                    self.read(component, write, filter);
                 }
                 self.block(body);
                 self.counting = outside;
@@ -588,8 +802,14 @@ impl<'p> Walker<'p> {
                         self.expr(value);
                     }
                 }
+                let table = Filter {
+                    require: components.iter().map(|init| init.component.0).collect(),
+                    exclude: Vec::new(),
+                    exact: true,
+                };
+                self.shapes.spawned.push(table.require.clone());
                 for init in components {
-                    self.change(init.component, Structural::Spawn);
+                    self.change(init.component, Structural::Spawn, table.clone());
                 }
             }
             ExprKind::Add { entity, components } => {
@@ -599,10 +819,14 @@ impl<'p> Walker<'p> {
                         self.expr(value);
                     }
                 }
+                let added = components.iter().map(|init| init.component.0).collect();
+                self.shapes.added.push(added);
                 self.change_row(Structural::Add);
             }
-            ExprKind::Remove { entity, .. } => {
+            ExprKind::Remove { entity, components } => {
                 self.expr(entity);
+                let removed = components.iter().map(|c| c.0).collect();
+                self.shapes.removed.push(removed);
                 self.change_row(Structural::Remove);
             }
             ExprKind::Despawn(entity) => {
@@ -632,7 +856,7 @@ impl<'p> Walker<'p> {
                 write,
             } => {
                 self.expr(entity);
-                self.read(*component, *write);
+                self.read(*component, *write, Filter::any(component.0));
             }
             PlaceKind::Field { base, .. } => self.place(base),
             PlaceKind::Index { base, index } => {

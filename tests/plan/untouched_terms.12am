@@ -1,0 +1,55 @@
+# expect: one line, the upload of R to `count`. `bump` names Q and R as
+# terms but never uses `q` or `r`, so it needs neither column; `census`
+# names P without using it. Only `count`, which reads `r` in a GPU block,
+# needs R after `writes_r` changes it on the CPU.
+
+component P
+  x: Int32
+end
+
+component Q
+  y: Int32
+end
+
+component R
+  z: Int32
+end
+
+system writes_q
+  each Q do |q|
+    q.y += 1
+  end
+end
+
+system writes_r
+  each R do |r|
+    r.z += 1
+  end
+end
+
+gpu system bump
+  each P, Q do |p, q|
+    n = 0
+    each P, R do |other, r|
+      n += other.x
+    end
+    p.x = n % 1000
+  end
+end
+
+gpu system count
+  each P, R do |p, r|
+    p.x += r.z
+  end
+end
+
+system census
+  each Entity, P do |e, p|
+    puts e
+  end
+end
+
+spawn P(1), Q(1), R(1)
+5.times do
+  World.tick
+end
