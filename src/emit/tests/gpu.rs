@@ -495,7 +495,12 @@ fn ordinary_code_syncs_what_gpu_blocks_name() {
     assert_seq(
         report,
         &[
-            "mn_sync(table, 0, false);",
+            "static const MnUse uses0[] = {{0, MN_USE_READ}};",
+            "if (mn_gpu_only) mn_gpu_use(&q0, uses0, 1);",
+            "for (uint32_t t = 0; t < q0.table_count; t++) {",
+            "MnTable *table = q0.tables[t];",
+            "uint32_t n = table->count;",
+            "if (n == 0) continue;",
             "const T_Body *restrict c0 = mn_column(table, 0);",
             "T_Other *restrict c1 = mn_column(table, 1);",
         ],
@@ -503,11 +508,23 @@ fn ordinary_code_syncs_what_gpu_blocks_name() {
     assert_seq(
         report,
         &[
-            "mn_sync(table, 0, true);",
-            "T_Body *restrict c0 = mn_column(table, 0);",
+            "bool w_0 = false;",
+            "static const MnUse uses1[] = {{0, MN_USE_ASSIGN}};",
+            "if (mn_gpu_only) mn_gpu_use(&q1, uses1, 1);",
         ],
     );
-    assert_lacks(report, "mn_sync(table, 1,");
+    assert_seq(
+        report,
+        &[
+            "w_0 = true;",
+            "c0[i].x = (float)0.0;",
+            "}",
+            "if (w_0) { mn_wrote(table, 0); w_0 = false; }",
+            "}",
+            "mn_defer_leave();",
+        ],
+    );
+    assert_lacks(report, "mn_wrote(table, 1)");
     let main = function_text(&c, "static void run_main(void)");
     assert_has(main, "= mn_get_synced(first_0, 0, sizeof(T_Body), true, ");
     assert_has(main, "= mn_get_synced(first_0, 0, sizeof(T_Body), false, ");
@@ -554,6 +571,58 @@ fn a_gpu_system_submits_before_an_ordinary_system() {
     );
 }
 
+/// A loop left early by `break` or `return` reports the table it was in
+/// when the body had assigned there, before the queued changes are
+/// applied. A nested loop that assigns through the outer parameter sets the
+/// outer loop's flag.
+#[test]
+fn a_loop_left_early_reports_what_it_wrote() {
+    let c = emit_c(
+        "gpu_early",
+        "component Body\n  x: Float32\nend\n\n\
+         gpu system drift\n  each Body do |body|\n    body.x += 1.0\n  end\nend\n\n\
+         def first_big -> Float\n  each Body do |body|\n    body.x = 1.0\n    return body.x if body.x > 9.0\n  end\n  0.0\nend\n\n\
+         system cap\n  each Body do |body|\n    body.x = 2.0\n    break if body.x > 5.0\n  end\nend\n\n\
+         system nest\n  each Body do |body|\n    each Body do |other|\n      body.x += other.x\n    end\n  end\nend\n\n\
+         puts first_big\n",
+    );
+    assert_seq(
+        function_text(&c, "static void S_cap(void)"),
+        &[
+            "if (w_0) mn_wrote(table, 0);",
+            "goto brk1;",
+            "}",
+            "}",
+            "if (w_0) { mn_wrote(table, 0); w_0 = false; }",
+            "}",
+            "brk1:",
+            "mn_defer_leave();",
+        ],
+    );
+    assert_seq(
+        function_text(&c, "static double F_first_big(void)"),
+        &[
+            "double t1 = (double)c0[i].x;",
+            "if (w_0) mn_wrote(table, 0);",
+            "mn_defer_leave();",
+            "return t1;",
+        ],
+    );
+    let nest = function_text(&c, "static void S_nest(void)");
+    assert_seq(
+        nest,
+        &[
+            "w_0 = true;",
+            "c0[i].x = (float)((double)c0[i].x + (double)cb0[ib].x);",
+        ],
+    );
+    assert_seq(
+        nest,
+        &["}", "if (w_0) { mn_wrote(table, 0); w_0 = false; }"],
+    );
+    assert_lacks(nest, "wb_0");
+}
+
 /// A program without GPU systems gets none of this.
 #[test]
 fn a_program_without_gpu_systems_is_unchanged() {
@@ -566,7 +635,8 @@ fn a_program_without_gpu_systems_is_unchanged() {
         "GPU systems",
         "FP_CONTRACT",
         "Gcx",
-        "mn_sync",
+        "mn_gpu_use",
+        "mn_wrote",
         "mn_get_synced",
         "_Alignas",
         "_Static_assert",

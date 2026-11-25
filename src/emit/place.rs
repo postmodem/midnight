@@ -125,6 +125,13 @@ impl<'a> FnCx<'a, '_> {
             .operands_then(&operands, super::expr::Want::Peek, tail_inert, tail_safe)
             .into_iter();
 
+        if write
+            && let PlaceKind::Local(id) = &root_place.kind
+            && let Some(flag) = self.flags.get(&id.0)
+        {
+            let line = format!("{flag} = true;");
+            self.line(&line);
+        }
         let (root, stable, dep) = match &root_place.kind {
             PlaceKind::Local(id) => match self.views.get(&id.0) {
                 Some(view) => (Root::Lv(view.clone()), false, Dep::World),

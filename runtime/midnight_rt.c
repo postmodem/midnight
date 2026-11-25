@@ -1621,6 +1621,7 @@ void mn_sleep(double seconds) {
 /* ---- GPU systems --------------------------------------------------------- */
 
 bool mn_gpu_active = false;
+bool mn_gpu_only = false;
 
 uint64_t mn_gpu_uploads;
 uint64_t mn_gpu_downloads;
@@ -1635,6 +1636,17 @@ void mn_gpu_sync(MnTable *table, uint32_t component, bool write) {
     (void)table;
     (void)component;
     (void)write;
+}
+
+void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count) {
+    (void)query;
+    (void)uses;
+    (void)count;
+}
+
+void mn_gpu_wrote(MnTable *table, uint32_t component) {
+    (void)table;
+    (void)component;
 }
 #endif
 

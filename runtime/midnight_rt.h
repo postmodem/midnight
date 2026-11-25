@@ -788,15 +788,40 @@ void mn_gpu_submit(void);
  * handles (MN_GPU_ENTITIES). Always false when no device is in use. */
 extern bool mn_gpu_active;
 
-void mn_gpu_sync(MnTable *table, uint32_t component, bool write);
+/* True exactly while the GPU copy of some component column, of any table,
+ * is the only current one. Always false when mn_gpu_active is. */
+extern bool mn_gpu_only;
 
-/* Makes the CPU copy of a column current, and with `write` the only
- * current one. Ordinary generated code calls it before it uses mn_column
- * on a component that some GPU block names, once per table per loop. The
- * runtime does the same itself before a structural change to a table. */
-static inline void mn_sync(MnTable *table, uint32_t component, bool write) {
-    if (mn_gpu_active) mn_gpu_sync(table, component, write);
+/* How an ordinary `each` uses the column of a component that some GPU
+ * block names. */
+enum {
+    MN_USE_READ,   /* the body reads the parameter and never assigns it */
+    MN_USE_ASSIGN, /* the body can assign through the parameter */
+};
+
+typedef struct MnUse {
+    uint32_t component;
+    uint32_t use;
+} MnUse;
+
+/* Makes the CPU copy of each listed column current in every table of the
+ * query that has rows, bringing back what it lacks with one wait for the
+ * device at most. Generated code calls it before the table loop of an
+ * ordinary `each` when mn_gpu_only is true, listing each term whose
+ * component some GPU block names and whose parameter the body uses. */
+void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count);
+
+void mn_gpu_wrote(MnTable *table, uint32_t component);
+
+/* Makes the CPU copy of a column the only current one. Generated code
+ * calls it for an MN_USE_ASSIGN term after the rows of each table in which
+ * the body assigned through the parameter, and for the table being visited
+ * when the loop is left early. */
+static inline void mn_wrote(MnTable *table, uint32_t component) {
+    if (mn_gpu_active) mn_gpu_wrote(table, component);
 }
+
+void mn_gpu_sync(MnTable *table, uint32_t component, bool write);
 
 /* mn_get for a component that some GPU block names. */
 static inline void *mn_get_synced(MnEntity e, uint32_t component, size_t size,

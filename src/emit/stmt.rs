@@ -260,13 +260,20 @@ impl<'a> FnCx<'a, '_> {
             self.line("continue;");
             return;
         }
-        let jump = match &mut self.scopes[index].kind {
-            ScopeKind::Each { label, used } => {
+        let (written, jump) = match &mut self.scopes[index].kind {
+            ScopeKind::Each {
+                label,
+                used,
+                written,
+            } => {
                 *used = true;
-                format!("goto {label};")
+                (written.clone(), format!("goto {label};"))
             }
-            _ => "break;".to_string(),
+            _ => (Vec::new(), "break;".to_string()),
         };
+        for line in written {
+            self.line(&line);
+        }
         self.line(&jump);
     }
 
@@ -458,6 +465,49 @@ impl<'a> FnCx<'a, '_> {
         }
         self.hoists.push(hoists);
 
+        // The columns of components some GPU block names are brought back
+        // before the tables are visited, and a table in which the body
+        // assigned through a parameter is reported after its rows.
+        let mut uses = Vec::new();
+        let mut written = Vec::new();
+        for (index, (term, &param)) in query.terms.iter().zip(params).enumerate() {
+            if let Term::Component {
+                component,
+                write,
+                touched: true,
+            } = term
+                && self.cx.gpu.named[component.0]
+            {
+                let usage = if *write {
+                    "MN_USE_ASSIGN"
+                } else {
+                    "MN_USE_READ"
+                };
+                uses.push(format!("{{{}, {usage}}}", component.0));
+                if *write {
+                    let flag = format!("w{sfx}_{index}");
+                    self.line(&format!("bool {flag} = false;"));
+                    self.flags.insert(param.0, flag.clone());
+                    written.push((flag, component.0));
+                }
+            }
+        }
+        if !uses.is_empty() {
+            let list = self.fresh("uses");
+            self.line(&format!(
+                "static const MnUse {list}[] = {{{}}};",
+                uses.join(", ")
+            ));
+            self.line(&format!(
+                "if (mn_gpu_only) mn_gpu_use(&{q}, {list}, {});",
+                uses.len()
+            ));
+        }
+        let report = |flag: &str, component: usize| {
+            format!("if ({flag}) mn_wrote(table{sfx}, {component});")
+        };
+        let early: Vec<String> = written.iter().map(|(flag, c)| report(flag, *c)).collect();
+
         self.line(&format!(
             "for (uint32_t t{sfx} = 0; t{sfx} < {q}.table_count; t{sfx}++) {{"
         ));
@@ -487,9 +537,6 @@ impl<'a> FnCx<'a, '_> {
                         .expect("a tag is not a query term");
                     let cty = self.cx.cty(&Type::Record(record));
                     let konst = if *write { "" } else { "const " };
-                    if self.cx.gpu.named[component.0] {
-                        self.line(&format!("mn_sync(table{sfx}, {}, {write});", component.0));
-                    }
                     self.line(&format!(
                         "{konst}{cty} *{restrict}c{sfx}{index} = mn_column(table{sfx}, {});",
                         component.0
@@ -510,6 +557,7 @@ impl<'a> FnCx<'a, '_> {
         self.push_scope(ScopeKind::Each {
             label: label.clone(),
             used: false,
+            written: early,
         });
         self.indent += 1;
         self.each_depth += 1;
@@ -526,6 +574,11 @@ impl<'a> FnCx<'a, '_> {
         self.each_depth -= 1;
         self.indent -= 1;
         self.line("}");
+        for (flag, component) in &written {
+            self.line(&format!(
+                "if ({flag}) {{ mn_wrote(table{sfx}, {component}); {flag} = false; }}"
+            ));
+        }
         self.indent -= 1;
         self.line("}");
         self.hoists.pop();

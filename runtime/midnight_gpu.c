@@ -51,6 +51,8 @@ typedef struct Column {
     Buffer buffer;
     /* Changes whenever the contents of `buffer` do. */
     uint64_t version;
+    /* Listed for the next round trip. */
+    bool fetching;
 } Column;
 
 struct MnGpuTable {
@@ -60,6 +62,14 @@ struct MnGpuTable {
     /* How many columns are not ON_CPU. */
     uint32_t current;
 };
+
+/* A column of a table to bring back in the next round trip, and where in
+ * the readback buffer it goes. */
+typedef struct Fetch {
+    MnTable *table;
+    uint32_t component;
+    uint64_t offset;
+} Fetch;
 
 static struct {
     WGPUInstance instance;
@@ -77,8 +87,14 @@ static struct {
     uint32_t max_groups;
     /* The last number given to a buffer or to a column's contents. */
     uint64_t serial;
-    /* How many component columns, over all tables, are not ON_CPU. */
+    /* How many component columns, over all tables, are not ON_CPU, and
+     * how many are ON_GPU. */
     uint64_t current;
+    uint64_t alone;
+    /* The columns to bring back in the next round trip. */
+    Fetch *fetches;
+    uint32_t fetch_count;
+    uint32_t fetch_capacity;
     /* Where columns are copied to be read back. */
     Buffer readback;
     /* The command encoder that records work until it is submitted, and
@@ -450,21 +466,32 @@ static Column *column_for(MnTable *table, const MnGpuColumn *named) {
 }
 
 /* Records which copy of a column is current, and keeps mn_gpu_active true
- * exactly while some component column has a current GPU copy. */
+ * exactly while some component column has a current GPU copy, and
+ * mn_gpu_only exactly while some component column's GPU copy is the only
+ * current one. */
 static void column_set(MnTable *table, Column *column, uint8_t where) {
-    bool was = column->where != ON_CPU;
-    bool is = where != ON_CPU;
+    uint8_t was = column->where;
     column->where = where;
-    if (was == is) return;
+    if (was == where) return;
     bool counted = column->component != MN_GPU_ENTITIES;
-    if (is) {
-        table->gpu->current++;
-        if (counted) gpu.current++;
-    } else {
-        table->gpu->current--;
-        if (counted) gpu.current--;
+    if ((was != ON_CPU) != (where != ON_CPU)) {
+        if (where != ON_CPU) {
+            table->gpu->current++;
+            if (counted) gpu.current++;
+        } else {
+            table->gpu->current--;
+            if (counted) gpu.current--;
+        }
+    }
+    if (counted && (was == ON_GPU) != (where == ON_GPU)) {
+        if (where == ON_GPU) {
+            gpu.alone++;
+        } else {
+            gpu.alone--;
+        }
     }
     mn_gpu_active = gpu.current != 0;
+    mn_gpu_only = gpu.alone != 0;
 }
 
 /* Makes the GPU copy current: copies the column up if only the CPU copy
@@ -484,76 +511,118 @@ static void column_upload(MnTable *table, Column *column) {
     if (column->component != MN_GPU_ENTITIES) mn_gpu_uploads++;
 }
 
-/* Copies columns of one table whose GPU copy is the only current one back
- * to the table's arrays, in as few submissions as the largest buffer
- * allows. Both copies are current afterwards. */
-static void columns_download(MnTable *table, Column **columns, uint32_t count) {
-    uint64_t rows = table->count;
+/* ---- Round trips --------------------------------------------------------- */
+
+/* Lists a column for the next round trip, when only its GPU copy is
+ * current and it is not listed yet. */
+static void fetch_column(MnTable *table, Column *column) {
+    if (column->where != ON_GPU || column->fetching) return;
+    column->fetching = true;
+    if (gpu.fetch_count == gpu.fetch_capacity) {
+        uint32_t capacity = gpu.fetch_capacity ? gpu.fetch_capacity * 2 : 16;
+        gpu.fetches = mn_realloc(gpu.fetches, capacity * sizeof(Fetch));
+        gpu.fetch_capacity = capacity;
+    }
+    Fetch *fetch = &gpu.fetches[gpu.fetch_count++];
+    fetch->table = table;
+    fetch->component = column->component;
+    fetch->offset = 0;
+}
+
+/* The bytes a listed column brings back. */
+static uint64_t fetch_bytes(const Fetch *fetch, const Column *column) {
+    return round4((uint64_t)fetch->table->count * column->size);
+}
+
+/* Brings back every column listed since the last round trip: the copies
+ * into the readback buffer are recorded in the open encoder, which is
+ * submitted, and the program waits once, or as many times as the largest
+ * buffer needs. Both copies of those columns are current afterwards. No
+ * column may be created between listing and bringing back. */
+static void fetch_run(void) {
     uint32_t first = 0;
-    while (first < count) {
+    while (first < gpu.fetch_count) {
         uint64_t total = 0;
         uint32_t end = first;
-        while (end < count) {
-            uint64_t bytes = round4(rows * columns[end]->size);
+        while (end < gpu.fetch_count) {
+            Fetch *fetch = &gpu.fetches[end];
+            Column *column = column_find(fetch->table, fetch->component);
+            uint64_t bytes = (fetch_bytes(fetch, column) + 7) & ~(uint64_t)7;
             if (end > first && total + bytes > gpu.max_buffer) break;
+            fetch->offset = total;
             total += bytes;
             end++;
         }
         if (total != 0) {
             if (gpu.readback.size < total) {
-                /* Sized by the table's capacity, as the columns are. */
-                uint64_t roomy = 0;
-                for (uint32_t i = first; i < end; i++) {
-                    roomy += round4((uint64_t)table->capacity * columns[i]->size);
-                }
+                uint64_t roomy = gpu.readback.size * 2;
                 if (roomy > gpu.max_buffer) roomy = gpu.max_buffer;
                 buffer_make(&gpu.readback, roomy > total ? roomy : total,
                             READBACK_USAGE);
             }
-            uint64_t offset = 0;
             for (uint32_t i = first; i < end; i++) {
-                uint64_t bytes = round4(rows * columns[i]->size);
-                buffer_copy(&columns[i]->buffer, 0, &gpu.readback, offset, bytes);
-                offset += bytes;
+                Fetch *fetch = &gpu.fetches[i];
+                Column *column = column_find(fetch->table, fetch->component);
+                uint64_t bytes = fetch_bytes(fetch, column);
+                if (bytes != 0) {
+                    buffer_copy(&column->buffer, 0, &gpu.readback, fetch->offset,
+                                bytes);
+                }
             }
             encoder_submit();
             const unsigned char *from = buffer_read(&gpu.readback, total);
             for (uint32_t i = first; i < end; i++) {
-                uint64_t bytes = rows * columns[i]->size;
-                memcpy(column_data(table, columns[i]), from, (size_t)bytes);
-                from += round4(bytes);
+                Fetch *fetch = &gpu.fetches[i];
+                Column *column = column_find(fetch->table, fetch->component);
+                memcpy(column_data(fetch->table, column), from + fetch->offset,
+                       (size_t)fetch->table->count * column->size);
             }
             wgpuBufferUnmap(gpu.readback.handle);
-            mn_gpu_downloads += end - first;
         }
         for (uint32_t i = first; i < end; i++) {
-            column_set(table, columns[i], ON_BOTH);
+            Fetch *fetch = &gpu.fetches[i];
+            Column *column = column_find(fetch->table, fetch->component);
+            column->fetching = false;
+            column_set(fetch->table, column, ON_BOTH);
+            mn_gpu_downloads++;
         }
         first = end;
     }
+    gpu.fetch_count = 0;
+}
+
+void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count) {
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        MnTable *table = query->tables[t];
+        if (table->count == 0 || !table->gpu) continue;
+        for (uint32_t i = 0; i < count; i++) {
+            Column *column = column_find(table, uses[i].component);
+            if (column) fetch_column(table, column);
+        }
+    }
+    fetch_run();
+}
+
+void mn_gpu_wrote(MnTable *table, uint32_t component) {
+    Column *column = column_find(table, component);
+    if (column) column_set(table, column, ON_CPU);
 }
 
 void mn_gpu_sync(MnTable *table, uint32_t component, bool write) {
     Column *column = column_find(table, component);
     if (!column) return;
-    if (column->where == ON_GPU) columns_download(table, &column, 1);
+    fetch_column(table, column);
+    fetch_run();
     if (write) column_set(table, column, ON_CPU);
 }
 
 void mn_gpu_reclaim(MnTable *table) {
     struct MnGpuTable *copies = table->gpu;
     if (!copies || copies->current == 0) return;
-    Column *batch[16];
-    uint32_t count = 0;
     for (uint32_t i = 0; i < copies->count; i++) {
-        if (copies->columns[i].where != ON_GPU) continue;
-        batch[count++] = &copies->columns[i];
-        if (count == 16) {
-            columns_download(table, batch, count);
-            count = 0;
-        }
+        fetch_column(table, &copies->columns[i]);
     }
-    if (count != 0) columns_download(table, batch, count);
+    fetch_run();
     for (uint32_t i = 0; i < copies->count; i++) {
         column_set(table, &copies->columns[i], ON_CPU);
     }
@@ -697,28 +766,43 @@ static const char *block_unfit(const MnGpuBlock *block) {
     return NULL;
 }
 
-/* Makes the CPU copy of every column the block uses current, and the only
- * current one for those it writes. */
+/* Makes the CPU copy of every column the block uses current, with one
+ * round trip, and the only current one for those it writes. */
 static void block_to_cpu(const MnGpuBlock *block) {
     MnQuery *query = block->outer;
     for (uint32_t t = 0; t < query->table_count; t++) {
         MnTable *table = query->tables[t];
         if (table->count == 0) continue;
         for (uint32_t i = 0; i < block->outer_count; i++) {
-            const MnGpuColumn *column = &block->outer_columns[i];
-            mn_sync(table, column->component, column->write);
+            Column *column = column_find(table, block->outer_columns[i].component);
+            if (column) fetch_column(table, column);
         }
     }
-    query = block->inner;
-    if (!query) return;
+    if (block->inner) {
+        query = block->inner;
+        for (uint32_t t = 0; t < query->table_count; t++) {
+            MnTable *table = query->tables[t];
+            if (table->count == 0) continue;
+            for (uint32_t i = 0; i < block->inner_count; i++) {
+                Column *column =
+                    column_find(table, block->inner_columns[i].component);
+                if (column) fetch_column(table, column);
+            }
+        }
+    }
+    fetch_run();
+    query = block->outer;
     for (uint32_t t = 0; t < query->table_count; t++) {
         MnTable *table = query->tables[t];
         if (table->count == 0) continue;
-        for (uint32_t i = 0; i < block->inner_count; i++) {
-            mn_sync(table, block->inner_columns[i].component, false);
+        for (uint32_t i = 0; i < block->outer_count; i++) {
+            const MnGpuColumn *named = &block->outer_columns[i];
+            Column *column = column_find(table, named->component);
+            if (column && named->write) column_set(table, column, ON_CPU);
         }
     }
 }
+
 
 /* Builds the block's pipeline. Its bind group layout is written out from
  * the block's description, in the order midnight_rt.h gives. */
@@ -899,7 +983,10 @@ static Buffer *snapshot_ready(const MnGpuBlock *block, Block *state,
         MnTable *table = query->tables[t];
         if (table->count == 0) continue;
         Column *column = column_for(table, named);
-        if (column->where == ON_GPU) columns_download(table, &column, 1);
+        if (column->where == ON_GPU) {
+            fetch_column(table, column);
+            fetch_run();
+        }
         size_t part = (size_t)table->count * named->size;
         memcpy(out, column_data(table, column), part);
         out += part;
@@ -1181,10 +1268,14 @@ void mn_gpu_device_finish(void) {
     buffer_drop(&gpu.readback);
     free(gpu.bytes);
     free(gpu.contents);
+    free(gpu.fetches);
     gpu.bytes = NULL;
     gpu.contents = NULL;
+    gpu.fetches = NULL;
     gpu.current = 0;
+    gpu.alone = 0;
     mn_gpu_active = false;
+    mn_gpu_only = false;
 
     gpu.finishing = true;
     wgpuQueueRelease(gpu.queue);

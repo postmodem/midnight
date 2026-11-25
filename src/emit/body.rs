@@ -167,9 +167,12 @@ pub(super) enum ScopeKind {
     /// The body of a `while`, counting loop, list loop or `on`.
     Loop,
     /// The row loop of an `each`. `label` is where `break` jumps to.
+    /// `written` reports the tables the loop assigned in, for code that
+    /// leaves it early.
     Each {
         label: String,
         used: bool,
+        written: Vec<String>,
     },
 }
 
@@ -202,6 +205,9 @@ pub(super) struct FnCx<'a, 'c> {
     pub scopes: Vec<Scope>,
     /// The column element each `View` local stands for.
     pub views: HashMap<usize, String>,
+    /// For each `View` local of a term that can have a GPU copy and that
+    /// the body assigns: the flag that records an assignment.
+    pub flags: HashMap<usize, String>,
     /// Values loaded before the loops of the enclosing `each`es.
     pub hoists: Vec<HashMap<HoistKey, String>>,
     pub each_depth: usize,
@@ -235,6 +241,7 @@ impl<'a, 'c> FnCx<'a, 'c> {
                 owned: Vec::new(),
             }],
             views: HashMap::new(),
+            flags: HashMap::new(),
             hoists: Vec::new(),
             each_depth: 0,
             ret,
@@ -260,6 +267,7 @@ impl<'a, 'c> FnCx<'a, 'c> {
                 owned: Vec::new(),
             }],
             views: HashMap::new(),
+            flags: HashMap::new(),
             hoists: Vec::new(),
             each_depth: 0,
             ret: Type::Void,
@@ -442,23 +450,21 @@ impl<'a, 'c> FnCx<'a, 'c> {
     }
 
     /// Generates the drops for leaving every scope from the innermost out
-    /// to the one at index `down_to`. With `leave_each`, also ends the
-    /// deferral of each `each` among them. The scopes stay open.
+    /// to the one at index `down_to`. With `leave_each`, also reports the
+    /// tables each `each` among them assigned in, and ends its deferral.
+    /// The scopes stay open.
     pub fn unwind(&mut self, down_to: usize, leave_each: bool) {
-        let mut steps: Vec<Option<(String, Type)>> = Vec::new();
+        let mut lines = Vec::new();
         for scope in self.scopes[down_to..].iter().rev() {
             for owned in scope.owned.iter().rev() {
-                steps.push(Some((owned.c.clone(), owned.ty.clone())));
+                lines.push(self.cx.drop_stmt(&owned.c, &owned.ty));
             }
-            if leave_each && matches!(scope.kind, ScopeKind::Each { .. }) {
-                steps.push(None);
+            if leave_each && let ScopeKind::Each { written, .. } = &scope.kind {
+                lines.extend(written.iter().cloned());
+                lines.push("mn_defer_leave();".to_string());
             }
         }
-        for step in steps {
-            let line = match step {
-                Some((c, ty)) => self.cx.drop_stmt(&c, &ty),
-                None => "mn_defer_leave();".to_string(),
-            };
+        for line in lines {
             self.line(&line);
         }
     }

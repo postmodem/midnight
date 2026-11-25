@@ -1,6 +1,7 @@
 # Columns that move between CPU and GPU memory in every tick. `steer` writes
 # Velocity before `move` reads it: an upload. `move` writes Position and
-# `wrap` reads and writes it: a download, and an upload in the next tick.
+# `wrap` reads and assigns it in every tick: a download, and an upload in
+# the next tick.
 # No ordinary code uses Age during a tick, so it is uploaded once and stays.
 # Every entity is in one table, so a line of the plan is one transfer; the
 # suite's GPU mode checks the `MIDNIGHT_GPU=stats` lines of this program
@@ -34,7 +35,7 @@ end
 
 system wrap
   each Position do |pos|
-    pos.x -= 20 if pos.x > 20
+    pos.x -= pos.x > 20 ? 20 : 0
   end
 end
 
