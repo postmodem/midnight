@@ -24,6 +24,7 @@ Usage:
   midnight check FILE                      report errors without generating code
   midnight plan FILE                       print the CPU-GPU transfers of one tick
   midnight emit-c FILE                     print the generated C
+  midnight emit-wgsl FILE                  print the shader of every GPU block
   midnight --version | --help
 
 Environment:
@@ -71,7 +72,7 @@ fn parse_args(args: &[String]) -> Result<Args, String> {
     let command = iter.next().ok_or("no command given")?.clone();
     if !matches!(
         command.as_str(),
-        "build" | "run" | "check" | "plan" | "emit-c"
+        "build" | "run" | "check" | "plan" | "emit-c" | "emit-wgsl"
     ) {
         return Err(format!("unknown command `{command}`"));
     }
@@ -107,6 +108,13 @@ fn run(args: &Args) -> u8 {
             return FAILURE;
         };
         print!("{}", plan::render(&plan::plan(&program)));
+        return 0;
+    }
+    if args.command == "emit-wgsl" {
+        let Some((program, sources)) = check_file(&args.file) else {
+            return FAILURE;
+        };
+        print!("{}", emit::emit_wgsl(&program, &sources));
         return 0;
     }
     let Some(c_source) = compile(&args.file, args.command == "check") else {
