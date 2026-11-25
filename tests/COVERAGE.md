@@ -397,7 +397,7 @@ programs written from the specification.
 | `/` and `%` by constants made by `/`, `%` and `**`: a constant has its 64-bit value, wrapped on the way in; the same operators between constants in the block work at 32 bits | `gpu_constant_divisors` |
 | `Float` `%` takes the divisor's sign | `gpu_div_mod` |
 | `abs`, `clamp`, `min`, `max`, `to_f`, `round(digits)`, the `Math` functions, `**` on `Float` with either sign of base | `gpu_numbers`, `gpu_float_literals` |
-| `**` on `Float`: a zero exponent, a zero base with an exponent of either sign, a negative base with a whole and with a fractional exponent | `gpu_float_power` |
+| `**` on `Float`: a zero exponent, a zero base with an exponent of either sign, a negative base with a whole, a fractional and an infinite exponent | `gpu_float_power` |
 | `%` on `Float` by zero is NaN | `gpu_float_power` |
 | `%` on `Float` where rounding to 32 bits shows (`1000000.3125 % 0.1`), and beyond a quotient of 16,777,216 | not covered: the CPU and a GPU are allowed different results |
 | `Math::PI` and `Math::E` | `gpu_replace_component` |

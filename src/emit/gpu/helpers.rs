@@ -275,20 +275,29 @@ fn define(name: &str) -> Func {
                     Ty::F32,
                     math(MathFn::Pow, vec![unary(UnOp::Neg, a()), b()]),
                 ),
-                // An odd exponent keeps the sign of the base.
+                // An odd exponent keeps the sign of the base. An infinite
+                // one is not odd.
                 if_(
                     binary(
-                        Ne,
+                        And,
                         binary(
-                            Sub,
-                            b(),
-                            binary(
-                                Mul,
-                                float(2.0),
-                                math(MathFn::Floor, vec![binary(Mul, b(), float(0.5))]),
-                            ),
+                            Ne,
+                            binary(BitAnd, bits(Ty::U32, b()), Expr::Hex(ABS_MASK)),
+                            Expr::Hex(INFINITY_BITS),
                         ),
-                        float(0.0),
+                        binary(
+                            Ne,
+                            binary(
+                                Sub,
+                                b(),
+                                binary(
+                                    Mul,
+                                    float(2.0),
+                                    math(MathFn::Floor, vec![binary(Mul, b(), float(0.5))]),
+                                ),
+                            ),
+                            float(0.0),
+                        ),
                     ),
                     vec![ret(unary(UnOp::Neg, var("r")))],
                 ),
