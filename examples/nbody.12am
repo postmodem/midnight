@@ -1,0 +1,99 @@
+# tolerance: 0.001
+# A star with a disc of small bodies in orbit around it. Every body pulls on
+# every other one, so a tick is BODIES * BODIES pair calculations.
+#
+# Shows a GPU system. `gravity` is ordinary Midnight. The compiler also
+# turns it into a compute shader, and the program runs the shader when the
+# machine has a GPU. With no GPU, or with MIDNIGHT_GPU=off, the same system
+# runs on the CPU. The two agree closely but not to the last digit: the
+# first line of this file says how far a GPU's output may be from
+# nbody.out, which is the CPU's.
+
+# The star and the bodies of the disc together.
+BODIES = 256
+TICKS = 100
+
+STAR_MASS = 100.0
+BODY_MASS = 0.1
+
+# The disc reaches from INNER to OUTER, measured from the star.
+INNER = 3.0
+OUTER = 10.0
+
+# The angle from one body of the disc to the next, in radians.
+TURN = 2.4
+
+# Added to every squared distance, so that two bodies passing close to each
+# other are not flung apart, and a body's distance to itself is not zero.
+SOFTENING = 0.04
+
+# One body in every SHOWN is printed at the end.
+SHOWN = 16
+
+# The components a GPU system uses have fields of 32 bits or fewer. A Body
+# takes 20 bytes.
+component Body
+  x: Float32
+  y: Float32
+  vx: Float32
+  vy: Float32
+  mass: Float32
+end
+
+# Pulls each body towards every body, then moves it.
+#
+# The block of the outer `each` runs once for every body, as if all at once.
+# The nested `each` shows every body as it was when the tick began, `a`
+# itself included, so the result does not depend on the order the bodies are
+# taken in. A body adds nothing to its own pull, because `dx` and `dy` are
+# zero. Inside a GPU system the arithmetic is 32 bits wide.
+gpu system gravity
+  each Body do |a|
+    ax = 0.0
+    ay = 0.0
+    each Body do |b|
+      dx = b.x - a.x
+      dy = b.y - a.y
+      d2 = dx * dx + dy * dy + SOFTENING
+      pull = b.mass / (d2 * Math.sqrt(d2))
+      ax += dx * pull
+      ay += dy * pull
+    end
+    a.vx += ax * Time.dt
+    a.vy += ay * Time.dt
+    a.x += a.vx * Time.dt
+    a.y += a.vy * Time.dt
+  end
+end
+
+# The star starts at rest in the middle.
+spawn Body(0.0, 0.0, 0.0, 0.0, STAR_MASS)
+
+# The disc: each body is TURN further round than the one before it and a
+# little further out. It starts at the speed that would keep it on a circle
+# if the star were all that pulled on it, so the weight of the disc draws
+# the orbits inward as the ticks go by.
+1.upto(BODIES - 1) do |i|
+  radius = INNER + (OUTER - INNER) * i / (BODIES - 1)
+  angle = i * TURN
+  speed = Math.sqrt(STAR_MASS / radius)
+  across = Math.cos(angle)
+  up = Math.sin(angle)
+  spawn Body(radius * across, radius * up, -speed * up, speed * across, BODY_MASS)
+end
+
+Time.dt = 0.02
+TICKS.times do
+  World.tick
+end
+
+# No ordinary code used a Body while the ticks ran, so the bodies stayed in
+# GPU memory from the first tick to the last, and `midnight plan` prints
+# nothing for this file. The loop below reads them, which copies them back
+# once.
+puts "#{World.count(Body)} bodies, #{TICKS} ticks; x and y of one body in #{SHOWN}"
+index = 0
+each Body do |body|
+  puts "#{body.x.round(5)} #{body.y.round(5)}" if index % SHOWN == 0
+  index += 1
+end

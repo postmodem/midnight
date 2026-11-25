@@ -1,0 +1,62 @@
+# The `move` of examples/bench.12am as a GPU system: one million entities,
+# each with a position and a velocity, moved for 1000 ticks. Nothing else
+# uses the two components while the ticks run, so they stay in GPU memory
+# and `midnight plan` prints nothing for this file. Prints the time per
+# tick.
+#
+# bench/bench-gpu.sh runs it twice, on the GPU and, with MIDNIGHT_GPU=off,
+# on the CPU. bench/gpu_move_read.12am is this program with a system that
+# reads the positions on the CPU every tick.
+
+ENTITIES = 1_000_000
+TICKS = 1000
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+# Entity `i` starts on a 1000 by 1000 grid with one of a few velocities.
+ENTITIES.times do |i|
+  position = Position(i % 1000, i / 1000)
+  velocity = Velocity((i % 7 - 3) * 0.5, (i % 5 - 2) * 0.25)
+  spawn position, velocity
+end
+
+# A power of two, so that every product and sum in `move` is exact and the
+# CPU and every GPU arrive at the same positions.
+Time.dt = 1.0 / 64
+
+# The first tick uploads both components and builds the shader's pipeline,
+# so it runs before the clock starts.
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+
+# Add up every x, which copies the positions back from GPU memory once.
+checksum = 0.0
+each Position do |pos|
+  checksum += pos.x
+end
+
+puts "entities: #{World.count(Position, Velocity)}"
+puts "ticks: #{TICKS}"
+puts "seconds: #{seconds.round(6)}"
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(3)}"
+puts "checksum: #{checksum}"
