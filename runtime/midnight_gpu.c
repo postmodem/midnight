@@ -63,6 +63,8 @@ static struct {
     uint64_t max_buffer;
     uint64_t max_binding;
     uint64_t max_uniform;
+    /* What the offset of uniform words in a buffer must be a multiple of. */
+    uint32_t uniform_align;
     uint32_t max_storage_buffers;
     uint32_t max_groups;
     /* The last number given to a buffer or to a column's contents. */
@@ -397,7 +399,6 @@ void mn_gpu_reclaim(MnTable *table) {
 
 /* What a block runs one table of its outer query with. */
 typedef struct Target {
-    Buffer uniform;
     WGPUBindGroup group;
     /* The serial of the buffer at each binding of `group`. */
     uint64_t *serials;
@@ -423,6 +424,12 @@ typedef struct Block {
     /* One per table of the outer query, in the query's order. */
     Target *targets;
     uint32_t target_count;
+    /* The uniform words of every table, table t's at t * uniform_stride
+     * bytes, and the copy of them in CPU memory that a run fills and
+     * writes in one piece. */
+    Buffer uniforms;
+    uint32_t *uniform_words;
+    uint32_t uniform_stride;
     /* One per inner column. */
     Snapshot *snapshots;
     uint32_t snapshot_count;
@@ -444,6 +451,13 @@ static bool block_writes(const MnGpuBlock *block, uint32_t component) {
 
 static uint32_t block_storage_buffers(const MnGpuBlock *block) {
     return block->outer_count + block->inner_count + (block->fallible ? 1 : 0);
+}
+
+/* The distance in bytes from one table's uniform words to the next's. */
+static uint64_t block_uniform_stride(const MnGpuBlock *block) {
+    uint64_t bytes = (uint64_t)block->uniform_words * 4;
+    return (bytes + gpu.uniform_align - 1) / gpu.uniform_align *
+           gpu.uniform_align;
 }
 
 /* Why the device cannot run the block as its tables are now, in
@@ -468,6 +482,13 @@ static const char *block_unfit(const MnGpuBlock *block) {
         return reason;
     }
     const MnQuery *query = block->outer;
+    if (block_uniform_stride(block) * query->table_count > gpu.max_buffer) {
+        snprintf(reason, room,
+                 "its query matches %u tables, more than the device has room "
+                 "for",
+                 (unsigned)query->table_count);
+        return reason;
+    }
     for (uint32_t t = 0; t < query->table_count; t++) {
         uint64_t rows = query->tables[t]->count;
         if ((rows + 63) / 64 > gpu.max_groups && gpu.max_groups < MAX_GROUPS) {
@@ -545,6 +566,12 @@ static Block *block_make(const MnGpuBlock *block) {
     state->entries = mn_calloc(count, sizeof(WGPUBindGroupEntry));
     state->snapshot_count = block->inner_count;
     state->snapshots = mn_calloc(block->inner_count, sizeof(Snapshot));
+    state->uniform_stride = (uint32_t)block_uniform_stride(block);
+
+    /* What the device calls the block's objects in its error messages. */
+    char name[128];
+    snprintf(name, sizeof name, "%s (each %u)", block->system,
+             (unsigned)block->each);
 
     WGPUBindGroupLayoutEntry *entries =
         mn_calloc(count, sizeof(WGPUBindGroupLayoutEntry));
@@ -563,14 +590,14 @@ static Block *block_make(const MnGpuBlock *block) {
         entries[count - 1].buffer.type = WGPUBufferBindingType_Storage;
     }
     WGPUBindGroupLayoutDescriptor layout = {0};
-    layout.label = view(block->system);
+    layout.label = view(name);
     layout.entryCount = count;
     layout.entries = entries;
     state->layout = wgpuDeviceCreateBindGroupLayout(gpu.device, &layout);
     free(entries);
 
     WGPUPipelineLayoutDescriptor pipeline_layout = {0};
-    pipeline_layout.label = view(block->system);
+    pipeline_layout.label = view(name);
     pipeline_layout.bindGroupLayoutCount = 1;
     pipeline_layout.bindGroupLayouts = &state->layout;
     WGPUPipelineLayout bindings =
@@ -581,11 +608,11 @@ static Block *block_make(const MnGpuBlock *block) {
     source.code = view(block->wgsl);
     WGPUShaderModuleDescriptor module = {0};
     module.nextInChain = &source.chain;
-    module.label = view(block->system);
+    module.label = view(name);
     WGPUShaderModule shader = wgpuDeviceCreateShaderModule(gpu.device, &module);
 
     WGPUComputePipelineDescriptor pipeline = {0};
-    pipeline.label = view(block->system);
+    pipeline.label = view(name);
     pipeline.layout = bindings;
     pipeline.compute.module = shader;
     pipeline.compute.entryPoint = view("main");
@@ -610,9 +637,10 @@ void mn_gpu_device_forget(void *block_state) {
     for (uint32_t t = 0; t < state->target_count; t++) {
         Target *target = &state->targets[t];
         if (target->group) wgpuBindGroupRelease(target->group);
-        buffer_drop(&target->uniform);
         free(target->serials);
     }
+    buffer_drop(&state->uniforms);
+    free(state->uniform_words);
     for (uint32_t i = 0; i < state->snapshot_count; i++) {
         buffer_drop(&state->snapshots[i].buffer);
         free(state->snapshots[i].contents);
@@ -718,9 +746,11 @@ static Buffer snapshot_ready(const MnGpuBlock *block, Block *state, uint32_t i,
     return snapshot->buffer;
 }
 
-/* Points the target's bind group at the buffers in state->bound, building
- * it again when any of them is not the one it was built from. */
-static void target_bind(Block *state, Target *target) {
+/* Points the bind group of the block's table `t` at the buffers in
+ * state->bound, building it again when any of them is not the one it was
+ * built from. The uniform words are the table's part of their buffer. */
+static void target_bind(const MnGpuBlock *block, Block *state, uint32_t t) {
+    Target *target = &state->targets[t];
     uint32_t count = state->binding_count;
     if (!target->serials) target->serials = mn_calloc(count, sizeof(uint64_t));
     bool same = target->group != NULL;
@@ -736,6 +766,8 @@ static void target_bind(Block *state, Target *target) {
         state->entries[i].buffer = state->bound[i].handle;
         state->entries[i].size = state->bound[i].size;
     }
+    state->entries[0].offset = (uint64_t)t * state->uniform_stride;
+    state->entries[0].size = (uint64_t)block->uniform_words * 4;
     WGPUBindGroupDescriptor group = {0};
     group.layout = state->layout;
     group.entryCount = count;
@@ -752,6 +784,13 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         block_to_cpu(block);
         return reason;
     }
+    MnQuery *outer = block->outer;
+    uint32_t populated_outer = 0;
+    for (uint32_t t = 0; t < outer->table_count; t++) {
+        if (outer->tables[t]->count != 0) populated_outer++;
+    }
+    if (populated_outer == 0) return NULL;
+
     Block *state = *block_state;
     if (!state) {
         state = block_make(block);
@@ -786,7 +825,6 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         bound[state->binding_count - 1] = state->error;
     }
 
-    MnQuery *outer = block->outer;
     if (state->target_count < outer->table_count) {
         state->targets = mn_realloc(
             state->targets, (size_t)outer->table_count * sizeof(Target));
@@ -794,27 +832,34 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
                (outer->table_count - state->target_count) * sizeof(Target));
         state->target_count = outer->table_count;
     }
-    size_t uniform_bytes = (size_t)block->uniform_words * 4;
+    size_t stride = state->uniform_stride;
+    if (state->uniforms.size < stride * outer->table_count) {
+        /* Room for as many tables again, when the device has it. */
+        uint64_t size = stride * outer->table_count * 2;
+        if (size > gpu.max_buffer) size = stride * outer->table_count;
+        buffer_make(&state->uniforms, size, UNIFORM_USAGE);
+        free(state->uniform_words);
+        state->uniform_words = mn_calloc((size_t)size, 1);
+    }
+    bound[0] = state->uniforms;
+    size_t uniform_end = 0;
     WGPUComputePassEncoder pass =
         wgpuCommandEncoderBeginComputePass(encoder, NULL);
     wgpuComputePassEncoderSetPipeline(pass, state->pipeline);
     for (uint32_t t = 0; t < outer->table_count; t++) {
         MnTable *table = outer->tables[t];
         if (table->count == 0) continue;
-        Target *target = &state->targets[t];
-        if (!target->uniform.handle) {
-            buffer_make(&target->uniform, uniform_bytes, UNIFORM_USAGE);
-        }
-        bound[0] = target->uniform;
         for (uint32_t i = 0; i < block->outer_count; i++) {
             Column *column = column_for(table, &block->outer_columns[i]);
             column_upload(table, column);
             bound[1 + i] = column->buffer;
         }
-        target_bind(state, target);
+        target_bind(block, state, t);
+        Target *target = &state->targets[t];
         uniform[0] = table->count;
-        wgpuQueueWriteBuffer(gpu.queue, target->uniform.handle, 0, uniform,
-                             uniform_bytes);
+        memcpy((char *)state->uniform_words + t * stride, uniform,
+               (size_t)block->uniform_words * 4);
+        uniform_end = (t + 1) * stride;
 
         /* Row r is run by invocation (r % MN_GPU_ROW_SPAN, r /
          * MN_GPU_ROW_SPAN). */
@@ -833,6 +878,10 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
     }
     wgpuComputePassEncoderEnd(pass);
     wgpuComputePassEncoderRelease(pass);
+    if (uniform_end != 0) {
+        wgpuQueueWriteBuffer(gpu.queue, state->uniforms.handle, 0,
+                             state->uniform_words, uniform_end);
+    }
     if (block->fallible) {
         wgpuCommandEncoderCopyBufferToBuffer(encoder, state->error.handle, 0,
                                              state->error_read.handle, 0, 4);
@@ -936,6 +985,8 @@ const char *mn_gpu_device_start(bool software) {
                           : limits.maxBufferSize;
     gpu.max_binding &= ~(uint64_t)3;
     gpu.max_uniform = limits.maxUniformBufferBindingSize;
+    gpu.uniform_align = limits.minUniformBufferOffsetAlignment;
+    if (gpu.uniform_align < 4) gpu.uniform_align = 4;
     gpu.max_storage_buffers = limits.maxStorageBuffersPerShaderStage;
     if (gpu.max_storage_buffers >= limits.maxBindingsPerBindGroup) {
         gpu.max_storage_buffers = limits.maxBindingsPerBindGroup - 1;
