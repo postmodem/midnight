@@ -63,6 +63,26 @@
             mainProgram = "midnight";
           };
         };
+
+      benchFor =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "midnight-bench";
+          runtimeInputs = [
+            (midnightFor pkgs)
+            pkgs.clang
+            pkgs.hyperfine
+            pkgs.jq
+            pkgs.gawk
+            pkgs.coreutils
+          ];
+          runtimeEnv = {
+            BENCH_SRC = "${src}";
+            MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+            NIX_HARDENING_ENABLE = "";
+          };
+          text = builtins.readFile ./bench/bench.sh;
+        };
     in
     {
       packages = forAllSystems (pkgs: {
@@ -74,6 +94,11 @@
           type = "app";
           program = lib.getExe (midnightFor pkgs);
           meta.description = "The Midnight compiler";
+        };
+        bench = {
+          type = "app";
+          program = lib.getExe (benchFor pkgs);
+          meta.description = "Time bench.12am against a hand-written C baseline, then churn.12am";
         };
       });
 
