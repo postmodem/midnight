@@ -1,0 +1,5 @@
+# Int modulo by zero.
+# Expected: modulo by zero
+a = 10
+b = 0
+puts a % b

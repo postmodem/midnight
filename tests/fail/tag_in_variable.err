@@ -1,0 +1,5 @@
+error: `Frozen` is a tag and has no value
+ --> tests/fail/tag_in_variable.grem:6:10
+  |
+6 | marker = Frozen
+  |          ^^^^^^ a tag can be attached, removed, tested with `has?` and used to filter queries

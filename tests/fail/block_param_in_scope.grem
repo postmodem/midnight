@@ -1,0 +1,7 @@
+# expect: the block parameter `i` reuses the name of a variable that is already in scope (created on line 4)
+# at: line 5, the `i` between the bars
+
+i = 10
+3.times do |i|
+  puts i
+end

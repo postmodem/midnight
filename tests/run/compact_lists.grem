@@ -1,0 +1,55 @@
+# Lists with compact integer elements, as fields and as annotated variables:
+# literals, index, write, push, pop, `+`, iteration and to_s.
+struct Image
+  pixels: [UInt8] = []
+  deltas: [Int16] = [-300, 300]
+end
+
+def sum_bytes(bytes: [UInt8]) -> Int
+  total = 0
+  bytes.each do |b|
+    total += b
+  end
+  total
+end
+
+bytes: [UInt8] = [0, 128, 255]
+puts bytes
+puts bytes.length
+puts bytes[1] + bytes[2]
+bytes.push(7)
+bytes[0] = 200
+puts bytes
+puts bytes.last
+puts bytes.pop
+more: [UInt8] = [1, 2]
+joined = bytes + more
+puts joined
+puts sum_bytes(joined)
+puts joined.include?(255)
+bytes[1] += 100
+puts bytes[1]
+bytes[1] -= 228
+puts bytes
+
+img = Image()
+puts img
+img.pixels.push(9)
+img.pixels.push(250)
+img.deltas[0] = -32768
+img.deltas.push(32767)
+puts img
+puts img.deltas[0] - 1
+copy = img.pixels
+copy[0] = 10
+puts img.pixels
+puts copy
+
+words: [UInt16] = [65535]
+ints: [Int32] = [-2147483648, 2147483647]
+tiny: [Int8] = [-128, 127]
+wide: [UInt32] = [4294967295]
+puts words[0] + 1
+puts ints[0] + ints[1]
+puts tiny
+puts wide[0] * 2

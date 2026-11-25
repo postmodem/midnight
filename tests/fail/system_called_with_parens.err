@@ -1,0 +1,5 @@
+error: `move` is a system and can't be called
+ --> tests/fail/system_called_with_parens.grem:8:1
+  |
+8 | move()
+  | ^^^^ systems run when `World.tick` is called

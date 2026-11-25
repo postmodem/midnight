@@ -1,0 +1,7 @@
+# expect: the constant `LIMIT` is already defined (on line 4) and can't be changed
+# at: line 5, the name `LIMIT`
+
+LIMIT = 10
+LIMIT = 20
+
+puts LIMIT

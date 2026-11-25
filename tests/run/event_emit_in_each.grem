@@ -1,0 +1,30 @@
+# emit takes effect at once, inside each too: an on in the same block sees
+# the event that was just emitted, and only that one.
+component Source
+  n: Int
+end
+
+event Pulse
+  n: Int
+end
+
+spawn Source(1)
+spawn Source(2)
+spawn Source(4)
+
+rounds = 0
+total = 0
+most = 0
+each Source do |src|
+  emit Pulse(src.n)
+  got = 0
+  on Pulse do |pulse|
+    got += 1
+    total += pulse.n
+  end
+  most = got if got > most
+  rounds += 1
+end
+puts rounds
+puts total
+puts most

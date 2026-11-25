@@ -1,0 +1,25 @@
+# An on that runs after the emit sees the event in the same tick; one that
+# runs before it sees the event in the next tick.
+event Ping
+  n: Int
+end
+
+system early
+  on Ping do |p|
+    puts "early saw #{p.n} in tick #{Time.tick}"
+  end
+end
+
+system sender
+  emit Ping(Time.tick)
+end
+
+system late
+  on Ping do |p|
+    puts "late saw #{p.n} in tick #{Time.tick}"
+  end
+end
+
+World.tick
+World.tick
+World.tick

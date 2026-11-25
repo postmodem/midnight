@@ -1,0 +1,14 @@
+# expect: duplicate definition: the method `doubled` of `Vec2` is already defined on line 7
+# at: line 11, the name `doubled`
+
+struct Vec2
+  x: Float
+
+  def doubled -> Float
+    x * 2
+  end
+
+  def doubled -> Float
+    x + x
+  end
+end

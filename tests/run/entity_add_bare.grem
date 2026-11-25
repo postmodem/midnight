@@ -1,0 +1,23 @@
+# add with bare type names: a tag, and a component whose fields all have
+# defaults. A bare component that is already present is replaced by its
+# defaults.
+component Health
+  hp: Int = 100
+end
+
+component Position
+  x: Float = 1.5
+  y: Float = 0
+end
+
+tag Player
+
+who = spawn
+who.add(Health, Player)
+puts who[Health].hp
+puts who.has?(Player)
+who[Health].hp = 3
+puts who[Health].hp
+who.add(Health, Position)
+puts who[Health].hp
+puts who[Position]

@@ -1,0 +1,5 @@
+# expect: an `if` used as a value needs an `else` branch
+# at: line 5, the `if` expression
+
+hp = 10
+label = if hp > 5 then "ok" end

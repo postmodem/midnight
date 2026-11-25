@@ -1,0 +1,5 @@
+error: can't assign to `k`
+ --> tests/fail/readonly_method_param.grem:9:5
+  |
+9 |     k = 2.0
+  |     ^ `k` is a parameter, and parameters are read-only

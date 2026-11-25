@@ -1,0 +1,46 @@
+# to_s of structs, components and events: Name(field: value, ...), with the
+# fields in declaration order and nested values shown by their own to_s.
+enum Team
+  Red
+  Blue
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+struct Unit
+  name: String
+  team: Team
+  pos: Vec2
+  alive: Bool = true
+  scores: [Int] = []
+end
+
+component Health
+  hp: Int
+  max: Int = 100
+end
+
+event Hit
+  damage: Int
+  note: String
+end
+
+v = Vec2(1, 2)
+puts v
+puts v.to_s
+puts "v = #{v}"
+puts Vec2()
+u = Unit("orc", Team::Red, Vec2(0.5, -1.5))
+puts u
+u.scores.push(3)
+u.scores.push(4)
+u.alive = false
+u.team = Team::Blue
+puts u
+puts Health(hp: 7)
+puts Hit(2, "ouch")
+puts v.to_s.length
+puts v.to_s + "!"

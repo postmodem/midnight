@@ -1,0 +1,33 @@
+# A function with no parameters is declared without parentheses and called
+# with or without them: as a statement, in arithmetic, on the right of an
+# assignment, as a method receiver, in interpolation and in a list literal.
+
+resource Counter
+  calls: Int = 0
+end
+
+def greet
+  puts "hello"
+end
+
+def seven -> Int
+  Counter.calls += 1
+  7
+end
+
+def name
+  "gremlin"
+end
+
+greet
+greet()
+puts seven
+puts seven()
+puts seven + seven() * 2
+total = seven
+puts total
+puts name.upcase
+puts name().length
+puts "#{name} has #{seven} lives"
+puts [seven, seven()].length
+puts Counter.calls

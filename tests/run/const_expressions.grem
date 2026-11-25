@@ -1,0 +1,57 @@
+# Constant expressions: literals, operators, earlier constants, enum
+# variants, constructors, list literals, `Entity.none`, and `Math` functions
+# and constants.
+enum Level
+  Easy
+  Hard
+end
+
+struct Span
+  lo: Int
+  hi: Int
+end
+
+MASK = 0xff
+BITS = 0b1010
+MILLION = 1_000_000
+BIG = 2.5e6
+SUM = 1 + 2 * 3
+POWER = 2 ** 10
+NEGATIVE = -SUM
+REMAINDER = 17 % 5
+RATIO = 3 / 4.0
+DASHES = "-" * 5
+JOINED = [1, 2] + [3]
+REPEATED = [0] * 3
+LARGE = SUM > 5 && !false
+LEVEL = Level::Easy
+SPAN = Span(1, SUM)
+SPANS = [Span(0, 1), SPAN]
+NOBODY = Entity.none
+ROOT = Math.sqrt(16.0)
+UNIT = Math.cos(0.0)
+TAU = Math::PI * 2
+
+puts MASK
+puts BITS
+puts MILLION
+puts BIG
+puts SUM
+puts POWER
+puts NEGATIVE
+puts REMAINDER
+puts RATIO
+puts DASHES
+puts JOINED
+puts REPEATED
+puts LARGE
+puts LEVEL
+puts SPAN
+puts SPANS
+puts NOBODY == Entity.none
+puts NOBODY.alive?
+puts ROOT
+puts UNIT
+puts TAU == Math::PI * 2
+puts Math::PI
+puts Math::E

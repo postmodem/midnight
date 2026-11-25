@@ -1,0 +1,14 @@
+# nan? tells whether a Float is NaN. Dividing a Float by zero is not an
+# error: it gives an infinity, or NaN for zero divided by zero.
+zero = 0.0
+nan = zero / zero
+puts nan.nan?
+puts 1.5.nan?
+puts zero.nan?
+inf = 1.0 / zero
+puts inf.nan?
+puts inf
+puts -1.0 / zero
+diff = inf - inf
+puts diff.nan?
+puts nan

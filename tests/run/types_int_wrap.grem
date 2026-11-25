@@ -1,0 +1,15 @@
+# Int is a 64-bit signed integer; `+`, `-`, `*` and negation wrap on overflow.
+big = 9223372036854775807
+puts big
+wrapped = big + 1
+puts wrapped
+puts wrapped - 1
+puts big * 2
+low = -9223372036854775807 - 1
+puts low
+puts low - 1
+puts low * -1
+puts big + big
+puts 4611686018427387904 * 2
+puts 3037000500 * 3037000500
+puts -low

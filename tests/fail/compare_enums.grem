@@ -1,0 +1,9 @@
+# expect: type mismatch: `<` works on numbers and strings, not on the enum `Team`
+# at: line 9, the expression `Team::Red < Team::Blue`
+
+enum Team
+  Red
+  Blue
+end
+
+puts Team::Red < Team::Blue

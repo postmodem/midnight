@@ -1,0 +1,25 @@
+# Writing component fields inside each is not a structural change: it takes
+# effect at once, whether made through the view, through e[C], by replacing
+# the value with e[C] = ..., by assigning the view, or by a nested query.
+component Counter
+  n: Int
+end
+
+one = spawn Counter(1)
+
+each Entity, Counter do |e, c|
+  c.n += 1
+  puts e[Counter].n
+  e[Counter].n += 1
+  puts c.n
+  e[Counter] = Counter(10)
+  puts c.n
+  c = Counter(20)
+  puts e[Counter].n
+  each Counter do |inner|
+    inner.n += 1
+  end
+  puts c.n
+  puts World.count(Counter)
+end
+puts one[Counter].n

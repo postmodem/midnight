@@ -1,0 +1,14 @@
+# expect: wrong number of arguments: the method `scaled` of `Rect` takes 1, found 2
+# at: line 14, the call `r.scaled(2, 3)`
+
+struct Rect
+  width: Float
+  height: Float
+
+  def scaled(k: Float) -> Rect
+    Rect(width * k, height * k)
+  end
+end
+
+r = Rect(2, 3)
+puts r.scaled(2, 3)

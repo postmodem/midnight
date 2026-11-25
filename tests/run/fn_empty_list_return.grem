@@ -1,0 +1,17 @@
+# `[]` as the value of a function with a declared list return type: as the
+# last expression and with `return`. The declared type supplies the element
+# type.
+
+def no_names -> [String]
+  []
+end
+
+def firsts(n: Int) -> [Int]
+  return [] if n <= 0
+  [1, 2, 3]
+end
+
+puts no_names.length
+puts no_names
+puts firsts(0)
+puts firsts(1)

@@ -1,0 +1,22 @@
+# Float division by zero gives Infinity, -Infinity or NaN, and is not a
+# runtime error.
+zero = 0.0
+one = 1.0
+inf = one / zero
+puts inf
+puts -one / zero
+ninf = -inf
+puts ninf
+nan = zero / zero
+puts nan
+puts nan.nan?
+puts inf.nan?
+puts one.nan?
+puts inf == inf
+puts inf > 1e20
+puts ninf < -1e20
+puts inf + 1
+puts inf - inf
+puts 1 / zero
+puts inf * -1
+puts "#{inf} #{ninf} #{nan}"

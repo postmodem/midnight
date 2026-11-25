@@ -1,0 +1,9 @@
+# expect: a constructor call can't mix positional and keyword arguments
+# at: line 9, the constructor call `Vec2(1, y: 2)` (the keyword argument `y:`)
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+v = Vec2(1, y: 2)

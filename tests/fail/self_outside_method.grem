@@ -1,0 +1,8 @@
+# expect: `self` can be used only inside a method of a struct or component
+# at: line 5, the keyword `self`
+
+def show
+  puts self
+end
+
+show

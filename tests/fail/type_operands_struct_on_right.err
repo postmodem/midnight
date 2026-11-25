@@ -1,0 +1,5 @@
+error: expected `Int` or `Float`, found `Vec2`
+  --> tests/fail/type_operands_struct_on_right.grem:14:10
+   |
+14 | puts 2 * v
+   |          ^ `Vec2` defines `*` for a `Vec2` on the left-hand side

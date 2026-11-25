@@ -1,0 +1,47 @@
+# `break` in a query `each`: the walk stops at the visit that breaks, at the
+# top level, in a function and in a system. Every entity carries the same
+# value, so the results do not depend on the visit order.
+
+component Coin
+  value: Int
+end
+
+resource Tally
+  visits: Int = 0
+  ticks: Int = 0
+end
+
+def visit_two -> Int
+  seen = 0
+  each Coin do |coin|
+    seen += coin.value
+    break if seen == 2
+  end
+  seen
+end
+
+system first_only
+  each Coin do |coin|
+    Tally.visits += coin.value
+    break
+  end
+  Tally.ticks += 1
+end
+
+5.times do
+  spawn Coin(1)
+end
+
+count = 0
+each Coin do |c|
+  count += c.value
+  break if count == 3
+end
+puts count
+puts visit_two
+
+World.tick
+World.tick
+puts Tally.visits
+puts Tally.ticks
+puts World.count(Coin)

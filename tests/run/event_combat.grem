@@ -1,0 +1,48 @@
+# The reference's combat example: events carrying entity handles, emitted
+# inside each by one system and applied by an on in a later system, which
+# skips targets that are dead, missing the component, or Entity.none.
+component Health
+  hp: Int
+end
+
+component Attack
+  target: Entity
+  power: Int
+end
+
+event Hit
+  target: Entity
+  damage: Int
+end
+
+system combat
+  each Attack do |attack|
+    emit Hit(attack.target, attack.power)
+  end
+end
+
+system damage
+  on Hit do |hit|
+    next unless hit.target.alive? && hit.target.has?(Health)
+    hit.target[Health].hp -= hit.damage
+  end
+end
+
+victim = spawn Health(100)
+bystander = spawn Health(100)
+gone = spawn Health(1)
+bare = spawn
+spawn Attack(victim, 10)
+spawn Attack(victim, 5)
+spawn Attack(gone, 50)
+spawn Attack(bare, 7)
+spawn Attack(Entity.none, 1)
+gone.despawn
+
+World.tick
+puts victim[Health].hp
+puts bystander[Health].hp
+World.tick
+puts victim[Health].hp
+puts bystander[Health].hp
+puts World.count(Health)

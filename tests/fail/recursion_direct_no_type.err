@@ -1,0 +1,10 @@
+error: recursive function `fact` needs a declared return type
+ --> tests/fail/recursion_direct_no_type.grem:6:7
+  |
+6 |   n * fact(n - 1)
+  |       ^^^^^^^^^^^ this call needs the type `fact` returns, which is still being inferred
+note: add `-> Type` to the definition of `fact`
+ --> tests/fail/recursion_direct_no_type.grem:4:5
+  |
+4 | def fact(n: Int)
+  |     ----

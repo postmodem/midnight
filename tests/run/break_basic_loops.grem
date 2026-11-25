@@ -1,0 +1,28 @@
+# `break` in `while`, `until` and `loop`: leaves the loop at once; the rest
+# of the body does not run.
+
+n = 0
+while true
+  n += 1
+  break if n == 3
+  puts "while #{n}"
+end
+puts n
+
+m = 10
+until m == 0
+  m -= 1
+  if m == 7
+    break
+  end
+  puts "until #{m}"
+end
+puts m
+
+k = 0
+loop do
+  k += 2
+  break if k > 5
+  puts "loop #{k}"
+end
+puts k

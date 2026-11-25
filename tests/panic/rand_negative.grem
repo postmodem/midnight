@@ -1,0 +1,4 @@
+# rand(n) with a negative n.
+# Expected: rand(-3): the argument must be positive
+n = -3
+puts rand(n)

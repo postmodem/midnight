@@ -1,0 +1,5 @@
+error: unknown variable or function `totl`
+ --> tests/fail/unknown_variable_suggest.grem:5:6
+  |
+5 | puts totl
+  |      ^^^^ did you mean `total`?

@@ -1,0 +1,11 @@
+# expect: `==` is provided for every struct and can't be redefined (it is also not one of the operator names a method may have)
+# at: line 8, the `==` after `def`
+
+struct Vec2
+  x: Float
+  y: Float
+
+  def ==(other: Vec2) -> Bool
+    x == other.x
+  end
+end

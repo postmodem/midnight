@@ -1,0 +1,43 @@
+# Field assignment and nested field assignment on locals, and structs held in
+# lists and modified in place.
+struct Point
+  x: Int = 0
+  y: Int = 0
+end
+
+struct Segment
+  head: Point = Point()
+  tail: Point = Point()
+  label: String = ""
+end
+
+pt = Point(1, 2)
+pt.x = 5
+pt.y += 10
+puts pt
+
+s = Segment()
+s.head.x = 3
+s.tail = Point(7, 8)
+s.tail.y -= 1
+s.label = "edge"
+s.label += "!"
+puts s
+
+copy = s
+copy.head.x = 99
+puts s.head.x
+puts copy.head.x
+
+pts = [Point(1, 1), Point(2, 2)]
+pts[0].x = 10
+pts[1] = Point(y: 6)
+pts.push(Point(3, 2))
+pts[-1].y *= 4
+puts pts
+puts pts.length
+one = pts[0]
+one.x = 0
+puts pts[0].x
+puts pts.include?(Point(0, 6))
+puts pts.include?(Point(0, 0))

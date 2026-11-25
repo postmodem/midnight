@@ -1,0 +1,6 @@
+# expect: type mismatch: the default of the field `hp` must be an `Int`, found a `String`
+# at: line 5, the default `"full"`
+
+struct Stats
+  hp: Int = "full"
+end

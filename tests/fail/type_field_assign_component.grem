@@ -1,0 +1,9 @@
+# expect: type mismatch: the field `hp` of `Health` is an `Int`, found a `String`
+# at: line 9, the value `"full"`
+
+component Health
+  hp: Int
+end
+
+e = spawn Health(5)
+e[Health].hp = "full"

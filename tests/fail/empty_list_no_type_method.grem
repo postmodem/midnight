@@ -1,0 +1,4 @@
+# expect: the element type of `[]` can't be inferred: nothing here supplies a type
+# at: line 4, the literal `[]`
+
+puts [].length

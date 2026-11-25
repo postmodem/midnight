@@ -1,0 +1,8 @@
+# Int division by zero inside a function; the divisor is a list length.
+# Expected: division by zero
+def share(total: Int, people: Int) -> Int
+  total / people
+end
+
+xs: [Int] = []
+puts share(100, xs.length)

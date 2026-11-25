@@ -1,0 +1,55 @@
+# Assignment copies a list: the two lists are independent in both
+# directions, at every level of nesting.
+def with_zero(xs: [Int]) -> [Int]
+  ys = xs
+  ys.push(0)
+  ys
+end
+
+a = [1, 2, 3]
+b = a
+b.push(4)
+puts a.length
+puts b.length
+a[0] = 99
+puts a
+puts b
+
+# nested lists
+grid = [[1, 2], [3, 4]]
+other = grid
+other[0][0] = 50
+other[1].push(5)
+grid[1][1] = 40
+puts grid
+puts other
+
+# an element read out of a list is a copy
+row = grid[0]
+row.push(7)
+puts grid[0]
+puts row
+
+# a list pushed into another list is copied
+inner = [1]
+outer: [[Int]] = []
+outer.push(inner)
+inner.push(2)
+outer[0].push(3)
+puts inner
+puts outer
+
+# passing to a function and returning
+c = with_zero(a)
+puts a
+puts c
+
+# pop, delete_at and clear on a copy
+d = c
+d.pop
+d.delete_at(0)
+puts c
+puts d
+d.clear
+puts c.length
+puts d.length

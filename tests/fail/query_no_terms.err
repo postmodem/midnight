@@ -1,0 +1,5 @@
+error: a query needs at least one term
+  --> tests/fail/query_no_terms.grem:11:6
+   |
+11 | each with: Player do
+   |      ^^^^^^^^^^^^ name a component or `Entity` before the filters

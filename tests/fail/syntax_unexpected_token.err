@@ -1,0 +1,5 @@
+error: unexpected `)`
+ --> tests/fail/syntax_unexpected_token.grem:5:10
+  |
+5 | y = (x + )
+  |          ^ expected an expression

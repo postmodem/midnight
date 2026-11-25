@@ -1,0 +1,15 @@
+# ljust and rjust pad with spaces to at least n characters.
+puts "|" + "ab".ljust(5) + "|"
+puts "|" + "ab".rjust(5) + "|"
+puts "|" + "abcde".ljust(5) + "|"
+puts "|" + "abcde".rjust(5) + "|"
+puts "|" + "abcdef".ljust(3) + "|"
+puts "|" + "abcdef".rjust(3) + "|"
+puts "|" + "".ljust(2) + "|"
+puts "|" + "x".rjust(0) + "|"
+puts "|" + "é".ljust(3) + "|"
+puts "|" + "é".rjust(3) + "|"
+n = 4
+puts "|" + 7.to_s.rjust(n) + "|"
+puts "|" + "id".ljust(n) + "name".rjust(n + 2) + "|"
+puts "ab".ljust(5).length

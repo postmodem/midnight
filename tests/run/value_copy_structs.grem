@@ -1,0 +1,56 @@
+# Assignment copies a struct, including any lists, strings and structs it
+# holds.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+struct Path
+  name: String
+  points: [Vec2] = []
+  start: Vec2 = Vec2()
+end
+
+def renamed(p: Path, name: String) -> Path
+  q = p
+  q.name = name
+  q
+end
+
+a = Vec2(1, 2)
+b = a
+b.x = 10
+a.y = 20
+puts a
+puts b
+
+p1 = Path("first")
+p1.points.push(Vec2(1, 1))
+p2 = p1
+p2.name = "second"
+p2.points.push(Vec2(2, 2))
+p2.points[0].x = 9
+p2.start.y = 5
+p1.start.x = 3
+puts p1
+puts p2
+
+# a struct stored in a list is a copy; so is one read back
+paths = [p1]
+p1.name = "changed"
+paths[0].points.clear
+puts paths[0].name
+puts p1.points.length
+got = paths[0]
+got.name = "got"
+puts paths[0].name
+
+# a field read into a variable is a copy
+pts = p2.points
+pts.clear
+puts p2.points.length
+
+# passing to a function and returning
+r = renamed(p2, "third")
+puts p2.name
+puts r.name

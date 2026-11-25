@@ -1,0 +1,13 @@
+# expect: the tag `Frozen` can't be a query term (a tag has no value to bind); hint: filter with `with: Frozen`
+# at: line 11, the name `Frozen`
+
+component Position
+  x: Float
+  y: Float
+end
+
+tag Frozen
+
+each Position, Frozen do |pos, frozen|
+  puts pos.x
+end

@@ -1,0 +1,10 @@
+# expect: `require` is allowed at the top level only
+# at: line 7, the keyword `require`
+# (the required name is this file itself, so the file exists; only the
+# placement is wrong)
+
+def load_more
+  require "require_not_top_level"
+end
+
+load_more

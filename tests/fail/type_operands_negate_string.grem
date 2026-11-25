@@ -1,0 +1,5 @@
+# expect: type mismatch: unary `-` can't be applied to a `String`
+# at: line 5, the expression `-s`
+
+s = "abc"
+puts -s

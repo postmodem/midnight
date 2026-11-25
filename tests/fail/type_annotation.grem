@@ -1,0 +1,4 @@
+# expect: type mismatch: `count` is declared `Int`, found a `Float` (a `Float` does not convert to `Int`)
+# at: line 4, the value `2.5`
+
+count: Int = 2.5

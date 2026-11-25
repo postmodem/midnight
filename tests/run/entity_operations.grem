@@ -1,0 +1,53 @@
+# Every row of the entity operations table: e[C] as a place, e[C] = value,
+# has?, add, remove, despawn, alive? and Entity.none.
+component Health
+  hp: Int
+  max: Int = 100
+end
+
+component Armor
+  rating: Int = 1
+end
+
+tag Player
+
+hero = spawn Health(hp: 50), Player
+puts hero.alive?
+puts hero.has?(Health)
+puts hero.has?(Player)
+puts hero.has?(Armor)
+
+# e[C] reads the component and is a place
+puts hero[Health].hp
+puts hero[Health]
+hero[Health].hp -= 1
+puts hero[Health].hp
+hero[Health].max = hero[Health].hp * 2
+puts hero[Health]
+
+# e[C] = value replaces the component
+hero[Health] = Health(5)
+puts hero[Health]
+
+# add attaches components; one that is already present is replaced
+hero.add(Armor(3))
+puts hero.has?(Armor)
+puts hero[Armor].rating
+hero.add(Health(7, 9), Armor(4))
+puts hero[Health]
+puts hero[Armor]
+
+# remove detaches components; absent ones are ignored
+hero.remove(Armor, Player)
+puts hero.has?(Armor)
+puts hero.has?(Player)
+hero.remove(Armor)
+hero.remove(Player, Armor)
+puts hero.has?(Health)
+hero.add(Player)
+puts hero.has?(Player)
+
+puts Entity.none.alive?
+hero.despawn
+puts hero.alive?
+puts hero.has?(Health)

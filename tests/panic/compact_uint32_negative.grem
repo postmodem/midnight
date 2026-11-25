@@ -1,0 +1,9 @@
+# A compound assignment that takes a UInt32 field below zero.
+# Expected: -5 does not fit in UInt32
+struct Ident
+  value: UInt32 = 0
+end
+
+ident = Ident()
+step = 5
+ident.value -= step

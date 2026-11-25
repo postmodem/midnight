@@ -1,0 +1,5 @@
+error: `<` can't compare `Team` values
+ --> tests/fail/compare_enums.grem:9:6
+  |
+9 | puts Team::Red < Team::Blue
+  |      ^^^^^^^^^^^^^^^^^^^^^^ `<`, `<=`, `>` and `>=` work on numbers and strings

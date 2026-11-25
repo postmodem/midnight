@@ -1,0 +1,7 @@
+# expect: can't assign to `LIMIT`: a constant can't be changed
+# at: line 6, the statement `LIMIT += 1`
+
+LIMIT = 10
+
+LIMIT += 1
+puts LIMIT

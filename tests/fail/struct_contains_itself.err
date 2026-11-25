@@ -1,0 +1,5 @@
+error: struct `Node` contains itself
+ --> tests/fail/struct_contains_itself.grem:6:3
+  |
+6 |   child: Node
+  |   ^^^^^ a value can contain its own type only through a list, like `[Node]`

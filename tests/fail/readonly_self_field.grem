@@ -1,0 +1,13 @@
+# expect: can't assign to the field `count` inside a method: methods cannot modify the receiver
+# at: line 8, the statement `count += 1`
+
+struct Counter
+  count: Int = 0
+
+  def bumped -> Counter
+    count += 1
+    self
+  end
+end
+
+puts Counter().bumped

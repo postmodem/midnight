@@ -1,0 +1,5 @@
+error: `case` does not cover `Team::Green`
+  --> tests/fail/case_enum_missing_one.grem:11:6
+   |
+11 | case team
+   |      ^^^^ add a `when` for each, or an `else`

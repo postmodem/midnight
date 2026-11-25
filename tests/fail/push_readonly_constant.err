@@ -1,0 +1,5 @@
+error: can't modify `PRIMES`
+ --> tests/fail/push_readonly_constant.grem:6:1
+  |
+6 | PRIMES.push(7)
+  | ^^^^^^ `PRIMES` is a constant

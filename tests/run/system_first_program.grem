@@ -1,0 +1,37 @@
+# The reference's first program, reporting positions instead of handles:
+# two systems, a query with a without: filter, Time.dt, and three ticks.
+component Position
+  x: Float
+  y: Float
+end
+
+component Velocity
+  dx: Float
+  dy: Float
+end
+
+tag Frozen
+
+system move
+  each Position, Velocity, without: Frozen do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system report
+  each Position, without: Frozen do |pos|
+    puts "moving: (#{pos.x}, #{pos.y})"
+  end
+  each Position, with: Frozen do |pos|
+    puts "frozen: (#{pos.x}, #{pos.y})"
+  end
+end
+
+spawn Position(0, 0), Velocity(1, 2)
+spawn Position(5, 5), Velocity(-1, 0), Frozen
+
+Time.dt = 0.5
+3.times do
+  World.tick
+end

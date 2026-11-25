@@ -1,0 +1,8 @@
+# expect: `push` needs a list that is a place (a variable, a field, an element); the result of `numbers()` is not one
+# at: line 8, the call `numbers().push(4)`
+
+def numbers -> [Int]
+  [1, 2, 3]
+end
+
+numbers().push(4)

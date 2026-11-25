@@ -1,0 +1,5 @@
+error: `break` outside a loop
+ --> tests/fail/break_outside_loop.grem:5:3
+  |
+5 |   break
+  |   ^^^^^ it belongs in `while`, `until`, `loop`, `each`, `on` or a `do` block

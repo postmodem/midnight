@@ -1,0 +1,5 @@
+# Int division by zero.
+# Expected: division by zero
+a = 10
+b = 0
+puts a / b

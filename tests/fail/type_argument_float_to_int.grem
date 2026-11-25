@@ -1,0 +1,8 @@
+# expect: type mismatch: the argument `n` of `double` is an `Int`, found a `Float` (a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`)
+# at: line 8, the argument `2.5`
+
+def double(n: Int) -> Int
+  n * 2
+end
+
+puts double(2.5)

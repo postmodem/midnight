@@ -1,0 +1,1 @@
+tests/panic/world_tick_in_system_during_run.grem:4: runtime error: World.tick called while a tick is in progress

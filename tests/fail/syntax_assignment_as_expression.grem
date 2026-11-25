@@ -1,0 +1,6 @@
+# expect: syntax error: unexpected `=` inside an expression (assignment is a statement, not an expression)
+# at: line 5, the second `=` (inside the parentheses)
+
+x = 1
+y = (x = 2)
+puts y

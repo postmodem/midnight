@@ -1,0 +1,10 @@
+error: can't assign `String` to `x`, which is `Int`
+ --> tests/fail/assign_different_type.grem:5:5
+  |
+5 | x = "one"
+  |     ^^^^^ a variable keeps the type of its first value
+note: `x` gets its type here
+ --> tests/fail/assign_different_type.grem:4:1
+  |
+4 | x = 1
+  | -

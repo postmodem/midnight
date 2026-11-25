@@ -1,0 +1,10 @@
+# expect: unknown variable `speed` inside the system `move`: top-level variables are not visible in systems (state belongs in a resource or on an entity)
+# at: line 7, the name `speed`
+
+speed = 2.5
+
+system move
+  puts speed
+end
+
+World.tick

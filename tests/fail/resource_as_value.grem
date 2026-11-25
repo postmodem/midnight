@@ -1,0 +1,8 @@
+# expect: the resource `Score` as a whole is not a value; read its fields (`Score.points`)
+# at: line 8, the name `Score`
+
+resource Score
+  points: Int = 0
+end
+
+saved = Score

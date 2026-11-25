@@ -1,0 +1,5 @@
+# expect: type mismatch: `n` is an `Int` (from its first assignment on line 4), found a `Float` (a `Float` does not convert to `Int`)
+# at: line 5, the value `2.5`
+
+n = 1
+n = 2.5

@@ -1,0 +1,9 @@
+# expect: type mismatch: a `case` used as a value needs branches of one type; found a `String` and an `Int`
+# at: line 7, the branch value `2` (the `case` expression starts on line 5)
+
+n = 2
+label = case n
+when 1 then "one"
+when 2 then 2
+else "many"
+end

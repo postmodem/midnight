@@ -1,0 +1,10 @@
+# expect: the resource `Score` is not a value type and can't be the type of a field
+# at: line 9, the name `Score`
+
+resource Score
+  points: Int = 0
+end
+
+struct Snapshot
+  score: Score
+end

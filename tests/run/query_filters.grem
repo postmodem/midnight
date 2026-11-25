@@ -1,0 +1,121 @@
+# Query filters: with: and without:, each taking one type or a bracketed
+# list, with tags and with components. Every entity's hp is a distinct power
+# of two, so a sum identifies exactly which entities were visited.
+component Health
+  hp: Int
+end
+
+component Armor
+  rating: Int
+end
+
+tag Player
+tag Dead
+tag Frozen
+
+spawn Health(1), Player
+spawn Health(2), Player, Dead
+spawn Health(4), Player, Frozen
+spawn Health(8), Dead, Frozen
+spawn Health(16), Armor(1)
+spawn Health(32), Armor(2), Player
+spawn Health(64)
+
+total = 0
+each Health do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, with: Player do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, without: Player do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, with: [Player, Dead] do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, without: [Dead, Frozen] do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, with: Player, without: Dead do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, with: Player, without: [Dead, Frozen] do |h|
+  total += h.hp
+end
+puts total
+
+# a component can be a filter too: required or excluded without being bound
+total = 0
+each Health, with: Armor do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, without: Armor do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, with: [Player, Armor] do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, with: [Player] do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, without: [Player, Armor] do |h|
+  total += h.hp
+end
+puts total
+
+total = 0
+each Health, with: [Dead, Frozen], without: Player do |h|
+  total += h.hp
+end
+puts total
+
+# two terms and a filter
+total = 0
+each Health, Armor, with: Player do |h, a|
+  total += h.hp * a.rating
+end
+puts total
+
+# Entity with filters only
+total = 0
+each Entity, with: Dead do |e|
+  total += 1 if e.has?(Health)
+end
+puts total
+
+total = 0
+each Entity, without: Health do |e|
+  total += 1
+end
+puts total

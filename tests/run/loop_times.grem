@@ -1,0 +1,29 @@
+# `times`: with a parameter (0 up to n-1), without one, a zero count, a
+# variable receiver, and nesting.
+
+3.times do |i|
+  puts i
+end
+
+2.times do
+  puts "again"
+end
+
+0.times do |z|
+  puts "never #{z}"
+end
+
+n = 4
+total = 0
+n.times do |j|
+  total += j
+end
+puts total
+
+cells = ""
+2.times do |r|
+  3.times do |c|
+    cells += "(#{r}#{c})"
+  end
+end
+puts cells

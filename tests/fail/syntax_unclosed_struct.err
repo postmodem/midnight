@@ -1,0 +1,5 @@
+error: this `struct` is never closed
+ --> tests/fail/syntax_unclosed_struct.grem:4:1
+  |
+4 | struct Vec2
+  | ^^^^^^ expected a matching `end`

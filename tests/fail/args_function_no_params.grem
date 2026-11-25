@@ -1,0 +1,8 @@
+# expect: wrong number of arguments: `greet` takes none, found 1
+# at: line 8, the call `greet(1)`
+
+def greet
+  puts "hello"
+end
+
+greet(1)

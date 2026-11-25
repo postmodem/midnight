@@ -1,0 +1,5 @@
+error: `Score` is a resource, not a component
+ --> tests/fail/query_resource_term.grem:8:6
+  |
+8 | each Score do |score|
+  |      ^^^^^ a query names components, tags and `Entity`

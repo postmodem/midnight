@@ -1,0 +1,5 @@
+error: expected `Int`, found `Float`
+ --> tests/fail/type_argument_float_to_int.grem:8:13
+  |
+8 | puts double(2.5)
+  |             ^^^

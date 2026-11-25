@@ -1,0 +1,10 @@
+# A computed positional constructor argument that is too large for an Int16
+# field.
+# Expected: 32768 does not fit in Int16
+struct Sample
+  level: Int16
+end
+
+v = 32767
+s = Sample(v + 1)
+puts s.level

@@ -1,0 +1,11 @@
+# expect: `to_s` is provided for every struct and can't be redefined
+# at: line 8, the method name `to_s`
+
+struct Vec2
+  x: Float
+  y: Float
+
+  def to_s -> String
+    "vec"
+  end
+end

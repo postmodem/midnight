@@ -1,0 +1,9 @@
+# expect: `emit` takes an event; `Vec2` is a struct
+# at: line 9, the value `Vec2(1, 2)`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+emit Vec2(1, 2)

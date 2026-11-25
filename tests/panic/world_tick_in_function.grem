@@ -1,0 +1,11 @@
+# World.tick called from a function that a system calls during a tick.
+# Expected: World.tick called while a tick is in progress
+def step_again
+  World.tick
+end
+
+system nested
+  step_again
+end
+
+World.tick

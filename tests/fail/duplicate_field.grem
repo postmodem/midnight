@@ -1,0 +1,8 @@
+# expect: duplicate definition: the field `x` of `Vec2` is already defined on line 5
+# at: line 7, the name `x`
+
+struct Vec2
+  x: Float
+  y: Float
+  x: Float
+end

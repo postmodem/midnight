@@ -1,0 +1,5 @@
+# expect: type mismatch: an element of a `[Int]` is an `Int`, found a `String`
+# at: line 5, the value `"one"`
+
+xs = [1, 2]
+xs[0] = "one"

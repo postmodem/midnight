@@ -1,0 +1,6 @@
+# expect: can't assign to `i`: the parameter of a counting loop is read-only
+# at: line 5, the statement `i *= 2`
+
+1.upto(3) do |i|
+  i *= 2
+end

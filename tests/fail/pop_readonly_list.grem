@@ -1,0 +1,8 @@
+# expect: `pop` needs a list that can be modified; `xs` is a function parameter and is read-only
+# at: line 5, the call `xs.pop`
+
+def last_of(xs: [Int]) -> Int
+  xs.pop
+end
+
+puts last_of([1, 2])

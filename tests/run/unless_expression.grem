@@ -1,0 +1,29 @@
+# `unless` as an expression (with `else`): assignment, interpolation, last
+# expression of a function, Int and Float branches.
+
+def speed(frozen: Bool) -> Float
+  unless frozen
+    2.5
+  else
+    0
+  end
+end
+
+armor = 0
+status = unless armor > 0 then "exposed" else "armored" end
+puts status
+
+armor = 10
+status = unless armor > 0 then "exposed" else "armored" end
+puts status
+
+penalty = unless armor >= 10
+  3
+else
+  1
+end
+puts penalty
+
+puts "you are #{unless armor > 5 then "soft" else "tough" end}"
+puts speed(false)
+puts speed(true)

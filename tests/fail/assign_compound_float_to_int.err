@@ -1,0 +1,5 @@
+error: expected `Int`, found `Float`
+ --> tests/fail/assign_compound_float_to_int.grem:5:6
+  |
+5 | n += 0.5
+  |      ^^^

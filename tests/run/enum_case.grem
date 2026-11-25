@@ -1,0 +1,38 @@
+# An enum declared with several variants per line, and `case` over an enum as
+# a statement: every variant covered without `else`, several candidates in
+# one `when`, and a partial `case` with `else`.
+enum Dir
+  North, East
+  South, West
+end
+
+def describe(d: Dir)
+  case d
+  when Dir::North then puts "up"
+  when Dir::South
+    puts "down"
+  when Dir::East, Dir::West
+    puts "sideways"
+  end
+end
+
+def axis(d: Dir) -> String
+  label = ""
+  case d
+  when Dir::North, Dir::South then label = "vertical"
+  else
+    label = "horizontal"
+  end
+  label
+end
+
+describe(Dir::North)
+describe(Dir::East)
+describe(Dir::South)
+describe(Dir::West)
+puts axis(Dir::South)
+puts axis(Dir::West)
+puts axis(Dir::North)
+dirs = [Dir::North, Dir::East, Dir::South, Dir::West]
+puts dirs
+puts Dir::East != Dir::West

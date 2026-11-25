@@ -1,0 +1,14 @@
+# expect: can't assign to `k`: a method parameter is read-only
+# at: line 9, the statement `k = 2.0`
+
+struct Vec2
+  x: Float
+  y: Float
+
+  def scaled(k: Float) -> Vec2
+    k = 2.0
+    Vec2(x * k, y * k)
+  end
+end
+
+puts Vec2(1, 2).scaled(3)

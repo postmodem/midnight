@@ -1,0 +1,13 @@
+# expect: the type `Frozen` appears twice in the query (in `with:` and in `without:`)
+# at: line 11, the `Frozen` after `without:`
+
+component Position
+  x: Float
+  y: Float
+end
+
+tag Frozen
+
+each Position, with: Frozen, without: Frozen do |pos|
+  puts pos.x
+end

@@ -1,0 +1,5 @@
+# expect: the constant `BASE` is used before its definition on line 5 (a constant may use only constants defined above it)
+# at: line 4, the name `BASE`
+
+DOUBLE = BASE * 2
+BASE = 21

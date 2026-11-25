@@ -1,0 +1,1 @@
+tests/panic/compact_list_literal.grem:4: runtime error: 300 does not fit in UInt8

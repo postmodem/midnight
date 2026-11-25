@@ -1,0 +1,6 @@
+# expect: unknown type `Quaternion`, with no suggestion
+# at: line 4, the name `Quaternion` in the parameter list
+
+def weight(q: Quaternion) -> Float
+  1.0
+end

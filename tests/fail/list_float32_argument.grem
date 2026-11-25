@@ -1,0 +1,17 @@
+# expect: type mismatch: the argument `xs` of `total` is a `[Float]`, found a `[Float32]` (the two list types do not convert to each other)
+# at: line 17, the argument `m.heights`
+
+struct Mesh
+  heights: [Float32] = []
+end
+
+def total(xs: [Float]) -> Float
+  sum = 0.0
+  xs.each do |x|
+    sum += x
+  end
+  sum
+end
+
+m = Mesh()
+puts total(m.heights)

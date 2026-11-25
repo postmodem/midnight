@@ -1,0 +1,7 @@
+# expect: the block parameter `item` is named twice (the second reuses a name already in scope)
+# at: line 5, the second `item` between the bars
+
+names = ["a", "b"]
+names.each_with_index do |item, item|
+  puts item
+end

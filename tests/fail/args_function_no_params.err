@@ -1,0 +1,5 @@
+error: `greet` takes no arguments, but 1 was given
+ --> tests/fail/args_function_no_params.grem:8:1
+  |
+8 | greet(1)
+  | ^^^^^^^^

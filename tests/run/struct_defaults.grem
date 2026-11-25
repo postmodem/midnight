@@ -1,0 +1,53 @@
+# Struct field defaults: one of every kind of constant expression, and each
+# construction getting its own copy of a default.
+enum Mode
+  Idle
+  Busy
+end
+
+BASE = 10
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+struct Config
+  count: Int = 7
+  label: String = "none"
+  active: Bool = true
+  base: Int = BASE
+  mode: Mode = Mode::Busy
+  computed: Int = BASE * 2 + 1
+  origin: Vec2 = Vec2(1, 2)
+  sizes: [Int] = [1, 2, 3]
+  names: [String] = []
+  owner: Entity = Entity.none
+  root: Float = Math.sqrt(16.0)
+  pi: Float = Math::PI
+end
+
+c = Config()
+puts c.count
+puts c.label
+puts c.active
+puts c.base
+puts c.mode
+puts c.computed
+puts c.origin
+puts c.sizes
+puts c.names
+puts c.owner == Entity.none
+puts c.root
+puts c.pi
+
+c.sizes.push(4)
+c.origin.x = 9
+d = Config(sizes: [9], mode: Mode::Idle)
+puts d.sizes
+puts d.mode
+puts d.origin
+fresh = Config()
+puts fresh.sizes
+puts fresh == Config()
+puts c == fresh

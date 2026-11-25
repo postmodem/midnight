@@ -1,0 +1,6 @@
+# expect: unknown constant (or type) `GRAVTY`, suggesting `GRAVITY`
+# at: line 6, the name `GRAVTY`
+
+GRAVITY = 9.81
+
+puts GRAVTY

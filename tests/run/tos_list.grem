@@ -1,0 +1,27 @@
+# to_s of lists: [a, b, c], for every element kind, nested and empty.
+enum Team
+  Red
+  Blue
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+puts [1, 2, 3]
+blank: [Int] = []
+puts blank
+puts [1.5, 2, -0.25]
+puts [true, false]
+puts ["a", "b c"]
+puts [Team::Red, Team::Blue]
+puts [Vec2(1, 2), Vec2()]
+puts [[1, 2], [3], [4, 5, 6]]
+nested: [[String]] = [["x"], ["y", "z"]]
+puts nested
+xs = [10, 20]
+puts "xs = #{xs}"
+puts xs.to_s + "!"
+puts [1].to_s.length
+puts blank.to_s.length

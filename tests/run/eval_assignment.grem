@@ -1,0 +1,57 @@
+# The right-hand side of an assignment is evaluated, left to right, before
+# the place on the left is written; `a += f` reads `a` before calling `f`.
+resource Counter
+  n: Int = 0
+  log: [Int] = []
+end
+
+def bump -> Int
+  Counter.n += 1
+  Counter.n
+end
+
+def set_to_100 -> Int
+  Counter.n = 100
+  1
+end
+
+def grow -> Int
+  Counter.log.push(7)
+  Counter.log.length
+end
+
+# the old value is read before the call on its right runs
+Counter.n = Counter.n + bump
+puts Counter.n
+
+# the call on the left runs before the read on its right
+Counter.n = 0
+Counter.n = bump + Counter.n
+puts Counter.n
+
+# `a += f` reads `a`, then calls `f`, then writes
+Counter.n = 5
+Counter.n += set_to_100
+puts Counter.n
+
+Counter.n = 5
+Counter.n = set_to_100 + Counter.n
+puts Counter.n
+
+# locals: every read on the right sees the value before the write
+x = 10
+x = x * 2 + x
+puts x
+xs = [1, 2, 3]
+xs[0] = xs[1] + xs[2]
+xs[1] = xs[0]
+puts xs
+s = "a"
+s += s
+puts s
+s = s + "b" + s
+puts s
+
+# an argument that changes the list being pushed to
+Counter.log.push(grow)
+puts Counter.log

@@ -1,0 +1,60 @@
+# Queries run anywhere statements can: at the top level, in functions (also
+# when the function is called from inside another query's block) and in
+# systems.
+component Coin
+  value: Int
+end
+
+component Purse
+  gold: Int = 0
+end
+
+resource Bank
+  total: Int = 0
+end
+
+def coin_total -> Int
+  sum = 0
+  each Coin do |coin|
+    sum += coin.value
+  end
+  sum
+end
+
+def double_coins
+  each Coin do |coin|
+    coin.value *= 2
+  end
+end
+
+system collect
+  each Purse do |purse|
+    purse.gold += coin_total
+  end
+  each Coin do |coin|
+    Bank.total += coin.value
+  end
+end
+
+spawn Coin(1)
+spawn Coin(2)
+spawn Coin(3)
+owner = spawn Purse
+
+puts coin_total
+double_coins
+puts coin_total
+
+seen = 0
+each Coin do |c|
+  seen += 1
+end
+puts seen
+
+World.tick
+puts owner[Purse].gold
+puts Bank.total
+double_coins
+World.tick
+puts owner[Purse].gold
+puts Bank.total

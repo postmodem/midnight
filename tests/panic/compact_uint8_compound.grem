@@ -1,0 +1,10 @@
+# A compound assignment on a UInt8 component field whose result is too
+# large.
+# Expected: 260 does not fit in UInt8
+component Health
+  hp: UInt8 = 100
+end
+
+e = spawn Health(250)
+gain = 10
+e[Health].hp += gain

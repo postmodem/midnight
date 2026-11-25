@@ -1,0 +1,5 @@
+error: expected `Int`, found `Float`
+ --> tests/fail/type_annotation.grem:4:14
+  |
+4 | count: Int = 2.5
+  |              ^^^

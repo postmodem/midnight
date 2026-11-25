@@ -1,0 +1,26 @@
+# The conditional operator, including nesting and its low precedence.
+def sign(n: Int) -> String
+  n < 0 ? "negative" : n == 0 ? "zero" : "positive"
+end
+
+hp = 30
+puts hp > 50 ? "healthy" : "hurt"
+label = hp > 50 ? "healthy" : "hurt"
+puts label
+puts sign(-5), sign(0), sign(5)
+n = hp > 20 ? hp * 2 : hp + 1
+puts n
+m = hp > 20 && hp < 25 ? 1 : 2
+puts m
+k = (hp > 20 ? 10 : 20) + 1
+puts k
+ok = hp == 30
+puts ok ? 1 : 0
+puts ok ? (hp < 10 ? "a" : "b") : "c"
+s = "x" + (ok ? "yes" : "no")
+puts s
+xs = ok ? [1, 2] : [3]
+puts xs
+puts hp > 100 ? 1.5 : 2.5
+d = ok ? hp > 40 ? "p" : "q" : "r"
+puts d

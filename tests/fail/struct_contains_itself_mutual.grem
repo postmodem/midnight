@@ -1,0 +1,10 @@
+# expect: the struct `Parent` contains itself through `Parent.child` and `Child.parent`; one diagnostic for the cycle
+# at: line 5, the field `child` (the cycle closes at the field `parent` on line 9)
+
+struct Parent
+  child: Child
+end
+
+struct Child
+  parent: Parent
+end

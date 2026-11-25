@@ -1,0 +1,6 @@
+# expect: `Entity` is a built-in name and can't be redefined
+# at: line 4, the name `Entity`
+
+struct Entity
+  id: Int
+end

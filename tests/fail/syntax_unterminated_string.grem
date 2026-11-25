@@ -1,0 +1,5 @@
+# expect: unterminated string literal; the diagnostic points at the opening quote
+# at: line 4, the `"` before `gremlin`
+
+name = "gremlin
+puts name

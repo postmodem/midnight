@@ -1,0 +1,28 @@
+# Functions may be used before they are defined: from top-level code, from
+# other functions and from a system, with declared and inferred return
+# types.
+
+puts triple(4)
+puts shout("hi")
+
+system announce
+  puts banner
+end
+
+def shout(s: String) -> String
+  emphasize(s.upcase)
+end
+
+World.tick
+
+def triple(n: Int) -> Int
+  n * 3
+end
+
+def emphasize(s: String) -> String
+  s + "!"
+end
+
+def banner
+  "== #{triple(1)} =="
+end

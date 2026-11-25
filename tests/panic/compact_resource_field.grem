@@ -1,0 +1,8 @@
+# Storing a computed Int that does not fit in a UInt8 resource field.
+# Expected: 256 does not fit in UInt8
+resource Stats
+  level: UInt8 = 0
+end
+
+n = 256
+Stats.level = n

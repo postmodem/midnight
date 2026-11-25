@@ -1,0 +1,18 @@
+# `then` lets a branch share the line with its condition: `if`, `elsif`,
+# `unless`, with and without `else`.
+
+hp = 10
+if hp > 50 then puts "healthy" else puts "hurt" end
+if hp > 5 then puts "alive" end
+if hp > 50 then puts "never" end
+
+if hp > 50 then puts "a"
+elsif hp > 5 then puts "b"
+else puts "c"
+end
+
+unless hp > 50 then puts "not healthy" end
+unless hp > 5 then puts "x" else puts "y" end
+
+label = if hp > 50 then "healthy" else "hurt" end
+puts label

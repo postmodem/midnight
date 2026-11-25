@@ -1,0 +1,41 @@
+# Strings are values: a copy is unaffected by later changes to the original,
+# and the original by changes to the copy.
+struct Label
+  text: String
+end
+
+def shout(s: String) -> String
+  t = s
+  t += "!"
+  t
+end
+
+a = "abc"
+b = a
+b += "def"
+puts a
+puts b
+a += "!"
+puts a
+puts b
+
+l1 = Label("one")
+l2 = l1
+l2.text += " more"
+puts l1.text
+puts l2.text
+
+words = ["x", "y"]
+w = words[0]
+w += "z"
+puts words
+puts w
+words[1] += "!"
+puts words
+
+c = shout(a)
+puts a
+puts c
+d = a * 2
+puts d
+puts a

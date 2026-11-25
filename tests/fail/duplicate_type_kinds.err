@@ -1,0 +1,10 @@
+error: `Health` is already defined
+ --> tests/fail/duplicate_type_kinds.grem:8:5
+  |
+8 | tag Health
+  |     ^^^^^^
+note: first defined here
+ --> tests/fail/duplicate_type_kinds.grem:4:11
+  |
+4 | component Health
+  |           ------

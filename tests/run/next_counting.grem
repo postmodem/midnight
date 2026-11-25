@@ -1,0 +1,29 @@
+# `next` in `times` (with and without a parameter), `upto` and `downto`.
+
+5.times do |i|
+  next if i == 1 || i == 3
+  puts i
+end
+
+sum = 0
+1.upto(10) do |u|
+  next unless u % 5 == 0
+  sum += u
+end
+puts sum
+
+text = ""
+5.downto(1) do |d|
+  if d == 3
+    next
+  end
+  text += d.to_s
+end
+puts text
+
+passes = 0
+3.times do
+  passes += 1
+  next
+end
+puts passes

@@ -1,0 +1,5 @@
+error: unknown method `upcase` for `Int`
+ --> tests/fail/unknown_method_wrong_type.grem:5:8
+  |
+5 | puts n.upcase
+  |        ^^^^^^

@@ -1,0 +1,10 @@
+# expect: type mismatch: the field `y` of `Vec2` is a `Float`, found a `String`
+# at: line 9, the argument `"two"`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+v = Vec2(1, "two")
+puts v

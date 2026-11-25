@@ -1,0 +1,25 @@
+# push appends; pop removes and returns the last element.
+xs: [Int] = []
+xs.push(1)
+xs.push(2)
+xs.push(3)
+puts xs
+puts xs.pop
+puts xs
+top = xs.pop
+puts top
+puts xs.length
+xs.push(xs.pop + 10)
+puts xs
+xs.pop
+puts xs.empty?
+words = ["a"]
+words.push("b")
+puts words.pop + words.pop
+puts words.length
+fs: [Float] = []
+fs.push(1)
+fs.push(2.5)
+puts fs
+puts fs.pop
+puts fs

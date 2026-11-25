@@ -1,0 +1,26 @@
+# `each_with_index`: the element first, then its index from 0; an empty
+# list; nested use.
+
+names = ["ann", "bob", "cy"]
+names.each_with_index do |name, i|
+  puts "#{i}: #{name}"
+end
+
+weights = [0.5, 1.5, 2.0]
+dot = 0.0
+weights.each_with_index do |w, k|
+  dot += w * k
+end
+puts dot
+
+empty: [String] = []
+empty.each_with_index do |s, n|
+  puts "never #{n} #{s}"
+end
+
+table = [[1, 2], [3]]
+table.each_with_index do |row, r|
+  row.each_with_index do |cell, c|
+    puts "#{r},#{c} = #{cell}"
+  end
+end

@@ -1,0 +1,9 @@
+# Storing a computed Int below -32768 in an Int16 field.
+# Expected: -32769 does not fit in Int16
+struct Sample
+  level: Int16
+end
+
+s = Sample(0)
+v = -32768
+s.level = v - 1

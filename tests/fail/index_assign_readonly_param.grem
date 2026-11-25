@@ -1,0 +1,9 @@
+# expect: can't assign to an element of `xs`: a function parameter is read-only
+# at: line 5, the statement `xs[0] = 0`
+
+def zero_first(xs: [Int]) -> Int
+  xs[0] = 0
+  xs.length
+end
+
+puts zero_first([1, 2])

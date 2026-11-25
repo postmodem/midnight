@@ -1,0 +1,5 @@
+error: can't find `tests/fail/no_such_helper_file.grem`
+ --> tests/fail/require_not_found.grem:4:1
+  |
+4 | require "no_such_helper_file"
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required here as "no_such_helper_file"

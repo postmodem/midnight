@@ -1,0 +1,5 @@
+error: `case` can't compare `Vec2` values
+  --> tests/fail/case_value_struct.grem:10:6
+   |
+10 | case v
+   |      ^ the value of a `case` is an `Int`, a `String`, a `Bool` or an enum

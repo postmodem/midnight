@@ -1,0 +1,5 @@
+# expect: unknown method `upcase` on `Int` (it exists on `String` only)
+# at: line 5, the name `upcase`
+
+n = 5
+puts n.upcase

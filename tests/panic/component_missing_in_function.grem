@@ -1,0 +1,16 @@
+# Writing e[C] inside a function, for an entity passed in that lacks C.
+# Expected: Entity(0v1) has no Health
+component Health
+  hp: Int
+end
+
+component Position
+  x: Float
+end
+
+def hurt(target: Entity, amount: Int)
+  target[Health].hp -= amount
+end
+
+e = spawn Position(0.5)
+hurt(e, 3)

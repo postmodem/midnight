@@ -1,0 +1,12 @@
+# expect: can't assign to `hit`: the parameter of `on` is read-only
+# at: line 10, the statement `hit = Hit(0)`
+
+event Hit
+  damage: Int
+end
+
+system soak
+  on Hit do |hit|
+    hit = Hit(0)
+  end
+end

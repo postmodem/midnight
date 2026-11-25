@@ -1,0 +1,1 @@
+tests/panic/compact_uint8_negative.grem:9: runtime error: -1 does not fit in UInt8

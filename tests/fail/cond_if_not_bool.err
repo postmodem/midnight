@@ -1,0 +1,5 @@
+error: condition must be `Bool`, found `Int`
+ --> tests/fail/cond_if_not_bool.grem:5:4
+  |
+5 | if n
+  |    ^ there is no truthiness: compare it, like `x != 0`

@@ -1,0 +1,20 @@
+# A list literal takes its element type from where it is used: a literal of
+# only Ints used where a list of Floats is expected holds Floats.
+struct Path
+  points: [Float] = [0, 1]
+end
+
+def total(xs: [Float]) -> Float
+  sum = 0.0
+  xs.each do |x|
+    sum += x
+  end
+  sum
+end
+
+nums: [Float] = [1, 2, 3]
+puts nums
+puts nums[0] / 2
+puts Path()
+puts Path([4, 5])
+puts total([1, 2])

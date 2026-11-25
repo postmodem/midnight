@@ -1,0 +1,5 @@
+error: unknown variable or function `seen`
+ --> tests/fail/scope_after_while.grem:9:6
+  |
+9 | puts seen
+  |      ^^^^

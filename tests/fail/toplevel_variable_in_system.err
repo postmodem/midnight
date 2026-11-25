@@ -1,0 +1,5 @@
+error: unknown variable or function `speed`
+ --> tests/fail/toplevel_variable_in_system.grem:7:8
+  |
+7 |   puts speed
+  |        ^^^^^ top-level variables can't be seen from functions and systems; use a resource

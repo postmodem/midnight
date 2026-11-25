@@ -1,0 +1,40 @@
+# `next` in a query `each`: the rest of the block is skipped for that entity
+# and the walk goes on, in a function and in a system. The results are sums
+# and counts, so they do not depend on the visit order.
+
+component Health
+  hp: Int
+end
+
+resource Stats
+  healed: Int = 0
+  visited: Int = 0
+end
+
+def heal_wounded
+  each Health do |h|
+    Stats.visited += 1
+    next if h.hp >= 50
+    h.hp += 100
+    Stats.healed += 1
+  end
+end
+
+system total
+  sum = 0
+  each Health do |health|
+    next unless health.hp > 100
+    sum += health.hp
+  end
+  puts sum
+end
+
+spawn Health(10)
+spawn Health(80)
+spawn Health(30)
+spawn Health(50)
+
+heal_wounded
+puts Stats.visited
+puts Stats.healed
+World.tick

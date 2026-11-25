@@ -1,0 +1,14 @@
+# expect: unknown method `explode` on `Rect`, with no suggestion
+# at: line 14, the name `explode`
+
+struct Rect
+  width: Float
+  height: Float
+
+  def scaled(k: Float) -> Rect
+    Rect(width * k, height * k)
+  end
+end
+
+r = Rect(2, 3)
+puts r.explode(2)

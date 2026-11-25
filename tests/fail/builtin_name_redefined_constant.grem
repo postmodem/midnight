@@ -1,0 +1,4 @@
+# expect: `World` is a built-in name and can't be redefined (here, as a constant)
+# at: line 4, the name `World`
+
+World = 1

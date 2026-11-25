@@ -1,0 +1,5 @@
+error: expected `[Int]`, found `[String]`
+ --> tests/fail/type_operands_list_concat.grem:6:11
+  |
+6 | puts xs + names
+  |           ^^^^^

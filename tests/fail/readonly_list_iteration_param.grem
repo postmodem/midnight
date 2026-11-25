@@ -1,0 +1,7 @@
+# expect: can't assign to `x`: the parameter of a list iteration is read-only (to update elements, loop over indexes)
+# at: line 6, the statement `x += 1`
+
+xs = [1, 2, 3]
+xs.each do |x|
+  x += 1
+end

@@ -1,0 +1,49 @@
+# Handles are values: they can be copied, stored in components and lists,
+# compared, and can outlive their entity. A new entity never revives an old
+# handle.
+component Name
+  text: String
+end
+
+component Target
+  who: Entity = Entity.none
+end
+
+one = spawn Name("one")
+copy = one
+puts copy == one
+puts copy[Name].text
+
+chaser = spawn Target(one)
+puts chaser[Target].who == one
+puts chaser[Target].who.alive?
+puts chaser[Target].who[Name].text
+
+one.despawn
+puts copy.alive?
+puts chaser[Target].who.alive?
+
+two = spawn Name("two")
+puts two.alive?
+puts one.alive?
+puts copy.alive?
+puts one == two
+puts one != two
+puts one.has?(Name)
+puts two[Name].text
+
+loner = spawn Target
+puts loner[Target].who == Entity.none
+puts loner[Target].who.alive?
+loner[Target].who = two
+puts loner[Target].who[Name].text
+
+handles = [two, chaser, one]
+living = 0
+handles.each do |h|
+  living += 1 if h.alive?
+end
+puts living
+puts handles.include?(chaser)
+puts handles[2] == one
+puts handles[0] == one

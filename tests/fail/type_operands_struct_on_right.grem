@@ -1,0 +1,14 @@
+# expect: type mismatch: `*` can't be applied to an `Int` and a `Vec2` (an operator method applies only when the struct is the left operand)
+# at: line 14, the expression `2 * v`
+
+struct Vec2
+  x: Float
+  y: Float
+
+  def *(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+end
+
+v = Vec2(1, 2)
+puts 2 * v

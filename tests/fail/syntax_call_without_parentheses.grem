@@ -1,0 +1,9 @@
+# expect: syntax error: unexpected `4` after `double` (a call with arguments needs parentheses)
+# at: line 8, the `4`
+
+def double(n: Int) -> Int
+  n * 2
+end
+
+x = double 4
+puts x

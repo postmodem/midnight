@@ -1,0 +1,27 @@
+# Keyword arguments are evaluated left to right in the order they are
+# written, not in the order of the fields.
+struct Triple
+  x: Int
+  y: Int
+  z: Int
+end
+
+def a -> Int
+  print "a"
+  1
+end
+
+def b -> Int
+  print "b"
+  2
+end
+
+def c -> Int
+  print "c"
+  3
+end
+
+t = Triple(z: a, y: b, x: c)
+puts " #{t}"
+u = Triple(y: c, x: b, z: a)
+puts " #{u}"

@@ -1,0 +1,9 @@
+# expect: unknown variable `seen`: it was created inside the `while` body (line 6) and does not exist after the loop
+# at: line 9, the name `seen`
+
+n = 3
+while n > 0
+  seen = n
+  n -= 1
+end
+puts seen

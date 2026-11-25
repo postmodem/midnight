@@ -1,0 +1,11 @@
+Path(points: [Vec2(x: 9.0, y: 2.0)])
+[1, 20, 8]
+Position(x: 3.0, y: 4.0)
+Position(x: 10.0, y: 20.0)
+[3, 2]
+Position(x: 11.0, y: 20.0)
+Position(x: 7.0, y: 8.0)
+Route(path: Path(points: [Vec2(x: 1.0, y: 6.0)]), stops: [4, 2, 5])
+15
+[15, 2]
+Vec2(x: 1.5, y: 0.0)

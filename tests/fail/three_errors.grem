@@ -1,0 +1,24 @@
+# expect: three independent errors, ALL reported in one run, in source order:
+#   1. line 9: unknown variable (or function) `totl`, suggesting `total`
+#   2. line 13: type mismatch: `+` can't be applied to an `Int` and a `String`
+#   3. line 17: the condition of `if` must be a `Bool`, found an `Int`
+# at: line 9 (the name `totl`), line 13 (the expression `1 + "two"`) and line 17 (the condition `n`)
+
+def one
+  total = 1
+  puts totl
+end
+
+def two
+  puts 1 + "two"
+end
+
+def three(n: Int)
+  if n
+    puts "yes"
+  end
+end
+
+one
+two
+three(1)

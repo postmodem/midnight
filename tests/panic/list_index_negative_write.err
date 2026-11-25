@@ -1,0 +1,1 @@
+tests/panic/list_index_negative_write.grem:5: runtime error: index -4 out of range for a list of length 3

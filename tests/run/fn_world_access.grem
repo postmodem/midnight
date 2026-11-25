@@ -1,0 +1,65 @@
+# Functions may do anything a system can: spawn, query, despawn, emit,
+# receive events, and read and write resources. Results are sums and counts,
+# so they do not depend on the visit order.
+
+component Health
+  hp: Int
+end
+
+tag Monster
+
+resource Score
+  points: Int = 0
+end
+
+event Slain
+  reward: Int
+end
+
+def populate(n: Int)
+  n.times do |i|
+    spawn Health((i + 1) * 10), Monster
+  end
+end
+
+def damage_all(amount: Int)
+  each Health, with: Monster do |h|
+    h.hp -= amount
+    emit Slain(5) if h.hp <= 0
+  end
+end
+
+def reap -> Int
+  removed = 0
+  each Entity, Health do |e, h|
+    if h.hp <= 0
+      e.despawn
+      removed += 1
+    end
+  end
+  removed
+end
+
+def collect
+  on Slain do |s|
+    Score.points += s.reward
+  end
+end
+
+def total_hp -> Int
+  sum = 0
+  each Health do |h|
+    sum += h.hp
+  end
+  sum
+end
+
+populate(4)
+puts World.count(Health)
+damage_all(20)
+puts total_hp
+puts reap
+puts World.count(Health, with: Monster)
+collect
+puts Score.points
+puts total_hp

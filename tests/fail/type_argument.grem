@@ -1,0 +1,8 @@
+# expect: type mismatch: the argument `n` of `double` is an `Int`, found a `String`
+# at: line 8, the argument `"four"`
+
+def double(n: Int) -> Int
+  n * 2
+end
+
+puts double("four")

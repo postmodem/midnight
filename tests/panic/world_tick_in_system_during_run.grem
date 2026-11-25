@@ -1,0 +1,7 @@
+# World.tick called from a system while World.run is running a tick.
+# Expected: World.tick called while a tick is in progress
+system nested
+  World.tick
+end
+
+World.run

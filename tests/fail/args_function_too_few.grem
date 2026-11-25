@@ -1,0 +1,8 @@
+# expect: wrong number of arguments: `add` takes 2, found 1
+# at: line 8, the call `add(1)`
+
+def add(a: Int, b: Int) -> Int
+  a + b
+end
+
+puts add(1)

@@ -1,0 +1,9 @@
+# Replacing e[C] as a whole through a handle whose entity was despawned.
+# Expected: Entity(0v1) is not alive
+component Health
+  hp: Int
+end
+
+e = spawn Health(10)
+e.despawn
+e[Health] = Health(5)

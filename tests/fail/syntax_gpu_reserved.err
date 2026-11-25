@@ -1,0 +1,5 @@
+error: unexpected `gpu`
+ --> tests/fail/syntax_gpu_reserved.grem:4:1
+  |
+4 | gpu = 1
+  | ^^^ `gpu` is reserved for GPU systems

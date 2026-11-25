@@ -1,0 +1,12 @@
+# expect: can't assign to `hit.damage`: the parameter of `on` is a read-only copy
+# at: line 10, the statement `hit.damage = 0`
+
+event Hit
+  damage: Int
+end
+
+system soak
+  on Hit do |hit|
+    hit.damage = 0
+  end
+end

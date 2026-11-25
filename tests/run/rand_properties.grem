@@ -1,0 +1,38 @@
+# rand gives a Float in [0, 1) and rand(n) an Int in [0, n). The values are
+# implementation-defined, so only their ranges are checked, plus that the
+# generator does not return the same number every time.
+floats_ok = true
+200.times do
+  r = rand
+  floats_ok = false if r < 0.0 || r >= 1.0
+end
+puts floats_ok
+puts rand() < 1.0
+
+ints_ok = true
+500.times do
+  k = rand(6)
+  ints_ok = false if k < 0 || k >= 6
+end
+puts ints_ok
+
+# rand(1) can only be 0
+ones = 0
+50.times do
+  ones += rand(1)
+end
+puts ones
+
+limit = 3
+big_ok = true
+100.times do
+  big_ok = false if rand(limit * 1000) >= 3000
+end
+puts big_ok
+
+first_draw = rand(1000000)
+varied = false
+100.times do
+  varied = true if rand(1000000) != first_draw
+end
+puts varied

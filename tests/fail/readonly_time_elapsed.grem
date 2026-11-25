@@ -1,0 +1,4 @@
+# expect: can't assign to `Time.elapsed`: it is read-only
+# at: line 4, the statement `Time.elapsed = 1.5`
+
+Time.elapsed = 1.5

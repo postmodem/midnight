@@ -1,0 +1,5 @@
+error: `Vec2` is a struct, not a component
+ --> tests/fail/count_non_component.grem:9:18
+  |
+9 | puts World.count(Vec2)
+  |                  ^^^^ a query names components, tags and `Entity`

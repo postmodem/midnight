@@ -1,0 +1,5 @@
+# expect: a variable name can't end in `?` (only function and method names may)
+# at: line 4, the name `ready?`
+
+ready? = true
+puts 1

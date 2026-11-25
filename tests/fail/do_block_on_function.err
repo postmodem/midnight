@@ -1,0 +1,5 @@
+error: unexpected `do`
+ --> tests/fail/do_block_on_function.grem:8:11
+  |
+8 | repeat(3) do
+  |           ^^ expected a newline

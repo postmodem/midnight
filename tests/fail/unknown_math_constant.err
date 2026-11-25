@@ -1,0 +1,5 @@
+error: unknown constant `Math::TAU`
+ --> tests/fail/unknown_math_constant.grem:4:12
+  |
+4 | puts Math::TAU
+  |            ^^^

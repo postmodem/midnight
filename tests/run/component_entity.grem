@@ -1,0 +1,43 @@
+# Components on entities: bare type names in `spawn` for components whose
+# fields all have defaults, methods called on query parameters and on
+# `e[C]`, and whole-component assignment through `e[C]` and a query parameter.
+component Health
+  hp: Int = 10
+  max: Int = 100
+
+  def full? -> Bool
+    hp == self.max
+  end
+end
+
+component Position
+  x: Float = 0
+  y: Float = 0
+
+  def shifted(dx: Float, dy: Float) -> Position
+    Position(x + dx, y + dy)
+  end
+end
+
+def report
+  each Position, Health do |pos, health|
+    puts "#{pos} #{health} full=#{health.full?}"
+  end
+end
+
+e = spawn Position, Health
+report
+e[Health].hp = 100
+e[Position] = e[Position].shifted(1.5, 2)
+report
+each Position do |spot|
+  spot = spot.shifted(1, 1)
+end
+puts e[Position]
+puts e[Health].full?
+puts e[Health].max
+
+other = spawn Position(y: 4), Health(max: 5, hp: 5)
+puts other[Position]
+puts other[Health].full?
+puts World.count(Position, Health)

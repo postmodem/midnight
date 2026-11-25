@@ -1,0 +1,6 @@
+# expect: type mismatch: `+` can't join a `[Int]` and a `[String]`
+# at: line 6, the expression `xs + names`
+
+xs = [1, 2]
+names = ["a", "b"]
+puts xs + names

@@ -1,0 +1,5 @@
+error: `Position` appears twice in this query
+ --> tests/fail/query_repeated_type.grem:9:16
+  |
+9 | each Position, Position do |a, b|
+  |                ^^^^^^^^ each type may be named once across terms, `with:` and `without:`

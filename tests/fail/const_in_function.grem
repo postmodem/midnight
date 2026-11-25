@@ -1,0 +1,8 @@
+# expect: a constant can be defined only by a top-level assignment, not inside a function
+# at: line 5, the name `LIMIT`
+
+def setup
+  LIMIT = 10
+end
+
+setup

@@ -1,0 +1,10 @@
+# expect: unknown variable `total` inside the function `show`: top-level variables are not visible in functions (state belongs in a resource or on an entity)
+# at: line 7, the name `total`
+
+total = 10
+
+def show
+  puts total
+end
+
+show

@@ -1,0 +1,9 @@
+# Reading e[C] after the component was removed from a living entity.
+# Expected: Entity(0v1) has no Health
+component Health
+  hp: Int
+end
+
+e = spawn Health(10)
+e.remove(Health)
+puts e[Health].hp

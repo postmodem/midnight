@@ -1,0 +1,5 @@
+# expect: type mismatch: `plain` is declared `[Int]`, found a `[UInt8]` (lists with different element storage are different types)
+# at: line 5, the value `bytes`
+
+bytes: [UInt8] = [1, 2, 3]
+plain: [Int] = bytes

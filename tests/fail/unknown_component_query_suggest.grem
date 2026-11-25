@@ -1,0 +1,16 @@
+# expect: unknown component `Postion`, suggesting `Position`
+# at: line 14, the name `Postion`
+
+component Position
+  x: Float
+  y: Float
+end
+
+component Velocity
+  dx: Float
+  dy: Float
+end
+
+each Postion, Velocity do |pos, vel|
+  puts vel.dx
+end

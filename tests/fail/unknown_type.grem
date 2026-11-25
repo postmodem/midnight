@@ -1,0 +1,7 @@
+# expect: unknown type `Polygon`, with no suggestion
+# at: line 5, the name `Polygon`
+
+struct Body
+  shape: Polygon
+  mass: Float
+end

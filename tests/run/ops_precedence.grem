@@ -1,0 +1,60 @@
+# The precedence table, level by level.
+xs = [3, 4]
+x = 7
+t = true
+f = false
+
+# calls, members and indexing bind tighter than `!`, `**` and unary minus
+puts !xs.empty?
+puts 2 ** xs.length
+puts xs[0] ** 2
+puts -x.abs
+
+# `**` binds tighter than unary minus
+puts -2 ** 2
+puts -x ** 2
+
+# unary minus binds tighter than `*`, `/`, `%`
+puts -x % 3
+puts -x / 2
+
+# `*`, `/`, `%` bind tighter than `+`, `-`; both levels group left to right
+puts 2 + 3 * 4
+puts 2 * 3 + 4
+puts 10 - 6 / 2
+puts 10 - 7 % 4
+puts 10 - 4 - 3
+puts 100 / 10 / 5
+puts 2 * 7 % 4
+puts 7 % 4 * 2
+
+# `+`, `-` bind tighter than comparisons
+puts 1 + 2 < 4
+puts 5 > 1 + 2 * 3
+
+# comparisons bind tighter than `==`, `!=`
+puts 1 < 2 == t
+puts 1 < 2 != 3 < 2
+
+# `==` binds tighter than `&&`
+puts f == f && f
+
+# `!` binds tighter than `&&`
+puts !t && f
+
+# `&&` binds tighter than `||`
+puts t || f && f
+puts f && f || t
+
+# `||` binds tighter than `? :`
+puts t || f ? f : t
+puts f ? 1 : t ? 2 : 3
+
+# parentheses override
+g = (2 + 3) * 4
+puts g
+h = -(2 ** 2) + (10 - 4) - 3
+puts h
+puts 2 * (3 + 4) % 5
+puts !(t && f)
+puts t && (f || t)

@@ -1,0 +1,43 @@
+# Forms of spawn: alone, with component values, with bare type names (a tag,
+# a component whose fields all have defaults), and spawn(...) inside a larger
+# expression. spawn returns the new entity's handle.
+component Position
+  x: Float = 0
+  y: Float = 0
+end
+
+component Health
+  hp: Int = 100
+end
+
+tag Player
+
+spawn
+puts World.count
+empty = spawn
+puts empty.alive?
+puts empty.has?(Position)
+puts World.count
+
+spawn Position(1, 2)
+puts World.count(Position)
+
+hero = spawn Position(3, 4), Health(hp: 50), Player
+puts hero[Position]
+puts hero[Health].hp
+puts hero.has?(Player)
+
+plain = spawn Position, Health, Player
+puts plain[Position]
+puts plain[Health].hp
+puts plain.has?(Player)
+
+puts spawn(Health(7))[Health].hp
+puts spawn(Player).has?(Player)
+puts spawn().alive?
+handles = [spawn(Health(1)), spawn(Health(2), Player)]
+puts handles.length
+puts handles[1][Health].hp
+puts World.count
+puts World.count(Health)
+puts World.count(Entity, with: Player)

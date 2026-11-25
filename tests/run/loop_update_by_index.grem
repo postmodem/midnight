@@ -1,0 +1,28 @@
+# Updating list elements in place by looping over indexes with `times`,
+# `upto` and `downto`, including a nested list.
+
+xs = [1, 2, 3]
+xs.length.times do |i|
+  xs[i] *= 2
+end
+puts xs
+
+words = ["a", "b"]
+0.upto(words.length - 1) do |k|
+  words[k] += "!"
+end
+puts words
+
+grid = [[1, 2], [3, 4]]
+grid.length.times do |r|
+  grid[r].length.times do |c|
+    grid[r][c] += r * 10
+  end
+end
+puts grid
+
+rev = [1, 2, 3, 4]
+(rev.length - 1).downto(0) do |j|
+  rev[j] = rev[j] * rev[j]
+end
+puts rev

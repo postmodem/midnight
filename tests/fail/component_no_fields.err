@@ -1,0 +1,5 @@
+error: component `Marker` needs at least one field
+ --> tests/fail/component_no_fields.grem:4:11
+  |
+4 | component Marker
+  |           ^^^^^^ a component with no data is a tag: `tag Marker`

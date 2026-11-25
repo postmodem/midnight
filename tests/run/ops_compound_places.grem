@@ -1,0 +1,65 @@
+# Compound assignment through fields, list elements, resource fields and
+# components; the place on the left is located once.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+component Health
+  hp: Int
+end
+
+resource Score
+  points: Int = 10
+  name: String = "s"
+  marks: [Int] = [1]
+end
+
+def next_index -> Int
+  Score.points += 1
+  0
+end
+
+v = Vec2(20, 42)
+v.x += 0.5
+v.y /= 2
+puts v
+
+xs = [1, 2, 3, 1, 2, 3]
+xs[0] += 10
+xs[-1] *= 5
+xs[1] -= 2
+xs[2] /= 2
+xs[3] %= 1
+puts xs
+
+names = ["a", "b"]
+names[0] += "z"
+names[1] *= 3
+puts names
+
+grid = [[1, 2], [3]]
+grid[1] += [4]
+grid[0][1] *= 10
+puts grid
+
+Score.points += 5
+Score.points *= 2
+Score.points -= 1
+Score.points /= 2
+Score.points %= 10
+Score.name += "!"
+Score.marks += [2]
+Score.marks[0] -= 1
+puts Score.points
+puts Score.name
+puts Score.marks
+
+e = spawn Health(10)
+e[Health].hp -= 3
+e[Health].hp *= 2
+puts e[Health].hp
+
+xs[next_index] += 100
+puts xs[0]
+puts Score.points

@@ -1,0 +1,4 @@
+# expect: wrong number of arguments: `min` takes 2, found 1
+# at: line 4, the call `min(1)`
+
+puts min(1)

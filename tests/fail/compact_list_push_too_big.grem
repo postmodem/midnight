@@ -1,0 +1,5 @@
+# expect: the constant 300 does not fit in `UInt8` (an element of a `[UInt8]`)
+# at: line 5, the argument `300`
+
+bytes: [UInt8] = [1, 2]
+bytes.push(300)

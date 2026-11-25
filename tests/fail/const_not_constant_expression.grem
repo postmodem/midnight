@@ -1,0 +1,5 @@
+# expect: the value of the constant `START` is not a constant expression: `rand` can't be called in one
+# at: line 4, the call `rand(10)`
+
+START = rand(10)
+puts "started"

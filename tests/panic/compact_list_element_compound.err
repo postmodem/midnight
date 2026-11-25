@@ -1,0 +1,1 @@
+tests/panic/compact_list_element_compound.grem:5: runtime error: 260 does not fit in UInt8

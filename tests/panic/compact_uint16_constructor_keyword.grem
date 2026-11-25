@@ -1,0 +1,10 @@
+# A computed keyword constructor argument that is too large for a UInt16
+# field.
+# Expected: 65536 does not fit in UInt16
+struct Port
+  number: UInt16 = 0
+end
+
+v = 65535
+port = Port(number: v + 1)
+puts port.number

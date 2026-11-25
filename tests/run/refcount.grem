@@ -1,0 +1,256 @@
+# Strings and lists copied, mutated and dropped through every kind of holder:
+# locals, struct, component and resource fields, events, queued commands,
+# despawned entities, list elements, arguments and return values. The debug
+# build checks that every string and list buffer is freed.
+struct Note
+  title: String
+  tags: [String] = []
+end
+
+component Label
+  text: String
+  history: [String] = []
+end
+
+component Inventory
+  items: [Note] = []
+end
+
+tag Host
+
+resource Journal
+  latest: String = "none"
+  lines: [String] = []
+  grid: [[Int]] = []
+end
+
+event Said
+  who: String
+  words: [String]
+end
+
+# locals: copied, modified, reassigned and cleared
+def locals
+  a = "alpha"
+  b = a
+  b += "-beta"
+  puts a, b
+  a = "gamma" * 2
+  puts a
+  xs = ["one", "two"]
+  ys = xs
+  ys.push("three")
+  ys[0] = "uno"
+  puts xs, ys
+  xs = ys + ["four"]
+  ys = ["z"]
+  puts xs.length, ys.length
+  ys.clear
+  puts ys.empty?
+end
+
+# lists of lists and lists of structs holding strings; pop, delete_at, clear
+def nested
+  grid = [["a", "b"], ["c"]]
+  row = grid[0]
+  row.push("x")
+  grid[1].push("d")
+  puts grid
+  puts row
+  copy = grid
+  copy[0][0] = "A"
+  puts grid[0][0], copy[0][0]
+  tail = copy.pop
+  puts tail
+  gone = copy.delete_at(0)
+  puts gone, copy.length
+  grid.clear
+  puts grid.empty?
+
+  notes = [Note("n1", ["t1"]), Note("n2")]
+  other = notes
+  other[0].title += "!"
+  other[1].tags.push("late")
+  puts notes
+  puts other
+  popped = other.pop
+  puts popped.tags
+  other.delete_at(0)
+  other.clear
+  puts other.length
+end
+
+# arguments and return values
+def shout(s: String) -> String
+  s.upcase + "!"
+end
+
+def build(n: Int) -> [String]
+  out: [String] = []
+  n.times do |i|
+    out.push("item" + i.to_s)
+  end
+  out
+end
+
+# early return, break and next with live locals
+def first_long(words: [String]) -> String
+  scratch = "scratch " + "value"
+  words.each do |w|
+    temp = w + w
+    return temp if temp.length > 6
+  end
+  scratch
+end
+
+def loops
+  kept: [String] = []
+  5.times do |i|
+    label = "loop" + i.to_s
+    parts = [label, label + "x"]
+    next if i == 1
+    break if i == 3
+    kept.push(parts[1])
+  end
+  puts kept
+  n = 0
+  while true
+    junk = ["w" * (n + 1)]
+    n += junk.length
+    next if n < 3
+    break
+  end
+  puts n
+end
+
+# struct fields
+def structs
+  n = Note("draft")
+  m = n
+  m.title = "final"
+  m.tags.push("done")
+  m.tags += ["really"]
+  puts n
+  puts m
+  n = m
+  n.tags.pop
+  puts n.tags, m.tags
+end
+
+# component fields, replaced and removed components, a despawned entity
+def components
+  e = spawn Label("first", ["made"])
+  saved = e[Label]
+  e[Label].text += " edited"
+  e[Label].history.push("edited")
+  puts saved
+  puts e[Label]
+  e[Label] = Label("replaced")
+  puts e[Label]
+  e.add(Label("added", ["a", "b"]))
+  puts e[Label].history
+  e.add(Inventory([Note("sword", ["sharp"])]))
+  bag = e[Inventory].items
+  e.remove(Inventory)
+  puts bag
+  e.despawn
+  puts saved.text
+end
+
+# resource fields
+def resources
+  Journal.latest = "start"
+  Journal.lines.push("line 1")
+  Journal.lines.push("line 2")
+  mine = Journal.lines
+  Journal.lines.delete_at(0)
+  Journal.lines[0] += "!"
+  puts mine, Journal.lines
+  Journal.lines = mine + Journal.lines
+  Journal.latest = Journal.latest + " again"
+  Journal.grid.push([1, 2])
+  Journal.grid.push([3])
+  Journal.grid[0].push(9)
+  puts Journal.latest, Journal.lines, Journal.grid
+end
+
+# queued commands carrying strings and lists, some of them for entities that
+# are despawned in the same batch
+def deferred
+  host = spawn Label("host", ["h"]), Host
+  victim = spawn Label("victim", ["v1", "v2"])
+  made: [Entity] = []
+  each Entity, Label, with: Host do |e, label|
+    kept = spawn(Label(label.text + " child", label.history + ["born"]))
+    kept.add(Inventory([Note("gift", ["new"])]))
+    made.push(kept)
+    dropped = spawn(Label("dropped", ["never", "seen"]), Inventory([Note("lost")]))
+    dropped.add(Label("dropped again", ["x"]))
+    dropped.despawn
+    made.push(dropped)
+    e.add(Inventory([Note("loot", ["shiny"])]))
+    e.add(Label(label.text + " v2", ["replaced"]))
+    victim.despawn
+    victim.add(Inventory([Note("too late")]))
+    victim.add(Label("too late", ["nope"]))
+  end
+  puts host[Label]
+  puts host[Inventory]
+  puts made[0][Label]
+  puts made[0][Inventory].items[0].title
+  puts made[1].alive?
+  puts victim.alive?
+  puts World.count(Label)
+  host.despawn
+  made[0].despawn
+end
+
+# leaving each early with a queued command and a live string
+def leave_early -> String
+  each Entity, Label do |e, label|
+    e.add(Inventory([Note("early", ["exit"])]))
+    name = label.text + "?"
+    return name
+  end
+  "nobody"
+end
+
+# events: read in the first tick, discarded unread afterwards
+system speak
+  each Label do |label|
+    emit Said(label.text, label.history)
+  end
+end
+
+system listen
+  return if Time.tick > 0
+  on Said do |said|
+    words = said.words
+    words.push("heard")
+    puts "#{said.who}: #{said.words.length} #{words}"
+  end
+end
+
+locals
+nested
+puts shout("hey")
+puts shout(shout("a"))
+puts build(3)
+build(2)
+puts first_long(["ab", "abcd", "xyz"])
+puts first_long(["a"])
+loops
+structs
+components
+resources
+deferred
+speaker = spawn Label("speaker", ["hi", "there"])
+puts leave_early
+puts speaker[Inventory].items[0].tags
+3.times do
+  World.tick
+end
+emit Said("nobody", ["unread"])
+top = "top-level " + "string"
+tops = [top, top + "!"]
+puts tops

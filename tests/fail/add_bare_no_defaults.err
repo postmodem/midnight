@@ -1,0 +1,5 @@
+error: component `Health` has fields without defaults
+  --> tests/fail/add_bare_no_defaults.grem:10:7
+   |
+10 | e.add(Health)
+   |       ^^^^^^ construct it: `Health(hp: …)`

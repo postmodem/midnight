@@ -1,0 +1,5 @@
+# expect: type mismatch: a list index must be an `Int`, found a `String`
+# at: line 5, the index `"first"`
+
+xs = [1, 2]
+puts xs["first"]

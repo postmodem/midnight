@@ -1,0 +1,17 @@
+# min and max: Int when both arguments are Int, otherwise Float.
+puts min(1, 2)
+puts max(1, 2)
+puts min(-3, -7)
+puts max(4, 4)
+puts min(1.5, 2.5)
+puts max(1.5, 2.5)
+puts max(3, 2.5)
+puts min(3, 2.5)
+puts min(1, 2.5)
+puts max(0.5, 2)
+a = 10
+b = 3
+puts max(a, b) - min(a, b)
+puts max(a, b) / 4
+puts max(a, 0.5) / 4
+puts min(max(a, 0), 5)

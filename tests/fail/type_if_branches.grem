@@ -1,0 +1,5 @@
+# expect: type mismatch: an `if` used as a value needs branches of one type; found a `String` and an `Int`
+# at: line 5, the `else` branch value `0` (the `if` expression on line 5)
+
+hp = 10
+label = if hp > 5 then "ok" else 0 end

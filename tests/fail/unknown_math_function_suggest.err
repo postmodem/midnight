@@ -1,0 +1,5 @@
+error: unknown function `Math.sqr`
+ --> tests/fail/unknown_math_function_suggest.grem:4:11
+  |
+4 | puts Math.sqr(16.0)
+  |           ^^^ did you mean `sqrt`?

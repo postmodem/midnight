@@ -1,0 +1,6 @@
+# expect: the tag `Frozen` has no value and can't be constructed; write the bare name `Frozen`
+# at: line 6, the call `Frozen()`
+
+tag Frozen
+
+spawn Frozen()

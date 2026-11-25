@@ -1,0 +1,4 @@
+# expect: the compact type `UInt8` can't be the type of a variable (only of fields and list elements); use `Int`
+# at: line 4, the name `UInt8`
+
+hp: UInt8 = 5

@@ -1,0 +1,16 @@
+# expect: `with:` takes components and tags; `Team` is an enum
+# at: line 14, the name `Team`
+
+component Position
+  x: Float
+  y: Float
+end
+
+enum Team
+  Red
+  Blue
+end
+
+each Position, with: Team do |pos|
+  puts pos.x
+end

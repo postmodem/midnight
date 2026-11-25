@@ -1,0 +1,28 @@
+# Functions that call each other, with declared return types.
+
+def even?(n: Int) -> Bool
+  return true if n == 0
+  odd?(n - 1)
+end
+
+def odd?(n: Int) -> Bool
+  return false if n == 0
+  even?(n - 1)
+end
+
+def ping(n: Int) -> String
+  return "" if n == 0
+  "p" + pong(n - 1)
+end
+
+def pong(n: Int) -> String
+  return "" if n == 0
+  "q" + ping(n - 1)
+end
+
+puts even?(10)
+puts even?(7)
+puts odd?(7)
+puts odd?(0)
+puts ping(5)
+puts even?(4) ? "four is even" : "four is odd"

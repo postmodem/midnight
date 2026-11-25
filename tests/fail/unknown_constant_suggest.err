@@ -1,0 +1,5 @@
+error: unknown constant `GRAVTY`
+ --> tests/fail/unknown_constant_suggest.grem:6:6
+  |
+6 | puts GRAVTY
+  |      ^^^^^^ did you mean `GRAVITY`?

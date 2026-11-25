@@ -1,0 +1,16 @@
+# `require`: a required file's systems run where its first `require` appears
+# in the system order; requiring it again changes nothing.
+system alpha
+  puts "a #{Time.tick}"
+end
+
+require "lib/middle_system"
+
+system gamma
+  puts "c #{Time.tick}"
+end
+
+require "lib/middle_system"
+
+World.tick
+World.tick

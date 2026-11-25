@@ -1,0 +1,6 @@
+chain, tick 0: step 1
+follow, tick 0: step 1
+follow, tick 0: step 2
+chain, tick 1: step 2
+follow, tick 1: step 3
+chain, tick 2: step 3

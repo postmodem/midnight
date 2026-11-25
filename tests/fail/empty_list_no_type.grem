@@ -1,0 +1,4 @@
+# expect: the element type of `[]` can't be inferred: nothing here supplies a type (annotate the variable, e.g. `xs: [Int] = []`)
+# at: line 4, the literal `[]`
+
+xs = []

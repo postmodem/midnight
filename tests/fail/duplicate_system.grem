@@ -1,0 +1,10 @@
+# expect: duplicate definition: the system `report` is already defined on line 4
+# at: line 8, the name `report`
+
+system report
+  puts "first"
+end
+
+system report
+  puts "second"
+end

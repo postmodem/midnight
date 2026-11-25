@@ -1,0 +1,26 @@
+# Struct construction: positional, keyword in any order, defaults left out by
+# name and from the end, and `Vec2()` with every default.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+struct Item
+  name: String
+  count: Int = 1
+  price: Float = 2.5
+end
+
+puts Vec2(3, 4)
+puts Vec2(y: 4, x: 3)
+puts Vec2(5)
+puts Vec2(y: 7)
+puts Vec2()
+puts Item("axe")
+puts Item("bow", 3)
+puts Item("cup", 4, 0.5)
+puts Item(price: 8, name: "gem")
+puts Item(count: 2, name: "key")
+v = Vec2(1.5, -2)
+puts v.x
+puts v.y

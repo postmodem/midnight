@@ -1,0 +1,5 @@
+error: condition must be `Bool`, found `Int`
+ --> tests/fail/cond_ternary_not_bool.grem:5:5
+  |
+5 | x = n ? 1 : 2
+  |     ^ there is no truthiness: compare it, like `x != 0`

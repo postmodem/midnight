@@ -1,0 +1,88 @@
+# Every kind of place: a local, a query parameter (whole and by field), a
+# component of an entity (whole and by field), a resource field, and fields
+# and list elements of those.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+struct Path
+  points: [Vec2] = []
+end
+
+component Position
+  x: Float
+  y: Float
+end
+
+component Route
+  path: Path = Path()
+  stops: [Int] = []
+end
+
+resource Score
+  points: Int = 0
+  history: [Int] = []
+  origin: Vec2 = Vec2()
+end
+
+def shift_all
+  each Position do |pos|
+    pos.x += 1
+  end
+end
+
+def reset_all
+  each Position do |pos|
+    pos = Position(7, 8)
+  end
+end
+
+def extend_routes
+  each Route do |route|
+    route.stops.push(5)
+    route.stops[0] = 4
+    route.path.points.push(Vec2(1, 1))
+    route.path.points[0].y = 6
+  end
+end
+
+# a local variable, its fields and elements
+path = Path()
+path.points.push(Vec2(1, 2))
+path.points[0].x = 9
+puts path
+nums = [1, 2, 3]
+nums[1] = 20
+nums[-1] += 5
+puts nums
+
+# a component of an entity
+e = spawn Position(1, 2), Route(stops: [1])
+e[Position].x = 3
+e[Position].y *= 2
+puts e[Position]
+e[Position] = Position(10, 20)
+puts e[Position]
+e[Route].stops.push(2)
+e[Route].stops[0] += 2
+puts e[Route].stops
+
+# a query parameter
+shift_all
+puts e[Position]
+reset_all
+puts e[Position]
+extend_routes
+puts e[Route]
+
+# a resource field
+Score.points = 5
+Score.points += 10
+Score.history.push(Score.points)
+Score.history.push(1)
+Score.history[1] = 2
+Score.origin.x = 1.5
+puts Score.points
+puts Score.history
+puts Score.origin

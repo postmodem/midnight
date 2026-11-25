@@ -1,0 +1,13 @@
+# expect: the `case` over the enum `Team` has no `else` and does not cover every variant; the missing ones are named: `Blue` and `Green`
+# at: line 11, the `case`
+
+enum Team
+  Red
+  Blue
+  Green
+end
+
+team = Team::Red
+case team
+when Team::Red then puts "red"
+end

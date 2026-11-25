@@ -1,0 +1,69 @@
+# Struct operator methods `+ - * / %` and unary minus (`-@`), precedence
+# between them, and compound assignment through them.
+struct Cell
+  x: Int
+  y: Int
+
+  def +(other: Cell) -> Cell
+    Cell(x + other.x, y + other.y)
+  end
+
+  def -(other: Cell) -> Cell
+    Cell(x - other.x, y - other.y)
+  end
+
+  def *(k: Int) -> Cell
+    Cell(x * k, y * k)
+  end
+
+  def /(k: Int) -> Cell
+    Cell(x / k, y / k)
+  end
+
+  def %(k: Int) -> Cell
+    Cell(x % k, y % k)
+  end
+
+  def -@ -> Cell
+    Cell(-x, -y)
+  end
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+
+  def *(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+end
+
+a = Cell(7, 9)
+b = Cell(2, 4)
+puts a + b
+puts a - b
+puts a * 3
+puts a / 2
+puts a % 4
+neg = -a
+puts neg
+puts a + b * 2
+mixed = -a + b
+puts mixed
+wide = (a - b) * 2
+puts wide
+
+c = Cell(1, 1)
+c += Cell(2, 3)
+puts c
+c -= Cell(1, 1)
+c *= 5
+puts c
+c /= 2
+c %= 3
+puts c
+
+cells = [Cell(1, 2)]
+cells[0] += Cell(1, 1)
+puts cells
+puts Vec2(1.5, 2) * 2

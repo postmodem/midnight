@@ -1,0 +1,9 @@
+# expect: unknown field `point` on the resource `Score`, suggesting `points`
+# at: line 9, the name `point`
+
+resource Score
+  points: Int = 0
+  best: Int = 0
+end
+
+Score.point += 10

@@ -1,0 +1,47 @@
+# add and remove inside each are queued until the outermost each finishes:
+# has?, e[C] and World.count see the world as it was. A queued add of a
+# component that is already present replaces it when the queue is applied,
+# with the value the add was given.
+component Health
+  hp: Int
+end
+
+component Shield
+  power: Int
+end
+
+tag Marked
+
+a = spawn Health(1), Shield(5)
+b = spawn Health(2)
+
+marked_inside = 0
+shield_inside = 0
+power_inside = 0
+hp_inside = 0
+count_inside = 0
+each Entity, Health do |e, h|
+  e.add(Marked)
+  e.add(Health(h.hp + 100))
+  e.remove(Shield)
+  h.hp += 10
+  marked_inside += 1 if e.has?(Marked)
+  if e.has?(Shield)
+    shield_inside += 1
+    power_inside += e[Shield].power
+  end
+  hp_inside += e[Health].hp
+  count_inside += World.count(Shield) + World.count(Entity, with: Marked)
+end
+puts marked_inside
+puts shield_inside
+puts power_inside
+puts hp_inside
+puts count_inside
+puts a.has?(Marked)
+puts b.has?(Marked)
+puts a.has?(Shield)
+puts a[Health].hp
+puts b[Health].hp
+puts World.count(Shield)
+puts World.count(Entity, with: Marked)

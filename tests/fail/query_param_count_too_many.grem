@@ -1,0 +1,11 @@
+# expect: the query has 1 term but the block takes 2 parameters
+# at: line 9, the block parameters `|pos, vel|`
+
+component Position
+  x: Float
+  y: Float
+end
+
+each Position do |pos, vel|
+  puts pos.x
+end

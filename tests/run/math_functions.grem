@@ -1,0 +1,30 @@
+# Math functions take and return Float; an Int argument converts. Results
+# that are not exact are compared with a tolerance.
+def close?(a: Float, b: Float) -> Bool
+  (a - b).abs < 0.000001
+end
+
+puts Math.sqrt(16.0)
+puts Math.sqrt(2.25)
+puts Math.sqrt(9)
+puts Math.sin(0.0)
+puts Math.cos(0.0)
+puts Math.tan(0.0)
+puts Math.atan2(0.0, 1.0)
+puts Math.exp(0.0)
+puts Math.log(1.0)
+puts Math.exp(0)
+puts Math.cos(0)
+
+puts close?(Math.sin(Math::PI / 2), 1.0)
+puts close?(Math.cos(Math::PI), -1.0)
+puts close?(Math.tan(Math::PI / 4), 1.0)
+puts close?(Math.atan2(1.0, 1.0) * 4, Math::PI)
+puts close?(Math.atan2(1.0, 0.0), Math::PI / 2)
+puts close?(Math.exp(1.0), Math::E)
+puts close?(Math.log(Math::E), 1.0)
+puts close?(Math.exp(Math.log(10.0)), 10.0)
+puts close?(Math.sqrt(2.0) * Math.sqrt(2.0), 2.0)
+angle = 1.0
+puts close?(Math.sin(angle) * Math.sin(angle) + Math.cos(angle) * Math.cos(angle), 1.0)
+puts close?(Math.sin(angle), 0.5)

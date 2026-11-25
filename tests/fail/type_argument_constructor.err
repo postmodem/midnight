@@ -1,0 +1,5 @@
+error: expected `Float`, found `String`
+ --> tests/fail/type_argument_constructor.grem:9:13
+  |
+9 | v = Vec2(1, "two")
+  |             ^^^^^

@@ -1,0 +1,9 @@
+# expect: wrong number of arguments: `Vec2` has 2 fields, found 3 values
+# at: line 9, the constructor call `Vec2(1, 2, 3)`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+v = Vec2(1, 2, 3)

@@ -1,0 +1,5 @@
+# first on a list that has become empty.
+# Expected: first on an empty list
+xs = [1, 2]
+xs.clear
+puts xs.first

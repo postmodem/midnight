@@ -1,0 +1,5 @@
+error: expected `Bool`, found `Int`
+ --> tests/fail/type_operands_logical.grem:6:6
+  |
+6 | puts n && ok
+  |      ^ `&&` needs a `Bool` on both sides

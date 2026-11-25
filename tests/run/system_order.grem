@@ -1,0 +1,41 @@
+# World.tick runs every system once, in source order, wherever the systems
+# are declared relative to the top-level statements. A system has its own
+# local variables, and return ends it early. Declaring a system does not run
+# it.
+resource Trace
+  text: String = ""
+end
+
+def helper
+  Trace.text += "h"
+end
+
+system first_one
+  Trace.text += "a"
+end
+
+system second_one
+  local = "b"
+  Trace.text += local
+  local += "!"
+  helper
+end
+
+system third_one
+  return if Time.tick == 1
+  Trace.text += "c"
+end
+
+puts Trace.text.empty?
+World.tick
+puts Trace.text
+World.tick
+puts Trace.text
+3.times do
+  World.tick
+end
+puts Trace.text
+
+system last_one
+  Trace.text += "z"
+end

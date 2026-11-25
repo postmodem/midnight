@@ -1,0 +1,9 @@
+# Storing a computed Int below -2147483648 in an Int32 field.
+# Expected: -2147483649 does not fit in Int32
+struct Counter
+  n: Int32 = 0
+end
+
+c = Counter()
+v = -2147483648
+c.n = v - 1

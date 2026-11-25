@@ -1,0 +1,10 @@
+# print writes its arguments with nothing added: no newline, no separator.
+print "a"
+print "b", "c"
+print "\n"
+print 1, " ", 2.5, " ", true, "\n"
+print "no newline"
+print "\n"
+n = 7
+print "n=", n, "\n"
+puts "done"

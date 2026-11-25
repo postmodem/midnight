@@ -1,0 +1,22 @@
+# to_s of Bool, String and enum values: implicit and explicit.
+enum Team
+  Red
+  Blue
+  Green
+end
+
+puts true
+puts false
+puts 1 < 2
+puts "plain"
+puts 'raw'
+puts ""
+puts Team::Red
+t = Team::Green
+puts t
+puts "#{true} #{t} #{false}"
+puts true.to_s + "!"
+puts false.to_s.length
+puts "s".to_s
+puts Team::Blue.to_s + "!"
+puts t.to_s.length

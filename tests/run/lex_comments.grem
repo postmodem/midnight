@@ -1,0 +1,20 @@
+# Comments: whole-line, trailing, and `#` inside strings.
+# A second comment line.
+
+puts "one"   # trailing comment
+puts "a # is not a comment"  # but this is
+puts 'single # too'
+x = 5 # comment after an assignment
+#puts "commented out"
+puts x #no space after the marker
+    # indented comment
+puts "interp #{x} # still text"
+if x > 3 # comment after a condition
+  puts "big" # inside a block
+end
+xs = [
+  1, # first
+  2  # second
+]
+puts xs.length
+# puts "end"

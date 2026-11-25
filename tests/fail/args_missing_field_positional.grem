@@ -1,0 +1,9 @@
+# expect: missing field `y` in the constructor of `Vec2` (it has no default, so it can't be left off the end)
+# at: line 9, the constructor call `Vec2(1)`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+v = Vec2(1)

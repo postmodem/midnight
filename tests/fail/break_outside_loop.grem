@@ -1,0 +1,8 @@
+# expect: `break` outside a loop
+# at: line 5, the keyword `break`
+
+def stop_now
+  break
+end
+
+stop_now

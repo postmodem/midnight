@@ -1,0 +1,10 @@
+# expect: the constant 300 (the value of `BIG`) does not fit in `UInt8` (the field `hp` of `Health`)
+# at: line 10, the argument `BIG`
+
+BIG = 300
+
+component Health
+  hp: UInt8 = 100
+end
+
+spawn Health(BIG)

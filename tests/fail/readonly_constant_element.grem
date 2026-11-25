@@ -1,0 +1,6 @@
+# expect: can't assign to an element of `PRIMES`: a constant can't be changed
+# at: line 6, the statement `PRIMES[0] = 1`
+
+PRIMES = [2, 3, 5]
+
+PRIMES[0] = 1

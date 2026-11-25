@@ -1,0 +1,4 @@
+# expect: the constant 256 does not fit in `UInt8` (an element of a `[UInt8]`)
+# at: line 4, the element `256`
+
+bytes: [UInt8] = [1, 2, 256]

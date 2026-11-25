@@ -1,0 +1,17 @@
+# to_i and to_f read the number at the start of a string, or give zero.
+puts "42".to_i
+puts "42abc".to_i
+puts "abc".to_i
+puts "-12".to_i
+puts "12.9".to_i
+puts "".to_i
+puts "007".to_i
+puts "3.5".to_f
+puts "3.5kg".to_f
+puts "x".to_f
+puts "7".to_f
+puts "-0.25".to_f
+puts "42".to_i + 1
+puts "1.5".to_f * 2
+s = "100 apples"
+puts s.to_i / 3

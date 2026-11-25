@@ -1,0 +1,22 @@
+# to_s of Float: the shortest text that reads back as the same number,
+# always with a fractional part.
+puts 1.0
+puts 0.1
+puts 2.5
+puts 100.0
+puts 1.0 / 3
+puts 1e20
+puts 1e-3
+puts 2.5e6
+puts 1_000.5
+puts -0.5
+puts 0.0
+puts 3.0 * 2
+puts 0.25 + 0.5
+puts 123456.75
+half = 0.5
+puts "half is #{half}"
+puts 2.5.to_s + "!"
+puts half.to_s.length
+whole: Float = 7
+puts whole

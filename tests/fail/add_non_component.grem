@@ -1,0 +1,10 @@
+# expect: `add` takes components and tags; `Vec2` is a struct
+# at: line 10, the argument `Vec2(1, 2)`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+e = spawn
+e.add(Vec2(1, 2))

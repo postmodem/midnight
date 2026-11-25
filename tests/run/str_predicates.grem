@@ -1,0 +1,22 @@
+# empty?, include?, start_with? and end_with?.
+puts "".empty?
+puts "a".empty?
+puts " ".empty?
+s = "gremlin"
+puts s.include?("eml")
+puts s.include?("xyz")
+puts s.include?("G")
+puts s.include?(s)
+puts s.start_with?("gre")
+puts s.start_with?("rem")
+puts s.start_with?(s)
+puts s.start_with?("gremlins")
+puts s.end_with?("lin")
+puts s.end_with?("gre")
+puts s.end_with?(s)
+puts s.end_with?("a gremlin")
+t = "lin"
+puts s.end_with?(t) && !s.start_with?(t)
+blank = "x" * 0
+puts blank.empty?
+puts !s.empty?

@@ -1,0 +1,8 @@
+# expect: `move` is a system; systems are not called by name (they run on `World.tick`)
+# at: line 8, the name `move`
+
+system move
+  puts "moving"
+end
+
+move

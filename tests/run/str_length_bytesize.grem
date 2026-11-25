@@ -1,0 +1,20 @@
+# length counts characters (Unicode code points); bytesize counts bytes.
+puts "hello".length
+puts "hello".bytesize
+puts "héllo".length
+puts "héllo".bytesize
+puts "".length
+puts "".bytesize
+s = "日本語"
+puts s.length
+puts s.bytesize
+puts "a→b".length
+puts "a→b".bytesize
+puts "😀".length
+puts "😀".bytesize
+t = s + "!"
+puts t.length
+puts t.bytesize
+r = "é" * 3
+puts r.length
+puts r.bytesize

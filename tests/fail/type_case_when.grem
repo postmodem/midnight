@@ -1,0 +1,9 @@
+# expect: type mismatch: the `case` value is an `Int`, but this `when` candidate is a `String`
+# at: line 7, the candidate `"two"`
+
+n = 2
+case n
+when 1 then puts "one"
+when "two" then puts "two"
+else puts "many"
+end

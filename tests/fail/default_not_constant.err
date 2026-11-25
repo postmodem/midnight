@@ -1,0 +1,5 @@
+error: not a constant expression
+ --> tests/fail/default_not_constant.grem:5:15
+  |
+5 |   face: Int = rand(6)
+  |               ^^^^^^^ a field default can use literals, constants, enum variants, operators, constructors, list literals and `Math` functions

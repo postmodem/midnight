@@ -1,0 +1,5 @@
+error: can't infer the element type of `[]`
+ --> tests/fail/empty_list_no_type_method.grem:4:6
+  |
+4 | puts [].length
+  |      ^^ give it a type, like `xs: [Int] = []`

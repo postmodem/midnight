@@ -1,0 +1,9 @@
+# expect: `push` needs a list that can be modified; `xs` is a function parameter and is read-only
+# at: line 5, the call `xs.push(1)`
+
+def with_one(xs: [Int]) -> Int
+  xs.push(1)
+  xs.length
+end
+
+puts with_one([2, 3])

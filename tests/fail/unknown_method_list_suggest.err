@@ -1,0 +1,5 @@
+error: unknown method `lengh` for `[Int]`
+ --> tests/fail/unknown_method_list_suggest.grem:5:9
+  |
+5 | puts xs.lengh
+  |         ^^^^^ did you mean `length`?

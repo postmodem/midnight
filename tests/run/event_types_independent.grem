@@ -1,0 +1,50 @@
+# Event types are independent streams: an on sees only events of its own
+# type, in the order they were emitted. Events can be emitted from functions
+# and carry strings, lists, structs and enums; the on parameter is a copy.
+enum Level
+  Info
+  Warn
+end
+
+struct Origin
+  file: String
+  line: Int
+end
+
+event Logged
+  level: Level
+  text: String
+  origin: Origin
+  codes: [Int] = []
+end
+
+event Alarm
+end
+
+def report(level: Level, text: String)
+  emit Logged(level, text, Origin("main", text.length))
+end
+
+system alarms
+  on Alarm do |alarm|
+    puts "alarm in tick #{Time.tick}"
+  end
+end
+
+system logs
+  on Logged do |entry|
+    copy = entry
+    copy.text = copy.text.upcase
+    copy.codes.push(0)
+    puts "#{entry.level}: #{entry.text} #{entry.origin} #{entry.codes} #{copy.text} #{copy.codes}"
+  end
+end
+
+report(Level::Info, "start")
+emit Alarm()
+emit Logged(Level::Warn, "low", Origin("disk", 7), [1, 2])
+World.tick
+emit Alarm()
+emit Alarm()
+World.tick
+World.tick

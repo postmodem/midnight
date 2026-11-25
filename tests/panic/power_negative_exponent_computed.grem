@@ -1,0 +1,5 @@
+# An Int raised to an Int power that works out negative.
+# Expected: negative exponent -3
+base = 10
+steps = 4
+puts base ** (1 - steps)

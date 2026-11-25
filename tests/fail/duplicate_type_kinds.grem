@@ -1,0 +1,8 @@
+# expect: duplicate definition: the type `Health` is already defined (as a component) on line 4
+# at: line 8, the name `Health`
+
+component Health
+  hp: Int
+end
+
+tag Health

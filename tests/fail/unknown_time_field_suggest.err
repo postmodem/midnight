@@ -1,0 +1,5 @@
+error: unknown field `elapse` for `Time`
+ --> tests/fail/unknown_time_field_suggest.grem:4:11
+  |
+4 | puts Time.elapse
+  |           ^^^^^^ did you mean `elapsed`?

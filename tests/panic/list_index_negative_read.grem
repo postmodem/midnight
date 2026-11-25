@@ -1,0 +1,6 @@
+# Reading with a negative index that reaches before the first element.
+# The index is reported as written.
+# Expected: index -4 out of range for a list of length 3
+xs = [10, 20, 30]
+i = -4
+puts xs[i]

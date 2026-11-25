@@ -1,0 +1,9 @@
+# Storing a computed Int above 4294967295 in a UInt32 field.
+# Expected: 4294967296 does not fit in UInt32
+struct Ident
+  value: UInt32 = 0
+end
+
+ident = Ident()
+v = 4294967295
+ident.value = v + 1

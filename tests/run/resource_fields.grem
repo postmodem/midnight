@@ -1,0 +1,61 @@
+# Resource fields: defaults of several types, reads and writes at the top
+# level, compound assignment, and list and struct fields modified in place.
+enum Phase
+  Setup
+  Running
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+resource Game
+  score: Int = 0
+  speed: Float = 1.5
+  paused: Bool = false
+  title: String = "untitled"
+  phase: Phase = Phase::Setup
+  origin: Vec2 = Vec2(1, 2)
+  lines: [String] = []
+  best: [Int] = [3, 2, 1]
+end
+
+puts Game.score
+puts Game.speed
+puts Game.paused
+puts Game.title
+puts Game.phase
+puts Game.origin
+puts Game.lines
+puts Game.best
+
+Game.score = 4
+Game.score += 3
+Game.score *= 2
+Game.speed /= 3
+Game.paused = !Game.paused
+Game.title = "quest"
+Game.title += "!"
+Game.phase = Phase::Running
+Game.origin.y = 7
+Game.origin.x += 0.5
+Game.lines.push("one")
+Game.lines.push("two")
+Game.best[0] = 9
+Game.best += [0]
+
+puts Game.score
+puts Game.speed
+puts Game.paused
+puts Game.title
+puts Game.phase
+puts Game.origin
+puts Game.lines
+puts Game.best
+puts Game.best.pop
+
+snapshot = Game.lines
+snapshot.clear
+puts Game.lines.length
+puts snapshot.length

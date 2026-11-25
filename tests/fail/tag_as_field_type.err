@@ -1,0 +1,5 @@
+error: `Frozen` is a tag, not a value type
+ --> tests/fail/tag_as_field_type.grem:7:11
+  |
+7 |   frozen: Frozen
+  |           ^^^^^^ a tag has no value: it can only be attached to entities and named in queries

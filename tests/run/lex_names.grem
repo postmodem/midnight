@@ -1,0 +1,59 @@
+# Names ending in `?` and `!`, names starting with `_`, `a!=b`, and the
+# conditional operator after a `?` name.
+struct Counter
+  n: Int = 0
+
+  def zero?
+    n == 0
+  end
+
+  def bump! -> Counter
+    Counter(n + 1)
+  end
+
+  def at_least?(k: Int) -> Bool
+    n >= k
+  end
+end
+
+resource Tally
+  hits: Int = 0
+end
+
+def even?(n: Int) -> Bool
+  n % 2 == 0
+end
+
+def reset!
+  Tally.hits = 0
+end
+
+def ready?
+  true
+end
+
+a = 1
+b = 2
+puts a!=b
+puts a != b
+puts a!=a
+c = Counter()
+puts c.zero?
+c = c.bump!
+puts c.zero?
+puts c.at_least?(1)
+puts even?(4)
+puts even?(7)
+Tally.hits = 5
+reset!
+puts Tally.hits
+Tally.hits = 6
+reset!()
+puts Tally.hits
+puts ready? ? "go" : "wait"
+puts even?(3) ? "even" : "odd"
+puts c.zero? ? 1 : 2
+_private = 3
+snake_case_2 = 4
+puts _private + snake_case_2
+puts !ready?

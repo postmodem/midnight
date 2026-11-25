@@ -1,0 +1,27 @@
+# Writing elements by positive and negative index, plain and compound.
+xs = [1, 2, 3]
+xs[0] = 10
+xs[-1] = 30
+puts xs
+xs[1] += 5
+puts xs
+xs[1] *= 2
+puts xs
+i = 2
+xs[i] -= 1
+xs[i - 2] = xs[i] + xs[1]
+puts xs
+xs[-2] /= 3
+xs[-3] %= 10
+puts xs
+names = ["a", "b"]
+names[0] = "z"
+names[1] += "!"
+puts names
+fs = [1.5, 2.5]
+fs[0] = 2
+puts fs
+ys = xs
+ys[0] = 0
+puts xs[0]
+puts ys[0]

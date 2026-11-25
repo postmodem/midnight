@@ -1,0 +1,20 @@
+# Escapes in double-quoted strings: \n \t \r \0 \e \\ \" \#.
+puts "line1\nline2"
+puts "a\tb"
+puts "back\\slash"
+puts "say \"hi\""
+puts "hash \#{not interpolated}"
+puts "\#"
+puts "50# off"
+puts "a\rb".length
+puts "a\rb".bytesize
+puts "a\0b".length
+puts "a\0b".bytesize
+puts "a\0b" == "a\0c"
+puts "a\0b" == "a\0b"
+puts "\e[0m".length
+puts "\e".bytesize
+puts "\n".length
+puts "\t\\\"".length
+puts "\n\t\r\0\e\\\"\#".length
+puts "\\n".length

@@ -1,0 +1,50 @@
+# Enums: one variant per line, `==`, `!=`, `to_s`, interpolation, and use as
+# a field, a parameter, a return value and a list element.
+enum Team
+  Red
+  Blue
+  Green
+end
+
+struct Unit
+  name: String
+  team: Team = Team::Red
+end
+
+def rival(t: Team) -> Team
+  return Team::Blue if t == Team::Red
+  Team::Red
+end
+
+def same_team?(a: Unit, b: Unit) -> Bool
+  a.team == b.team
+end
+
+mine = Team::Blue
+puts mine
+puts Team::Green
+puts mine.to_s + "!"
+puts "team #{mine}"
+puts mine == Team::Blue
+puts mine == Team::Red
+puts mine != Team::Red
+puts rival(mine)
+puts rival(Team::Red)
+mine = rival(mine)
+puts mine
+
+u = Unit("ann")
+w = Unit("bob", Team::Green)
+puts u
+puts w.team
+puts same_team?(u, w)
+w.team = Team::Red
+puts same_team?(u, w)
+
+teams = [Team::Green, Team::Red, Team::Green]
+puts teams
+puts teams.include?(Team::Blue)
+puts teams[0] == teams[2]
+teams.push(Team::Blue)
+puts teams.include?(Team::Blue)
+puts teams.length

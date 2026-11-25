@@ -1,0 +1,5 @@
+error: expected `[Float]`, found `[Float32]`
+  --> tests/fail/list_float32_argument.grem:17:12
+   |
+17 | puts total(m.heights)
+   |            ^^^^^^^^^ list types do not convert; a list literal takes its type from where it is used

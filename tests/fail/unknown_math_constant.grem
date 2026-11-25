@@ -1,0 +1,4 @@
+# expect: unknown constant `Math::TAU`, with no suggestion (`Math` has `PI` and `E`)
+# at: line 4, the name `TAU`
+
+puts Math::TAU

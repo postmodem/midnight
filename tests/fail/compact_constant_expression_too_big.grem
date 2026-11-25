@@ -1,0 +1,6 @@
+# expect: the constant 300 (the value of `200 + 100`) does not fit in `UInt8`
+# at: line 5, the default `200 + 100`
+
+component Health
+  hp: UInt8 = 200 + 100
+end

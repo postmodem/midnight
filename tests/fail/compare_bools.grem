@@ -1,0 +1,6 @@
+# expect: type mismatch: `<` works on numbers and strings, not on `Bool`
+# at: line 6, the expression `a < b`
+
+a = true
+b = false
+puts a < b

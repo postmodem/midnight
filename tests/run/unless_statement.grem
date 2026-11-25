@@ -1,0 +1,38 @@
+# `unless` as a statement, with and without `else`.
+
+ready = false
+unless ready
+  puts "waiting"
+end
+
+ready = true
+unless ready
+  puts "still waiting"
+end
+
+count = 3
+unless count > 5
+  puts "few"
+else
+  puts "many"
+end
+
+unless count < 5
+  puts "at least five"
+else
+  puts "under five"
+end
+
+unless count == 3 || ready
+  puts "neither"
+else
+  puts "one of them"
+end
+
+total = 0
+1.upto(4) do |i|
+  unless i % 2 == 0
+    total += i
+  end
+end
+puts total

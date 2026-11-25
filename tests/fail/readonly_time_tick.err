@@ -1,0 +1,5 @@
+error: can't assign to `Time.tick`
+ --> tests/fail/readonly_time_tick.grem:4:1
+  |
+4 | Time.tick = 5
+  | ^^^^^^^^^ `Time.tick` is read-only; only `Time.dt` can be assigned

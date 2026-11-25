@@ -1,0 +1,5 @@
+error: this query has 1 term, but its block takes no parameters
+ --> tests/fail/query_param_count_none.grem:9:6
+  |
+9 | each Position do
+  |      ^^^^^^^^ the block takes one parameter per term, in order

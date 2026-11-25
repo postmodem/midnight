@@ -1,0 +1,34 @@
+# Functions that call themselves, with declared return types: Int, Float,
+# String, and one that walks a list.
+
+def factorial(n: Int) -> Int
+  return 1 if n <= 1
+  n * factorial(n - 1)
+end
+
+def fib(n: Int) -> Int
+  if n < 2 then n else fib(n - 1) + fib(n - 2) end
+end
+
+def power(base: Float, k: Int) -> Float
+  return 1 if k == 0
+  base * power(base, k - 1)
+end
+
+def repeat(s: String, n: Int) -> String
+  return "" if n == 0
+  s + repeat(s, n - 1)
+end
+
+def sum_to(xs: [Int], i: Int) -> Int
+  return 0 if i < 0
+  xs[i] + sum_to(xs, i - 1)
+end
+
+puts factorial(5)
+puts factorial(10)
+puts fib(10)
+puts power(2, 10)
+puts power(0.5, 2)
+puts repeat("ab", 3)
+puts sum_to([1, 2, 3, 4], 3)

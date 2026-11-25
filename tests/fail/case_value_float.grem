@@ -1,0 +1,8 @@
+# expect: a `case` value must be an `Int`, a `String`, a `Bool` or an enum; found a `Float`
+# at: line 5, the value `x`
+
+x = 1.5
+case x
+when 1.5 then puts "one and a half"
+else puts "other"
+end

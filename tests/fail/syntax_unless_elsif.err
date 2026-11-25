@@ -1,0 +1,5 @@
+error: unexpected `elsif`
+ --> tests/fail/syntax_unless_elsif.grem:8:1
+  |
+8 | elsif count > 0
+  | ^^^^^ `unless` can't have an `elsif`

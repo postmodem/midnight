@@ -1,0 +1,5 @@
+error: not a constant expression
+ --> tests/fail/const_not_constant_expression.grem:4:9
+  |
+4 | START = rand(10)
+  |         ^^^^^^^^ a constant's value can use literals, constants, enum variants, operators, constructors, list literals and `Math` functions

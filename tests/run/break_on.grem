@@ -1,0 +1,22 @@
+# `break` in `on`: events are delivered oldest first and the loop stops at
+# the `break`. A second `on` keeps its own position and still sees them all.
+
+event Step
+  n: Int
+end
+
+1.upto(5) do |i|
+  emit Step(i)
+end
+
+on Step do |s|
+  break if s.n == 3
+  puts s.n
+end
+puts "after"
+
+total = 0
+on Step do |t|
+  total += t.n
+end
+puts total

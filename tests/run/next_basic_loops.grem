@@ -1,0 +1,26 @@
+# `next` in `while`, `until` and `loop`: skips the rest of the body and goes
+# on with the next iteration, testing the condition again.
+
+n = 0
+while n < 6
+  n += 1
+  next if n % 2 == 0
+  puts "while #{n}"
+end
+
+m = 6
+until m == 0
+  m -= 1
+  next unless m % 3 == 0
+  puts "until #{m}"
+end
+
+k = 0
+kept = 0
+loop do
+  k += 1
+  break if k > 5
+  next if k == 2 || k == 4
+  kept += k
+end
+puts kept

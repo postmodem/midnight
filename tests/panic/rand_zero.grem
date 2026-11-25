@@ -1,0 +1,4 @@
+# rand(n) with n equal to zero.
+# Expected: rand(0): the argument must be positive
+n = 0
+puts rand(n)

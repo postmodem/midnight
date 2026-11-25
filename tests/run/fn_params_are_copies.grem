@@ -1,0 +1,41 @@
+# Arguments are passed by value: a function that builds a changed local copy
+# of a list, a struct or a string leaves the caller's value untouched.
+
+struct Bag
+  items: [String]
+  weight: Int
+end
+
+def with_extra(xs: [Int]) -> [Int]
+  ys = xs
+  ys.push(99)
+  ys[0] = -1
+  ys
+end
+
+def heavier(b: Bag) -> Bag
+  copy = b
+  copy.weight += 10
+  copy.items.push("stone")
+  copy
+end
+
+def exclaim(s: String) -> String
+  t = s
+  t += "!"
+  t
+end
+
+nums = [1, 2, 3]
+more = with_extra(nums)
+puts nums
+puts more
+
+bag = Bag(["rope"], 5)
+big = heavier(bag)
+puts bag
+puts big
+
+word = "hey"
+loud = exclaim(word)
+puts word, loud

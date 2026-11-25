@@ -1,0 +1,7 @@
+# expect: unknown variable `i`: a block parameter does not exist after its block
+# at: line 7, the name `i`
+
+3.times do |i|
+  puts i
+end
+puts i

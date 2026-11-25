@@ -1,0 +1,10 @@
+# An Int stored into a list of Floats converts: `push`, element assignment
+# and the argument of `include?`.
+xs = [1.5, 2.5]
+xs.push(4)
+xs[0] = 9
+puts xs
+ys: [Float] = []
+ys.push(1)
+puts ys
+puts xs.include?(4)

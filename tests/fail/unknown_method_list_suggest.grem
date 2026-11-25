@@ -1,0 +1,5 @@
+# expect: unknown method `lengh` on a list (`[Int]`), suggesting `length`
+# at: line 5, the name `lengh`
+
+xs = [1, 2, 3]
+puts xs.lengh

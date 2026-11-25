@@ -1,0 +1,47 @@
+# Tags: attached at spawn and with `add`, removed with `remove`, checked with
+# `has?`, and used in `with:` and `without:` filters, alone and in lists.
+component Name
+  text: String
+end
+
+tag Player
+tag Frozen
+tag Boss
+
+a = spawn Name("ann"), Player
+b = spawn Name("bob")
+c = spawn Name("cy"), Player, Frozen
+d = spawn Boss
+
+puts a.has?(Player)
+puts b.has?(Player)
+puts c.has?(Frozen)
+puts d.has?(Boss)
+puts World.count(Name, with: Player)
+puts World.count(Name, without: Player)
+puts World.count(Name, with: [Player, Frozen])
+puts World.count(Name, with: Player, without: Frozen)
+puts World.count(Name, without: [Player, Frozen])
+puts World.count(Entity, with: Boss)
+puts World.count
+
+b.add(Player, Frozen)
+puts b.has?(Player)
+puts World.count(Name, with: [Player, Frozen])
+a.remove(Player)
+puts a.has?(Player)
+a.remove(Player)
+c.remove(Frozen, Player)
+puts c.has?(Frozen)
+puts c.has?(Player)
+d.add(Boss)
+puts World.count(Entity, with: Boss)
+puts World.count(Name, with: Player)
+
+each Name, with: Player, without: Boss do |n|
+  puts n.text
+end
+each Entity, Name, with: Frozen do |who, n2|
+  puts "#{n2.text} #{who == b}"
+end
+puts World.count

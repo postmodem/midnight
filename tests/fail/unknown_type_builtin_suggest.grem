@@ -1,0 +1,6 @@
+# expect: unknown type `Flot`, suggesting the built-in `Float`
+# at: line 5, the name `Flot`
+
+struct Particle
+  mass: Flot
+end

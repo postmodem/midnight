@@ -1,0 +1,5 @@
+error: can't assign to `ORIGIN.x`
+  --> tests/fail/readonly_constant_field.grem:11:1
+   |
+11 | ORIGIN.x = 5
+   | ^^^^^^^^ `ORIGIN` is a constant

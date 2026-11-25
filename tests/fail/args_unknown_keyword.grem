@@ -1,0 +1,9 @@
+# expect: unknown keyword argument `depth`: `Rect` has no field of that name
+# at: line 9, the keyword `depth`
+
+struct Rect
+  width: Float
+  height: Float = 1
+end
+
+r = Rect(width: 2, depth: 3)

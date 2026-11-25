@@ -1,0 +1,5 @@
+error: unterminated string
+ --> tests/fail/syntax_unterminated_string.grem:4:8
+  |
+4 | name = "gremlin
+  |        ^ the closing `"` is missing

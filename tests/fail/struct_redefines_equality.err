@@ -1,0 +1,5 @@
+error: unexpected `==`
+ --> tests/fail/struct_redefines_equality.grem:8:7
+  |
+8 |   def ==(other: Vec2) -> Bool
+  |       ^^ expected a function name

@@ -1,0 +1,8 @@
+# expect: `answer` declares the return type `Int`, but its body can end without a value
+# at: line 4, the name `answer` in its definition
+
+def answer -> Int
+  puts "thinking"
+end
+
+answer

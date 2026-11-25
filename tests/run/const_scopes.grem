@@ -1,0 +1,53 @@
+# Constants are visible everywhere: in functions (also one defined above the
+# constant), systems, methods and field defaults.
+def banner -> String
+  GREETING + "!"
+end
+
+LIMIT = 3
+STEP = 0.5
+START_X = 1.5
+GREETING = "hi"
+
+struct Counter
+  value: Int = LIMIT
+  step: Float = STEP
+
+  def over? -> Bool
+    value > LIMIT
+  end
+end
+
+component Mover
+  x: Float = START_X
+end
+
+resource Tally
+  ticks: Int = 0
+  bound: Int = LIMIT * 2
+end
+
+def scaled(n: Int) -> Int
+  n * LIMIT
+end
+
+system count_up
+  Tally.ticks += 1 if Tally.ticks < LIMIT
+  each Mover do |m|
+    m.x += STEP
+  end
+end
+
+c = Counter()
+puts c
+puts c.over?
+puts Counter(4).over?
+puts scaled(5)
+puts Tally.bound
+puts banner
+e = spawn Mover
+5.times do
+  World.tick
+end
+puts Tally.ticks
+puts e[Mover].x

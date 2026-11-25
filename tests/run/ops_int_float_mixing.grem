@@ -1,0 +1,31 @@
+# Arithmetic between an Int and a Float gives a Float; comparisons accept
+# the mix; Int with Int stays Int.
+puts 1 + 0.5
+puts 0.5 + 1
+puts 3 - 0.5
+puts 2 * 1.5
+puts 1.5 * 2
+puts 7 / 2
+puts 7 / 2.0
+puts 7.0 / 2
+puts 7 % 2.5
+puts 7.5 % 2
+puts 2 ** 2.0
+puts 2.0 ** 2
+i = 3
+f = 0.5
+puts i + f
+puts i * f
+puts i / f
+puts f - i
+puts i + i * f
+puts i / 2 + f
+puts i / 2 * f
+puts 1 < 1.5
+puts 1.5 < 1
+puts 2 <= 2.0
+puts 2.0 >= 3
+puts i > f
+puts i == 3.0
+puts i.to_f / 2
+puts i + 1 == 4.0

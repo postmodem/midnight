@@ -1,0 +1,5 @@
+error: expected `[Float]`, found `[Float32]`
+ --> tests/fail/list_float32_to_float.grem:9:18
+  |
+9 | plain: [Float] = m.heights
+  |                  ^^^^^^^^^ list types do not convert; a list literal takes its type from where it is used

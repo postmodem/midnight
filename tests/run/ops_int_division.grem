@@ -1,0 +1,17 @@
+# Integer division rounds toward negative infinity.
+puts 7 / 2
+puts -7 / 2
+puts 7 / -2
+puts -7 / -2
+puts 6 / 3
+puts -6 / 3
+puts 1 / 2
+puts -1 / 2
+puts 0 / 5
+a = -9
+b = 4
+puts a / b
+puts b / a
+puts a / -b
+c = (a + 1) / b
+puts c

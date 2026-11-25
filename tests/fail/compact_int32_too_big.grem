@@ -1,0 +1,8 @@
+# expect: the constant 2147483648 does not fit in `Int32` (the field `offset` of `Record`)
+# at: line 8, the argument `2147483648`
+
+struct Record
+  offset: Int32
+end
+
+r = Record(2147483648)

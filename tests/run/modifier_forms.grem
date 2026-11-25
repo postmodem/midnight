@@ -1,0 +1,43 @@
+# Modifier `if` and `unless` on simple statements: `puts`, `print`,
+# assignment, compound assignment, a function call, a method call, an
+# element assignment.
+
+def shout(s: String)
+  puts s.upcase
+end
+
+hp = 15
+puts "low" if hp < 20
+puts "high" if hp > 20
+puts "not high" unless hp > 20
+puts "not low" unless hp < 20
+
+print "a" if hp == 15
+print "b" unless hp == 15
+print "c\n" unless hp == 0
+
+level = 1
+level = 2 if hp > 10
+puts level
+level = 3 unless hp > 10
+puts level
+
+hp += 5 if level == 2
+puts hp
+hp -= 100 unless level == 2
+puts hp
+hp *= 2 if hp == 20
+puts hp
+
+shout("hey") if hp == 40
+shout("nope") unless hp == 40
+
+items = [1, 2]
+items.push(3) if items.length == 2
+items.push(4) unless items.length == 3
+puts items
+
+items[0] = 9 if items.include?(3)
+puts items
+
+puts "both" if hp == 40 && level == 2

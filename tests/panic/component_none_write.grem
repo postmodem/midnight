@@ -1,0 +1,12 @@
+# Writing a field of e[C] on Entity.none, held in a struct field.
+# Expected: Entity(none) is not alive
+component Health
+  hp: Int
+end
+
+struct Target
+  who: Entity = Entity.none
+end
+
+t = Target()
+t.who[Health].hp = 3

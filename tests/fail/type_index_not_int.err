@@ -1,0 +1,5 @@
+error: expected `Int`, found `String`
+ --> tests/fail/type_index_not_int.grem:5:9
+  |
+5 | puts xs["first"]
+  |         ^^^^^^^

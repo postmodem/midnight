@@ -1,0 +1,9 @@
+# expect: the component `Health` can't be listed bare in `spawn`: its field `hp` has no default
+# at: line 9, the name `Health`
+
+component Health
+  hp: Int
+  max: Int = 100
+end
+
+spawn Health

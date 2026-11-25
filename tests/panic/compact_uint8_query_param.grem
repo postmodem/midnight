@@ -1,0 +1,15 @@
+# A compound assignment through a query parameter that drops a UInt8 field
+# below zero.
+# Expected: -100 does not fit in UInt8
+component Health
+  hp: UInt8 = 100
+end
+
+resource Damage
+  amount: Int = 200
+end
+
+spawn Health
+each Health do |health|
+  health.hp -= Damage.amount
+end

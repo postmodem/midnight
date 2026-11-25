@@ -1,0 +1,5 @@
+# expect: the `do` block is never closed (an `end` is missing); the diagnostic points at the `do` that opened it, not at the end of the file
+# at: line 4, the keyword `do`
+
+3.times do |i|
+  puts i

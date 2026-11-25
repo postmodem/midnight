@@ -1,0 +1,12 @@
+# upcase and downcase convert ASCII letters and leave everything else.
+puts "Hello, World".upcase
+puts "Hello, World".downcase
+puts "héllo".upcase
+puts "ÉCOLE".downcase
+puts "abc123".upcase
+puts "".upcase
+s = "MiXeD"
+puts s.downcase + s.upcase
+puts s
+puts s.upcase.downcase
+puts s.upcase.length

@@ -1,0 +1,5 @@
+error: can't assign to `i`
+ --> tests/fail/readonly_upto_param.grem:5:3
+  |
+5 |   i *= 2
+  |   ^ `i` is the counter of a counting loop, which is read-only

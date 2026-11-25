@@ -1,0 +1,31 @@
+# `case` over an enum as a statement: several variants per `when`, with
+# `else` covering the rest.
+
+enum Team
+  Red
+  Blue
+  Green
+  Gold
+end
+
+def describe(team: Team)
+  case team
+  when Team::Red then puts "red"
+  when Team::Blue, Team::Green
+    puts "cool colors"
+  else
+    puts "other"
+  end
+end
+
+describe(Team::Red)
+describe(Team::Blue)
+describe(Team::Green)
+describe(Team::Gold)
+
+mine = Team::Green
+case mine
+when Team::Gold then puts "shiny"
+else
+  puts "plain #{mine}"
+end

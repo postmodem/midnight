@@ -1,0 +1,10 @@
+error: `move` is already defined
+ --> tests/fail/duplicate_system_function.grem:8:8
+  |
+8 | system move
+  |        ^^^^
+note: first defined here
+ --> tests/fail/duplicate_system_function.grem:4:5
+  |
+4 | def move
+  |     ----

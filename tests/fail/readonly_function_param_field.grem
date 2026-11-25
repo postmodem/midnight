@@ -1,0 +1,14 @@
+# expect: can't assign to `v.y`: `v` is a function parameter, and a part of a read-only value is read-only
+# at: line 10, the statement `v.y = 0`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+def flatten(v: Vec2) -> Vec2
+  v.y = 0
+  v
+end
+
+puts flatten(Vec2(1, 2))

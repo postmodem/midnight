@@ -1,0 +1,10 @@
+error: `doubled` is already defined
+  --> tests/fail/duplicate_method.grem:11:7
+   |
+11 |   def doubled -> Float
+   |       ^^^^^^^
+note: first defined here
+ --> tests/fail/duplicate_method.grem:7:7
+  |
+7 |   def doubled -> Float
+  |       -------

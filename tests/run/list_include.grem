@@ -1,0 +1,35 @@
+# include? tells whether any element == the value, by content.
+enum Team
+  Red
+  Blue
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+xs = [1, 2, 3]
+puts xs.include?(2)
+puts xs.include?(5)
+names = ["ann", "bob"]
+puts names.include?("bob")
+puts names.include?("Bob")
+puts names.include?("b" + "ob")
+pts = [Vec2(1, 2), Vec2(3, 4)]
+puts pts.include?(Vec2(3, 4))
+puts pts.include?(Vec2(4, 3))
+teams = [Team::Red]
+puts teams.include?(Team::Red)
+puts teams.include?(Team::Blue)
+fs = [0.5, 1.5]
+puts fs.include?(1.5)
+puts fs.include?(1)
+grid = [[1, 2], [3]]
+puts grid.include?([3])
+puts grid.include?([2, 1])
+blank: [Int] = []
+puts blank.include?(0)
+flags = [true, true]
+puts flags.include?(false)
+puts flags.include?(true)

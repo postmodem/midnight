@@ -1,0 +1,6 @@
+# Int `**` wraps on overflow like the rest of Int arithmetic.
+puts 2 ** 62
+puts 2 ** 63
+puts 2 ** 64
+puts 3 ** 39
+puts 3 ** 40

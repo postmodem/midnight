@@ -1,0 +1,10 @@
+# expect: duplicate definition: the system `move` has the name of the function defined on line 4 (systems and functions share a namespace)
+# at: line 8, the name `move`
+
+def move
+  puts "function"
+end
+
+system move
+  puts "system"
+end

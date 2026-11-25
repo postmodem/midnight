@@ -1,0 +1,8 @@
+# Reading e[C] on Entity.none.
+# Expected: Entity(none) is not alive
+component Health
+  hp: Int
+end
+
+e = Entity.none
+puts e[Health].hp

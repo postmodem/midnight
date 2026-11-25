@@ -1,0 +1,13 @@
+# expect: type mismatch: `e[Health]` is a `Health`, found an `Armor`
+# at: line 13, the value `Armor(2)`
+
+component Health
+  hp: Int
+end
+
+component Armor
+  points: Int
+end
+
+e = spawn Health(5), Armor(1)
+e[Health] = Armor(2)

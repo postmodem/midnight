@@ -1,0 +1,6 @@
+# delete_at accepts a negative index, counting from the end like xs[i].
+xs = [10, 20, 30]
+puts xs.delete_at(-1)
+puts xs
+puts xs.delete_at(-2)
+puts xs

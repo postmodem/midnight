@@ -1,0 +1,53 @@
+# Declared return types: `->` with Int, Float, String, Bool, list, struct
+# and enum types.
+
+struct Vec
+  x: Float
+  y: Float
+end
+
+enum Side
+  Left
+  Right
+end
+
+def double(n: Int) -> Int
+  n * 2
+end
+
+def ratio(a: Int, b: Int) -> Float
+  a.to_f / b
+end
+
+def tag_for(n: Int) -> String
+  "item-#{n}"
+end
+
+def odd?(n: Int) -> Bool
+  n % 2 == 1
+end
+
+def range(lo: Int, hi: Int) -> [Int]
+  out: [Int] = []
+  lo.upto(hi) do |i|
+    out.push(i)
+  end
+  out
+end
+
+def flip(v: Vec) -> Vec
+  Vec(v.y, v.x)
+end
+
+def other(s: Side) -> Side
+  if s == Side::Left then Side::Right else Side::Left end
+end
+
+puts double(21)
+puts ratio(1, 4)
+puts tag_for(7)
+puts odd?(7)
+puts range(2, 5)
+puts flip(Vec(1, 2.5))
+puts other(Side::Left)
+puts other(other(Side::Left))

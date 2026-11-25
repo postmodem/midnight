@@ -1,0 +1,40 @@
+# `upto` and `downto`: inclusive bounds, a single step, empty ranges, and
+# bounds given by variables, expressions and negative numbers.
+
+1.upto(3) do |i|
+  puts i
+end
+
+3.downto(1) do |d|
+  puts d
+end
+
+5.upto(5) do |once|
+  puts "once #{once}"
+end
+
+3.upto(1) do |u|
+  puts "never #{u}"
+end
+
+1.downto(3) do |v|
+  puts "never #{v}"
+end
+
+lo = 2
+hi = 4
+sum = 0
+lo.upto(hi) do |k|
+  sum += k
+end
+puts sum
+
+text = ""
+(hi + 1).downto(lo - 1) do |m|
+  text += m.to_s
+end
+puts text
+
+0.downto(-2) do |neg|
+  puts neg
+end

@@ -1,0 +1,4 @@
+# expect: type mismatch: `+` can't be applied to an `Int` and a `String`
+# at: line 4, the expression `1 + "two"`
+
+puts 1 + "two"

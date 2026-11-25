@@ -1,0 +1,10 @@
+error: `a` is already defined
+ --> tests/fail/duplicate_parameter.grem:4:17
+  |
+4 | def add(a: Int, a: Int) -> Int
+  |                 ^
+note: first defined here
+ --> tests/fail/duplicate_parameter.grem:4:9
+  |
+4 | def add(a: Int, a: Int) -> Int
+  |         -

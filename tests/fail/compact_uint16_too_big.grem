@@ -1,0 +1,6 @@
+# expect: the constant 65536 does not fit in `UInt16` (0 to 65535)
+# at: line 5, the default `65536`
+
+struct Packet
+  port: UInt16 = 65536
+end

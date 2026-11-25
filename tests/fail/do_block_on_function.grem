@@ -1,0 +1,10 @@
+# expect: a function call can't take a `do` block (blocks are not values; `do … end` is accepted only by the loop forms)
+# at: line 8, the keyword `do`
+
+def repeat(n: Int)
+  puts n
+end
+
+repeat(3) do
+  puts "again"
+end

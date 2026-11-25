@@ -1,0 +1,10 @@
+# expect: the block parameter `n` reuses the name of the function parameter `n`
+# at: line 5, the `n` between the bars
+
+def show(n: Int)
+  n.times do |n|
+    puts n
+  end
+end
+
+show(2)

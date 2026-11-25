@@ -1,0 +1,60 @@
+# `case` as an expression: on the right of an assignment, as the last
+# expression of a function, nested with `if` expressions, and with Int and
+# Float branches (the Int converts).
+
+def size_name(n: Int) -> String
+  case n
+  when 0 then "none"
+  when 1, 2 then "few"
+  else
+    "many"
+  end
+end
+
+def scale(kind: String) -> Float
+  case kind
+  when "half" then 0.5
+  when "double" then 2
+  else
+    1
+  end
+end
+
+n = 2
+label = case n
+when 1 then "one"
+when 2, 3 then "few"
+else
+  "many"
+end
+puts label
+
+puts size_name(0), size_name(2), size_name(9)
+puts scale("half"), scale("double"), scale("other")
+
+factor = case n
+when 2 then 1.5
+else
+  1
+end
+puts factor
+
+grade = case n
+when 2
+  if n > 1 then "two or more" else "under two" end
+else
+  "other"
+end
+puts grade
+
+ready = n == 2
+state = if ready
+  case n
+  when 2 then "ready at two"
+  else
+    "ready"
+  end
+else
+  "waiting"
+end
+puts state

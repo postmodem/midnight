@@ -1,0 +1,19 @@
+# `require`: every kind of declaration in a required file is visible in the
+# root file, before and after the `require` line; its constant is used after
+# the line.
+box = Box(2, 3)
+puts box.area
+puts shade_name(Shade::Dark)
+e = spawn Size(4), Marked
+puts e[Size].n
+puts e.has?(Marked)
+Stock.items += 2
+emit Restock(5)
+
+require "lib/shapes"
+
+puts UNIT
+puts Box(UNIT, UNIT).area
+World.tick
+puts Stock.items
+puts World.count(Size, with: Marked)

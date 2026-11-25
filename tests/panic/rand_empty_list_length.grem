@@ -1,0 +1,5 @@
+# rand(n) where n is the length of an empty list.
+# Expected: rand(0): the argument must be positive
+xs: [Int] = []
+pick = rand(xs.length)
+puts pick

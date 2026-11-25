@@ -1,0 +1,5 @@
+error: field `points` of resource `Score` needs a default
+ --> tests/fail/resource_field_no_default.grem:5:3
+  |
+5 |   points: Int
+  |   ^^^^^^ a resource exists from the start, so every field has a default

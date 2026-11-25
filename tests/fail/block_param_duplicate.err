@@ -1,0 +1,10 @@
+error: block parameter `item` reuses a name that is already in scope
+ --> tests/fail/block_param_duplicate.grem:5:33
+  |
+5 | names.each_with_index do |item, item|
+  |                                 ^^^^
+note: `item` is defined here
+ --> tests/fail/block_param_duplicate.grem:5:27
+  |
+5 | names.each_with_index do |item, item|
+  |                           ----

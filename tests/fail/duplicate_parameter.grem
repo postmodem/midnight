@@ -1,0 +1,6 @@
+# expect: duplicate definition: the parameter `a` of `add` is named twice
+# at: line 4, the second `a`
+
+def add(a: Int, a: Int) -> Int
+  a
+end

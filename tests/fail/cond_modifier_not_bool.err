@@ -1,0 +1,5 @@
+error: condition must be `Bool`, found `Int`
+ --> tests/fail/cond_modifier_not_bool.grem:5:15
+  |
+5 | puts "yes" if n
+  |               ^ there is no truthiness: compare it, like `x != 0`

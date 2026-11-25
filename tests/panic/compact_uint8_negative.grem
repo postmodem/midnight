@@ -1,0 +1,9 @@
+# Storing a negative computed Int in a UInt8 struct field.
+# Expected: -1 does not fit in UInt8
+struct Pixel
+  r: UInt8 = 0
+end
+
+px = Pixel()
+v = -1
+px.r = v

@@ -1,0 +1,32 @@
+# An Int returned from a function that returns Float converts: as the last
+# expression, with `return`, from an `if` with Int and Float branches, and
+# from an Int local.
+
+def as_float(n: Int) -> Float
+  n
+end
+
+def early(n: Int) -> Float
+  return n if n > 0
+  return 0
+end
+
+def half_or_whole(n: Int) -> Float
+  if n % 2 == 0 then n / 2 else n / 2.0 end
+end
+
+def count_up(limit: Int) -> Float
+  total = 0
+  limit.times do |i|
+    total += i
+  end
+  total
+end
+
+puts as_float(3)
+puts early(4)
+puts early(-4)
+puts half_or_whole(8)
+puts half_or_whole(5)
+puts count_up(4)
+puts as_float(2) / 4

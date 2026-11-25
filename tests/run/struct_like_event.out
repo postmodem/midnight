@@ -1,0 +1,11 @@
+Scored(points: 10, by: "nobody", bonus: 0.0)
+Scored(points: 3, by: "ann", bonus: 0.0)
+Scored(points: 1, by: "bob", bonus: 2.5)
+true
+true
+11
+10
+nobody
+2
+15
+["nobody", "cy"]

@@ -1,0 +1,12 @@
+# expect: unknown field (or method) `depth` on `Position`, with no suggestion
+# at: line 11, the name `depth`
+
+component Position
+  x: Float
+  y: Float
+end
+
+spawn Position(1, 2)
+each Position do |pos|
+  puts pos.depth
+end

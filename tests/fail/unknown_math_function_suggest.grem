@@ -1,0 +1,4 @@
+# expect: unknown function `Math.sqr`, suggesting `sqrt`
+# at: line 4, the name `sqr`
+
+puts Math.sqr(16.0)

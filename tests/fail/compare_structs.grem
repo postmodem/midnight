@@ -1,0 +1,11 @@
+# expect: type mismatch: `<` works on numbers and strings, not on `Vec2`
+# at: line 11, the expression `a < b`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+a = Vec2(1, 2)
+b = Vec2(3, 4)
+puts a < b

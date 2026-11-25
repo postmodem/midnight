@@ -1,0 +1,42 @@
+# `case` over an Int as a statement: one and several candidates per `when`,
+# `then` and multi-line bodies, `else`, no match without `else`, computed
+# subject and candidate.
+
+def name_of(n: Int)
+  case n
+  when 0 then puts "zero"
+  when 1
+    puts "one"
+  when 2, 3, 5, 7
+    puts "small prime"
+  when 4, 6 then puts "small composite"
+  else
+    puts "many"
+  end
+end
+
+0.upto(8) do |i|
+  name_of(i)
+end
+
+hits = 0
+1.upto(6) do |k|
+  case k % 3
+  when 0
+    hits += 10
+  when 1 then hits += 1
+  end
+end
+puts hits
+
+x = -4
+case x
+when -4 then puts "minus four"
+else
+  puts "something else"
+end
+
+case x + 5
+when 2 - 1
+  puts "computed candidate"
+end

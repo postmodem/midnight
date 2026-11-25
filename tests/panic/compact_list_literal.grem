@@ -1,0 +1,5 @@
+# A [UInt8] list literal with a computed element that does not fit.
+# Expected: 300 does not fit in UInt8
+v = 300
+xs: [UInt8] = [1, v]
+puts xs.length

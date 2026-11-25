@@ -1,0 +1,32 @@
+# Every on in the source keeps its own position: each on sees each event
+# exactly once, oldest first. An on inside a function is one on, however
+# often the function is called.
+event Msg
+  text: String
+end
+
+def drain -> Int
+  seen = 0
+  on Msg do |m|
+    seen += 1
+  end
+  seen
+end
+
+system reader
+  on Msg do |m|
+    puts "first on: #{m.text}"
+  end
+  on Msg do |m|
+    puts "second on: #{m.text}"
+  end
+  puts drain
+  puts drain
+end
+
+emit Msg("a")
+emit Msg("b")
+World.tick
+World.tick
+emit Msg("c")
+World.tick

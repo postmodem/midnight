@@ -1,0 +1,3 @@
+# puts writes its own newline even when the string already ends with one.
+puts "a\n"
+puts "b"

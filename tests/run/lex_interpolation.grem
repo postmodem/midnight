@@ -1,0 +1,28 @@
+# String interpolation: values of each basic type, expressions, calls.
+struct Vec2
+  x: Float
+  y: Float
+end
+
+enum Team
+  Red
+  Blue
+end
+
+def double(n: Int) -> Int
+  n * 2
+end
+
+name = "gremlin"
+count = 3
+puts "hello #{name}"
+puts "#{count} + 1 = #{count + 1}"
+puts "#{1.5} #{true} #{Team::Blue}"
+puts "#{Vec2(1, 2)}"
+puts "#{[1, 2, 3]} #{["a"]}"
+puts "len=#{name.length} up=#{name.upcase}"
+puts "double=#{double(count)}"
+puts "#{name}#{name}"
+puts "#{count > 2 ? "big" : "small"}"
+puts "empty:#{""}:"
+puts "x" + "#{count * count}" + "y"

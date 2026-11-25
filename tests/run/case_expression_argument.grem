@@ -1,0 +1,14 @@
+# A multi-line `case` expression used directly as a call argument, inside
+# the parentheses of the call.
+
+def show(s: String)
+  puts "<#{s}>"
+end
+
+n = 3
+show(case n
+when 1 then "one"
+when 3 then "three"
+else
+  "other"
+end)

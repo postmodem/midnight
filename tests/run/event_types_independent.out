@@ -1,0 +1,5 @@
+alarm in tick 0
+Info: start Origin(file: "main", line: 5) [] START [0]
+Warn: low Origin(file: "disk", line: 7) [1, 2] LOW [1, 2, 0]
+alarm in tick 1
+alarm in tick 1

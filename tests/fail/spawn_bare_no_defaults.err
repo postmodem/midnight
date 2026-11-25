@@ -1,0 +1,5 @@
+error: component `Position` has fields without defaults
+ --> tests/fail/spawn_bare_no_defaults.grem:9:7
+  |
+9 | spawn Position
+  |       ^^^^^^^^ construct it: `Position(x: …, y: …)`

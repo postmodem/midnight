@@ -1,0 +1,13 @@
+# expect: unknown component or tag `Playr` in `with:`, suggesting `Player`
+# at: line 11, the name `Playr`
+
+component Position
+  x: Float
+  y: Float
+end
+
+tag Player
+
+each Position, with: Playr do |pos|
+  puts pos.x
+end

@@ -1,0 +1,7 @@
+# expect: unknown variable `square`: it was created inside the `do` block (line 5) and does not exist after it
+# at: line 7, the name `square`
+
+3.times do |i|
+  square = i * i
+end
+puts square

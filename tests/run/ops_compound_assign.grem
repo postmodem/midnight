@@ -1,0 +1,62 @@
+# Compound assignment on each type that has the operator: Int, Float,
+# String, list, and a struct that defines it.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+
+  def +(other: Vec2) -> Vec2
+    Vec2(x + other.x, y + other.y)
+  end
+
+  def -(other: Vec2) -> Vec2
+    Vec2(x - other.x, y - other.y)
+  end
+
+  def *(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+end
+
+n = 10
+n += 5
+puts n
+n -= 3
+puts n
+n *= 4
+puts n
+n /= 5
+puts n
+n %= 4
+puts n
+
+x = 1.5
+x += 1
+puts x
+x -= 0.5
+puts x
+x *= 4
+puts x
+x /= 2
+puts x
+x %= 3
+puts x
+
+s = "a"
+s += "b"
+puts s
+s *= 2
+puts s
+
+xs = [1]
+xs += [2, 3]
+puts xs
+xs *= 2
+puts xs
+
+v = Vec2(1, 2)
+v += Vec2(10, 20)
+puts v
+v -= Vec2(1, 1)
+puts v
+v *= 2
+puts v

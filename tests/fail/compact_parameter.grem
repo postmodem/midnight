@@ -1,0 +1,6 @@
+# expect: the compact type `Int16` can't be the type of a parameter (only of fields and list elements); use `Int`
+# at: line 4, the name `Int16`
+
+def half(n: Int16) -> Int
+  2
+end

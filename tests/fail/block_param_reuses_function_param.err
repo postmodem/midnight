@@ -1,0 +1,10 @@
+error: block parameter `n` reuses a name that is already in scope
+ --> tests/fail/block_param_reuses_function_param.grem:5:15
+  |
+5 |   n.times do |n|
+  |               ^
+note: `n` is defined here
+ --> tests/fail/block_param_reuses_function_param.grem:4:10
+  |
+4 | def show(n: Int)
+  |          -

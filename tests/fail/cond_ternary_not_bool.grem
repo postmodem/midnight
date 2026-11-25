@@ -1,0 +1,5 @@
+# expect: the condition of `? :` must be a `Bool`, found an `Int`
+# at: line 5, the condition `n`
+
+n = 1
+x = n ? 1 : 2

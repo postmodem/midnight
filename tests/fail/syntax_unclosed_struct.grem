@@ -1,0 +1,6 @@
+# expect: the `struct` block is never closed (an `end` is missing); the diagnostic points at the `struct` that opened it, not at the end of the file
+# at: line 4, the keyword `struct`
+
+struct Vec2
+  x: Float
+  y: Float

@@ -1,0 +1,5 @@
+error: `push` does not take a `do` block
+ --> tests/fail/do_block_not_loop.grem:5:4
+  |
+5 | xs.push(4) do |x|
+  |    ^^^^ only `times`, `upto`, `downto`, `each` and `each_with_index` take one

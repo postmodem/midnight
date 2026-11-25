@@ -1,0 +1,6 @@
+# expect: `next` outside a loop
+# at: line 5, the keyword `next`
+
+x = 1
+next if x > 0
+puts x

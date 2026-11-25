@@ -1,0 +1,5 @@
+error: unexpected `=`
+ --> tests/fail/syntax_keyword_as_variable.grem:4:5
+  |
+4 | tag = "boss"
+  |     ^ expected a type name

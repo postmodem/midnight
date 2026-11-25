@@ -1,0 +1,10 @@
+# expect: a query term must be a component or `Entity`; `Score` is a resource
+# at: line 8, the name `Score`
+
+resource Score
+  points: Int = 0
+end
+
+each Score do |score|
+  puts 1
+end

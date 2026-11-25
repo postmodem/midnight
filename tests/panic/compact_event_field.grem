@@ -1,0 +1,9 @@
+# Emitting an event whose UInt8 field is given a computed value that does
+# not fit.
+# Expected: 999 does not fit in UInt8
+event Hit
+  damage: UInt8
+end
+
+power = 999
+emit Hit(power)

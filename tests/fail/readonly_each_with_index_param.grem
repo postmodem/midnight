@@ -1,0 +1,7 @@
+# expect: can't assign to `i`: the index parameter of `each_with_index` is read-only
+# at: line 6, the statement `i += 1`
+
+names = ["a", "b"]
+names.each_with_index do |name, i|
+  i += 1
+end

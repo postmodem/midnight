@@ -1,0 +1,33 @@
+# srand(seed) restarts the generator: the same seed gives the same sequence
+# within one run, for rand(n) and for rand. srand with no argument reseeds
+# from the clock, so nothing printed depends on the values drawn after it.
+def draw(count: Int) -> [Int]
+  values: [Int] = []
+  count.times do
+    values.push(rand(1000000))
+  end
+  values
+end
+
+srand(42)
+first_run = draw(20)
+first_float = rand
+srand(42)
+second_run = draw(20)
+second_float = rand
+puts first_run.length
+puts first_run == second_run
+puts first_float == second_float
+
+seed = 7
+srand(seed * 3)
+a = rand(100)
+srand(21)
+b = rand(100)
+puts a == b
+
+srand
+later = rand(10)
+puts later >= 0 && later < 10
+srand()
+puts rand < 1.0

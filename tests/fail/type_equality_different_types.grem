@@ -1,0 +1,5 @@
+# expect: type mismatch: `==` can't compare an `Int` with a `String`
+# at: line 5, the expression `n == "1"`
+
+n = 1
+puts n == "1"

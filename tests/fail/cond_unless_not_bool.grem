@@ -1,0 +1,7 @@
+# expect: the condition of `unless` must be a `Bool`, found a `String`
+# at: line 5, the condition `name`
+
+name = ""
+unless name
+  puts "anonymous"
+end

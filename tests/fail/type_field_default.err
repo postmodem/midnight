@@ -1,0 +1,5 @@
+error: expected `Int`, found `String`
+ --> tests/fail/type_field_default.grem:5:13
+  |
+5 |   hp: Int = "full"
+  |             ^^^^^^

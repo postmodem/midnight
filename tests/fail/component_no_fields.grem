@@ -1,0 +1,5 @@
+# expect: the component `Marker` has no fields (a component has at least one); hint: declare it with `tag Marker`
+# at: line 4, the name `Marker`
+
+component Marker
+end

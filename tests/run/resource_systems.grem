@@ -1,0 +1,45 @@
+# Resources read and written from functions and systems; their state
+# persists across ticks.
+resource Score
+  points: Int = 0
+  best: Int = 0
+  history: [Int] = []
+end
+
+resource Settings
+  bonus: Int = 2
+  enabled: Bool = true
+end
+
+def award(n: Int)
+  Score.points += n
+  Score.best = Score.points if Score.points > Score.best
+end
+
+def summary -> String
+  "points #{Score.points} best #{Score.best}"
+end
+
+system earn
+  return unless Settings.enabled
+  award(Settings.bonus)
+end
+
+system record
+  Score.history.push(Score.points)
+end
+
+puts summary
+World.tick
+World.tick
+puts summary
+Settings.bonus = 10
+World.tick
+Score.points = 1
+Settings.enabled = false
+World.tick
+puts summary
+puts Score.history
+award(20)
+puts summary
+puts Score.history.length

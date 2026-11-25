@@ -1,0 +1,18 @@
+# clear removes every element and leaves copies of the list alone.
+xs = [1, 2, 3]
+ys = xs
+xs.clear
+puts xs
+puts xs.length
+puts xs.empty?
+puts ys
+xs.push(9)
+puts xs
+xs.clear
+xs.clear
+puts xs.empty?
+words = ["a", "b"]
+words.clear
+puts words
+words.push("c")
+puts words

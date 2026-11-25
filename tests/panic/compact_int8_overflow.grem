@@ -1,0 +1,9 @@
+# Storing a computed Int above 127 in an Int8 field.
+# Expected: 128 does not fit in Int8
+struct Step
+  dx: Int8 = 0
+end
+
+s = Step()
+v = 127
+s.dx = v + 1

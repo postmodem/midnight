@@ -1,0 +1,7 @@
+# expect: `UInt8` is a built-in name (a compact type) and can't be redefined
+# at: line 4, the name `UInt8`
+
+enum UInt8
+  Low
+  High
+end

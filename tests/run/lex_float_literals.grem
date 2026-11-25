@@ -1,0 +1,12 @@
+# Float literal forms: fraction, underscore separators, exponents.
+puts 3.14
+puts 0.5
+puts 1_000.5
+puts 1e-3
+puts 2.5e6
+puts 1e3
+puts 1.5e2
+puts 1e20
+puts -0.25
+puts 100.0
+puts 2.5e-1

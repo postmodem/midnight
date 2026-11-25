@@ -1,0 +1,57 @@
+# World.count: with no arguments the number of living entities; with terms
+# and filters the number of entities the same query would visit.
+component Health
+  hp: Int
+end
+
+component Armor
+  rating: Int
+end
+
+tag Player
+tag Dead
+tag Frozen
+
+def living_players -> Int
+  World.count(Entity, with: Player, without: Dead)
+end
+
+puts World.count
+puts World.count(Health)
+
+spawn Health(1), Player
+spawn Health(2), Player, Dead
+spawn Health(4), Player, Frozen
+spawn Health(8), Dead, Frozen
+spawn Health(16), Armor(1)
+spawn Health(32), Armor(2), Player
+spawn Health(64)
+
+puts World.count
+puts World.count(Health)
+puts World.count(Armor)
+puts World.count(Health, Armor)
+puts World.count(Entity)
+puts World.count(Entity, Health)
+puts World.count(Health, with: Player)
+puts World.count(Health, without: Player)
+puts World.count(Entity, with: Dead)
+puts World.count(Health, with: [Player, Dead])
+puts World.count(Health, without: [Dead, Frozen])
+puts World.count(Health, with: Player, without: [Dead, Frozen])
+puts World.count(Armor, with: Dead)
+puts World.count(Health) * 2 + World.count(Armor)
+puts living_players
+
+extra = spawn
+puts World.count
+puts World.count(Entity)
+puts World.count(Health)
+extra.add(Health(128), Dead)
+puts World.count(Health)
+puts World.count(Entity, with: Dead)
+extra.remove(Dead)
+puts World.count(Entity, with: Dead)
+extra.despawn
+puts World.count
+puts World.count(Health)

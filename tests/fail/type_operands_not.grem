@@ -1,0 +1,5 @@
+# expect: type mismatch: `!` needs a `Bool`, found an `Int`
+# at: line 5, the operand `n`
+
+n = 5
+puts !n

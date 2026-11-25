@@ -1,0 +1,9 @@
+# Storing a computed Int above 255 in a UInt8 struct field.
+# Expected: 300 does not fit in UInt8
+struct Pixel
+  r: UInt8 = 0
+end
+
+px = Pixel()
+v = 200
+px.r = v + 100

@@ -1,0 +1,5 @@
+# expect: the `def` block is never closed (an `end` is missing); the diagnostic points at the `def` that opened it, not at the end of the file
+# at: line 4, the keyword `def`
+
+def double(n: Int) -> Int
+  n * 2

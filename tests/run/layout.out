@@ -1,0 +1,6 @@
+mass 12.625 heat 42.25 height 32479 armor 262 solid 2 birds 1
+mass 12.625 heat 43.0 height 32179 armor 264 solid 1 birds 1
+Body(mass: 2.5, heat: 0.75, height: -400, armor: 255, solid: false, kind: Rock)
+32667
+Body(mass: 0.25, heat: 40.75, height: -88, armor: 8, solid: true, kind: Tree)
+3

@@ -1,0 +1,53 @@
+# Queries nest: the inner query runs in full for every entity of the outer
+# one, which is how pairs of entities are compared.
+component Position
+  x: Int
+end
+
+component Team
+  id: Int
+end
+
+spawn Position(1), Team(1)
+spawn Position(4), Team(1)
+spawn Position(6), Team(2)
+spawn Position(20)
+
+pairs = 0
+closest = 100
+same_team = 0
+each Entity, Position do |a, pa|
+  each Entity, Position do |b, pb|
+    next if a == b
+    pairs += 1
+    gap = (pa.x - pb.x).abs
+    closest = gap if gap < closest
+    same_team += 1 if a.has?(Team) && b.has?(Team) && a[Team].id == b[Team].id
+  end
+end
+puts pairs
+puts closest
+puts same_team
+
+# the inner query writes through its view while the outer one is running
+each Team do |team|
+  each Position do |pos|
+    pos.x += team.id
+  end
+end
+total = 0
+each Position do |pos|
+  total += pos.x
+end
+puts total
+
+# three levels
+triples = 0
+each Team do |t1|
+  each Team do |t2|
+    each Team do |t3|
+      triples += 1 if t1.id + t2.id + t3.id == 4
+    end
+  end
+end
+puts triples

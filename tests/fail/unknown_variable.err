@@ -1,0 +1,5 @@
+error: unknown variable or function `zzyzx`
+ --> tests/fail/unknown_variable.grem:6:6
+  |
+6 | puts zzyzx
+  |      ^^^^^

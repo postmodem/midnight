@@ -1,0 +1,9 @@
+# expect: type mismatch: `label` returns `String`, but `return` is given an `Int`
+# at: line 5, the value `0`
+
+def label(n: Int) -> String
+  return 0 if n < 0
+  "positive"
+end
+
+puts label(1)

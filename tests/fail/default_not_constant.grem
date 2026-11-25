@@ -1,0 +1,6 @@
+# expect: the default of the field `face` is not a constant expression: `rand` can't be called in one
+# at: line 5, the call `rand(6)`
+
+struct Die
+  face: Int = rand(6)
+end

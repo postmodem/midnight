@@ -1,0 +1,7 @@
+# expect: `push` needs a list that can be modified; `row` is the read-only parameter of a list iteration
+# at: line 6, the call `row.push(0)`
+
+rows = [[1], [2]]
+rows.each do |row|
+  row.push(0)
+end

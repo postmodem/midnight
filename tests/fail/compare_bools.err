@@ -1,0 +1,5 @@
+error: `<` can't compare `Bool` values
+ --> tests/fail/compare_bools.grem:6:6
+  |
+6 | puts a < b
+  |      ^^^^^ `<`, `<=`, `>` and `>=` work on numbers and strings

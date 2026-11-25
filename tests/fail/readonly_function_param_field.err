@@ -1,0 +1,5 @@
+error: can't assign to `v.y`
+  --> tests/fail/readonly_function_param_field.grem:10:3
+   |
+10 |   v.y = 0
+   |   ^^^ `v` is a parameter, and parameters are read-only

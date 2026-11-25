@@ -1,0 +1,11 @@
+# expect: `on` takes an event type; `Position` is a component
+# at: line 9, the name `Position`
+
+component Position
+  x: Float
+  y: Float
+end
+
+on Position do |position|
+  puts position.x
+end

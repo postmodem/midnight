@@ -1,0 +1,10 @@
+# expect: can't assign to `LIMIT`: a constant can't be changed
+# at: line 7, the statement `LIMIT += 5`
+
+LIMIT = 10
+
+def raise_limit
+  LIMIT += 5
+end
+
+raise_limit

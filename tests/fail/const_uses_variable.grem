@@ -1,0 +1,5 @@
+# expect: the value of the constant `AREA` is not a constant expression: it uses the variable `size`
+# at: line 5, the name `size`
+
+size = 4
+AREA = size * size

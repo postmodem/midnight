@@ -1,0 +1,10 @@
+# expect: unknown field (or method) `widt` on `Rect`, suggesting `width`
+# at: line 10, the name `widt`
+
+struct Rect
+  width: Float
+  height: Float
+end
+
+r = Rect(2, 3)
+puts r.widt

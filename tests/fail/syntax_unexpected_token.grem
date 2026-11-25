@@ -1,0 +1,6 @@
+# expect: syntax error: unexpected `)` where an expression is expected
+# at: line 5, the `)` after `+`
+
+x = 1
+y = (x + )
+puts y

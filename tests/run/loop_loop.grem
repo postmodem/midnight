@@ -1,0 +1,34 @@
+# `loop do`: runs until `break`; nested loops; leaving a loop with `return`.
+
+def first_power_above(limit: Int) -> Int
+  p = 1
+  loop do
+    return p if p > limit
+    p *= 2
+  end
+  0
+end
+
+count = 0
+loop do
+  count += 1
+  break if count == 4
+end
+puts count
+
+outer = 0
+pairs = 0
+loop do
+  outer += 1
+  inner = 0
+  loop do
+    inner += 1
+    pairs += 1
+    break if inner >= outer
+  end
+  break if outer == 3
+end
+puts pairs
+
+puts first_power_above(100)
+puts first_power_above(0)

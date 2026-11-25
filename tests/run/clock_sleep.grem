@@ -1,0 +1,9 @@
+# clock is real seconds since the program started: never negative and never
+# going backwards. sleep pauses for real seconds (here for none at all).
+start = clock
+puts start >= 0.0
+sleep(0)
+sleep(0.0)
+later = clock
+puts later >= start
+puts clock() >= 0.0

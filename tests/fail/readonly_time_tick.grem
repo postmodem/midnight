@@ -1,0 +1,4 @@
+# expect: can't assign to `Time.tick`: it is read-only
+# at: line 4, the statement `Time.tick = 5`
+
+Time.tick = 5

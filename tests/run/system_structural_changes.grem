@@ -1,0 +1,37 @@
+# Structural changes in systems: queued inside each (the reference's reap
+# system), immediate outside it.
+component Health
+  hp: Int
+end
+
+tag Fresh
+
+system decay
+  each Health do |health|
+    health.hp -= 1
+  end
+end
+
+system reap
+  inside = 0
+  each Entity, Health do |e, health|
+    e.despawn if health.hp <= 0
+    inside = World.count(Health)
+  end
+  puts "tick #{Time.tick}: #{inside} during, #{World.count(Health)} after"
+end
+
+system refill
+  return if World.count(Health) > 1
+  made = spawn Health(2), Fresh
+  puts "refill: #{World.count(Health)} #{made.has?(Fresh)}"
+  made.remove(Fresh)
+  puts made.has?(Fresh)
+end
+
+spawn Health(1)
+spawn Health(2)
+spawn Health(3)
+4.times do
+  World.tick
+end

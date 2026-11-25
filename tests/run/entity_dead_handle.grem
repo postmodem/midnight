@@ -1,0 +1,44 @@
+# Operations on a dead handle and on Entity.none are forgiving: has? is false
+# and add, remove and despawn do nothing, also once another entity exists
+# that may occupy the old slot.
+component Health
+  hp: Int
+end
+
+tag Player
+
+ghost = spawn Health(10), Player
+other = spawn Health(20)
+ghost.despawn
+puts ghost.alive?
+puts ghost.has?(Health)
+puts ghost.has?(Player)
+ghost.add(Health(99), Player)
+puts ghost.alive?
+puts ghost.has?(Health)
+ghost.remove(Health, Player)
+ghost.despawn
+puts World.count
+puts World.count(Health)
+puts other[Health].hp
+
+fresh = spawn Health(30)
+ghost.add(Player)
+ghost.remove(Health)
+ghost.despawn
+puts fresh.alive?
+puts fresh.has?(Player)
+puts fresh[Health].hp
+puts World.count
+
+nobody = Entity.none
+puts nobody.alive?
+puts nobody.has?(Health)
+nobody.add(Health(1), Player)
+nobody.remove(Health)
+nobody.despawn
+puts nobody.alive?
+puts nobody.has?(Player)
+puts nobody == Entity.none
+puts ghost == Entity.none
+puts World.count

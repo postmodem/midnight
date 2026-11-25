@@ -1,0 +1,8 @@
+# Float to_s stays in positional notation for small and large magnitudes
+# short of the exponent form.
+puts 0.0001
+puts 0.000125
+puts 1e15
+puts 123456789012345.0
+puts 4503599627370496.0
+puts -1e15

@@ -1,0 +1,32 @@
+# to_f (Int to Float) and the Float to Int conversions: to_i goes toward
+# zero, floor goes down, ceil goes up, round goes to the nearest.
+puts 3.to_f
+n = -4
+puts n.to_f
+puts 10.to_f / 4
+puts 1 / 2.to_f
+
+puts 7.9.to_i
+puts -7.9.to_i
+puts 0.5.to_i
+x = 9.99
+i = x.to_i
+puts i + 1
+
+puts 7.25.floor
+puts -7.25.floor
+puts 7.25.ceil
+puts -7.25.ceil
+puts 2.4.round
+puts 2.6.round
+puts -2.4.round
+puts -2.6.round
+puts 3.0.floor, 3.0.ceil, 3.0.round, 3.0.to_i
+
+y = -0.75
+puts y.floor
+puts y.ceil
+puts y.round
+puts y.to_i
+puts x.floor + x.ceil
+puts x.round / 4

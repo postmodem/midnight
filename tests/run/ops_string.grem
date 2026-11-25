@@ -1,0 +1,20 @@
+# `+` joins two strings and `*` repeats one.
+puts "foo" + "bar"
+puts "a" + "b" + "c"
+puts "-" * 20
+puts "ab" * 3
+puts "ab" * 1
+empty = "ab" * 0
+puts empty.length
+puts empty.empty?
+puts "" + ""
+s = "x"
+s = s + "y"
+puts s
+n = 4
+puts "=" * n + ">"
+puts "<" + "=" * n
+puts "é" * 2
+line = "ab" * 2 + "-" * 2
+puts line
+puts "a" + 1.to_s + 2.5.to_s

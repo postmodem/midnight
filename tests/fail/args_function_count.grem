@@ -1,0 +1,8 @@
+# expect: wrong number of arguments: `double` takes 1, found 2
+# at: line 8, the call `double(1, 2)`
+
+def double(n: Int) -> Int
+  n * 2
+end
+
+puts double(1, 2)

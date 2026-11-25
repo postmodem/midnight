@@ -1,0 +1,11 @@
+# expect: the type `Position` appears twice in the query
+# at: line 9, the second `Position`
+
+component Position
+  x: Float
+  y: Float
+end
+
+each Position, Position do |a, b|
+  puts a.x + b.x
+end

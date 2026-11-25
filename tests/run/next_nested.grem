@@ -1,0 +1,21 @@
+# `next` continues only the nearest enclosing loop, across mixed loop forms.
+
+3.times do |i|
+  line = "#{i}:"
+  3.times do |j|
+    next if j == i
+    line += j.to_s
+  end
+  puts line
+end
+
+rows = [[1, 0, 2], [0, 0], [3]]
+rows.each do |row|
+  next if row.length == 2
+  n = 0
+  while n < row.length
+    n += 1
+    next if row[n - 1] == 0
+    puts row[n - 1]
+  end
+end

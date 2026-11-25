@@ -1,0 +1,11 @@
+say "hi"
+["say \"hi\""]
+Label(text: "say \"hi\"")
+a\b
+["a\\b"]
+["t\tx"]
+["l1\nl2"]
+Label(text: "l1\nl2")
+[["deep"]]
+["say \"hi\""]
+14

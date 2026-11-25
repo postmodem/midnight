@@ -1,0 +1,17 @@
+# `+`, `-`, `*`, `/` and `%` on two Ints and on two Floats.
+puts 2 + 3
+puts 2 - 3
+puts 4 * 5
+puts -4 * 5
+puts 0 - 7
+puts 1.5 + 2.25
+puts 1.5 - 2.25
+puts 1.5 * 4.0
+puts 7.0 / 2.0
+puts 1.0 / 4.0
+a = 6
+b = 4
+puts a + b, a - b, a * b, a / b, a % b
+x = 6.0
+y = 4.0
+puts x + y, x - y, x * y, x / y, x % y

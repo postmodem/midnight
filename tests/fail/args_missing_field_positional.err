@@ -1,0 +1,5 @@
+error: missing field `y` in `Vec2(…)`
+ --> tests/fail/args_missing_field_positional.grem:9:5
+  |
+9 | v = Vec2(1)
+  |     ^^^^^^^ `y` has no default

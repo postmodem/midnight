@@ -1,0 +1,5 @@
+error: `add` takes 2 arguments, but 1 was given
+ --> tests/fail/args_function_too_few.grem:8:6
+  |
+8 | puts add(1)
+  |      ^^^^^^

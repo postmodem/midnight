@@ -1,0 +1,42 @@
+# A list can hold any value type: enums, structs, components, events,
+# entities, bools and other lists.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+enum Team
+  Red
+  Blue
+end
+
+component Health
+  hp: Int
+end
+
+event Hit
+  damage: Int
+end
+
+teams = [Team::Red, Team::Blue, Team::Red]
+puts teams
+puts teams[1] == Team::Blue
+vecs = [Vec2(1, 2), Vec2()]
+puts vecs
+healths = [Health(5), Health(6)]
+puts healths[1].hp
+hits: [Hit] = []
+hits.push(Hit(3))
+puts hits
+e1 = spawn Health(1)
+e2 = spawn Health(2)
+handles = [e1, e2]
+puts handles.length
+puts handles[1][Health].hp
+puts handles.include?(e1)
+e1.despawn
+puts handles[0].alive?, handles[1].alive?
+flags = [true, false]
+puts flags[0] && !flags[1]
+grid = [[1.5], [2.5, 3.5]]
+puts grid[1][0]

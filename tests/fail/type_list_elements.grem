@@ -1,0 +1,5 @@
+# expect: type mismatch: the elements of a list literal share one type; the first is an `Int`, this one is a `String`
+# at: line 4, the element `"two"`
+
+xs = [1, "two", 3]
+puts "done"

@@ -1,0 +1,49 @@
+# Queued changes wait for the OUTERMOST each: an inner each finishing does
+# not apply them, and that includes changes made by functions called from
+# the block.
+component Spawner
+  n: Int
+end
+
+component Minion
+  hp: Int
+end
+
+tag Marked
+
+def clear_minions
+  each Entity, Minion do |m, minion|
+    m.despawn
+  end
+end
+
+def mark_all
+  each Entity, Minion do |e, minion|
+    e.add(Marked)
+  end
+end
+
+spawn Spawner(1)
+spawn Minion(1)
+spawn Minion(2)
+
+# called outside any each: applied when the function's own each finishes
+mark_all
+puts World.count(Minion, with: Marked)
+
+inner_runs = 0
+each Spawner do |s|
+  clear_minions
+  # the inner each has finished, but this one is still running
+  puts World.count(Minion)
+  each Minion do |mm|
+    inner_runs += 1
+  end
+  spawn Minion(9)
+  puts World.count(Minion)
+end
+puts inner_runs
+puts World.count(Minion)
+each Minion do |left|
+  puts left.hp
+end

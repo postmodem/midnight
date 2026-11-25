@@ -1,0 +1,87 @@
+# Statement continuation: a newline does not end a statement inside
+# parentheses or brackets, after a binary operator, a comma, `=` or a
+# compound assignment operator, or before a line that begins with `.`.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+def add3(a: Int, b: Int, c: Int) -> Int
+  a + b + c
+end
+
+# inside parentheses
+total = add3(
+  1,
+  2,
+  3
+)
+puts total
+grouped = (
+  10
+  + 4
+)
+puts grouped
+v = Vec2(
+  y: 2,
+  x: 1
+)
+puts v
+
+# inside brackets
+xs = [
+  1,
+  2,
+  3
+]
+puts xs
+puts xs[
+  1
+]
+
+# after a binary operator
+sum = 1 +
+  2 *
+  3
+puts sum
+ok = sum > 5 &&
+  sum < 10
+puts ok
+either = false ||
+  true
+puts either
+same = sum ==
+  7
+puts same
+less = sum <
+  8
+puts less
+
+# after a comma
+puts "a",
+  "b"
+
+# after `=`
+long_name =
+  "assigned"
+puts long_name
+ratio: Float =
+  2
+puts ratio
+
+# after a compound assignment operator
+sum +=
+  10
+puts sum
+sum *=
+  2
+puts sum
+
+# before a line that begins with `.`
+shout = "hello"
+  .upcase
+  .ljust(7)
+puts shout + "|"
+n = xs
+  .length
+puts n

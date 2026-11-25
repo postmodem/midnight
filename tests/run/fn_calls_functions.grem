@@ -1,0 +1,30 @@
+# Functions calling functions: results passed on as arguments, calls nested
+# in expressions, and a helper that returns nothing called for its effect.
+
+def square(n: Int) -> Int
+  n * n
+end
+
+def sum_of_squares(a: Int, b: Int) -> Int
+  square(a) + square(b)
+end
+
+def hypot(a: Int, b: Int) -> Float
+  Math.sqrt(sum_of_squares(a, b))
+end
+
+def rule(width: Int)
+  puts "-" * width
+end
+
+def boxed(text: String)
+  rule(text.length + 4)
+  puts "| #{text} |"
+  rule(text.length + 4)
+end
+
+puts sum_of_squares(3, 4)
+puts hypot(3, 4)
+puts square(square(2) + 1)
+boxed("hi")
+puts max(square(3), sum_of_squares(1, 2))

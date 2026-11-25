@@ -1,0 +1,8 @@
+# expect: the constant 300 does not fit in `UInt8` (the field `hp` of `Health`)
+# at: line 8, the argument `300`
+
+component Health
+  hp: UInt8
+end
+
+spawn Health(300)

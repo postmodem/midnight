@@ -1,0 +1,41 @@
+# Compact integer field types in a struct: boundary values are stored and
+# read back as Int, and arithmetic on the values read happens at 64 bits.
+struct Packed
+  a: Int8 = 0
+  b: Int16 = 0
+  c: Int32 = 0
+  d: UInt8 = 0
+  e: UInt16 = 0
+  f: UInt32 = 0
+end
+
+lo = Packed(-128, -32768, -2147483648, 0, 0, 0)
+hi = Packed(127, 32767, 2147483647, 255, 65535, 4294967295)
+puts lo
+puts hi
+puts hi.a + 1
+puts hi.b + 1
+puts hi.c + 1
+puts hi.d + 1
+puts hi.e + 1
+puts hi.f + 1
+puts lo.a - 1
+puts lo.c * 2
+puts hi.c * hi.c
+pk = Packed()
+puts pk
+pk.a = -5
+pk.b = 300
+pk.c = -70000
+pk.d = 200
+pk.e = 40000
+pk.f = 3000000000
+puts pk
+pk.a += 100
+pk.d -= 200
+pk.e /= 3
+pk.f %= 7
+puts pk
+n = 127
+q = Packed(a: n, d: n * 2)
+puts q.a + q.d

@@ -1,0 +1,13 @@
+# expect: unknown query filter `withou`; the label names the two filters there are, `with:` and `without:`
+# at: line 11, the name `withou`
+
+component Position
+  x: Float
+  y: Float
+end
+
+tag Frozen
+
+each Position, withou: Frozen do |pos|
+  puts pos.x
+end

@@ -1,0 +1,6 @@
+# A `do` block written on one line, as in the reference's example for
+# updating a list in place.
+
+xs = [1, 2, 3]
+xs.length.times do |i| xs[i] *= 2 end
+puts xs

@@ -1,0 +1,40 @@
+# `while`: counting down, zero iterations, a compound condition, nested
+# loops, and a variable created inside the body.
+
+n = 3
+while n > 0
+  puts n
+  n -= 1
+end
+puts "n is #{n}"
+
+while n > 0
+  puts "never"
+end
+
+a = 0
+b = 10
+while a < b && b > 6
+  a += 1
+  b -= 1
+end
+puts a, b
+
+row = 0
+cells = 0
+while row < 3
+  col = 0
+  while col < row
+    col += 1
+    cells += 1
+  end
+  row += 1
+end
+puts cells
+
+text = ""
+while text.length < 4
+  piece = "ab"
+  text += piece
+end
+puts text

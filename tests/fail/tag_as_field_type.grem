@@ -1,0 +1,8 @@
+# expect: the tag `Frozen` is not a value type and can't be the type of a field
+# at: line 7, the name `Frozen`
+
+tag Frozen
+
+struct Status
+  frozen: Frozen
+end

@@ -1,0 +1,7 @@
+# expect: the condition of `until` must be a `Bool`, found a `[Int]`
+# at: line 5, the condition `xs`
+
+xs = [1, 2]
+until xs
+  xs.pop
+end

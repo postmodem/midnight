@@ -1,0 +1,5 @@
+error: expected a component, found `Vec2`
+ --> tests/fail/spawn_non_component.grem:9:7
+  |
+9 | spawn Vec2(1, 2)
+  |       ^^^^^^^^^^ an entity is made of component values and tags

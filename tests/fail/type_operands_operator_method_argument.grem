@@ -1,0 +1,14 @@
+# expect: type mismatch: the right operand of `+` on `Vec2` (parameter `other`) is a `Vec2`, found an `Int`
+# at: line 14, the operand `1`
+
+struct Vec2
+  x: Float
+  y: Float
+
+  def +(other: Vec2) -> Vec2
+    Vec2(x + other.x, y + other.y)
+  end
+end
+
+a = Vec2(1, 2)
+puts a + 1

@@ -1,0 +1,8 @@
+# expect: the constant -129 does not fit in `Int8` (the field `offset` of `Tile`; -128 to 127)
+# at: line 8, the argument `-129`
+
+struct Tile
+  offset: Int8
+end
+
+t = Tile(offset: -129)

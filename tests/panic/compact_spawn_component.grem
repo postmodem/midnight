@@ -1,0 +1,9 @@
+# Spawning with a component whose Int16 field is given a computed value
+# that does not fit.
+# Expected: 40000 does not fit in Int16
+component Altitude
+  metres: Int16
+end
+
+h = 20000
+spawn Altitude(h * 2)

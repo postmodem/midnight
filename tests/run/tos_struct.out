@@ -1,0 +1,10 @@
+Vec2(x: 1.0, y: 2.0)
+Vec2(x: 1.0, y: 2.0)
+v = Vec2(x: 1.0, y: 2.0)
+Vec2(x: 0.0, y: 0.0)
+Unit(name: "orc", team: Red, pos: Vec2(x: 0.5, y: -1.5), alive: true, scores: [])
+Unit(name: "orc", team: Blue, pos: Vec2(x: 0.5, y: -1.5), alive: false, scores: [3, 4])
+Health(hp: 7, max: 100)
+Hit(damage: 2, note: "ouch")
+20
+Vec2(x: 1.0, y: 2.0)!

@@ -1,0 +1,9 @@
+# expect: type mismatch: `plain` is declared `[Float]`, found a `[Float32]` (the two list types do not convert to each other)
+# at: line 9, the value `m.heights`
+
+struct Mesh
+  heights: [Float32] = []
+end
+
+m = Mesh()
+plain: [Float] = m.heights

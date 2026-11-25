@@ -1,0 +1,18 @@
+Health(hp: 50, cap: 100)
+Health(hp: 5, cap: 10)
+Health(hp: 4, cap: 20)
+0.5
+Health(hp: 30, cap: 100)
+50
+false
+true
+Health(hp: 75, cap: 150)
+true
+true
+40
+[Health(hp: 1, cap: 100), Health(hp: 75, cap: 150)]
+40
+true
+40
+Health(hp: 5, cap: 100)
+false

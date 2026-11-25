@@ -1,0 +1,8 @@
+Node(name: "root", value: 100, children: [Node(name: "mid", value: 10, children: [Node(name: "a", value: 1, children: []), Node(name: "b", value: 2, children: [])]), Node(name: "c", value: 3, children: [])])
+116
+3
+2
+134
+2
+1
+false

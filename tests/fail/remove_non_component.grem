@@ -1,0 +1,10 @@
+# expect: `remove` takes components and tags; `Vec2` is a struct
+# at: line 10, the name `Vec2`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+e = spawn
+e.remove(Vec2)

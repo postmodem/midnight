@@ -1,0 +1,5 @@
+error: unknown query filter `withou`
+  --> tests/fail/query_unknown_filter.grem:11:16
+   |
+11 | each Position, withou: Frozen do |pos|
+   |                ^^^^^^ expected `with:` or `without:`

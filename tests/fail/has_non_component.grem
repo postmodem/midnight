@@ -1,0 +1,10 @@
+# expect: `has?` takes a component or tag; `Vec2` is a struct
+# at: line 10, the name `Vec2`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+e = spawn
+puts e.has?(Vec2)

@@ -1,0 +1,19 @@
+# `next` in `on`: skips to the next pending event.
+
+event Hit
+  damage: Int
+end
+
+system damage_report
+  on Hit do |hit|
+    next if hit.damage <= 0
+    puts "hit for #{hit.damage}"
+  end
+  puts "report done"
+end
+
+emit Hit(5)
+emit Hit(0)
+emit Hit(-3)
+emit Hit(7)
+World.tick

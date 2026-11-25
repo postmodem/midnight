@@ -1,0 +1,14 @@
+# Int literal forms: decimal, underscore separators, hexadecimal, binary.
+puts 42
+puts 0
+puts 1_000_000
+puts 12_34
+puts 0xff
+puts 0x10
+puts 0x7fffffffffffffff
+puts 0b1010
+puts 0b1
+puts 0b11111111
+puts -17
+puts 9223372036854775807
+puts 0xff + 0b1010 + 1_000

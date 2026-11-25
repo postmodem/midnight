@@ -1,0 +1,13 @@
+Card(title: "first", rank: High, ok: true, weight: 2.0, at: Point(x: 1, y: 2), marks: [1, 2], words: ["a", "b"], path: [Point(x: 0, y: 0), Point(x: 3, y: 4)])
+Point(x: 1, y: 2)!
+card at Point(x: 1, y: 2)
+true
+true
+false
+true
+false
+true
+true
+true
+Card(title: "", rank: Low, ok: false, weight: 0.5, at: Point(x: 0, y: 0), marks: [], words: [], path: [])
+Note(text: "say \"hi\"\n\tback\\slash")

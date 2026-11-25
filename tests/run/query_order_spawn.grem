@@ -1,0 +1,21 @@
+# Visit order. The reference only promises a deterministic order; this test
+# assumes that entities with the same component set, spawned in sequence with
+# no removals, are visited in spawn order.
+component Name
+  text: String
+end
+
+spawn Name("a")
+spawn Name("b")
+spawn Name("c")
+spawn Name("d")
+spawn Name("e")
+
+each Name do |name|
+  print name.text
+end
+puts
+each Name do |name|
+  print name.text.upcase
+end
+puts

@@ -1,0 +1,5 @@
+error: `scaled` takes 1 argument, but 2 were given
+  --> tests/fail/args_method_count.grem:14:6
+   |
+14 | puts r.scaled(2, 3)
+   |      ^^^^^^^^^^^^^^

@@ -1,0 +1,9 @@
+# expect: the constant 40000 does not fit in `Int16` (the field `level` of `Stats`; -32768 to 32767)
+# at: line 9, the value `40000`
+
+struct Stats
+  level: Int16 = 1
+end
+
+s = Stats()
+s.level = 40000

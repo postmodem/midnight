@@ -1,0 +1,5 @@
+error: `self` can only be used in a method
+ --> tests/fail/self_outside_method.grem:5:8
+  |
+5 |   puts self
+  |        ^^^^ there is no receiver here

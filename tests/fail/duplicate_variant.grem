@@ -1,0 +1,8 @@
+# expect: duplicate definition: the variant `Red` of `Team` is already defined on line 5
+# at: line 7, the name `Red`
+
+enum Team
+  Red
+  Blue
+  Red
+end

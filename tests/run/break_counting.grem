@@ -1,0 +1,27 @@
+# `break` in `times` (with and without a parameter), `upto` and `downto`.
+
+reached = -1
+10.times do |i|
+  break if i == 3
+  reached = i
+end
+puts reached
+
+2.upto(100) do |u|
+  break if u * u > 30
+  puts u
+end
+
+stops = 0
+9.downto(1) do |d|
+  stops += 1
+  break unless d > 7
+end
+puts stops
+
+tries = 0
+5.times do
+  tries += 1
+  break
+end
+puts tries

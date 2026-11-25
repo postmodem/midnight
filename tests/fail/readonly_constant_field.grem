@@ -1,0 +1,11 @@
+# expect: can't assign to `ORIGIN.x`: `ORIGIN` is a constant, and a part of a constant can't be changed
+# at: line 11, the statement `ORIGIN.x = 5`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+ORIGIN = Vec2(0, 0)
+
+ORIGIN.x = 5

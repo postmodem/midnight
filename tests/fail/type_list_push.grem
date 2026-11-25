@@ -1,0 +1,5 @@
+# expect: type mismatch: `push` on a `[Int]` takes an `Int`, found a `String`
+# at: line 5, the argument `"three"`
+
+xs = [1, 2]
+xs.push("three")

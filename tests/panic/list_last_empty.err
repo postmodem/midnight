@@ -1,0 +1,1 @@
+tests/panic/list_last_empty.grem:5: runtime error: last on an empty list

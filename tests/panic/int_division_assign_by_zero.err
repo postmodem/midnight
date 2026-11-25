@@ -1,0 +1,1 @@
+tests/panic/int_division_assign_by_zero.grem:5: runtime error: division by zero

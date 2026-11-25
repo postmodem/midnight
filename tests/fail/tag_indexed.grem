@@ -1,0 +1,7 @@
+# expect: the tag `Frozen` has no value and can't be read from an entity; use `e.has?(Frozen)`
+# at: line 7, the expression `e[Frozen]`
+
+tag Frozen
+
+e = spawn Frozen
+puts e[Frozen]

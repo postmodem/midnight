@@ -1,0 +1,9 @@
+# expect: can't assign to `n`: a function parameter is read-only
+# at: line 5, the statement `n += 1`
+
+def bump(n: Int) -> Int
+  n += 1
+  n
+end
+
+puts bump(1)

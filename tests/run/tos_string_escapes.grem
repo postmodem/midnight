@@ -1,0 +1,21 @@
+# A string inside a struct or a list is shown quoted, with escapes; a
+# string on its own is written as it is.
+struct Label
+  text: String
+end
+
+quote = "say \"hi\""
+puts quote
+puts [quote]
+puts Label(quote)
+slash = "a\\b"
+puts slash
+puts [slash]
+tabbed = "t\tx"
+puts [tabbed]
+lines = "l1\nl2"
+puts [lines]
+puts Label(lines)
+puts [["deep"]]
+puts "#{[quote]}"
+puts [quote].to_s.length

@@ -1,0 +1,8 @@
+# expect: syntax error: the parameter `n` needs a type (`n: Type`); found `)` where `:` is expected
+# at: line 4, the `)` after `n`
+
+def double(n) -> Int
+  2
+end
+
+puts double(4)

@@ -1,0 +1,5 @@
+error: `push` needs a list that can be modified
+ --> tests/fail/push_not_a_place.grem:8:1
+  |
+8 | numbers().push(4)
+  | ^^^^^^^^^ this list is a temporary value; put it in a variable first

@@ -1,0 +1,5 @@
+error: `World` is a built-in name and can't be redefined
+ --> tests/fail/builtin_name_redefined_constant.grem:4:1
+  |
+4 | World = 1
+  | ^^^^^

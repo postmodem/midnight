@@ -1,0 +1,58 @@
+# Queued changes are applied when the outermost each is left, however it is
+# left: by break, after next, or by return.
+component Item
+  n: Int
+end
+
+component Trigger
+  id: Int
+end
+
+tag Marked
+
+def mark_first -> Int
+  each Entity, Item do |e, item|
+    e.add(Marked)
+    return item.n
+  end
+  0
+end
+
+def despawn_one
+  each Entity, Item do |e, item|
+    e.despawn
+    return
+  end
+end
+
+spawn Item(1)
+spawn Item(2)
+spawn Item(3)
+
+got = mark_first
+puts got > 0
+puts World.count(Item, with: Marked)
+
+visits = 0
+each Entity, Item, without: Marked do |e, item|
+  visits += 1
+  e.despawn
+  break
+end
+puts visits
+puts World.count(Item)
+
+each Entity, Item do |e, item|
+  e.add(Marked)
+  next
+end
+puts World.count(Item, with: Marked)
+
+# a return out of a function's each does not apply the queue while an outer
+# each is still running
+spawn Trigger(1)
+each Trigger do |trigger|
+  despawn_one
+  puts World.count(Item)
+end
+puts World.count(Item)

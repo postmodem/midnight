@@ -1,0 +1,20 @@
+# `require`: a required file's top-level statements run at the point of the
+# first `require`; a file is loaded at most once; a helper's own `require` is
+# found relative to the helper; all files share one namespace.
+resource Trace
+  steps: [String] = []
+end
+
+def note(s: String)
+  puts s
+  Trace.steps.push(s)
+end
+
+note("root start")
+require "lib/outer"
+note("root middle")
+require "lib/inner"
+require "lib/outer"
+note("root end")
+puts Trace.steps.length
+puts inner_value + outer_value

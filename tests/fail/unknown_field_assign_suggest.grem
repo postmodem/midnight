@@ -1,0 +1,10 @@
+# expect: unknown field `heigt` on `Rect`, suggesting `height`
+# at: line 10, the name `heigt`
+
+struct Rect
+  width: Float
+  height: Float
+end
+
+r = Rect(2, 3)
+r.heigt = 5

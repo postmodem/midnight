@@ -1,0 +1,5 @@
+error: component `Health` has fields without defaults
+ --> tests/fail/spawn_bare_partial_defaults.grem:9:7
+  |
+9 | spawn Health
+  |       ^^^^^^ construct it: `Health(hp: …)`

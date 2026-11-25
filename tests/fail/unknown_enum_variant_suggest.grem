@@ -1,0 +1,10 @@
+# expect: unknown variant `Gren` of the enum `Team`, suggesting `Green`
+# at: line 10, the name `Gren`
+
+enum Team
+  Red
+  Blue
+  Green
+end
+
+puts Team::Gren

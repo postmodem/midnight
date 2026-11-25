@@ -1,0 +1,9 @@
+# Writing a field of e[C] through a handle whose entity was despawned.
+# Expected: Entity(0v1) is not alive
+component Health
+  hp: Int
+end
+
+e = spawn Health(10)
+e.despawn
+e[Health].hp -= 1

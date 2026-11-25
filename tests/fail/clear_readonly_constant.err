@@ -1,0 +1,5 @@
+error: can't modify `PRIMES`
+ --> tests/fail/clear_readonly_constant.grem:6:1
+  |
+6 | PRIMES.clear
+  | ^^^^^^ `PRIMES` is a constant

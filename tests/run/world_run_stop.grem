@@ -1,0 +1,32 @@
+# World.run ticks until a tick during which World.stop was called has
+# finished: the rest of that tick still runs. World.stop outside World.run
+# (at the top level, or during a plain World.tick) has no effect on a later
+# World.run.
+resource Log
+  ticks: Int = 0
+  finished: Int = 0
+end
+
+system tally
+  Log.ticks += 1
+  World.stop if Log.ticks == 3 || Log.ticks == 4 || Log.ticks == 7
+end
+
+system tail
+  Log.finished += 1
+end
+
+World.stop
+World.run
+puts Log.ticks
+puts Log.finished
+puts Time.tick
+World.tick
+puts Log.ticks
+World.run
+puts Log.ticks
+puts Log.finished
+puts Time.tick
+World.stop
+World.tick
+puts Time.tick

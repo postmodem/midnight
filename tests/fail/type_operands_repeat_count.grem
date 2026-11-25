@@ -1,0 +1,4 @@
+# expect: type mismatch: `*` on a `String` needs an `Int` count, found a `String`
+# at: line 4, the expression `"ab" * "3"`
+
+puts "ab" * "3"

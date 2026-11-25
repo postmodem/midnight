@@ -1,0 +1,5 @@
+error: `min` takes 2 arguments, but 1 was given
+ --> tests/fail/args_builtin_count.grem:4:6
+  |
+4 | puts min(1)
+  |      ^^^^^^

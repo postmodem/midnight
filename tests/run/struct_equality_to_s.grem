@@ -1,0 +1,50 @@
+# The `==`, `!=` and `to_s` provided for every struct: nested structs and
+# fields of every kind, compared by content; strings are quoted inside.
+enum Rank
+  Low
+  High
+end
+
+struct Point
+  x: Int
+  y: Int
+end
+
+struct Card
+  title: String
+  rank: Rank
+  ok: Bool
+  weight: Float
+  at: Point
+  marks: [Int]
+  words: [String]
+  path: [Point]
+end
+
+struct Note
+  text: String
+end
+
+a = Card("first", Rank::High, true, 2, Point(1, 2), [1, 2], ["a", "b"],
+         [Point(0, 0), Point(3, 4)])
+puts a
+puts a.at.to_s + "!"
+puts "card at #{a.at}"
+line = a.to_s
+puts line == "#{a}"
+
+b = a
+puts a == b
+b.marks.push(3)
+puts a == b
+puts a != b
+c = a
+c.at.x = 9
+puts a == c
+d = a
+d.words[1] = "z"
+puts a != d
+puts Point(1, 2) == Point(1, 2)
+puts Point(1, 2) != Point(2, 1)
+puts Card("", Rank::Low, false, 0.5, Point(0, 0), [], [], [])
+puts Note("say \"hi\"\n\tback\\slash")

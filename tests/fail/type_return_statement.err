@@ -1,0 +1,5 @@
+error: expected `String`, found `Int`
+ --> tests/fail/type_return_statement.grem:5:10
+  |
+5 |   return 0 if n < 0
+  |          ^

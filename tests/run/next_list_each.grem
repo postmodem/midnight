@@ -1,0 +1,20 @@
+# `next` in list `each` and `each_with_index`.
+
+words = ["one", "", "three", "", "five"]
+words.each do |w|
+  next if w.empty?
+  puts w
+end
+
+words.each_with_index do |word, i|
+  next unless word.empty?
+  puts "blank at #{i}"
+end
+
+nums = [3, -1, 4, -1, 5]
+total = 0
+nums.each do |v|
+  next if v < 0
+  total += v
+end
+puts total

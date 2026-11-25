@@ -1,0 +1,70 @@
+# Query terms: component types and Entity, one block parameter per term.
+# Component parameters are views: assigning to one or to its fields changes
+# the world.
+component Position
+  x: Float
+  y: Float
+end
+
+component Velocity
+  dx: Float
+  dy: Float
+end
+
+component Label
+  text: String
+end
+
+mover = spawn Position(0, 0), Velocity(1, 2)
+still = spawn Position(5, 5)
+named = spawn Label("only")
+spawn
+
+# one term
+visits = 0
+sum = 0.0
+each Position do |item|
+  visits += 1
+  sum += item.x
+end
+puts visits
+puts sum
+
+# two terms: only entities that have both
+each Position, Velocity do |pos, vel|
+  pos.x += vel.dx
+  pos.y += vel.dy
+end
+puts mover[Position]
+puts still[Position]
+
+# assigning a whole component through the view
+each Label do |label|
+  label = Label(label.text + "!")
+end
+puts named[Label].text
+
+# Entity as a term gives the handle
+each Entity, Label do |who, lab|
+  puts who == named
+  puts lab.text
+end
+
+# Entity alone visits every entity
+total = 0
+each Entity do |any|
+  total += 1 if any.alive?
+end
+puts total
+
+# terms in any order
+each Velocity, Entity, Position do |v2, e2, p2|
+  puts e2 == mover
+  puts p2.x + v2.dx
+end
+
+# no match: the block never runs
+each Label, Position do |l3, p3|
+  puts "unreachable"
+end
+puts "done"

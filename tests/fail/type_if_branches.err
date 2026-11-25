@@ -1,0 +1,5 @@
+error: expected `String`, found `Int`
+ --> tests/fail/type_if_branches.grem:5:34
+  |
+5 | label = if hp > 5 then "ok" else 0 end
+  |                                  ^ every branch of an `if` has the same type

@@ -1,0 +1,13 @@
+# expect: a `case` value must be an `Int`, a `String`, a `Bool` or an enum; found a `Vec2`
+# at: line 10, the value `v`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+v = Vec2(0, 0)
+case v
+when Vec2(0, 0) then puts "origin"
+else puts "elsewhere"
+end

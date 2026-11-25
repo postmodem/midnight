@@ -1,0 +1,11 @@
+Entity(0v1)
+Entity(1v1)
+Entity(0v1) and Entity(1v1)
+Entity(0v1)!
+Entity(none)
+Target(who: Entity(1v1))
+Target(who: Entity(none))
+Entity(0v1)
+Entity(0v2)
+false
+[Entity(1v1), Entity(0v2)]

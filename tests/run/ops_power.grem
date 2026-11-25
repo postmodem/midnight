@@ -1,0 +1,28 @@
+# `**`: right-associative, tighter than unary minus and than `*`; Int ** Int
+# is an Int, and a Float on either side gives a Float.
+puts 2 ** 10
+puts 2 ** 0
+puts 10 ** 18
+puts 2 ** 3 ** 2
+left = (2 ** 3) ** 2
+puts left
+puts 2 ** 2 ** 3
+puts -2 ** 2
+sq = (-2) ** 2
+puts sq
+puts -2.0 ** 2
+x = 3
+puts -x ** 2
+neg = -3
+puts neg ** 2
+puts neg ** 3
+puts 2 * 3 ** 2
+puts 10 ** 2 * 3
+puts 2.0 ** 3
+puts 2 ** 3.0
+puts 4 ** 0.5
+puts 0.5 ** 2
+puts 2.0 ** -1
+puts 2 ** -1.0
+k = -2
+puts 2.0 ** k

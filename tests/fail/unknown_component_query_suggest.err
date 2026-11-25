@@ -1,0 +1,5 @@
+error: unknown component `Postion`
+  --> tests/fail/unknown_component_query_suggest.grem:14:6
+   |
+14 | each Postion, Velocity do |pos, vel|
+   |      ^^^^^^^ did you mean `Position`?

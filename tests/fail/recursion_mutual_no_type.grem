@@ -1,0 +1,14 @@
+# expect: the recursive function `is_even` needs a declared return type: neither `is_even` nor `is_odd` declares one, and the call back to `is_even` needs a type that is still being inferred; a note points at the definition of `is_even` on line 4
+# at: line 11, the call `is_even(n - 1)` inside `is_odd`
+
+def is_even(n: Int)
+  return true if n == 0
+  is_odd(n - 1)
+end
+
+def is_odd(n: Int)
+  return false if n == 0
+  is_even(n - 1)
+end
+
+puts is_even(4)

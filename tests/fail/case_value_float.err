@@ -1,0 +1,5 @@
+error: `case` can't compare `Float` values
+ --> tests/fail/case_value_float.grem:5:6
+  |
+5 | case x
+  |      ^ the value of a `case` is an `Int`, a `String`, a `Bool` or an enum

@@ -1,0 +1,7 @@
+# expect: the `if` block is never closed (an `end` is missing); the diagnostic points at the `if` that opened it, not at the end of the file
+# at: line 5, the keyword `if`
+
+hp = 10
+if hp > 5
+  puts "fine"
+puts "done"

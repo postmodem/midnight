@@ -1,0 +1,5 @@
+error: constant `BASE` is used before it is defined
+ --> tests/fail/const_uses_later_constant.grem:4:10
+  |
+4 | DOUBLE = BASE * 2
+  |          ^^^^ a constant can use only the constants defined above it

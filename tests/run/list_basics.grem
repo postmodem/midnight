@@ -1,0 +1,23 @@
+# length, empty?, reading by positive and negative index, first and last.
+xs = [10, 20, 30, 40]
+puts xs.length
+puts xs.empty?
+puts xs[0]
+puts xs[3]
+puts xs[-1]
+puts xs[-4]
+i = 2
+puts xs[i]
+puts xs[i - 3]
+puts xs.first
+puts xs.last
+blank: [Int] = []
+puts blank.length
+puts blank.empty?
+one = ["only"]
+puts one.first == one.last
+puts one[0]
+puts one[-1]
+puts [5, 6, 7][1]
+puts [5, 6, 7].length
+puts xs[xs.length - 1] == xs.last

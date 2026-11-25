@@ -1,0 +1,10 @@
+# to_s of the Floats that are not finite: Infinity, -Infinity and NaN.
+big = 1e308
+inf = big * 10.0
+puts inf
+puts -inf
+nan = inf - inf
+puts nan
+puts "#{inf} #{-inf} #{nan}"
+puts inf.to_s + "!"
+puts [inf, nan]

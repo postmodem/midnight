@@ -1,0 +1,21 @@
+# Modifier `if` and `unless` on `break`, `next` and `emit`.
+
+event Found
+  value: Int
+end
+
+def scan(limit: Int)
+  i = 0
+  loop do
+    i += 1
+    break if i > limit
+    next unless i % 3 == 0
+    emit Found(i) if i != 6
+    emit Found(i * 100) unless i < 9
+  end
+end
+
+scan(10)
+on Found do |f|
+  puts f.value
+end

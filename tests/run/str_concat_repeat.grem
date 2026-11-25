@@ -1,0 +1,23 @@
+# + joins two strings and * repeats one, also as += and *=.
+puts "foo" + "bar"
+a = "x"
+b = a + "y" + a
+puts b
+puts a
+puts "-" * 20
+puts "ab" * 3
+puts "ab" * 1
+puts "ab" * 0
+nothing = "ab" * 0
+puts nothing.length
+n = 2
+puts "=" * n + ">"
+puts "<" + "=" * n
+s = "a"
+s += "b"
+puts s
+s *= 2
+puts s
+puts "" + ""
+joined = ("a" + "b") * 2
+puts joined == "abab"

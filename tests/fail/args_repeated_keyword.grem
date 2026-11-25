@@ -1,0 +1,9 @@
+# expect: the keyword argument `x` is given twice
+# at: line 9, the second `x:`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+v = Vec2(x: 1, y: 2, x: 3)

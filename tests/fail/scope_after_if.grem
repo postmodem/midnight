@@ -1,0 +1,8 @@
+# expect: unknown variable `label`: it was created inside the `if` (line 6) and does not exist after it; create it before the `if`
+# at: line 8, the name `label`
+
+hp = 3
+if hp > 1
+  label = "ok"
+end
+puts label

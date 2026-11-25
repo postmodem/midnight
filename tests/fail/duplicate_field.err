@@ -1,0 +1,10 @@
+error: `x` is already defined
+ --> tests/fail/duplicate_field.grem:7:3
+  |
+7 |   x: Float
+  |   ^
+note: first defined here
+ --> tests/fail/duplicate_field.grem:5:3
+  |
+5 |   x: Float
+  |   -

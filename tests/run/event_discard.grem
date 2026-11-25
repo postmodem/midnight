@@ -1,0 +1,21 @@
+# An event is discarded at the end of the tick after the one it was emitted
+# in, so an on that first runs later than that never sees it.
+event Note
+  n: Int
+end
+
+system sender
+  emit Note(Time.tick) if Time.tick < 2
+end
+
+system late_reader
+  return if Time.tick < 2
+  on Note do |note|
+    puts "tick #{Time.tick}: note #{note.n}"
+  end
+end
+
+4.times do
+  World.tick
+end
+puts "done"

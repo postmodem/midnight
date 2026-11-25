@@ -1,0 +1,5 @@
+# expect: unknown method `upcas` on `String`, suggesting `upcase`
+# at: line 5, the name `upcas`
+
+name = "gremlin"
+puts name.upcas

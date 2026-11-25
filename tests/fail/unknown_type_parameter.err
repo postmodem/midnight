@@ -1,0 +1,5 @@
+error: unknown type `Quaternion`
+ --> tests/fail/unknown_type_parameter.grem:4:15
+  |
+4 | def weight(q: Quaternion) -> Float
+  |               ^^^^^^^^^^

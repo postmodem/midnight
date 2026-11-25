@@ -1,0 +1,50 @@
+# Events emitted from top-level code count as emitted in the next tick, so
+# they last until the end of the tick after that one. A top-level on runs
+# when control reaches it and keeps its own position like any other on.
+event Note
+  n: Int
+end
+
+resource Gate
+  open: Bool = false
+end
+
+system reader
+  return unless Gate.open
+  on Note do |note|
+    puts "system saw #{note.n} in tick #{Time.tick}"
+  end
+end
+
+emit Note(1)
+on Note do |seen|
+  puts "top level saw #{seen.n}"
+end
+
+# tick 0 with the gate closed; Note(1) counts as emitted in tick 0
+World.tick
+# counts as emitted in tick 1
+emit Note(2)
+Gate.open = true
+# tick 1: both are still pending
+World.tick
+
+# counts as emitted in tick 2, discarded at the end of tick 3
+emit Note(3)
+Gate.open = false
+World.tick
+World.tick
+Gate.open = true
+World.tick
+puts "after tick #{Time.tick - 1}"
+on Note do |old|
+  puts "unexpected #{old.n}"
+end
+
+# one on run twice sees an event once
+2.times do |pass|
+  emit Note(10 + pass) if pass == 0
+  on Note do |again|
+    puts "pass #{pass}: #{again.n}"
+  end
+end

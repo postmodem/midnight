@@ -1,0 +1,12 @@
+# Math::PI and Math::E.
+puts Math::PI
+puts Math::E
+puts Math::PI * 2
+puts Math::PI / 2
+puts Math::PI > 3.14 && Math::PI < 3.15
+puts Math::E > 2.71 && Math::E < 2.72
+TAU = Math::PI * 2
+puts TAU == Math::PI + Math::PI
+r = 2.0
+area = Math::PI * r * r
+puts area > 12.56 && area < 12.57

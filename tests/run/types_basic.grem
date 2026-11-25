@@ -1,0 +1,24 @@
+# The basic value types: Int, Float (64-bit), Bool and String (immutable
+# UTF-8), and how each prints.
+i = 7
+f = 2.5
+t = true
+no = false
+s = "hello"
+puts i, f, t, no, s
+puts i + 1
+puts f * 2
+puts t && no
+puts s + "!"
+loud = s.upcase
+puts s, loud
+puts "héllo wörld"
+puts 0.1
+puts 1.0
+puts 100.0
+puts 1.0 / 3
+puts 123456789.125
+puts 0.000030517578125
+puts 9007199254740993.0
+puts 1e15
+puts 1e20

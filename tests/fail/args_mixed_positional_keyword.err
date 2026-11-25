@@ -1,0 +1,5 @@
+error: positional and named fields can't be mixed
+ --> tests/fail/args_mixed_positional_keyword.grem:9:13
+  |
+9 | v = Vec2(1, y: 2)
+  |             ^ give every field of `Vec2` by position, or every one by name

@@ -1,0 +1,40 @@
+# List iteration walks the list as it was when the loop started: pushing,
+# overwriting, clearing, popping or reassigning the list inside the loop
+# does not change the walk.
+
+xs = [1, 2, 3]
+xs.each do |x|
+  xs.push(x * 10)
+end
+puts xs
+
+ys = [1, 2, 3]
+ys.each do |y|
+  ys[2] = 99
+  ys[0] = 77
+  puts y
+end
+puts ys
+
+zs = ["a", "b", "c"]
+zs.each_with_index do |z, i|
+  zs.clear
+  puts "#{i} #{z} #{zs.length}"
+end
+puts zs.empty?
+
+ws = [5, 6]
+ws.each do |w|
+  ws = [0]
+  puts w
+end
+puts ws
+
+qs = [1, 2, 3, 4]
+seen = 0
+qs.each do |q|
+  qs.pop
+  seen += q
+end
+puts seen
+puts qs.length

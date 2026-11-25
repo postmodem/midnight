@@ -1,0 +1,10 @@
+error: `Red` is already defined
+ --> tests/fail/duplicate_variant.grem:7:3
+  |
+7 |   Red
+  |   ^^^
+note: first defined here
+ --> tests/fail/duplicate_variant.grem:5:3
+  |
+5 |   Red
+  |   ---

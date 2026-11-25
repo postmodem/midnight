@@ -1,0 +1,35 @@
+# `case` over a String as a statement: matching is by content, including
+# strings built at run time and the empty string.
+
+def kind(word: String) -> String
+  result = "unknown"
+  case word
+  when "cat", "dog" then result = "pet"
+  when "oak"
+    result = "tree"
+  when ""
+    result = "empty"
+  end
+  result
+end
+
+puts kind("cat")
+puts kind("dog")
+puts kind("oak")
+puts kind("")
+puts kind("rock")
+puts kind("c" + "at")
+puts kind("Cat")
+
+greeting = "hel" + "lo"
+case greeting
+when "hello"
+  puts "matched"
+else
+  puts "missed"
+end
+
+case greeting.upcase
+when "hello" then puts "lower"
+when "HELLO" then puts "upper"
+end

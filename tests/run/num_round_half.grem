@@ -1,0 +1,9 @@
+# round on a value exactly halfway between two Ints goes away from zero.
+puts 2.5.round
+puts -2.5.round
+puts 0.5.round
+puts -0.5.round
+puts 1.5.round
+puts 3.5.round
+h = 6.5
+puts h.round

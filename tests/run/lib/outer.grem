@@ -1,0 +1,9 @@
+# Loaded by require_order.grem; requires a sibling file relative to itself
+# and uses the root file's `note`.
+note("outer start")
+require "inner"
+note("outer end")
+
+def outer_value -> Int
+  inner_value * 10
+end

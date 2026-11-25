@@ -1,0 +1,50 @@
+# Values read out of the world are copies; only the parameters of a query
+# are views into it.
+component Health
+  hp: Int
+  max: Int = 100
+end
+
+component Inventory
+  items: [String] = []
+end
+
+resource Config
+  names: [String] = ["a"]
+end
+
+def check_copies
+  each Health, Inventory do |h, inv|
+    saved = h
+    saved.hp = 1
+    items = inv.items
+    items.push("local")
+    h.hp -= 5
+    inv.items.push("gem")
+    puts saved.hp
+    puts items
+  end
+end
+
+target = spawn Health(50), Inventory
+health = target[Health]
+health.hp -= 10
+puts health.hp
+puts target[Health].hp
+target[Health].hp -= 30
+puts health.hp
+puts target[Health].hp
+
+bag = target[Inventory].items
+bag.push("copy")
+puts bag
+puts target[Inventory].items
+
+check_copies
+puts target[Health].hp
+puts target[Inventory].items
+
+names = Config.names
+names.push("b")
+puts names
+puts Config.names

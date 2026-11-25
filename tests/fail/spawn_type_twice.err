@@ -1,0 +1,5 @@
+error: `Position` is listed twice
+ --> tests/fail/spawn_type_twice.grem:9:23
+  |
+9 | spawn Position(0, 0), Position(1, 1)
+  |                       ^^^^^^^^^^^^^^ an entity has at most one component of each type

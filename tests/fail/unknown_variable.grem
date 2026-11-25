@@ -1,0 +1,6 @@
+# expect: unknown variable (or function) `zzyzx`, with no suggestion
+# at: line 6, the name `zzyzx`
+
+total = 3
+puts total
+puts zzyzx

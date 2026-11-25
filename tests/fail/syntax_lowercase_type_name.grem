@@ -1,0 +1,6 @@
+# expect: syntax error: a type name (beginning with an uppercase letter) is expected after `struct`, found `vec2`
+# at: line 4, the name `vec2`
+
+struct vec2
+  x: Float
+end

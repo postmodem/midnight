@@ -1,0 +1,28 @@
+# expect: 25 independent errors (an unknown name on each of lines 4 to 28); the first 20 are reported in source order, then a line saying that the rest were not shown
+# at: lines 4 to 23, each name `missing_NN`; nothing for lines 24 to 28 except the closing summary
+
+puts missing_01
+puts missing_02
+puts missing_03
+puts missing_04
+puts missing_05
+puts missing_06
+puts missing_07
+puts missing_08
+puts missing_09
+puts missing_10
+puts missing_11
+puts missing_12
+puts missing_13
+puts missing_14
+puts missing_15
+puts missing_16
+puts missing_17
+puts missing_18
+puts missing_19
+puts missing_20
+puts missing_21
+puts missing_22
+puts missing_23
+puts missing_24
+puts missing_25

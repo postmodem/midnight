@@ -1,0 +1,5 @@
+error: expected `Int` or `Float`, found `String`
+ --> tests/fail/type_operands.grem:4:10
+  |
+4 | puts 1 + "two"
+  |          ^^^^^

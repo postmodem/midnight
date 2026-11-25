@@ -1,0 +1,16 @@
+# abs on Int and Float values.
+puts 5.abs
+puts -5.abs
+puts 0.abs
+n = -12
+puts n.abs
+m = 3 - 10
+puts m.abs
+puts n.abs + 1
+puts 2.5.abs
+puts -2.5.abs
+x = -0.75
+puts x.abs
+y = 1.5 - 4
+puts y.abs
+puts x.abs * 2

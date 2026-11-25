@@ -1,0 +1,13 @@
+# expect: can't assign to `self.count`: `self` is read-only (methods cannot modify the receiver)
+# at: line 8, the statement `self.count = 5`
+
+struct Counter
+  count: Int = 0
+
+  def reset -> Counter
+    self.count = 5
+    self
+  end
+end
+
+puts Counter().reset

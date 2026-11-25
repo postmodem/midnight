@@ -1,0 +1,49 @@
+# Only a query each queues structural changes. Inside a counting loop, list
+# iteration, a while loop or an on block (outside any query) they take effect
+# at once.
+component Health
+  hp: Int
+end
+
+tag Marked
+
+event Kill
+  target: Entity
+end
+
+handles: [Entity] = []
+3.times do |i|
+  made = spawn Health(i)
+  handles.push(made)
+  puts World.count(Health)
+end
+
+handles.each do |h|
+  h.add(Marked)
+  puts h.has?(Marked)
+end
+
+handles.each_with_index do |h, i|
+  next if i == 0
+  h.despawn
+  puts h.alive?
+end
+puts World.count
+
+emit Kill(handles[0])
+on Kill do |kill|
+  kill.target.remove(Marked)
+  puts kill.target.has?(Marked)
+  kill.target.despawn
+  puts kill.target.alive?
+  extra = spawn Health(9)
+  puts extra.has?(Health)
+end
+puts World.count
+
+n = 0
+while n < 2
+  spawn Health(n)
+  n += 1
+  puts World.count(Health)
+end

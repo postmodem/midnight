@@ -1,0 +1,53 @@
+# Queued changes are applied in the order they were made.
+component Health
+  hp: Int
+end
+
+component Armor
+  rating: Int
+end
+
+tag Marked
+
+seed = spawn Health(1)
+made: [Entity] = []
+
+each Entity, Health do |e, h|
+  # two adds of the same component: the later one wins
+  e.add(Armor(1))
+  e.add(Armor(2))
+  # remove then add leaves it present; add then remove leaves it absent
+  e.remove(Health)
+  e.add(Health(h.hp + 49))
+  e.add(Marked)
+  e.remove(Marked)
+  # an entity spawned in the batch can be given more components, or be
+  # despawned, later in the same batch
+  kept = spawn(Health(7))
+  kept.add(Armor(3))
+  dropped = spawn(Health(8))
+  dropped.despawn
+  made.push(kept)
+  made.push(dropped)
+end
+puts seed[Armor].rating
+puts seed[Health].hp
+puts seed.has?(Marked)
+puts made[0].alive?
+puts made[0][Health].hp
+puts made[0][Armor].rating
+puts made[1].alive?
+puts World.count(Health)
+puts World.count
+
+# changes queued for an entity after its despawn find it dead and do nothing
+victim = spawn Health(3)
+each Entity, Health, without: Armor do |e, h|
+  e.despawn
+  e.add(Marked)
+  e.add(Armor(9))
+end
+puts victim.alive?
+puts World.count
+puts World.count(Entity, with: Marked)
+puts World.count(Armor)

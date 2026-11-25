@@ -1,0 +1,10 @@
+error: `Vec2` is already defined
+ --> tests/fail/duplicate_type.grem:8:8
+  |
+8 | struct Vec2
+  |        ^^^^
+note: first defined here
+ --> tests/fail/duplicate_type.grem:4:8
+  |
+4 | struct Vec2
+  |        ----

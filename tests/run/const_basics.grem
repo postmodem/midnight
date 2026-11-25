@@ -1,0 +1,49 @@
+# Constants of every kind of type, constants built from earlier constants,
+# and reading their elements and fields.
+enum Level
+  Easy
+  Hard
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+WIDTH = 40
+HEIGHT = WIDTH / 4
+AREA = WIDTH * HEIGHT
+GRAVITY = 9.5
+HALF_G = GRAVITY / 2
+NAME = "gremlin"
+BANNER = NAME + "!"
+DEBUG = false
+LEVEL = Level::Hard
+CORNER = Vec2(WIDTH, HEIGHT)
+PRIMES = [2, 3, 5, 7]
+NAMES = ["a", NAME]
+
+puts WIDTH, HEIGHT, AREA
+puts GRAVITY
+puts HALF_G
+puts NAME
+puts BANNER
+puts DEBUG
+puts LEVEL
+puts CORNER
+puts PRIMES
+puts NAMES
+puts PRIMES[2]
+puts PRIMES[-1]
+puts PRIMES.length
+puts PRIMES.first + PRIMES.last
+puts PRIMES.include?(5)
+puts CORNER.x
+puts NAMES[1].upcase
+puts LEVEL == Level::Hard
+puts "#{NAME} is #{WIDTH} wide"
+
+mine = PRIMES
+mine.push(11)
+puts PRIMES.length
+puts mine.length

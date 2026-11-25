@@ -1,0 +1,30 @@
+# A local variable hides a function of the same name when the name is used
+# bare; `name(...)` is always a function call. Holds at the top level and
+# inside a function.
+
+def total -> Int
+  10
+end
+
+def label
+  "from function"
+end
+
+def inside -> Int
+  total = 3
+  total + total()
+end
+
+puts total
+total = 5
+puts total
+puts total()
+puts total + total()
+total += 1
+puts total
+
+puts inside
+
+label = "from local"
+puts label
+puts label()

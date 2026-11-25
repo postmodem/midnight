@@ -1,0 +1,5 @@
+# Storing a computed Int that does not fit into an element of a [UInt8].
+# Expected: 256 does not fit in UInt8
+xs: [UInt8] = [1, 2, 3]
+v = 255
+xs[0] = v + 1

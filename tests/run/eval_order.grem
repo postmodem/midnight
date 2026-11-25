@@ -1,0 +1,48 @@
+# Operands and arguments are evaluated left to right: each function prints
+# its name when it runs.
+struct Triple
+  x: Int
+  y: Int
+  z: Int
+end
+
+def a -> Int
+  print "a"
+  1
+end
+
+def b -> Int
+  print "b"
+  2
+end
+
+def c -> Int
+  print "c"
+  3
+end
+
+def add3(x: Int, y: Int, z: Int) -> Int
+  x + y + z
+end
+
+r = a + b * c
+puts " #{r}"
+r = a - b - c
+puts " #{r}"
+r = c * b + a
+puts " #{r}"
+r = add3(a, b, c)
+puts " #{r}"
+r = add3(c, a, b)
+puts " #{r}"
+t = Triple(c, b, a)
+puts " #{t.x}"
+xs = [c, a, b]
+puts " #{xs}"
+ok = a < b == (c > a)
+puts " #{ok}"
+r = max(b, a) + min(c, b)
+puts " #{r}"
+puts " #{a}#{b}"
+s = "#{c}#{a}"
+puts " #{s}"

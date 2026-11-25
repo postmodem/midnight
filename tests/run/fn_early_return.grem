@@ -1,0 +1,50 @@
+# Early `return`: with a value from nested control flow and loops, and
+# without a value from a function that returns nothing; the code after it
+# does not run.
+
+def classify(n: Int) -> String
+  if n < 0
+    return "negative"
+  end
+  if n == 0
+    return "zero"
+  end
+  "positive"
+end
+
+def index_of(xs: [Int], wanted: Int) -> Int
+  i = 0
+  while i < xs.length
+    if xs[i] == wanted
+      return i
+    end
+    i += 1
+  end
+  return -1
+end
+
+def countdown(from: Int)
+  n = from
+  loop do
+    if n == 0
+      puts "liftoff"
+      return
+    end
+    puts n
+    n -= 1
+  end
+end
+
+def guarded(n: Int)
+  if n > 2
+    return
+  end
+  puts "guarded #{n}"
+end
+
+puts classify(-5), classify(0), classify(5)
+puts index_of([4, 8, 15], 15)
+puts index_of([4, 8, 15], 16)
+countdown(2)
+guarded(1)
+guarded(3)

@@ -1,0 +1,50 @@
+# List iteration with `each`: a list in a variable, a list field, a list
+# returned by a function, an empty list, lists of strings and of structs,
+# and nested iteration.
+
+struct Team
+  name: String
+  scores: [Int]
+end
+
+def evens -> [Int]
+  [2, 4, 6]
+end
+
+names = ["ann", "bob", "cy"]
+names.each do |name|
+  puts name
+end
+
+team = Team("red", [3, 4, 5])
+total = 0
+team.scores.each do |s|
+  total += s
+end
+puts total
+
+evens.each do |e|
+  print e, ";"
+end
+puts
+
+nothing: [Int] = []
+nothing.each do |x|
+  puts "never #{x}"
+end
+
+teams = [Team("a", [1, 2]), Team("b", [10])]
+teams.each do |t|
+  t.scores.each do |pts|
+    puts "#{t.name}: #{pts}"
+  end
+end
+
+grid = [[1, 2], [3, 4]]
+flat = 0
+grid.each do |row|
+  row.each do |cell|
+    flat = flat * 10 + cell
+  end
+end
+puts flat

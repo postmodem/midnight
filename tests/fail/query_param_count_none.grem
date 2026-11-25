@@ -1,0 +1,11 @@
+# expect: the query has 1 term but the block takes no parameters
+# at: line 9, the `do` of the query (or the term `Position`)
+
+component Position
+  x: Float
+  y: Float
+end
+
+each Position do
+  puts "one"
+end

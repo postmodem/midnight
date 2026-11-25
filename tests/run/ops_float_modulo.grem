@@ -1,0 +1,7 @@
+# Float `%` takes the sign of the divisor, like Int `%`.
+puts 7.5 % 2.0
+puts -7.5 % 2.0
+puts 7.5 % -2.0
+puts -7.5 % -2.0
+puts -7.5 % 2
+puts -1 % 2.5

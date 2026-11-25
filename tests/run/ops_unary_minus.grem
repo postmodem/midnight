@@ -1,0 +1,26 @@
+# Unary minus: part of a number literal when directly before one, otherwise
+# an operator that binds looser than a method call and tighter than `*`.
+puts -1.abs
+puts -2.5.abs
+x = 3
+puts -x
+puts -x.abs
+y = -x
+puts y.abs
+puts -(x + 1)
+puts 5 - -3
+puts 5 + -3
+puts -x * 2
+puts -x + 10
+puts 2 * -x
+puts -(-x)
+f = 1.5
+puts -f
+puts -f * 2
+z = -4
+puts -z
+puts -7.abs + 1
+puts -3.clamp(-2, 2)
+-1.upto(1) do |i|
+  puts i
+end

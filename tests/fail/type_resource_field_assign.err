@@ -1,0 +1,5 @@
+error: expected `Int`, found `Float`
+ --> tests/fail/type_resource_field_assign.grem:8:16
+  |
+8 | Score.points = 1.5
+  |                ^^^

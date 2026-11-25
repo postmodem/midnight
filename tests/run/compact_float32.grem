@@ -1,0 +1,26 @@
+# Float32 fields: a Float stored is rounded to the nearest 32-bit value and
+# reads back as a Float; values exact in 32 bits are unchanged.
+struct Sample
+  v: Float32 = 0
+end
+
+s = Sample(1.5)
+puts s.v
+puts s
+s.v = 0.1
+puts s.v
+puts s.v == 0.1
+puts s.v > 0.1
+s.v = 16777217.0
+puts s.v
+s.v = 0.25
+s.v += 0.5
+puts s.v
+s.v = 3
+puts s.v
+s.v = 1.0 / 3
+t = s.v * 3
+puts t == 1.0
+half = Sample(0.5)
+puts half.v * 4 + 1
+puts Sample()

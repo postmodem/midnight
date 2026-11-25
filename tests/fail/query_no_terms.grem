@@ -1,0 +1,13 @@
+# expect: syntax error: a query needs at least one term before its filters (use `Entity` to visit every entity)
+# at: line 11, the filter `with` directly after `each`
+
+component Position
+  x: Float
+  y: Float
+end
+
+tag Player
+
+each with: Player do
+  puts "player"
+end

@@ -1,0 +1,40 @@
+# A struct that contains a list of itself: build a tree, print it, and walk
+# it with recursive functions that declare their return types.
+struct Node
+  name: String
+  value: Int = 0
+  children: [Node] = []
+end
+
+def total(n: Node) -> Int
+  sum = n.value
+  n.children.each do |child|
+    sum += total(child)
+  end
+  sum
+end
+
+def depth(n: Node) -> Int
+  deepest = 0
+  n.children.each do |child|
+    d = depth(child)
+    deepest = d if d > deepest
+  end
+  deepest + 1
+end
+
+leaf_a = Node("a", 1)
+leaf_b = Node("b", 2)
+mid = Node("mid", 10, [leaf_a, leaf_b])
+root = Node("root", 100)
+root.children.push(mid)
+root.children.push(Node("c", 3))
+puts root
+puts total(root)
+puts depth(root)
+puts root.children.length
+root.children[0].children[1].value = 20
+puts total(root)
+puts mid.children[1].value
+puts depth(leaf_a)
+puts root.children[0] == mid

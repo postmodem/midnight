@@ -1,0 +1,6 @@
+# expect: `push` needs a list that can be modified; `PRIMES` is a constant
+# at: line 6, the call `PRIMES.push(7)`
+
+PRIMES = [2, 3, 5]
+
+PRIMES.push(7)

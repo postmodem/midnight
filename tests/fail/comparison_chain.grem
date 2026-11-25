@@ -1,0 +1,5 @@
+# expect: comparison operators do not chain (`1 < x` is a `Bool`, which can't be compared with `3`); write `1 < x && x < 3`
+# at: line 5, the second `<`
+
+x = 2
+puts 1 < x < 3

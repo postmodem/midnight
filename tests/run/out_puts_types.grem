@@ -1,0 +1,32 @@
+# puts and print accept a value of any type and write its to_s.
+enum Team
+  Red
+  Blue
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+component Health
+  hp: Int
+  max: Int = 100
+end
+
+event Hit
+  damage: Int
+end
+
+puts 42
+puts -7
+puts 1.5
+puts false
+puts "text"
+puts Team::Blue
+puts Vec2(1, 2)
+puts Health(5)
+puts Hit(3)
+puts [1, 2, 3]
+puts 1, "two", 3.0, Team::Red, [4]
+print 42, 1.5, true, Team::Red, Vec2(), [1], "\n"

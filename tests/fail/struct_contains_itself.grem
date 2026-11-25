@@ -1,0 +1,7 @@
+# expect: the struct `Node` contains itself through the field `child` (allowed only through a list, `[Node]`)
+# at: line 6, the field `child`
+
+struct Node
+  value: Int
+  child: Node
+end

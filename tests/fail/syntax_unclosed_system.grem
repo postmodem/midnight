@@ -1,0 +1,5 @@
+# expect: the `system` block is never closed (an `end` is missing); the diagnostic points at the `system` that opened it, not at the end of the file
+# at: line 4, the keyword `system`
+
+system report
+  puts "tick"

@@ -1,0 +1,8 @@
+# Nested interpolation, and string literals inside an interpolation.
+n = 2
+puts "a#{"b#{1 + 1}c"}d"
+puts "#{"#{"#{n}"}"}"
+puts "[#{"<#{n * 2}>" * 2}]"
+puts "#{"}"}"
+puts "#{"{" + "}"}"
+puts "#{"x".length + "#{n}".length}"

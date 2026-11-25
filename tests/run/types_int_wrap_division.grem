@@ -1,0 +1,6 @@
+# The one Int division that overflows, the smallest Int divided by -1,
+# wraps like the rest of Int arithmetic; its remainder is zero.
+low = -9223372036854775807 - 1
+d = -1
+puts low / d
+puts low % d

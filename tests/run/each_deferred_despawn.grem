@@ -1,0 +1,52 @@
+# despawn inside each is queued: the entity stays alive, keeps its components
+# and is still matched by queries until the outermost each finishes.
+component Health
+  hp: Int
+end
+
+doomed = spawn Health(0)
+healthy = spawn Health(10)
+weak = spawn Health(-5)
+
+seen = 0
+alive_inside = 0
+has_inside = 0
+hp_inside = 0
+count_inside = 0
+each Entity, Health do |e, health|
+  seen += 1
+  next if health.hp > 0
+  e.despawn
+  e.despawn
+  alive_inside += 1 if e.alive?
+  has_inside += 1 if e.has?(Health)
+  hp_inside += e[Health].hp
+  count_inside += World.count(Health)
+end
+puts seen
+puts alive_inside
+puts has_inside
+puts hp_inside
+puts count_inside
+puts doomed.alive?
+puts weak.alive?
+puts healthy.alive?
+puts World.count(Health)
+puts World.count
+
+# an entity despawned during an earlier visit is still visited, and a nested
+# query still sees every entity
+spawn Health(1)
+spawn Health(2)
+outer = 0
+inner = 0
+each Entity, Health do |e, health|
+  outer += 1
+  each Entity, Health do |victim, vh|
+    victim.despawn
+    inner += 1
+  end
+end
+puts outer
+puts inner
+puts World.count

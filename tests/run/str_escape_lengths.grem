@@ -1,0 +1,16 @@
+# The escapes \0, \e and \r each stand for one character and one byte.
+# They are checked through length, bytesize and comparison, not printed.
+puts "a\0b".length
+puts "a\0b".bytesize
+puts "\e".length
+puts "\e".bytesize
+puts "\r".length
+puts "\r\n".bytesize
+z = "a\0b"
+puts z == "a\0b"
+puts z == "a\0c"
+puts z == "a"
+w = z + "c"
+puts w.length
+puts w.end_with?("bc")
+puts "\e[0m".length

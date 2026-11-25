@@ -1,0 +1,7 @@
+# expect: the field `points` of the resource `Score` needs a default
+# at: line 5, the field `points`
+
+resource Score
+  points: Int
+  best: Int = 0
+end

@@ -1,0 +1,62 @@
+# `if` / `elsif` / `else` as statements: every branch taken, forms without
+# `else`, nested ifs, compound conditions, a variable local to a branch.
+
+def describe(hp: Int)
+  if hp <= 0
+    puts "dead"
+  elsif hp < 20
+    puts "hurt"
+  elsif hp < 50
+    puts "ok"
+  else
+    puts "fine"
+  end
+end
+
+describe(0)
+describe(-5)
+describe(19)
+describe(20)
+describe(49)
+describe(50)
+
+n = 7
+if n > 5
+  puts "big"
+end
+if n > 10
+  puts "huge"
+end
+
+if n > 5
+  if n % 2 == 1
+    puts "big and odd"
+  else
+    puts "big and even"
+  end
+else
+  puts "small"
+end
+
+flag = false
+if flag
+  puts "set"
+else
+  puts "clear"
+end
+
+if n == 7 && !flag
+  puts "both"
+end
+if n == 8 || flag
+  puts "either"
+elsif n == 7
+  puts "second chance"
+end
+
+total = 0
+if n > 0
+  step = n * 2
+  total += step
+end
+puts total

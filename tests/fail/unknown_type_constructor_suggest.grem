@@ -1,0 +1,9 @@
+# expect: unknown type `Vec3`, suggesting `Vec2`
+# at: line 9, the name `Vec3`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+puts Vec3(1, 2)

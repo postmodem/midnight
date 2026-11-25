@@ -1,0 +1,30 @@
+# List literals: elements of one type, nested lists, and `[]` taking its
+# type from an annotation, a field or a parameter.
+struct Bag
+  items: [String] = []
+end
+
+def size_of(xs: [Int]) -> Int
+  xs.length
+end
+
+puts [1, 2, 3]
+puts ["a", "b"]
+puts [true, false]
+puts [1.5, 2.5]
+puts [[1, 2], [3]]
+empty: [Int] = []
+puts empty
+puts empty.length
+b = Bag([])
+puts b
+puts size_of([])
+puts size_of([4, 5])
+puts [1 + 1, 2 * 3, 10 / 2]
+nested: [[String]] = [[], ["x"]]
+puts nested
+puts [
+  1,
+  2
+].length
+puts [7][0]

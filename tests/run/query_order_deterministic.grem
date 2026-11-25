@@ -1,0 +1,40 @@
+# The visit order is deterministic: the same query run twice with nothing
+# changed in between visits the entities in the same order, whatever that
+# order is.
+component Id
+  n: Int
+end
+
+component Extra
+  k: Int
+end
+
+tag Odd
+
+def walk -> [Int]
+  seen: [Int] = []
+  each Id do |id|
+    seen.push(id.n)
+  end
+  seen
+end
+
+6.times do |i|
+  if i % 2 == 1
+    spawn Id(i), Odd
+  elsif i == 4
+    spawn Id(i), Extra(i)
+  else
+    spawn Id(i)
+  end
+end
+
+first_walk = walk
+second_walk = walk
+puts first_walk.length
+puts first_walk == second_walk
+sum = 0
+first_walk.each do |n|
+  sum += n
+end
+puts sum

@@ -1,0 +1,92 @@
+# An Int converts to Float wherever a Float is expected.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+component Speed
+  v: Float
+end
+
+resource Clock
+  scale: Float = 1
+end
+
+def half(x: Float) -> Float
+  x / 2
+end
+
+def as_float(n: Int) -> Float
+  n
+end
+
+def early(n: Int) -> Float
+  return n if n > 0
+  0
+end
+
+# arithmetic with a Float
+puts 1 + 2.5
+puts 2.5 - 1
+puts 3 * 0.5
+puts 7 / 2.0
+puts 7.0 / 2
+
+# assignment to a Float variable
+x = 1.5
+x = 2
+puts x
+x += 1
+puts x
+
+# an annotated variable
+ratio: Float = 1
+puts ratio
+
+# a Float field: default, constructor argument, assignment
+v = Vec2()
+puts v
+w = Vec2(3, 4)
+puts w
+w.x = 7
+puts w.x
+k = Vec2(y: 9)
+puts k
+
+# a component field and a resource field
+e = spawn Speed(5)
+puts e[Speed].v
+e[Speed].v = 6
+puts e[Speed].v
+puts Clock.scale
+Clock.scale = 3
+puts Clock.scale
+
+# a Float argument
+puts half(5)
+puts Math.sqrt(16)
+
+# returned from a function that returns Float
+puts as_float(3)
+puts early(4)
+puts early(-4)
+
+# a list literal with an Int among Floats
+xs = [1, 2.5, 3]
+puts xs
+
+# branches of an `if` and of a `case` used as values
+big = true
+y = if big then 1 else 2.5 end
+puts y
+n = 1
+z = case n
+when 1 then 10
+else 0.5
+end
+puts z
+
+# `==` and `!=` between an Int and a Float
+puts 1 == 1.0
+puts 2.0 == 2
+puts 2 != 2.5

@@ -1,0 +1,37 @@
+# Function names ending in `?` and `!`: called with and without arguments
+# and parentheses, after `!`, as a condition, and before the conditional
+# operator.
+
+resource Door
+  open: Bool = false
+  slams: Int = 0
+end
+
+def open? -> Bool
+  Door.open
+end
+
+def open!
+  Door.open = true
+end
+
+def slam!(n: Int)
+  Door.open = false
+  Door.slams += n
+end
+
+def big?(n: Int) -> Bool
+  n > 100
+end
+
+puts open?
+open!
+puts open?
+puts "it is open" if open?
+slam!(2)
+puts !open?
+puts open?()
+open!()
+puts open? ? "open" : "shut"
+puts big?(500) && !big?(5)
+puts Door.slams

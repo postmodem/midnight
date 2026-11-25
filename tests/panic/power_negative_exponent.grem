@@ -1,0 +1,5 @@
+# An Int raised to a negative Int power.
+# Expected: negative exponent -2
+base = 2
+n = -2
+puts base ** n

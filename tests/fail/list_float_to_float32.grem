@@ -1,0 +1,10 @@
+# expect: type mismatch: the field `heights` of `Mesh` is a `[Float32]`, found a `[Float]` (the two list types do not convert to each other)
+# at: line 10, the value `values`
+
+struct Mesh
+  heights: [Float32] = []
+end
+
+values = [1.5, 2.5]
+m = Mesh()
+m.heights = values

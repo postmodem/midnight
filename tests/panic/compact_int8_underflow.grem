@@ -1,0 +1,9 @@
+# Storing a computed Int below -128 in an Int8 field.
+# Expected: -129 does not fit in Int8
+struct Step
+  dx: Int8 = 0
+end
+
+s = Step()
+v = -128
+s.dx = v - 1

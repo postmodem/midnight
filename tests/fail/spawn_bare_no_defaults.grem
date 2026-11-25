@@ -1,0 +1,9 @@
+# expect: the component `Position` can't be listed bare in `spawn`: its fields `x` and `y` have no defaults
+# at: line 9, the name `Position`
+
+component Position
+  x: Float
+  y: Float
+end
+
+spawn Position

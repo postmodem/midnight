@@ -1,0 +1,52 @@
+# A variable belongs to the block that created it and to the blocks nested
+# inside that one.
+def classify(n: Int) -> String
+  result = "small"
+  if n > 10
+    extra = n - 10
+    result = "big by #{extra}"
+  end
+  result
+end
+
+def sum_to(n: Int) -> Int
+  total = 0
+  n.times do |i|
+    step = i + 1
+    total += step
+  end
+  total
+end
+
+puts classify(3)
+puts classify(15)
+puts sum_to(4)
+
+# sibling blocks can reuse a block-parameter name and a local name
+2.times do |i|
+  inner = i * 10
+  puts inner
+end
+2.times do |i|
+  inner = i + 100
+  puts inner
+end
+
+# nested blocks see and assign outer variables
+outer = 0
+3.times do |a|
+  2.times do |b|
+    if a == b
+      outer += 10
+    end
+  end
+end
+puts outer
+
+# a loop body starts fresh on every iteration
+k = 0
+while k < 2
+  fresh = k * 2
+  puts fresh
+  k += 1
+end

@@ -1,0 +1,16 @@
+# Int `%` takes the sign of the divisor.
+puts 7 % 3
+puts -7 % 3
+puts 7 % -3
+puts -7 % -3
+puts 6 % 3
+puts -6 % 3
+puts 5 % 7
+puts -5 % 7
+a = -9
+b = 4
+puts a % b
+puts b % a
+puts a % -b
+ok = a / b * b + a % b == a
+puts ok

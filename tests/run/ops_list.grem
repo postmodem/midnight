@@ -1,0 +1,26 @@
+# `+` joins two lists and `*` repeats one; both give a new list and leave
+# their operands alone.
+a = [1, 2]
+b = [3]
+c = a + b
+puts c
+puts a, b
+puts a + a
+puts b + a + b
+z = [0] * 4
+puts z
+puts z.length
+puts [1, 2] * 2
+puts a * 0
+e: [Int] = []
+puts e + a
+words = ["a"] + ["b", "c"]
+puts words
+puts ["ab"] * 2
+grid = [[0] * 2] * 2
+grid[0][0] = 1
+puts grid
+fs = [1.5] + [2.5]
+puts fs
+big = [0] * 64
+puts big.length

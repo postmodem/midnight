@@ -1,0 +1,56 @@
+# A component with fields of mixed sizes (Float, Float32, Int16, UInt8, Bool
+# and an enum), spawned, queried, modified and printed.
+enum Kind
+  Rock
+  Tree
+  Bird
+end
+
+component Body
+  mass: Float
+  heat: Float32
+  height: Int16
+  armor: UInt8
+  solid: Bool
+  kind: Kind
+end
+
+def summary
+  mass = 0.0
+  heat = 0.0
+  height = 0
+  armor = 0
+  solid = 0
+  birds = 0
+  each Body do |b|
+    mass += b.mass
+    heat += b.heat
+    height += b.height
+    armor += b.armor
+    solid += 1 if b.solid
+    birds += 1 if b.kind == Kind::Bird
+  end
+  puts "mass #{mass} heat #{heat} height #{height} armor #{armor} solid #{solid} birds #{birds}"
+end
+
+system warm
+  each Body do |b|
+    b.heat += 0.25
+    b.height -= 100
+    b.armor += 1 if b.armor < 255
+    b.solid = !b.solid
+  end
+end
+
+rock = spawn Body(2.5, 0.5, -300, 255, true, Kind::Rock)
+tree = spawn Body(mass: 10, heat: 1.25, height: 32767, armor: 0, solid: true, kind: Kind::Tree)
+bird = spawn Body(0.125, 40.5, 12, 7, false, Kind::Bird)
+summary
+World.tick
+summary
+puts rock[Body]
+puts tree[Body].height
+bird[Body].kind = Kind::Tree
+bird[Body].mass *= 2
+puts bird[Body]
+puts World.count(Body)

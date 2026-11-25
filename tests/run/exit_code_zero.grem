@@ -1,0 +1,33 @@
+# exit(0) from a function called by a system during a tick, with strings and
+# lists alive in locals, in a resource and in a component: the program ends
+# there with status 0 and nothing later runs.
+component Label
+  text: String
+end
+
+resource Log
+  lines: [String] = []
+end
+
+def finish(reason: String)
+  parts = [reason, reason + "!"]
+  puts "exiting: #{parts[1]}"
+  exit(0)
+  puts "not reached"
+end
+
+system work
+  Log.lines.push("tick " + Time.tick.to_s)
+  note = "tick " + Time.tick.to_s
+  puts note
+  finish("done") if Time.tick == 1
+  puts "end of " + note
+end
+
+system after
+  puts "after work"
+end
+
+spawn Label("kept " + "alive")
+World.run
+puts "not reached either"

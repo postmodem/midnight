@@ -1,0 +1,63 @@
+# Parameters of every kind of type: Int, Float (given an Int), String, Bool,
+# enum, struct, list and Entity.
+
+struct Size
+  w: Int
+  h: Int
+end
+
+enum Color
+  Red
+  Blue
+end
+
+component Health
+  hp: Int
+end
+
+def area(s: Size) -> Int
+  s.w * s.h
+end
+
+def scaled(v: Float, by: Float) -> Float
+  v * by
+end
+
+def describe(name: String, shiny: Bool, color: Color) -> String
+  prefix = if shiny then "shiny " else "" end
+  "#{prefix}#{color} #{name}"
+end
+
+def total(xs: [Int]) -> Int
+  sum = 0
+  xs.each do |x|
+    sum += x
+  end
+  sum
+end
+
+def longest(words: [String]) -> String
+  best = ""
+  words.each do |w|
+    best = w if w.length > best.length
+  end
+  best
+end
+
+def hp_of(e: Entity) -> Int
+  return 0 unless e.alive? && e.has?(Health)
+  e[Health].hp
+end
+
+puts area(Size(3, 4))
+puts scaled(3, 2)
+puts scaled(1.5, 2)
+puts describe("ring", true, Color::Red)
+puts describe("rock", false, Color::Blue)
+puts total([1, 2, 3])
+puts longest(["a", "abc", "ab"])
+hero = spawn Health(25)
+puts hp_of(hero)
+puts hp_of(Entity.none)
+hero.despawn
+puts hp_of(hero)

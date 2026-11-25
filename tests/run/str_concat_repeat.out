@@ -1,0 +1,14 @@
+foobar
+xyx
+x
+--------------------
+ababab
+ab
+
+0
+==>
+<==
+ab
+abab
+
+true

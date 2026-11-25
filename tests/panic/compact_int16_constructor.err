@@ -1,0 +1,1 @@
+tests/panic/compact_int16_constructor.grem:9: runtime error: 32768 does not fit in Int16

@@ -1,0 +1,9 @@
+# expect: the constant -1 does not fit in `UInt32` (the field `id` of `Record`)
+# at: line 9, the value `-1`
+
+struct Record
+  id: UInt32 = 0
+end
+
+r = Record()
+r.id = -1

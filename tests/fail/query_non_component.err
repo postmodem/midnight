@@ -1,0 +1,5 @@
+error: `Vec2` is a struct, not a component
+ --> tests/fail/query_non_component.grem:9:6
+  |
+9 | each Vec2 do |v|
+  |      ^^^^ a query names components, tags and `Entity`

@@ -1,0 +1,8 @@
+# expect: type mismatch: `name_of` returns `String`, but its last expression is an `Int`
+# at: line 5, the expression `n`
+
+def name_of(n: Int) -> String
+  n
+end
+
+puts name_of(1)

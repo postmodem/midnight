@@ -1,0 +1,36 @@
+# `!`, `&&` and `||`; the right operand is evaluated only when needed.
+resource Calls
+  n: Int = 0
+end
+
+def yes -> Bool
+  Calls.n += 1
+  print "y"
+  true
+end
+
+def no -> Bool
+  Calls.n += 1
+  print "n"
+  false
+end
+
+puts true && true, true && false, false && true, false && false
+puts true || true, true || false, false || true, false || false
+puts !true, !false, !!true
+
+r1 = no && yes
+puts " #{r1}"
+r2 = yes && no
+puts " #{r2}"
+r3 = yes || no
+puts " #{r3}"
+r4 = no || yes
+puts " #{r4}"
+r5 = no && yes || yes
+puts " #{r5}"
+r6 = yes || no && no
+puts " #{r6}"
+r7 = !no && !yes
+puts " #{r7}"
+puts Calls.n

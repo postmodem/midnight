@@ -1,0 +1,25 @@
+# In an on block next skips one event and break skips the rest of the current
+# batch. This test reads "skips" as: the skipped events are not delivered to
+# that on again, although they are still pending in the following tick.
+event Num
+  n: Int
+end
+
+system reader
+  on Num do |num|
+    next if num.n == 2
+    break if num.n == 4
+    puts "tick #{Time.tick}: #{num.n}"
+  end
+end
+
+emit Num(1)
+emit Num(2)
+emit Num(3)
+emit Num(4)
+emit Num(5)
+emit Num(6)
+World.tick
+World.tick
+emit Num(7)
+World.tick

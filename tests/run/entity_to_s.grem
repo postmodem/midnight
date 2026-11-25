@@ -1,0 +1,26 @@
+# Entity to_s shows index and generation. This is the one test that assumes
+# the numbering: indexes are handed out from 0, generations start at 1, and
+# a slot freed by despawn is reused by the next spawn with generation 2.
+component Marker
+  n: Int
+end
+
+component Target
+  who: Entity = Entity.none
+end
+
+a = spawn Marker(1)
+b = spawn Marker(2)
+puts a
+puts b
+puts "#{a} and #{b}"
+puts a.to_s + "!"
+puts Entity.none
+puts Target(b)
+puts Target()
+a.despawn
+puts a
+c = spawn Marker(3)
+puts c
+puts a == c
+puts [b, c]

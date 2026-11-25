@@ -1,0 +1,31 @@
+# `case` over a Bool: as a statement (both values, one value, a comparison as
+# the subject) and as an expression with `else`.
+
+def answer(b: Bool) -> String
+  case b
+  when true then "yes"
+  else
+    "no"
+  end
+end
+
+done = false
+case done
+when true
+  puts "finished"
+when false
+  puts "running"
+end
+
+case 3 > 2
+when true then puts "three is more"
+when false then puts "three is less"
+end
+
+case done
+when true then puts "only true handled"
+end
+
+puts answer(true)
+puts answer(false)
+puts answer(1 == 2)

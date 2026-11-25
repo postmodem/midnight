@@ -1,0 +1,53 @@
+alpha
+alpha-beta
+gammagamma
+["one", "two"]
+["uno", "two", "three"]
+4
+1
+true
+[["a", "b"], ["c", "d"]]
+["a", "b", "x"]
+a
+A
+["c", "d"]
+["A", "b"]
+0
+true
+[Note(title: "n1", tags: ["t1"]), Note(title: "n2", tags: [])]
+[Note(title: "n1!", tags: ["t1"]), Note(title: "n2", tags: ["late"])]
+["late"]
+0
+HEY!
+A!!
+["item0", "item1", "item2"]
+abcdabcd
+scratch value
+["loop0x", "loop2x"]
+3
+Note(title: "draft", tags: [])
+Note(title: "final", tags: ["done", "really"])
+["done"]
+["done", "really"]
+Label(text: "first", history: ["made"])
+Label(text: "first edited", history: ["made", "edited"])
+Label(text: "replaced", history: [])
+["a", "b"]
+[Note(title: "sword", tags: ["sharp"])]
+first
+["line 1", "line 2"]
+["line 2!"]
+start again
+["line 1", "line 2", "line 2!"]
+[[1, 2, 9], [3]]
+Label(text: "host v2", history: ["replaced"])
+Inventory(items: [Note(title: "loot", tags: ["shiny"])])
+Label(text: "host child", history: ["h", "born"])
+gift
+false
+false
+2
+speaker?
+["exit"]
+speaker: 2 ["hi", "there", "heard"]
+["top-level string", "top-level string!"]

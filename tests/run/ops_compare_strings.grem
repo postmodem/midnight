@@ -1,0 +1,18 @@
+# `<`, `<=`, `>` and `>=` on strings compare byte by byte; a prefix sorts
+# before the longer string.
+puts "apple" < "banana"
+puts "banana" < "apple"
+puts "a" < "ab"
+puts "ab" < "a"
+puts "abc" <= "abc"
+puts "abc" >= "abc"
+puts "abc" > "abb"
+puts "abc" < "abd"
+puts "" < "a"
+puts "Zebra" < "apple"
+puts "10" < "9"
+a = "pear"
+b = "peach"
+puts a > b
+puts a >= b
+puts a <= b

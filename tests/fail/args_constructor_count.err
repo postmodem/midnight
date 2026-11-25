@@ -1,0 +1,5 @@
+error: `Vec2` has 2 fields, but 3 were given
+ --> tests/fail/args_constructor_count.grem:9:5
+  |
+9 | v = Vec2(1, 2, 3)
+  |     ^^^^^^^^^^^^^

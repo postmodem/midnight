@@ -1,0 +1,5 @@
+error: unknown field or method `opacity` for `Rect`
+  --> tests/fail/unknown_field.grem:10:8
+   |
+10 | puts r.opacity
+   |        ^^^^^^^

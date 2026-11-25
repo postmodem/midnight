@@ -1,0 +1,4 @@
+# exit ends the program at once with status 0: nothing after it runs.
+puts "before"
+exit
+puts "after"

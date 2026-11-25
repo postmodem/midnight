@@ -1,0 +1,9 @@
+# expect: the return type of `pick` can't be inferred: it returns a `String` on line 5 and an `Int` on line 6
+# at: line 6, the expression `n` (the conflicting `return` is on line 5)
+
+def pick(n: Int)
+  return "negative" if n < 0
+  n
+end
+
+puts pick(1)

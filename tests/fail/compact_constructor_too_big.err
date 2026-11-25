@@ -1,0 +1,5 @@
+error: 300 does not fit in `UInt8`
+ --> tests/fail/compact_constructor_too_big.grem:8:14
+  |
+8 | spawn Health(300)
+  |              ^^^ `UInt8` holds 0 to 255

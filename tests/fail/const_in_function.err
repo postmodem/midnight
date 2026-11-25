@@ -1,0 +1,5 @@
+error: constant `LIMIT` can't be defined here
+ --> tests/fail/const_in_function.grem:5:3
+  |
+5 |   LIMIT = 10
+  |   ^^^^^ a constant is defined by an assignment at the top level

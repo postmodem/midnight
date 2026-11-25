@@ -1,0 +1,6 @@
+# expect: `clear` needs a list that can be modified; `PRIMES` is a constant
+# at: line 6, the call `PRIMES.clear`
+
+PRIMES = [2, 3, 5]
+
+PRIMES.clear

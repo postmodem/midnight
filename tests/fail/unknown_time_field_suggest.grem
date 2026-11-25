@@ -1,0 +1,4 @@
+# expect: unknown field `elapse` on `Time`, suggesting `elapsed`
+# at: line 4, the name `elapse`
+
+puts Time.elapse

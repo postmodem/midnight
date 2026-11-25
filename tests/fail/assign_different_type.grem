@@ -1,0 +1,5 @@
+# expect: type mismatch: `x` is an `Int` (from its first assignment on line 4), found a `String`
+# at: line 5, the value `"one"`
+
+x = 1
+x = "one"

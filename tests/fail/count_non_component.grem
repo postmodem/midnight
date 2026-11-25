@@ -1,0 +1,9 @@
+# expect: a term of `World.count` must be a component or `Entity`; `Vec2` is a struct
+# at: line 9, the name `Vec2`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+puts World.count(Vec2)

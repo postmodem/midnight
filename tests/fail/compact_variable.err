@@ -1,0 +1,5 @@
+error: `UInt8` can't be the type of a variable
+ --> tests/fail/compact_variable.grem:4:5
+  |
+4 | hp: UInt8 = 5
+  |     ^^^^^ variables, parameters and return values are `Int` or `Float`; use `Int`

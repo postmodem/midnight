@@ -1,0 +1,5 @@
+error: can't modify `xs`
+ --> tests/fail/push_readonly_list.grem:5:3
+  |
+5 |   xs.push(1)
+  |   ^^ `xs` is a parameter, and parameters are read-only

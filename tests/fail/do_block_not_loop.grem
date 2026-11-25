@@ -1,0 +1,7 @@
+# expect: `push` does not take a `do` block; `do … end` is accepted only by the loop forms (`times`, `upto`, `downto`, `each`, `each_with_index`, `loop`, a query `each`, `on`)
+# at: line 5, the method name `push`
+
+xs = [1, 2, 3]
+xs.push(4) do |x|
+  puts x
+end

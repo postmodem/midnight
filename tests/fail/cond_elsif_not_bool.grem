@@ -1,0 +1,10 @@
+# expect: the condition of `elsif` must be a `Bool`, found a `String`
+# at: line 8, the condition `name`
+
+n = 1
+name = "x"
+if n > 5
+  puts "big"
+elsif name
+  puts "named"
+end

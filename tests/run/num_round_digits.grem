@@ -1,0 +1,11 @@
+# round(digits) gives a Float rounded to that many decimal places.
+puts 3.14159.round(2)
+puts 1234.5678.round(1)
+puts 0.126.round(2)
+puts 5.0.round(3)
+puts 7.77.round(0)
+puts -3.14159.round(3)
+d = 2
+x = 9.87654
+puts x.round(d)
+puts x.round(1)

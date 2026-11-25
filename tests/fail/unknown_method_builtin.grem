@@ -1,0 +1,5 @@
+# expect: unknown method `frobnicate` on a list (`[Int]`), with no suggestion
+# at: line 5, the name `frobnicate`
+
+xs = [1, 2, 3]
+puts xs.frobnicate

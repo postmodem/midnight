@@ -1,0 +1,14 @@
+# expect: unknown method `scale` on `Rect`, suggesting `scaled`
+# at: line 14, the name `scale`
+
+struct Rect
+  width: Float
+  height: Float
+
+  def scaled(k: Float) -> Rect
+    Rect(width * k, height * k)
+  end
+end
+
+r = Rect(2, 3)
+puts r.scale(2)

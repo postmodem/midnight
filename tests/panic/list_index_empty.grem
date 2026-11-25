@@ -1,0 +1,6 @@
+# Indexing a list that has become empty.
+# Expected: index 0 out of range for a list of length 0
+xs = [1]
+xs.pop
+i = 0
+puts xs[i]

@@ -1,0 +1,10 @@
+# expect: syntax error: unexpected `elsif` (an `unless` takes only an optional `else`)
+# at: line 8, the keyword `elsif`
+
+ready = false
+count = 0
+unless ready
+  puts "waiting"
+elsif count > 0
+  puts "counting"
+end

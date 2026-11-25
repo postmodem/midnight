@@ -1,0 +1,5 @@
+# Pushing a computed Int that does not fit onto a [Int8].
+# Expected: 200 does not fit in Int8
+xs: [Int8] = []
+v = 200
+xs.push(v)

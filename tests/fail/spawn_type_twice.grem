@@ -1,0 +1,9 @@
+# expect: `spawn` lists the component `Position` twice
+# at: line 9, the second `Position(…)`
+
+component Position
+  x: Float
+  y: Float
+end
+
+spawn Position(0, 0), Position(1, 1)

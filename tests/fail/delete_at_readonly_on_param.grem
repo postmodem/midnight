@@ -1,0 +1,12 @@
+# expect: `delete_at` needs a list that can be modified; `batch` is the read-only parameter of `on`
+# at: line 10, the call `batch.items.delete_at(0)`
+
+event Batch
+  items: [Int]
+end
+
+system drain
+  on Batch do |batch|
+    batch.items.delete_at(0)
+  end
+end

@@ -1,0 +1,10 @@
+# expect: syntax error: unexpected `def` in a resource body (a resource holds fields only)
+# at: line 7, the keyword `def`
+
+resource Score
+  points: Int = 0
+
+  def doubled -> Int
+    points * 2
+  end
+end

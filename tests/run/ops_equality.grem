@@ -1,0 +1,63 @@
+# `==` and `!=` compare by content on every kind of type; entities compare
+# by identity.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+struct Named
+  name: String
+  nums: [Int] = []
+  at: Vec2 = Vec2()
+end
+
+enum Team
+  Red
+  Blue
+end
+
+component Health
+  hp: Int
+end
+
+event Hit
+  damage: Int
+end
+
+puts 1 == 1, 1 == 2, 1 != 2, 1 != 1
+puts 1.5 == 1.5, 1.5 != 1.5, 0.5 == 0.25
+puts 1 == 1.0, 1.0 == 1, 1 == 1.5, 2 != 2.0, 3 != 2.5
+puts true == true, true == false, false != true
+puts "abc" == "abc", "abc" == "abd", "abc" != "ab", "" == ""
+puts "ab" + "c" == "abc"
+puts Team::Red == Team::Red, Team::Red == Team::Blue, Team::Red != Team::Blue
+puts [1, 2, 3] == [1, 2, 3], [1, 2, 3] == [1, 2], [1, 2] != [2, 1]
+puts [[1], [2, 3]] == [[1], [2, 3]], [[1], [2, 3]] == [[1], [2, 4]]
+puts ["a", "b"] == ["a", "b"], [1.5] != [1.5]
+puts Vec2(1, 2) == Vec2(1, 2), Vec2(1, 2) == Vec2(2, 1), Vec2(1, 2) != Vec2(1, 3)
+
+a = Named("n", [1, 2], Vec2(1, 1))
+b = Named("n", [1, 2], Vec2(1, 1))
+puts a == b
+b.nums.push(3)
+puts a == b, a != b
+b.nums.pop
+puts a == b
+b.name = "m"
+puts a == b
+
+puts Health(5) == Health(5), Health(5) != Health(6)
+puts Hit(1) == Hit(1), Hit(1) == Hit(2)
+
+e1 = spawn Health(5)
+e2 = spawn Health(5)
+same = e1
+puts e1 == same, e1 == e2, e1 != e2
+puts e1[Health] == e2[Health]
+puts Entity.none == Entity.none, e1 == Entity.none, e1 != Entity.none
+e1.despawn
+puts e1 == same
+
+xs: [Int] = []
+ys: [Int] = []
+puts xs == ys

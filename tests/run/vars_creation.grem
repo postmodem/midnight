@@ -1,0 +1,28 @@
+# Variables are created by their first assignment, with or without a type
+# annotation, and keep that type.
+count = 0
+name = "gremlin"
+ratio: Float = 1
+scores: [Int] = []
+flag = true
+label: String = "typed"
+grid: [[Int]] = []
+puts count, name, ratio, scores, flag, label, grid
+count = count + 5
+count += 1
+name = name + "!"
+ratio = 3
+scores.push(10)
+scores.push(20)
+flag = !flag
+row: [Int] = [1, 2]
+grid.push(row)
+puts count, name, ratio, scores, flag, grid
+names: [String] = []
+names.push("a")
+puts names
+pair = [1.5, 2.5]
+pair = [4.5]
+puts pair
+scores = []
+puts scores.length

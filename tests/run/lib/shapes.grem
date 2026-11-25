@@ -1,0 +1,40 @@
+# One declaration of every kind, loaded by require_declarations.grem.
+UNIT = 5
+
+struct Box
+  w: Int
+  h: Int
+
+  def area -> Int
+    w * h
+  end
+end
+
+enum Shade
+  Light
+  Dark
+end
+
+component Size
+  n: Int
+end
+
+tag Marked
+
+resource Stock
+  items: Int = 0
+end
+
+event Restock
+  amount: Int
+end
+
+def shade_name(s: Shade) -> String
+  "shade #{s}"
+end
+
+system restock
+  on Restock do |r|
+    Stock.items += r.amount
+  end
+end

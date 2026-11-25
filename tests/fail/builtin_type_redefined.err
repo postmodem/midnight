@@ -1,0 +1,5 @@
+error: `Entity` is a built-in name and can't be redefined
+ --> tests/fail/builtin_type_redefined.grem:4:8
+  |
+4 | struct Entity
+  |        ^^^^^^

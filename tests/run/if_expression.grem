@@ -1,0 +1,41 @@
+# `if` as an expression: on the right of an assignment, as an argument, in
+# interpolation, in parentheses, in a list literal, nested, in multi-line
+# form, and with Int and Float branches (the Int converts).
+
+def show(s: String)
+  puts "<#{s}>"
+end
+
+hp = 30
+label = if hp > 50 then "healthy" else "hurt" end
+puts label
+
+size = if hp > 100
+  "huge"
+elsif hp > 20
+  "medium"
+else
+  "small"
+end
+puts size
+
+show(if hp == 30 then "thirty" else "other" end)
+puts "state: #{if hp < 10 then "low" else "fine" end}"
+
+ratio = if hp > 50 then 1 else 0.5 end
+puts ratio
+whole = if hp < 50 then 1 else 0.5 end
+puts whole
+
+nested = if hp > 0
+  if hp > 25 then "upper" else "lower" end
+else
+  "none"
+end
+puts nested
+
+bonus = (if hp > 10 then 5 else 0 end) + 1
+puts bonus
+
+flags = [if hp > 10 then 1 else 2 end, if hp > 40 then 3 else 4 end]
+puts flags

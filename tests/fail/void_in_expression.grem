@@ -1,0 +1,8 @@
+# expect: `greet` returns nothing, so its call can't be used as a value (here, as an argument of `puts`)
+# at: line 8, the call `greet()`
+
+def greet
+  puts "hello"
+end
+
+puts greet()

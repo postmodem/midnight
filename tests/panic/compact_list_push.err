@@ -1,0 +1,1 @@
+tests/panic/compact_list_push.grem:5: runtime error: 200 does not fit in Int8

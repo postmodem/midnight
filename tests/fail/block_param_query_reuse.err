@@ -1,0 +1,10 @@
+error: block parameter `pos` reuses a name that is already in scope
+  --> tests/fail/block_param_query_reuse.grem:11:19
+   |
+11 | each Position do |pos|
+   |                   ^^^
+note: `pos` is defined here
+ --> tests/fail/block_param_query_reuse.grem:9:1
+  |
+9 | pos = Position(1, 2)
+  | ---

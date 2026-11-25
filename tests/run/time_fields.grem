@@ -1,0 +1,46 @@
+# The Time resource: tick is the number of ticks completed (0 during the
+# first tick), dt is writable (an Int converts), and elapsed goes up by dt at
+# the end of each tick, including a dt set by a system during that tick.
+resource Seen
+  ticks: [Int] = []
+  elapsed: [Float] = []
+  dts: [Float] = []
+end
+
+system observe
+  Seen.ticks.push(Time.tick)
+  Seen.elapsed.push(Time.elapsed)
+  Seen.dts.push(Time.dt)
+end
+
+system throttle
+  Time.dt = 4 if Time.tick == 5
+end
+
+def frame -> Int
+  Time.tick
+end
+
+Time.dt = 0.5
+puts Time.dt
+3.times do
+  World.tick
+end
+puts Time.tick
+puts Time.elapsed
+puts frame
+Time.dt = 2
+puts Time.dt
+World.tick
+puts Time.elapsed
+Time.dt *= 0.125
+puts Time.dt
+World.tick
+puts Time.tick
+puts Time.elapsed
+World.tick
+puts Time.dt
+puts Time.elapsed
+puts Seen.ticks
+puts Seen.elapsed
+puts Seen.dts

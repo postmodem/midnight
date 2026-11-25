@@ -1,0 +1,5 @@
+error: -129 does not fit in `Int8`
+ --> tests/fail/compact_constructor_keyword_too_small.grem:8:18
+  |
+8 | t = Tile(offset: -129)
+  |                  ^^^^ `Int8` holds -128 to 127

@@ -1,0 +1,6 @@
+# expect: the compact type `UInt8` can't be a return type (only the type of fields and list elements); use `Int`
+# at: line 4, the name `UInt8`
+
+def level -> UInt8
+  7
+end

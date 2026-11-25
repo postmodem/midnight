@@ -1,0 +1,50 @@
+# A component used as a plain value, like a struct: constructed positionally,
+# by keyword and with defaults, held in locals and lists, with methods, an
+# operator method, `==` and `to_s`; then attached to an entity as a copy.
+component Health
+  hp: Int
+  cap: Int = 100
+
+  def ratio -> Float
+    hp.to_f / cap
+  end
+
+  def damaged(amount: Int) -> Health
+    Health(hp - amount, cap)
+  end
+
+  def +(other: Health) -> Health
+    Health(hp + other.hp, cap + other.cap)
+  end
+
+  def dead? -> Bool
+    hp <= 0
+  end
+end
+
+h = Health(50)
+puts h
+puts Health(hp: 5, cap: 10)
+puts Health(cap: 20, hp: 4)
+puts h.ratio
+puts h.damaged(20)
+puts h.hp
+puts h.dead?
+puts h.damaged(50).dead?
+both = h + Health(25, 50)
+puts both
+puts h == Health(50, 100)
+puts h != both
+h.hp -= 10
+puts h.hp
+pool = [h, both]
+pool[0].hp = 1
+puts pool
+puts h.hp
+
+e = spawn h
+puts e[Health] == h
+e[Health].hp = 7
+puts h.hp
+puts e[Health].damaged(2)
+puts e[Health].dead?

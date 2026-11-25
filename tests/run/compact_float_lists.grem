@@ -1,0 +1,37 @@
+# `[Float32]` and `[Float]` are different list types: elements of the first
+# are rounded to 32 bits when stored, elements of the second are not.
+struct Wave
+  samples: [Float32] = []
+  exact: [Float] = []
+end
+
+narrow: [Float32] = [0.5, 1.5, 0.1]
+full: [Float] = [0.5, 1.5, 0.1]
+puts narrow[0], narrow[1]
+puts narrow[2]
+puts full[2]
+puts narrow[2] == full[2]
+puts narrow[0] == full[0]
+narrow.push(16777217.0)
+full.push(16777217.0)
+puts narrow[3]
+puts full[3]
+narrow[0] = 2
+narrow[1] *= 0.5
+puts narrow[0] + narrow[1]
+
+w = Wave()
+w.samples.push(0.25)
+w.samples.push(0.1)
+w.exact.push(0.1)
+puts w.samples[0]
+puts w.samples[1] == w.exact[0]
+puts w.samples.length + w.exact.length
+halves: [Float32] = [0.5, 0.25]
+puts halves
+puts halves + halves
+total = 0.0
+halves.each do |h|
+  total += h
+end
+puts total

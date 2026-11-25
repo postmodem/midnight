@@ -1,0 +1,51 @@
+# The value of the last expression is the return value: a plain expression,
+# an `if` expression, a `case` expression, an `unless` expression, a call,
+# a variable.
+
+def square(n: Int) -> Int
+  n * n
+end
+
+def sign(n: Int) -> String
+  if n < 0
+    "negative"
+  elsif n == 0
+    "zero"
+  else
+    "positive"
+  end
+end
+
+def price(kind: String) -> Float
+  case kind
+  when "small" then 1.5
+  when "large" then 4
+  else
+    0
+  end
+end
+
+def parity(n: Int)
+  unless n % 2 == 0
+    "odd"
+  else
+    "even"
+  end
+end
+
+def fourth(n: Int) -> Int
+  square(square(n))
+end
+
+def describe(n: Int) -> String
+  text = sign(n)
+  text += " and " + parity(n)
+  text
+end
+
+puts square(7)
+puts sign(-2), sign(0), sign(2)
+puts price("small"), price("large"), price("free")
+puts parity(3), parity(4)
+puts fourth(3)
+puts describe(5)

@@ -1,0 +1,12 @@
+# A new entity does not revive an old handle: reading through the old
+# handle fails even though another entity with the component now exists.
+# Expected: Entity(0v1) is not alive
+component Health
+  hp: Int
+end
+
+old = spawn Health(10)
+old.despawn
+fresh = spawn Health(20)
+puts fresh[Health].hp
+puts old[Health].hp

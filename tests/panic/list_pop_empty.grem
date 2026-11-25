@@ -1,0 +1,5 @@
+# pop on a list that has become empty.
+# Expected: pop on an empty list
+xs = [1]
+xs.pop
+xs.pop

@@ -1,0 +1,11 @@
+# Single-quoted strings are taken as written; only \' and \\ are escapes.
+puts 'raw'
+puts 'no #{interpolation} here'
+puts 'a\nb'
+puts 'it\'s'
+puts 'back\\slash'
+puts 'say "hi"'
+puts 'a\tb'.length
+puts 'tab\t' == "tab\\t"
+puts '' == ""
+puts 'x'.length

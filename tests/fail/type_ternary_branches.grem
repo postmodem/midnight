@@ -1,0 +1,5 @@
+# expect: type mismatch: the branches of `? :` are an `Int` and a `String`
+# at: line 5, the branch `"no"`
+
+ok = true
+x = ok ? 1 : "no"

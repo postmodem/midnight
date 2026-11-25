@@ -1,0 +1,9 @@
+# Pushing a computed Int that does not fit onto a [UInt16] component field.
+# Expected: 70000 does not fit in UInt16
+component Trail
+  marks: [UInt16] = []
+end
+
+e = spawn Trail
+v = 70000
+e[Trail].marks.push(v)

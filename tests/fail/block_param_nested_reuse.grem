@@ -1,0 +1,8 @@
+# expect: the block parameter `i` reuses the name of the enclosing block's parameter (line 4)
+# at: line 5, the `i` between the bars
+
+3.times do |i|
+  2.times do |i|
+    puts i
+  end
+end

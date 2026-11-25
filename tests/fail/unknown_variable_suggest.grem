@@ -1,0 +1,5 @@
+# expect: unknown variable (or function) `totl`, suggesting `total`
+# at: line 5, the name `totl`
+
+total = 3
+puts totl

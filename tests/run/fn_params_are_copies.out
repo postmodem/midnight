@@ -1,0 +1,6 @@
+[1, 2, 3]
+[-1, 2, 3, 99]
+Bag(items: ["rope"], weight: 5)
+Bag(items: ["rope", "stone"], weight: 15)
+hey
+hey!

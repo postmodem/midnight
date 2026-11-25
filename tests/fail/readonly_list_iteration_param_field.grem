@@ -1,0 +1,12 @@
+# expect: can't assign to `pt.x`: `pt` is the parameter of a list iteration, and a part of a read-only value is read-only
+# at: line 11, the statement `pt.x = 0`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+points = [Vec2(1, 2), Vec2(3, 4)]
+points.each do |pt|
+  pt.x = 0
+end

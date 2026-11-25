@@ -1,0 +1,33 @@
+# `case` over an enum used as a value: every variant is covered, so there is
+# no `else`.
+enum Dir
+  North, East, South, West
+end
+
+def turn(d: Dir) -> Dir
+  case d
+  when Dir::North then Dir::East
+  when Dir::East then Dir::South
+  when Dir::South then Dir::West
+  when Dir::West then Dir::North
+  end
+end
+
+def score(d: Dir) -> Int
+  points = case d
+  when Dir::North then 1
+  when Dir::East, Dir::West then 2
+  when Dir::South then 3
+  end
+  points * 10
+end
+
+facing = Dir::North
+4.times do
+  facing = turn(facing)
+  puts facing
+end
+puts score(Dir::East)
+puts score(Dir::South)
+puts score(Dir::North)
+puts score(turn(Dir::South))

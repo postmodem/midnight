@@ -1,0 +1,27 @@
+# `until`: runs while the condition is false; zero iterations when it starts
+# out true; a Bool variable as the condition, set from a function.
+
+resource Steps
+  left: Int = 3
+end
+
+def step -> Bool
+  Steps.left -= 1
+  puts "step, #{Steps.left} left"
+  Steps.left == 0
+end
+
+done = false
+until done
+  done = step
+end
+
+until done
+  puts "never"
+end
+
+k = 1
+until k >= 20
+  k *= 3
+end
+puts k

@@ -1,0 +1,46 @@
+# Events as data: positional and keyword construction, defaults, an event
+# with no fields, and `to_s` and `==` of an event value held in a local.
+event Scored
+  points: Int
+  by: String = "nobody"
+  bonus: Float = 0
+end
+
+event Ping
+end
+
+resource Seen
+  pings: Int = 0
+  total: Int = 0
+  names: [String] = []
+end
+
+system listen
+  on Ping do |ping|
+    Seen.pings += 1
+  end
+  on Scored do |scored|
+    Seen.total += scored.points
+    Seen.names.push(scored.by)
+  end
+end
+
+s = Scored(10)
+puts s
+puts Scored(by: "ann", points: 3)
+puts Scored(1, "bob", 2.5)
+puts s == Scored(10)
+puts s != Scored(11)
+puts s.points + 1
+t = s
+t.points = 99
+puts s.points
+puts t.by
+emit s
+emit Scored(5, "cy")
+emit Ping()
+emit Ping()
+World.tick
+puts Seen.pings
+puts Seen.total
+puts Seen.names

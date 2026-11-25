@@ -1,0 +1,26 @@
+# A name whose block has ended is free again: it can be created anew, with a
+# different type.
+if true
+  t = 1
+  puts t
+end
+t = "after"
+puts t
+
+2.times do |i|
+  inner = i * 10
+  puts inner
+end
+inner = "outside"
+puts inner
+
+flag = false
+if flag
+  v = 1
+  puts v
+else
+  v = "else"
+  puts v
+end
+v = 2.5
+puts v

@@ -1,0 +1,6 @@
+# expect: syntax error: unexpected `(` after the system name (a system has no parameters)
+# at: line 4, the `(`
+
+system move(speed: Float)
+  puts speed
+end

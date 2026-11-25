@@ -1,0 +1,9 @@
+# expect: `spawn` takes components and tags; `Vec2` is a struct
+# at: line 9, the argument `Vec2(1, 2)`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+spawn Vec2(1, 2)

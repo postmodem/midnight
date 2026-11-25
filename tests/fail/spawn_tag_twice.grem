@@ -1,0 +1,6 @@
+# expect: `spawn` lists the tag `Player` twice
+# at: line 6, the second `Player`
+
+tag Player
+
+spawn Player, Player

@@ -1,0 +1,5 @@
+# expect: the condition of the `unless` modifier must be a `Bool`, found an `Entity`
+# at: line 5, the condition `e`
+
+e = spawn
+puts "gone" unless e

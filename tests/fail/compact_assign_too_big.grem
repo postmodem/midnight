@@ -1,0 +1,9 @@
+# expect: the constant 256 does not fit in `UInt8` (the field `hp` of `Stats`)
+# at: line 9, the value `256`
+
+struct Stats
+  hp: UInt8 = 10
+end
+
+s = Stats()
+s.hp = 256

@@ -1,0 +1,6 @@
+# expect: the `while` block is never closed (an `end` is missing); the diagnostic points at the `while` that opened it, not at the end of the file
+# at: line 5, the keyword `while`
+
+n = 3
+while n > 0
+  n -= 1

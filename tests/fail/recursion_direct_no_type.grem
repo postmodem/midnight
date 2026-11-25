@@ -1,0 +1,9 @@
+# expect: the recursive function `fact` needs a declared return type: its call to itself needs a type that is still being inferred; a note points at the definition of `fact` on line 4
+# at: line 6, the call `fact(n - 1)`
+
+def fact(n: Int)
+  return 1 if n <= 1
+  n * fact(n - 1)
+end
+
+puts fact(5)

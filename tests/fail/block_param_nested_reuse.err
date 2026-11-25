@@ -1,0 +1,10 @@
+error: block parameter `i` reuses a name that is already in scope
+ --> tests/fail/block_param_nested_reuse.grem:5:15
+  |
+5 |   2.times do |i|
+  |               ^
+note: `i` is defined here
+ --> tests/fail/block_param_nested_reuse.grem:4:13
+  |
+4 | 3.times do |i|
+  |             -

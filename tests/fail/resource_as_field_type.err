@@ -1,0 +1,5 @@
+error: `Score` is a resource, not a value type
+ --> tests/fail/resource_as_field_type.grem:9:10
+  |
+9 |   score: Score
+  |          ^^^^^ a resource is one global instance; use its fields, like `Score.field`

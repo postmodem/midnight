@@ -1,0 +1,6 @@
+# expect: type mismatch: the operands of `&&` must be `Bool`, found an `Int`
+# at: line 6, the operand `n`
+
+n = 1
+ok = true
+puts n && ok

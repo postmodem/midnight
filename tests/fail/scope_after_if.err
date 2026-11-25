@@ -1,0 +1,5 @@
+error: unknown variable or function `label`
+ --> tests/fail/scope_after_if.grem:8:6
+  |
+8 | puts label
+  |      ^^^^^

@@ -1,0 +1,12 @@
+# Writing a field of e[C] when the entity is alive but has no C.
+# Expected: Entity(0v1) has no Health
+component Health
+  hp: Int
+end
+
+component Position
+  x: Float
+end
+
+e = spawn Position(1.5)
+e[Health].hp -= 1

@@ -1,0 +1,64 @@
+# Return types inferred from the body: Int, Float, String, Bool, list,
+# struct, enum, nothing, and a body with an early `return`. Each result is
+# used in a way that needs the inferred type.
+
+struct Point
+  x: Int
+  y: Int
+end
+
+enum Mode
+  Fast
+  Slow
+end
+
+def answer
+  42
+end
+
+def half(n: Int)
+  n / 2.0
+end
+
+def greeting(name: String)
+  "hello, " + name
+end
+
+def positive?(n: Int)
+  n > 0
+end
+
+def pair(a: Int, b: Int)
+  [a, b]
+end
+
+def origin
+  Point(0, 0)
+end
+
+def default_mode
+  Mode::Slow
+end
+
+def say(s: String)
+  puts s
+end
+
+def pick(n: Int)
+  return "negative" if n < 0
+  "non-negative"
+end
+
+puts answer + 1
+puts half(5)
+puts greeting("bo").length
+puts positive?(3) && !positive?(-3)
+puts pair(1, 2).length
+puts pair(3, 4)
+puts origin.x + origin.y
+puts origin
+puts default_mode == Mode::Slow
+puts default_mode
+say("said")
+puts pick(-1).upcase
+puts pick(1)

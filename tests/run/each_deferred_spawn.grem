@@ -1,0 +1,49 @@
+# spawn inside each is queued: the returned entity is alive but has no
+# components until the outermost each finishes, queries do not count it, and
+# the running query does not visit it.
+component Cell
+  gen: Int
+end
+
+tag Fresh
+
+spawn Cell(0)
+spawn Cell(0)
+
+visits = 0
+alive_inside = 0
+has_inside = 0
+count_inside = 0
+children: [Entity] = []
+each Cell do |cell|
+  visits += 1
+  child = spawn(Cell(cell.gen + 1), Fresh)
+  children.push(child)
+  alive_inside += 1 if child.alive?
+  has_inside += 1 if child.has?(Cell) || child.has?(Fresh)
+  count_inside += World.count(Cell)
+end
+puts visits
+puts alive_inside
+puts has_inside
+puts count_inside
+puts World.count(Cell)
+puts children.length
+puts children[0].alive?
+puts children[0].has?(Cell)
+puts children[0].has?(Fresh)
+puts children[0][Cell].gen
+puts children[1][Cell].gen
+
+# the statement form is queued the same way
+each Cell, with: Fresh do |cell|
+  spawn Cell(cell.gen + 1)
+  spawn
+end
+puts World.count(Cell)
+puts World.count
+gens = 0
+each Cell do |cell|
+  gens += cell.gen
+end
+puts gens

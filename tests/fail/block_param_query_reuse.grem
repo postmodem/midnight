@@ -1,0 +1,13 @@
+# expect: the block parameter `pos` reuses the name of a variable that is already in scope (created on line 9)
+# at: line 11, the `pos` between the bars
+
+component Position
+  x: Float
+  y: Float
+end
+
+pos = Position(1, 2)
+spawn pos
+each Position do |pos|
+  puts pos.x
+end

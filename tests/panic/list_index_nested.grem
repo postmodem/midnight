@@ -1,0 +1,5 @@
+# Indexing past the end of an inner list.
+# Expected: index 1 out of range for a list of length 1
+grid = [[1, 2], [3]]
+i = 1
+puts grid[1][i]

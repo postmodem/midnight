@@ -1,0 +1,13 @@
+# to_s of Int: implicit in puts and interpolation, explicit with to_s.
+puts 42
+puts -42
+puts 0
+puts 1_000_000
+puts 0xff
+puts 0b1010
+puts 9223372036854775807
+n = -5
+puts "n is #{n}"
+puts 42.to_s + "!"
+puts n.to_s + n.to_s
+puts 42.to_s.length

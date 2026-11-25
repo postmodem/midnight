@@ -1,0 +1,5 @@
+error: can't assign to `pt.x`
+  --> tests/fail/readonly_list_iteration_param_field.grem:11:3
+   |
+11 |   pt.x = 0
+   |   ^^^^ `pt` is a parameter of a list iteration, a read-only copy; loop over indexes to change the list

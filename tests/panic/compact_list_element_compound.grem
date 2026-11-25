@@ -1,0 +1,5 @@
+# A compound assignment to a [UInt8] element whose result is too large.
+# Expected: 260 does not fit in UInt8
+xs: [UInt8] = [250, 5]
+step = 10
+xs[0] += step

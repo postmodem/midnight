@@ -1,0 +1,6 @@
+# expect: the tag `Frozen` can't be a term of `World.count`; hint: `World.count(Entity, with: Frozen)`
+# at: line 6, the name `Frozen`
+
+tag Frozen
+
+puts World.count(Frozen)

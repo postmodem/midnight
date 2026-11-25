@@ -1,0 +1,8 @@
+# expect: unknown function `doubl`, suggesting `double`
+# at: line 8, the name `doubl`
+
+def double(n: Int) -> Int
+  n * 2
+end
+
+puts doubl(4)

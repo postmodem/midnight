@@ -1,0 +1,23 @@
+# Events emitted while an on block is running are left for the next time that
+# on runs. Another on that runs later in the same tick sees them at once.
+event Step
+  n: Int
+end
+
+system chain
+  on Step do |s|
+    puts "chain, tick #{Time.tick}: step #{s.n}"
+    emit Step(s.n + 1) if s.n < 3
+  end
+end
+
+system follow
+  on Step do |s|
+    puts "follow, tick #{Time.tick}: step #{s.n}"
+  end
+end
+
+emit Step(1)
+5.times do
+  World.tick
+end

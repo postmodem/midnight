@@ -1,0 +1,48 @@
+# An enum `case` with no `else` that covers every variant, as a statement and
+# as an expression.
+
+enum Phase
+  Idle
+  Moving
+  Done
+end
+
+def label(p: Phase) -> String
+  case p
+  when Phase::Idle then "idle"
+  when Phase::Moving then "moving"
+  when Phase::Done then "done"
+  end
+end
+
+def weight(p: Phase) -> Int
+  case p
+  when Phase::Idle, Phase::Done
+    0
+  when Phase::Moving
+    3
+  end
+end
+
+def announce(p: Phase)
+  case p
+  when Phase::Idle
+    puts "nothing to do"
+  when Phase::Moving, Phase::Done
+    puts "busy or finished"
+  end
+end
+
+phases = [Phase::Idle, Phase::Moving, Phase::Done]
+phases.each do |ph|
+  puts "#{label(ph)} #{weight(ph)}"
+  announce(ph)
+end
+
+current = Phase::Moving
+text = case current
+when Phase::Idle then "I"
+when Phase::Moving then "M"
+when Phase::Done then "D"
+end
+puts text

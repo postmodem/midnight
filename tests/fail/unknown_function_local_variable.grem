@@ -1,0 +1,5 @@
+# expect: unknown function `total`: `total(…)` is always a function call, and `total` is only a local variable
+# at: line 5, the name `total` before `(`
+
+total = 5
+puts total(1)

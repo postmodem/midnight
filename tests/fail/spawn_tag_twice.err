@@ -1,0 +1,5 @@
+error: `Player` is listed twice
+ --> tests/fail/spawn_tag_twice.grem:6:15
+  |
+6 | spawn Player, Player
+  |               ^^^^^^ an entity has at most one component of each type

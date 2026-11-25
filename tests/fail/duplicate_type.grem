@@ -1,0 +1,10 @@
+# expect: duplicate definition: the type `Vec2` is already defined on line 4
+# at: line 8, the name `Vec2`
+
+struct Vec2
+  x: Float
+end
+
+struct Vec2
+  y: Float
+end

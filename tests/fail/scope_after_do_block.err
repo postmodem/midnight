@@ -1,0 +1,5 @@
+error: unknown variable or function `square`
+ --> tests/fail/scope_after_do_block.grem:7:6
+  |
+7 | puts square
+  |      ^^^^^^

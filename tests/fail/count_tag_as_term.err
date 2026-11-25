@@ -1,0 +1,5 @@
+error: tag `Frozen` can't be a query term
+ --> tests/fail/count_tag_as_term.grem:6:18
+  |
+6 | puts World.count(Frozen)
+  |                  ^^^^^^ a tag has no data to bind; filter with `with: Frozen`

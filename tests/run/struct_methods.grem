@@ -1,0 +1,55 @@
+# Struct methods: fields in scope by name, `self` as the whole value,
+# parameters, calls through `self.`, an inferred return type, names ending in
+# `?` and `!`, and methods that return a changed copy.
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+
+  def length_squared -> Float
+    x * x + y * y
+  end
+
+  def length -> Float
+    Math.sqrt(self.length_squared)
+  end
+
+  def scaled(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+
+  def with_x(nx: Float) -> Vec2
+    Vec2(nx, y)
+  end
+
+  def doubled
+    self.scaled(2)
+  end
+
+  def same?(other: Vec2) -> Bool
+    self == other
+  end
+
+  def flipped! -> Vec2
+    Vec2(y, x)
+  end
+
+  def describe
+    puts "vec #{x}, #{y}"
+  end
+end
+
+v = Vec2(3, 4)
+puts v.length_squared
+puts v.length
+puts v.length()
+puts v.scaled(2)
+puts v
+w = v.with_x(10)
+puts w
+puts v.same?(Vec2(3, 4))
+puts v.same?(w)
+v.describe
+puts v.doubled.length
+puts v.flipped!
+puts Vec2(1, 1).scaled(0.5).with_x(4)
+puts v.x
