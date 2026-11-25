@@ -1,8 +1,8 @@
 # 0002 — GPU systems: run data-parallel systems on the GPU
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0001
-- **Tested on:** —
+- **Tested on:** x86_64-linux, 2026-11-25
 
 ## Goal
 
@@ -404,3 +404,160 @@ All run on x86_64-linux. Criteria 2, 6, 7 and 8 need a hardware GPU.
 9. `ldd` on the release build of `examples/hello.12am` lists libc and libm
    and no GPU library.
 10. Every command in the README works as written.
+
+## Outcome
+
+Implemented as specified, with the differences listed under "Differences
+from the design". All ten criteria pass on x86_64-linux: an RTX 5090 (driver
+595.71.05) beside a Ryzen 9 9950X3D, `wgpu-native` 27.0.4.0, clang 21.1.8,
+and Mesa's `llvmpipe` for software Vulkan.
+
+### Acceptance criteria
+
+| #  | Result |
+| -- | ------ |
+| 1  | `nix flake check` passes. The package's check phase runs `cargo test`: 300 unit tests and the suite, with every GPU system on its CPU implementation, in both build modes. `checks.gpu` ran 88 runs of 44 programs on `llvmpipe` inside the sandbox (31 of `tests/run`, 12 of `tests/panic` and `examples/nbody.12am`, each in release and debug). `nix flake check --no-build --all-systems` passes. |
+| 2  | `MIDNIGHT_GPU=info midnight run examples/nbody.12am` prints `midnight: gpu: NVIDIA GeForce RTX 5090 (Vulkan)`. Against the `MIDNIGHT_GPU=off` run, 2 of the 32 printed numbers differ, by 0.00001, which is 6.0e-6 × max(1, \|position\|). Over all 256 bodies, unrounded, the largest difference is 9.5e-6 (7.8e-6 on `llvmpipe`). |
+| 3  | Two `MIDNIGHT_GPU=off` runs and one with `--debug` print the same bytes, those of `examples/nbody.out`. |
+| 4  | 82 `tests/fail/gpu_*` cases. For the rules the criterion lists: `gpu_output_puts`, `gpu_spawn` (and `gpu_despawn`, `gpu_add`, `gpu_remove`), `gpu_emit`, `gpu_index_component`, `gpu_term_string_field`, `gpu_term_float_field` and `gpu_term_int_field`, `gpu_term_uint32_field`, `gpu_write_resource`, `gpu_write_nested_param`, `gpu_each_two_deep`, `gpu_break`, `gpu_return`, `gpu_recursion_direct` and `gpu_recursion_mutual`, `gpu_function_each`, `gpu_int_literal_too_big`, `gpu_statement_outside_each`. |
+| 5  | 12 `tests/panic/gpu_*` cases: `/` and `%` by zero, a negative exponent, `rand(n)` with `n` not positive, a store that does not fit each of the four compact types, the earliest of several failures, a failure in a called function, a failure that stops the tick, and a constant divisor that wraps to zero. Each stops with its message and status 1 with `MIDNIGHT_GPU=off` in both build modes, and in `checks.gpu`. |
+| 6  | `nix run .#bench-gpu`, gravity on 16,384 bodies: 1.33 ms per tick on the GPU, 356 ms on the CPU, ratio 267. |
+| 7  | Same run, one million entities moved, ms per tick: 0.13 on the CPU; 0.04 on the GPU with the data left there; 0.78 on the GPU with a CPU system reading every tick. The app adds a fourth row, the reading program on the CPU: 0.53. Every run prints the same checksum. |
+| 8  | Same run. `gpu_move_read.12am`: the plan is `download  Position  move -> total`, and `stats` counts 0 uploads and 1 download in each of the 1,000 ticks after the first. `gpu_move.12am`: the plan is empty and `stats` counts none. The app exits 1 if either differs. |
+| 9  | `ldd` on the release build of `examples/hello.12am` lists `libm.so.6`, `libc.so.6` and the loader. The build of `examples/nbody.12am` adds `libwgpu_native.so`, `libvulkan.so.1`, `libgcc_s.so.1` and `libdl.so.2`. |
+| 10 | Every command in the README was run as written. |
+
+`MIDNIGHT_TEST_GPU=hardware cargo test` and `nix run .#gpu-test` ran the 44
+programs on the RTX 5090 in release mode. Every output is exact except
+`examples/nbody.12am`, which is within its tolerance on both devices.
+
+### Measured with generated shaders
+
+On the RTX 5090, with nothing else running. Times are ms per tick, the
+fastest of 5 runs; the slowest was within 10 % of it up to a million
+entities.
+
+Moving entities (`bench/gpu_move.12am` at other sizes, with
+`Time.dt = 2^-20`). In the download column an ordinary system reads one
+position in every tick; in the upload column one writes one velocity.
+
+| Entities  | CPU implementation | GPU, data stays | GPU, download each tick | GPU, upload each tick |
+| --------- | ------------------ | --------------- | ----------------------- | --------------------- |
+| 1,000     | 0.00012            | 0.039           | 0.043                   | 0.045                 |
+| 10,000    | 0.0011             | 0.038           | 0.047                   | 0.050                 |
+| 100,000   | 0.012              | 0.039           | 0.103                   | 0.106                 |
+| 200,000   | 0.024              | 0.038           | 0.135                   | 0.149                 |
+| 300,000   | 0.039              | 0.037           | 0.169                   | 0.190                 |
+| 400,000   | 0.053              | 0.039           | 0.207                   | 0.231                 |
+| 500,000   | 0.067              | 0.038           | 0.242                   | 0.274                 |
+| 1,000,000 | 0.129              | 0.042           | 0.399                   | 0.484                 |
+| 4,000,000 | 1.241              | 0.063           | 1.811                   | 1.931                 |
+
+- **A block costs about 0.04 ms** whatever its size up to a million
+  entities. Planning measured 0.03 with a hand-written shader.
+- **A light system wins on the GPU from about 300,000 entities** when its
+  data stays there. Planning estimated 200,000; the generated CPU
+  implementation is faster than the hand-written loop was (0.13 against
+  0.19 ms at a million).
+- **A transfer costs 0.04 to 0.06 ms per megabyte,** an upload a little more
+  than a download: a download 0.045 and an upload 0.055 at 8 MB, 0.055 and
+  0.058 at 32 MB.
+- **With a transfer in every tick the GPU loses at every size measured.**
+
+The reference's "What a GPU system costs" carries these figures.
+
+### Open questions, settled
+
+- **Many small tables.** A query that matches tables of 100 rows: 0.040 ms
+  per tick for 1 table, 0.043 for 8, 0.064 for 64, about 0.0004 ms for each
+  further table. A block has one uniform buffer, written once, and each
+  table is bound to its own range of it. Dispatches are not batched.
+- **The error word.** `atomicMin` on an `atomic<u32>` reports the earliest
+  line on the 5090, `llvmpipe` and RADV. `tests/panic/gpu_earliest_failure`
+  covers it.
+- **The numbers from the compiler** are in the section above.
+
+### Differences from the design
+
+- **`UInt32` is kept out of GPU code altogether,** not only out of query
+  terms: a resource field or constant of that type, or of a struct that
+  holds one, cannot be read in a GPU block, and a function a block calls
+  cannot take, return or declare one. A shader's 32-bit `Int` is signed, so
+  the value would have changed meaning on the way in.
+- **Constants are worked out by the compiler.** An `Int` constant made from
+  literals and other such constants with `+`, `-`, `*`, `/`, `%` and `**`
+  is a known number. It takes no uniform word, and `x / H` is not an
+  operation that can fail when `H` is known and not zero.
+- **Assigning to an `Entity` parameter** in a GPU block is an error.
+  Ordinary code allows it.
+- **A large table is one dispatch in two dimensions,** not several
+  dispatches.
+- **A snapshot of rows that are not whole words,** for a nested query that
+  matches several tables, is put together in CPU memory and written in one
+  piece: a copy between GPU buffers moves whole words.
+- **The plan is worked out for two ticks:** one in which no structural
+  change runs, and one in which every structural change runs. A single pass
+  that takes every statement to run hid a transfer of every tick behind one
+  that only a structural change causes.
+- **Top-level code in the plan** counts only inside a loop that ticks.
+- **Tolerances apply to `Float`s only,** as `T * max(1, |expected|)`. Whole
+  numbers and all other text are compared exactly. A GPU-mode run that
+  finds no device, or runs a block on the CPU, fails.
+- **The suite's GPU mode is `MIDNIGHT_TEST_GPU=software` or `hardware`,**
+  which `checks.gpu` and `apps.gpu-test` set. The stats test is
+  `gpu_stats_match_plan` on `tests/run/gpu_transfers.12am`.
+- **`MIDNIGHT_GPU`** reports a word it does not know, once, when the program
+  starts.
+- **`midnight emit-wgsl FILE`** prints the shader of every GPU block.
+- **`bench-gpu`** also prints the reading program's time on the CPU, and
+  compares the two plans with the counted transfers. It prints the gravity
+  ratio and does not enforce the factor of 10.
+- **The uniform buffer.** Words 0 to 7 are a header (the table's rows, the
+  snapshot's rows, the seed, the block, and `Time.tick`, `Time.dt` and
+  `Time.elapsed`). From word 8 every block of a program uses one
+  layout of the resource fields and constants that any block reads.
+  `runtime/midnight_rt.h` states it.
+- **Build flags.** Generated C is compiled with `-DMN_GPU_SYSTEMS` when the
+  program declares a GPU system, and with `-DMN_GPU` when
+  `MIDNIGHT_GPU_FLAGS` is set and the GPU runtime is linked.
+- **Leaks a driver leaves are passed over.** In a debug build, LeakSanitizer
+  skips a leak whose allocation came through a library that is no longer
+  loaded when the program ends. RADV leaves one such allocation. Every
+  other leak is still reported.
+
+### Known limits
+
+- A debug build cannot use an NVIDIA device: the driver fails to start
+  under AddressSanitizer. Such a build uses another adapter if the machine
+  has one, and the CPU otherwise. `apps.gpu-test` runs release builds only.
+- `%` on `Float` at 32 bits is not the exact remainder; the reference says
+  how far off it can be. The sign of a zero result of `%` and `**` can
+  differ from what ordinary code gives.
+- A divisor that is a resource field, a field of a struct constant or a
+  constant made by a call still makes its block one that can fail, so its
+  error word is read back in every tick.
+- On a device, `Math` functions outside their domain and comparisons with
+  NaN are not tested; the reference leaves their results open.
+- `stats` does not count the copy a nested `each` reads, and the plan does
+  not list it.
+- The plan does not follow ticks written out one after another with code
+  between them, or a tick in which only some structural changes run.
+- `gpu_stats_match_plan` needs a program whose GPU components sit in one
+  table, since a plan line stands for one transfer per table.
+- `llvmpipe` binds at most 128 MB per buffer. A block with a larger column
+  runs on the CPU there and `info` says so; five million entities with a
+  32-byte component did.
+- Creating the device adds about 0.15 s to a run on the 5090.
+- Nothing has run on macOS or on aarch64; the flake evaluates there.
+
+### Noticed, not changed
+
+- Floor division is written twice in the compiler, in `check/util.rs` and
+  in `emit/analysis.rs`.
+- `narrow` in `emit/gpu/lower.rs` still names `UInt32` as a source type,
+  which the checker no longer lets through.
+- A division by a constant known to be zero could be a compile error. It is
+  a run-time error, as in ordinary code.
+- The check of query terms names one kind of unsuitable field per compile.
+- GCC 15.3 reports `-Werror=maybe-uninitialized` in `midnight_rt.c`. The
+  flake uses clang.
