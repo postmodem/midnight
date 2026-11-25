@@ -1,0 +1,38 @@
+# A GPU block replaces a whole component through its parameter: with a
+# constructor, with a constructor that leaves fields to their defaults, and
+# with the value a function returns. The function takes and returns the
+# component and reads `Time` and a constant. The block uses `Math::PI` and
+# `Math::E`.
+component Reading
+  value: Int32
+  scale: Int32 = 1000
+  tick: Int32 = -1
+end
+
+STEP = 5
+
+def stamped(reading: Reading) -> Reading
+  Reading(reading.value + STEP, reading.scale, Time.tick)
+end
+
+gpu system renew
+  each Reading do |reading|
+    if reading.value == 0
+      reading = Reading((Math::PI * reading.scale).round, reading.scale)
+    elsif reading.value == 1
+      reading = Reading(value: (Math::E * reading.scale).round)
+    else
+      reading = stamped(reading)
+    end
+  end
+end
+
+spawn Reading(0, 100, 7)
+spawn Reading(1, 100, 7)
+spawn Reading(2, 100, 7)
+2.times do
+  World.tick
+  each Reading do |reading|
+    puts reading
+  end
+end

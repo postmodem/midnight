@@ -11,7 +11,7 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 233 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+Counts: 235 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 317 in `tests/fail`, 71 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
@@ -313,8 +313,8 @@ Counts: 233 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 
 ## GPU systems
 
-The rules a `gpu system` must follow are in "The language" of
-[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md). Each row is a
+The rules a `gpu system` must follow are in "What a GPU block may contain"
+and "What a GPU system may touch" of the reference. Each row is a
 rule and the programs that break it. A rule applies inside a GPU block and
 inside every function one calls; the `gpu_function_*` programs break rules
 there, and their diagnostics carry a note that names the system and the call.
@@ -362,8 +362,7 @@ Programs with GPU systems that follow every rule. They run on the C
 implementation of each block here; the same programs are meant to run on a
 device, so those that print a `Float` a device may round differently state a
 tolerance in their first line and print it rounded. Each expected output was
-worked out by hand from "The language" of
-[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), except where
+worked out by hand from "GPU systems" in the reference, except where
 hand arithmetic does not reach: the orbits of `gpu_gravity`, the `Math`
 results of `gpu_numbers`, and the random numbers of `gpu_rand`,
 `gpu_control_flow` and `gpu_statements` were compared with separate C
@@ -394,9 +393,14 @@ programs written from the specification.
 | `Int` `/` floors and `%` takes the divisor's sign, by a variable and by a constant; the smallest `Int` by -1 | `gpu_div_mod` |
 | `Float` `%` takes the divisor's sign | `gpu_div_mod` |
 | `abs`, `clamp`, `min`, `max`, `to_f`, `round(digits)`, the `Math` functions, `**` on `Float` with either sign of base | `gpu_numbers`, `gpu_float_literals` |
+| `**` on `Float`: a zero exponent, a zero base with an exponent of either sign, a negative base with a whole and with a fractional exponent | `gpu_float_power` |
+| `%` on `Float` by zero is NaN | `gpu_float_power` |
+| `%` on `Float` where rounding to 32 bits shows (`1000000.3125 % 0.1`), and beyond a quotient of 16,777,216 | not covered: the CPU and a GPU are allowed different results |
+| `Math::PI` and `Math::E` | `gpu_replace_component` |
 | A function computes at 32 bits when a GPU block calls it and at 64 bits otherwise | `gpu_functions`, `gpu_float_literals`, `gpu_int_wrap` |
 | Functions that call functions, return early, loop, return nothing, return a struct | `gpu_functions`, `gpu_statements` |
 | Struct construction, methods, operator methods, unary minus, `+=` through an operator, `==`, a struct with `Float` and `Int` fields | `gpu_struct_methods` |
+| A whole component assigned through the parameter: from a constructor, with fields left to their defaults, from a function that takes and returns the component and reads `Time` | `gpu_replace_component` |
 | `if`, `elsif`, `unless`, modifiers, `case` on `Int`, `Bool` and enum, the conditional operator, as statements and as values | `gpu_control_flow`, `gpu_statements`, `gpu_field_types` |
 | `while`, `until`, `loop`, `times`, `upto`, `downto` | `gpu_control_flow`, `gpu_next_keeps_writes`, `gpu_functions` |
 | `&&` and `||` evaluate their right side only when it decides the result | `gpu_control_flow` |
@@ -405,6 +409,10 @@ programs written from the specification.
 | `rand` and `rand(n)`: the same in every run; different per entity, tick, draw and block; draws in called functions count | `gpu_rand`, `gpu_control_flow` |
 | `srand` changes the numbers; drawing in a GPU system does not move the ordinary generator | `gpu_rand` |
 | A call whose value is unused still draws | `gpu_statements` |
+| `rand` follows the hash chain of the reference | `gpu_rand` (its numbers were compared with a separate C program) |
+| A comparison with NaN, and a `Math` function outside its domain, on a GPU | not covered: the result is not specified |
+| A block that does not fit the device runs on the CPU | not covered: it needs a device with small limits |
+| `World.tick` returns when the GPU has finished the tick's work | not observable from a program's output; not covered |
 | A GPU system between ordinary systems that read and write the same components, and top-level code between ticks | `gpu_with_cpu_systems`, `gpu_index_from_cpu` |
 | `e[C]` in ordinary code on a component a GPU block names, read, written and replaced | `gpu_index_from_cpu`, `gpu_entity_term` |
 | A block that uses none of its parameters | `gpu_statements` |
@@ -524,6 +532,8 @@ programs written from the specification.
 | Fact | Files |
 | --- | --- |
 | A component's fields are ordered to minimise padding; `Bool` and enum fields take one byte | `layout` (the size is asserted by a separate harness step) |
+| A component a GPU block writes is rounded up to a multiple of 4 bytes; one that GPU blocks only read keeps its size | `gpu_odd_row_size`, `gpu_field_types` (the generated C asserts the size and every offset of each component a GPU block names); the unit tests `a_written_component_is_whole_words` and `a_read_only_column_can_have_rows_of_any_size` in `src/emit/tests/gpu.rs` |
+| What a GPU system costs: the fixed cost of a block, the cost of a transfer, the copy a nested `each` reads | not observable from a program's output; `nix run .#bench-gpu` measures the first two |
 | The other layout and cost facts (tables, 20 bytes per entity, tags take no space, costs of operations) | not observable from a program's output; not covered |
 
 ## Errors
@@ -579,6 +589,10 @@ the rule for where a column lives.
 | `despawn` changes every component with a GPU copy: `on despawn` | `plan/despawn` |
 | `add` and `remove` change every component with a GPU copy: `on add`, `on remove` | `plan/add_remove` |
 | A marked download before an unmarked one of the same component: both are listed | `plan/despawn` |
+| The plan shown in the reference | `plan/despawn` |
+| `with:` and `without:` filters read no column | `plan/add_remove` (`freeze` filters on Heat, and its download is marked `on add`) |
+| The mark names the first structural change of a system that touches the component | the unit test `the_first_structural_change_of_a_system_is_named` in `src/plan/tests.rs` |
+| Ticks written out one after another, with code between them, are not followed | the unit test `top_level_code_between_ticks_outside_a_loop_does_not_count` in `src/plan/tests.rs` |
 | A structural change that finds the CPU copy current downloads nothing | `plan/add_remove` |
 | Components with no GPU copy never appear | `plan/despawn`, `plan/spawn` |
 | Top-level code in the loop that ticks is the step `top level` | `plan/top_level` |
@@ -658,6 +672,8 @@ the rule for where a column lives.
 | | `UInt16` negative, field of a struct in a component | `panic/gpu_store_uint16` | `value does not fit in UInt16` |
 | | in a function the block calls: the line in the function | `panic/gpu_failure_in_function` | `modulo by zero` |
 | | two operations fail in different runs: the earliest in the source is reported | `panic/gpu_earliest_failure` | `division by zero` |
+| | operations fail in two files: the one in the file loaded first is reported | not covered | |
+| | a failed operation gives 0 and the run goes on; a failed `rand(n)` draws no number | not observable: the program stops | |
 | | nothing after the failing `each` runs | `panic/gpu_failure_stops_tick` | `negative exponent` |
 
 ## Assumptions
@@ -993,7 +1009,7 @@ against that header.
 | `to_s` is provided for every struct and can't be redefined | `struct_redefines_to_s.12am` | 8 | Structs |
 | syntax error: unexpected `=` inside an expression (assignment is a statement, not an expression) | `syntax_assignment_as_expression.12am` | 5 | Grammar; Lexical structure |
 | syntax error: unexpected `4` after `double` (a call with arguments needs parentheses) | `syntax_call_without_parentheses.12am` | 8 | Grammar; Lexical structure |
-| syntax error: `gpu` is a reserved word (it has no use in 0.1) and can't name a variable | `syntax_gpu_reserved.12am` | 4 | Grammar; Lexical structure |
+| syntax error: `gpu` is a keyword (it goes before `system`) and can't name a variable | `syntax_gpu_reserved.12am` | 4 | Grammar; Lexical structure |
 | syntax error: `tag` is a keyword and can't name a variable; a type name is expected after `tag`, found `=` | `syntax_keyword_as_variable.12am` | 4 | Grammar; Lexical structure |
 | syntax error: a type name (beginning with an uppercase letter) is expected after `struct`, found `vec2` | `syntax_lowercase_type_name.12am` | 4 | Grammar; Lexical structure |
 | syntax error: the parameter `n` needs a type (`n: Type`); found `)` where `:` is expected | `syntax_param_without_type.12am` | 4 | Grammar; Lexical structure |
