@@ -10,7 +10,7 @@
 
 use crate::source::{SourceMap, Span};
 
-/// The checker stops reporting after this many errors.
+/// At most this many errors are printed.
 pub const MAX_ERRORS: usize = 20;
 
 #[derive(Clone, Debug)]
@@ -61,10 +61,11 @@ const BLUE: &str = "\x1b[1;34m";
 const BOLD: &str = "\x1b[1m";
 const RESET: &str = "\x1b[0m";
 
-/// Renders diagnostics in order, separated by blank lines.
+/// Renders the first [`MAX_ERRORS`] diagnostics in order, separated by blank
+/// lines, and says how many more there were.
 pub fn render(sources: &SourceMap, diagnostics: &[Diagnostic], color: bool) -> String {
     let mut out = String::new();
-    for (i, diagnostic) in diagnostics.iter().enumerate() {
+    for (i, diagnostic) in diagnostics.iter().take(MAX_ERRORS).enumerate() {
         if i > 0 {
             out.push('\n');
         }
@@ -90,6 +91,14 @@ pub fn render(sources: &SourceMap, diagnostics: &[Diagnostic], color: bool) -> S
             out.push_str(&format!("{blue}note{reset}: {}\n", note.message));
             excerpt(&mut out, sources, note.span, None, color, false);
         }
+    }
+    if diagnostics.len() > MAX_ERRORS {
+        let hidden = diagnostics.len() - MAX_ERRORS;
+        let (blue, reset) = if color { (BLUE, RESET) } else { ("", "") };
+        let errors = if hidden == 1 { "error" } else { "errors" };
+        out.push_str(&format!(
+            "\n{blue}note{reset}: {hidden} more {errors} not shown\n"
+        ));
     }
     out
 }

@@ -271,3 +271,38 @@ fn panic_programs() {
     let _ = std::fs::remove_dir_all(&dir);
     report("panicking programs", jobs.len(), failures);
 }
+
+#[test]
+fn move_example_is_the_first_program_in_the_reference() {
+    let reference = std::fs::read_to_string("docs/language.md").expect("read the reference");
+    let opening = "```ruby\n";
+    let start = reference.find(opening).expect("a ruby block") + opening.len();
+    let end = start + reference[start..].find("```").expect("the block's end");
+    let example = std::fs::read_to_string("examples/move.grem").expect("read examples/move.grem");
+    assert_eq!(example, &reference[start..end]);
+}
+
+/// The component in `tests/run/layout.grem` has a `Float`, a `Float32`, an
+/// `Int16`, a `UInt8`, a `Bool` and an enum: 17 bytes of fields, which the
+/// largest alignment rounds up to 24.
+#[test]
+fn mixed_component_is_as_small_as_its_fields_allow() {
+    let output = Command::new(GREMLIN)
+        .args(["emit-c", "tests/run/layout.grem"])
+        .output()
+        .expect("run gremlin");
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let dir = scratch("layout");
+    let mut c_source = text(&output.stdout);
+    c_source.push_str("\n_Static_assert(sizeof(T_Body) == 24, \"size of Body\");\n");
+    std::fs::write(dir.join("layout.c"), c_source).expect("write C");
+    std::fs::copy("runtime/gremlin_rt.h", dir.join("gremlin_rt.h")).expect("copy header");
+    let cc = std::env::var("GREMLIN_CC").unwrap_or_else(|_| "cc".to_string());
+    let compiled = Command::new(cc)
+        .args(["-std=c11", "-fsyntax-only"])
+        .arg(dir.join("layout.c"))
+        .output()
+        .expect("run the C compiler");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(compiled.status.success(), "{}", text(&compiled.stderr));
+}
