@@ -770,9 +770,12 @@ nested `each` visits entities in the order an ordinary `each` would.
   and the call that reaches it.
 - **`UInt32`.** A `UInt32` field cannot be read, written or built in GPU
   code. In a GPU system, and in a function called from one, it is an error
-  to use a value of a struct type that has a `UInt32` field at any depth, or
-  to read a `UInt32` field of a resource or of a constant. The other fields
-  of such a resource can be read. The hint is to declare the field `Int32`.
+  to use a value of a struct type that has a `UInt32` field at any depth, to
+  read a constant of such a type, or to read a resource field that is a
+  `UInt32` or is of such a type. Any part of such a constant or resource
+  field counts: `Config.cell.age` is an error when `Cell` has a `UInt32`
+  field. The other fields of the resource can be read. The hint is to
+  declare the field `Int32`.
 
 ### Snapshot semantics
 
@@ -1281,9 +1284,14 @@ What follows from this:
   the next GPU block uploads what it needs again.
 - **Keep operations that can fail out of blocks that run in every tick.**
   Reading the result back makes the program wait for the block. `Float`
-  arithmetic cannot fail, and neither can `/` or `%` by a literal other than
-  zero, `**` with a literal exponent that is not negative, `rand(n)` with a
-  positive literal, or a store into an `Int32` field.
+  arithmetic cannot fail, and neither can a store into an `Int32` field, or
+  an operation whose right-hand number the compiler knows: `/` or `%` by one
+  that is not zero as a 32-bit value, `**` with an exponent that is not
+  negative, `rand(n)` with a positive `n`. The compiler knows a literal, an
+  `Int` constant made from literals and other such constants with `+`, `-`,
+  `*`, `/`, `%` and `**`, and arithmetic on those. It does not know a
+  resource field, a field of a struct constant, or a constant made by a
+  call.
 - **Leave small worlds on the CPU.** For a light system on few entities, the
   fixed cost of a block is more than the loop it replaces.
 - **A nested `each` reads a copy** of the arrays it names, made in GPU memory
