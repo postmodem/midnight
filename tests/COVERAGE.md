@@ -11,7 +11,7 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 233 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+Counts: 234 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 317 in `tests/fail`, 71 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
@@ -358,10 +358,10 @@ Programs that follow every rule are checked by the unit tests in
 
 ## What GPU systems compute
 
-Programs with GPU systems that follow every rule. They run on the C
-implementation of each block here; the same programs are meant to run on a
-device, so those that print a `Float` a device may round differently state a
-tolerance in their first line and print it rounded. Each expected output was
+Programs with GPU systems that follow every rule. The suite runs them on the
+C implementation of each block, and in its GPU mode on a device, so those
+that print a `Float` a device may round differently state a tolerance in
+their first line and print it rounded. Each expected output was
 worked out by hand from "The language" of
 [`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), except where
 hand arithmetic does not reach: the orbits of `gpu_gravity`, the `Math`
@@ -406,6 +406,7 @@ programs written from the specification.
 | `srand` changes the numbers; drawing in a GPU system does not move the ordinary generator | `gpu_rand` |
 | A call whose value is unused still draws | `gpu_statements` |
 | A GPU system between ordinary systems that read and write the same components, and top-level code between ticks | `gpu_with_cpu_systems`, `gpu_index_from_cpu` |
+| On a device, the uploads and downloads `MIDNIGHT_GPU=stats` counts in a tick are the ones `midnight plan` lists; a column no ordinary code uses moves once | `gpu_transfers` |
 | `e[C]` in ordinary code on a component a GPU block names, read, written and replaced | `gpu_index_from_cpu`, `gpu_entity_term` |
 | A block that uses none of its parameters | `gpu_statements` |
 | Names that WGSL or C reserve, as fields, locals, parameters, functions and types | `gpu_names` |

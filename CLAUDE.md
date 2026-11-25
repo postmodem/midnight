@@ -33,8 +33,11 @@ nix develop -c cargo test                  # unit tests and every test program, 
 nix develop -c cargo clippy --all-targets -- -D warnings
 nix develop -c cargo fmt
 nix develop -c cargo run -- run FILE.12am  # also: build, check, emit-c; add --debug
-nix flake check                            # package, clippy, rustfmt, nixfmt
+nix flake check                            # package, clippy, rustfmt, nixfmt, GPU programs on llvmpipe
 nix run .#bench                            # timings against bench/baseline.c
+nix run .#gpu-test                         # GPU programs on this machine's GPU, release builds
+MIDNIGHT_TEST_GPU=software nix develop -c cargo test   # the suite, plus GPU programs on llvmpipe
+MIDNIGHT_TEST_GPU=hardware nix develop -c cargo test   # the suite, plus GPU programs on this machine's GPU
 ```
 
 Flakes see only files known to git: `git add` a new file before a `nix`
@@ -70,6 +73,27 @@ command that needs it.
   that, with status 0. Each program begins with an `# expect:` comment that
   states the intent the `.plan` is reviewed against.
 - `examples/NAME.12am` with `NAME.out`: as `tests/run`.
+- Every program above runs with `MIDNIGHT_GPU=off`: GPU systems run their CPU
+  implementation, so the suite needs no device and is exact.
+- GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe, release and debug)
+  or `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU, release only), the
+  tests `gpu_programs` and `gpu_stats_match_plan` also run. Without it they
+  do nothing. `checks.gpu` is the software mode in the build sandbox;
+  `apps.gpu-test` is the hardware mode.
+  - `gpu_programs` runs every program of `tests/run`, `tests/panic` and
+    `examples` that declares a GPU system on the device. Output must match
+    `NAME.out`: exactly, or, when the program has a `# tolerance: T` line,
+    each `Float` within `T * max(1, |expected|)` and everything else, whole
+    numbers included, exactly. A panic program must stop with status 1 and
+    exactly `NAME.err`. A run that finds no device, or runs a GPU block on
+    the CPU, fails.
+  - `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
+    `MIDNIGHT_GPU=stats` and requires every tick after the first to make the
+    uploads and downloads `midnight plan` lists.
+  - Both print the device they ran on. GPU mode never rewrites expected
+    files.
+  - The dev shell sets `MIDNIGHT_TEST_SOFTWARE_ICD`, the Vulkan driver file
+    the software mode passes to programs as `VK_DRIVER_FILES`.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
   diagnostic and run-time error has a test; keep it that way when the
   language changes.

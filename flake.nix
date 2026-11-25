@@ -87,6 +87,47 @@
           };
         };
 
+      # The Vulkan driver file of Mesa's llvmpipe. With VK_DRIVER_FILES set
+      # to it, llvmpipe is the only device a program finds.
+      softwareIcdFor =
+        pkgs: "${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.parsed.cpu.name}.json";
+
+      # tests/suite.rs as a program. It tests the compiler MIDNIGHT_BIN
+      # names on the programs under the working directory.
+      suiteFor =
+        pkgs:
+        (midnightFor pkgs).overrideAttrs {
+          pname = "midnight-suite";
+          buildPhase = ''
+            cargo test --offline --release --no-run --test suite
+          '';
+          doCheck = false;
+          installPhase = ''
+            install -D "$(find target/release/deps -name 'suite-*' -type f -executable)" \
+              $out/bin/midnight-suite
+          '';
+          postInstall = "";
+          meta.mainProgram = "midnight-suite";
+        };
+
+      # The suite's GPU mode on the machine's hardware device.
+      gpuTestFor =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "midnight-gpu-test";
+          runtimeEnv = {
+            MIDNIGHT_BIN = lib.getExe (midnightFor pkgs);
+            MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+            MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
+            NIX_HARDENING_ENABLE = "";
+            MIDNIGHT_TEST_GPU = "hardware";
+          };
+          text = ''
+            cd ${src}
+            exec ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan
+          '';
+        };
+
       benchFor =
         pkgs:
         pkgs.writeShellApplication {
@@ -124,23 +165,33 @@
           program = lib.getExe (benchFor pkgs);
           meta.description = "Time bench.12am against a hand-written C baseline, then churn.12am";
         };
+        gpu-test = {
+          type = "app";
+          program = lib.getExe (gpuTestFor pkgs);
+          meta.description = "Run the programs with GPU systems on this machine's GPU";
+        };
       });
 
       devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          packages = [
-            pkgs.cargo
-            pkgs.rustc
-            pkgs.clippy
-            pkgs.rustfmt
-            pkgs.rust-analyzer
-            pkgs.clang
-            pkgs.nixfmt
-          ];
-          MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
-          MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
-          hardeningDisable = [ "all" ];
-        };
+        default = pkgs.mkShell (
+          {
+            packages = [
+              pkgs.cargo
+              pkgs.rustc
+              pkgs.clippy
+              pkgs.rustfmt
+              pkgs.rust-analyzer
+              pkgs.clang
+              pkgs.nixfmt
+            ];
+            MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+            MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
+            hardeningDisable = [ "all" ];
+          }
+          // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+            MIDNIGHT_TEST_SOFTWARE_ICD = softwareIcdFor pkgs;
+          }
+        );
       });
 
       checks = forAllSystems (
@@ -185,6 +236,22 @@
               }
               ''
                 find ${self} -name '*.nix' -exec nixfmt --check {} +
+                touch $out
+              '';
+        }
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # The suite's GPU mode on llvmpipe, release and debug builds.
+          gpu =
+            pkgs.runCommand "midnight-gpu-tests"
+              {
+                MIDNIGHT_BIN = lib.getExe midnight;
+                MIDNIGHT_TEST_GPU = "software";
+                MIDNIGHT_TEST_SOFTWARE_ICD = softwareIcdFor pkgs;
+              }
+              ''
+                export HOME=$TMPDIR XDG_RUNTIME_DIR=$TMPDIR
+                cd ${src}
+                ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan
                 touch $out
               '';
         }
