@@ -239,7 +239,7 @@ fn local_paths(body: &TBlock) -> HashMap<usize, Paths> {
     paths
 }
 
-/// The nested loop of an enclosing kind: what `break` and `next` mean.
+/// What encloses a statement, for `break` and `next`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Looping {
     /// The run of a block: `next` ends it.
