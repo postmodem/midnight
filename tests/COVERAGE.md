@@ -411,6 +411,7 @@ programs written from the specification.
 | Functions that call functions, return early, loop, return nothing, return a struct | `gpu_functions`, `gpu_statements` |
 | Struct construction, methods, operator methods, unary minus, `+=` through an operator, `==`, a struct with `Float` and `Int` fields | `gpu_struct_methods` |
 | A whole component assigned through the parameter: from a constructor, with fields left to their defaults, from a function that takes and returns the component and reads `Time` | `gpu_replace_component` |
+| A variable set from a helper call (`/`, `%`, `**`, `to_i`, `round`, a struct `==`), named alone as a statement, then used | `gpu_bare_variable` |
 | `if`, `elsif`, `unless`, modifiers, `case` on `Int`, `Bool` and enum, the conditional operator, as statements and as values | `gpu_control_flow`, `gpu_statements`, `gpu_field_types` |
 | `while`, `until`, `loop`, `times`, `upto`, `downto` | `gpu_control_flow`, `gpu_next_keeps_writes`, `gpu_functions` |
 | `&&` and `||` evaluate their right side only when it decides the result | `gpu_control_flow` |

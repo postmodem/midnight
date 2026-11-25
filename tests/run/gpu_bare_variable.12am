@@ -1,0 +1,40 @@
+# A variable set from a call of a helper, named alone on the next line as
+# a statement, and used after.
+struct Pair
+  a: Int32
+  b: Int32
+end
+
+component C
+  a: Int32
+  b: Int32
+  f: Float32
+  p: Pair
+  v: Int32
+end
+
+gpu system s
+  each C do |c|
+    q = c.a / c.b
+    q
+    r = c.a % c.b
+    r
+    p = c.a ** 2
+    p
+    t = c.f.to_i
+    t
+    n = c.f.round
+    n
+    same = c.p == Pair(c.a, c.b)
+    same
+    c.v = q * 10000 + r * 1000 + p * 10 + t + n
+    c.v += 100000 if same
+  end
+end
+
+spawn C(7, 2, 2.75, Pair(7, 2), 0)
+spawn C(-7, 2, -1.5, Pair(1, 1), 0)
+World.tick
+each C do |c|
+  puts c.v
+end

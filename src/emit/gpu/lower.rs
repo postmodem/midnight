@@ -721,12 +721,15 @@ impl<'l, 'a> BodyCx<'l, 'a> {
         stmts
     }
 
-    /// Ends the evaluation of an expression whose value is not used.
+    /// Ends the evaluation of an expression whose value is not used. A
+    /// temporary of the lowering's own, set from a call by the statement
+    /// before, becomes the bare call.
     fn discard(&mut self, value: Val) {
         if value.ty == Ty::Void || value.e.is_literal() {
             return;
         }
         if let Expr::Var(name) = &value.e
+            && !self.names.contains(name)
             && let Some(Stmt::Let {
                 name: last,
                 init: Some(Expr::Call(..)),
