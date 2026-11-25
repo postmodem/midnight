@@ -1,0 +1,67 @@
+The teams
+  Ada (Red): power 4, 28 hp
+  Bram (Red): power 4, 24 hp
+  Cleo (Red): power 5, 24 hp
+  Dov (Red): power 4, 21 hp
+  Eli (Blue): power 3, 27 hp
+  Faye (Blue): power 3, 28 hp
+  Gus (Blue): power 5, 29 hp
+  Hana (Blue): power 5, 20 hp
+Round 1
+  Ada hits Gus for 5, leaving 24
+  Bram hits Eli for 4, leaving 23
+  Cleo hits Faye for 8, leaving 20
+  Dov hits Hana for 5, leaving 15
+  Eli hits Bram for 3, leaving 21
+  Faye hits Dov for 3, leaving 18
+  Gus hits Dov for 6, leaving 12
+  Hana hits Dov for 7, leaving 5
+  Red has 4 standing with 78 hp, Blue has 4 standing with 82 hp
+Round 2
+  Ada hits Eli for 6, leaving 17
+  Bram hits Eli for 5, leaving 12
+  Cleo hits Hana for 8, leaving 7
+  Dov hits Hana for 4, leaving 3
+  Eli hits Dov for 6 and brings them down
+  Faye hits Cleo for 6, leaving 18
+  Gus hits Ada for 6, leaving 22
+  Hana hits Cleo for 5, leaving 13
+  Dov leaves the field for Red
+  Red has 3 standing with 56 hp, Blue has 4 standing with 59 hp
+Round 3
+  Ada hits Hana for 5 and brings them down
+  Cleo hits Faye for 6, leaving 14
+  Hana hits Bram for 8, leaving 13
+  Eli hits Ada for 5, leaving 17
+  Faye hits Ada for 5, leaving 12
+  Gus hits Cleo for 7, leaving 6
+  Hana leaves the field for Blue
+  Red has 3 standing with 31 hp, Blue has 3 standing with 50 hp
+Round 4
+  Ada hits Eli for 5, leaving 7
+  Bram hits Gus for 6, leaving 18
+  Cleo hits Gus for 7, leaving 11
+  Gus hits Ada for 6, leaving 6
+  Eli hits Bram for 3, leaving 10
+  Faye hits Cleo for 6 and brings them down
+  Cleo leaves the field for Red
+  Red has 2 standing with 16 hp, Blue has 3 standing with 32 hp
+Round 5
+  Ada hits Gus for 6, leaving 5
+  Bram hits Faye for 6, leaving 8
+  Faye hits Ada for 4, leaving 2
+  Gus hits Ada for 7 and brings them down
+  Eli hits Bram for 3, leaving 7
+  Ada leaves the field for Red
+  Red has 1 standing with 7 hp, Blue has 3 standing with 20 hp
+Round 6
+  Eli hits Bram for 6, leaving 1
+  Bram hits Gus for 4, leaving 1
+  Faye hits Bram for 3 and brings them down
+  Bram leaves the field for Red
+  Red has 0 standing with 0 hp, Blue has 3 standing with 16 hp
+Blue wins in round 6.
+Left standing after 6 rounds: 3
+  Eli (Blue) with 7 hp
+  Gus (Blue) with 1 hp
+  Faye (Blue) with 8 hp

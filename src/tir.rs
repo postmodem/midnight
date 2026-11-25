@@ -312,9 +312,10 @@ pub enum StmtKind {
         place: Place,
         value: Expr,
     },
-    /// `place op= value`. The operands of the place (an entity, indexes)
-    /// are evaluated once, then `value`, then the place is read, combined
-    /// and written.
+    /// `place op= value`, which means `place = place op value`. The
+    /// operands of the place (an entity, indexes) are evaluated once, then
+    /// the place is read, then `value` is evaluated, and the result is
+    /// written to the place.
     CompoundAssign {
         place: Place,
         op: CompoundOp,
