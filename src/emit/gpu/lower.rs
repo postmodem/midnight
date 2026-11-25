@@ -1138,6 +1138,10 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             }
             ExprKind::And { lhs, rhs } => self.short_circuit(lhs, rhs, true),
             ExprKind::Or { lhs, rhs } => self.short_circuit(lhs, rhs, false),
+            // An `Int` literal made `Float` need not fit in 32 bits.
+            ExprKind::IntToFloat(inner) if let ExprKind::Int(literal) = inner.kind => {
+                Val::literal(float(literal as f64 as f32), ty)
+            }
             ExprKind::IntToFloat(inner) => {
                 let value = self.expr(inner);
                 let e = match value.e {

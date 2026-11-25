@@ -835,7 +835,8 @@ when ordinary code calls it and at 32 bits when a GPU block does.
 - **Literals.** A `Float` literal is rounded to 32 bits, and one beyond the
   range is an infinity. An `Int` literal outside -2,147,483,648 to
   2,147,483,647 is a compile error, in a GPU block, in a function one calls,
-  and in a field default that a constructor there uses.
+  and in a field default that a constructor there uses, except where a
+  `Float` is expected: there it is a `Float` literal.
 - **Values from outside.** Constants, resource fields and `Time` are
   converted as they are read. A `Float` is rounded to 32 bits. An `Int`
   must fit in 32 bits:

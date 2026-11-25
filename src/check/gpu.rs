@@ -967,6 +967,8 @@ impl<'a, 'p> Walk<'a, 'p> {
                     self.default_use = outer;
                 }
             }
+            // An `Int` literal made `Float` need not fit in 32 bits.
+            ExprKind::IntToFloat(inner) if matches!(inner.kind, ExprKind::Int(_)) => {}
             ExprKind::Unary { expr: inner, .. } | ExprKind::IntToFloat(inner) => self.expr(inner),
             ExprKind::Binary { lhs, rhs, .. }
             | ExprKind::And { lhs, rhs }

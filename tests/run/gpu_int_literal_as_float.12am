@@ -1,0 +1,28 @@
+# An Int literal beyond 32 bits where a Float is expected is a Float
+# literal in a GPU block: as a declared variable and as a field default.
+struct Scale
+  big: Float32 = 3000000000
+end
+
+component P
+  x: Int32
+  f: Float32
+  g: Float32
+end
+
+gpu system set
+  each P do |p|
+    p.x = -2147483648
+    big: Float = 3000000000
+    p.f = big
+    p.g = Scale().big * 2.0
+  end
+end
+
+spawn P(1, 0.0, 0.0)
+World.tick
+each P do |p|
+  puts p.x
+  puts p.f
+  puts p.g
+end

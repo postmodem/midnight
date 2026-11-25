@@ -11,7 +11,7 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 243 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+Counts: 244 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 334 in `tests/fail`, 77 in `tests/panic`, 12 in `tests/plan`.
 
 ## A first program, The model
@@ -398,6 +398,7 @@ programs written from the specification.
 | A struct with a `UInt32` field carried through a GPU block: values above the largest 32-bit `Int` come back unchanged and decide `==`, on the CPU and on a device | `gpu_uint32_carried` |
 | A component with `UInt32` fields as a term: the fields the block does not name keep their values, a struct that holds one is copied from field to field and compared across a nested `each` and between components, and what ordinary code changes between runs is seen | `gpu_uint32_term`; the unit test `a_uint32_field_of_a_term_is_carried_as_its_bits` in `src/emit/tests/gpu.rs` |
 | `Int` is 32 bits and wraps: `+`, `-`, `*`, unary minus, `abs`, `**` | `gpu_int_wrap`, `gpu_field_types` |
+| An `Int` literal beyond 32 bits where a `Float` is expected is a `Float` literal, in a block and in a field default | `gpu_int_literal_as_float` |
 | `Float` is 32 bits: literals out of range, products that overflow or vanish, 16777217 | `gpu_float_literals`, `gpu_functions` |
 | `to_i`, `floor`, `ceil`, `round`: saturation, 0 for NaN, halves away from zero; `nan?` | `gpu_float_to_int` |
 | `Int` `/` floors and `%` takes the divisor's sign, by a variable and by a constant; the smallest `Int` by -1 | `gpu_div_mod` |
