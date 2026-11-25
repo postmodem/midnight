@@ -347,7 +347,10 @@ and RADV on the Ryzen's iGPU (`VK_DRIVER_FILES` set to Mesa's
 11. The reference says 0.4 and `midnight --version` 0.4.0, and every
     command in the README works as written.
 
-## Decisions for review
+## Decisions
+
+Settled with Dave on 2026-11-25, together with the ten-times gate of
+slice 1.
 
 - **Per system, as a keyword.** The source says which systems are strict,
   next to `gpu`; a program can keep a fast default for systems whose
