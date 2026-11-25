@@ -604,35 +604,23 @@ is kept to the files named, so a disagreement stays local.
 
 ## Contradictions in the reference
 
-1. The grammar requires a newline after a `do` header and after every
-   statement of a block, while the prose shows
-   `xs.length.times do |i| xs[i] *= 2 end` and `if a then b else c end` on
-   one line. The one-line `if` is used freely; the one-line `do` only in
-   `loop_do_one_line`.
-2. A function that calls itself must declare its return type, but there is
-   no way to declare "returns nothing". No test has a recursive function
-   without a value.
-3. `case` is a primary expression and so may appear inside parentheses,
+1. `case` is a primary expression and so may appear inside parentheses,
    where newlines do not end statements, yet `case` needs newlines between
    its arms. `case_expression_argument`.
-4. The prose says a zero-parameter function "is declared without
+2. The prose says a zero-parameter function "is declared without
    parentheses"; the grammar also accepts `def f()`. Not tested.
-5. The prose says `==` can't be redefined; the grammar's `OPERATOR` does not
+3. The prose says `==` can't be redefined; the grammar's `OPERATOR` does not
    include `==`, so `def ==` is a syntax error first.
    `fail/struct_redefines_equality` accepts either diagnostic.
-6. Comparisons "do not chain", but the grammar parses `1 < x < 3`; the
-   error is then a type error. `fail/comparison_chain`.
-7. The compiler orders fields to minimise padding, while `to_s` examples
-   show declaration order; the reference never says which order `to_s` and
-   positional construction use (assumption 15).
+4. Comparisons "do not chain", and the parser rejects `1 < x < 3` itself,
+   although the grammar as written would parse it. `fail/comparison_chain`.
 
 ## Diagnostics
 
 One row per `tests/fail` program. Each program states what must be reported,
 and where, in its `# expect:` and `# at:` header lines; the exact text is not
 in the reference, so each `.err` holds the compiler's output and is reviewed
-against that header. `syntax_variable_question_mark.err` holds `TODO` until
-the compiler rejects the program.
+against that header.
 
 | Diagnostic | File | Line | Reference section |
 | --- | --- | --- | --- |

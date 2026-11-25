@@ -1,7 +1,7 @@
 # 0001 — Language core: Midnight 0.1, its compiler and its runtime
 
-- **Status:** approved
-- **Tested on:** —
+- **Status:** implemented
+- **Tested on:** x86_64-linux, 2026-11-24
 
 ## Goal
 
@@ -400,3 +400,119 @@ Each one is a command whose result can be checked. All run on x86_64-linux.
     C's `sizeof` for it, checked with a static assertion the test adds, equals
     the sum of the field sizes rounded up to the largest alignment.
 17. Every command in the README works as written.
+
+## Outcome
+
+Implemented as specified, with the differences listed under "Differences
+from the design". All seventeen criteria pass on x86_64-linux.
+
+### Acceptance criteria
+
+| #  | Result |
+| -- | ------ |
+| 1  | `nix flake check` passes: the package builds, its check phase runs `cargo test` (229 unit tests and the end-to-end suite, in both build modes), and clippy, rustfmt and nixfmt are clean. |
+| 2  | `nix flake check --all-systems --no-build` passes; `nix flake show` lists `packages`, `apps` (`default`, `bench`), `devShells`, `checks` and `formatter` for the four systems. |
+| 3  | `env -i ./result/bin/midnight run examples/hello.12am` prints `Hello, world!`. |
+| 4  | In the isolated dev shell `cargo`, `rustc` and `clang` resolve to `/nix/store/…` and `cargo test` passes. |
+| 5  | `examples/move.12am` prints both entities for three ticks, the frozen one unmoved. A suite test compares the file with the first program in the reference byte for byte. |
+| 6  | `battle.12am` and `life.12am` print their expected output on two consecutive runs and under `--debug`. |
+| 7  | Every construct, operator and built-in has a `tests/run` program. See "Coverage" below. |
+| 8  | Each listed diagnostic has a `tests/fail` case with excerpt and marker; the misspelled-name cases carry the right "did you mean". 243 cases. |
+| 9  | Each run-time error has a `tests/panic` case with file, line and status 1. 60 cases, each run in both build modes. |
+| 10 | `tests/run/refcount.12am` passes in debug mode with no sanitizer report and no live buffer. With one `mn_str_release` call deleted from its generated C, the same run exits with status 70 and `midnight: 18 buffers still alive at exit`. |
+| 11 | `nix run .#bench`: `bench.12am` 0.371 ms per tick, `bench/baseline.c` 0.371 ms per tick, ratio 1.00 (limit 1.25), with equal checksums. |
+| 12 | Same run: `bench.12am` peaks at 36.7 MB (limit 64 MB); the baseline at 17.1 MB. |
+| 13 | Same run, `bench/churn.12am` on one million entities, operations per second: `spawn` 89.1 million, `despawn` 129.8 million, `add` of a tag 23.3 million, `remove` of a tag 56.0 million, `e[C]` through shuffled handles 171.8 million. Peak 58.9 MB. |
+| 14 | `midnight emit-c examples/move.12am` shows `move` as a counted loop over rows with `restrict` column pointers, `Time.dt` loaded into a local before the loop, and no call in the body. The release build of `bench.12am` has only packed instructions in that loop (`cvtps2pd`, `mulpd`, `addpd`, `cvtpd2ps`). |
+| 15 | In the same output the `Velocity` column pointer is `const` and the `Position` one is not. |
+| 16 | A suite test appends `_Static_assert(sizeof(T_Body) == 24, …)` to the generated C of `tests/run/layout.12am`: 17 bytes of fields rounded up to the largest alignment, 8. |
+| 17 | Every command in the README was run as written. |
+
+### Coverage
+
+`tests/COVERAGE.md` maps every table row and rule of the reference to the
+programs that exercise it, and every diagnostic and run-time error to its
+case. By section (names are prefixes of files in `tests/run` unless a
+directory is given):
+
+| Reference section | Tests |
+| ----------------- | ----- |
+| A first program, The model | `system_first_program`, `value_*`, `entity_handles`, `examples/move` |
+| Lexical structure | `lex_*` (10), `tests/fail/syntax_*` |
+| Types | `types_*` (5), `conv_*` (3) |
+| Compact field types | `compact_*` (5), `layout`, `tests/panic/compact_*` (21) |
+| Variables and values | `vars_*` (3), `value_*` (3), `place_*` (2) |
+| Expressions | `ops_*` (19), `eval_*` (3) |
+| Control flow | `if_*`, `unless_*`, `case_*`, `loop_*`, `break_*`, `next_*`, `modifier_*` (38) |
+| Functions | `fn_*` (16) |
+| Declaring data | `struct_*`, `enum_*`, `component_*`, `tag_*`, `resource_*`, `const_*` (19) |
+| Entities | `entity_*` (6), `tests/panic/component_*` (11) |
+| Queries | `query_*` (7), `world_*` |
+| Structural changes inside `each` | `each_*` (8), `refcount` |
+| Systems and ticks | `system_*` (3), `time_*` (2), `tests/panic/world_*` (5) |
+| Events | `event_*` (9) |
+| Built-ins | `out_*`, `tos_*`, `num_*`, `math_*`, `str_*`, `list_*`, `rand_*`, `clock_*`, `exit_*` (40), `tests/panic/list_*`, `int_*`, `power_*`, `rand_*` (23) |
+| Programs and files | `require_*` (3), `examples/life` |
+| What things cost | `layout`, `examples/bench`, `bench/churn` |
+| Errors | `tests/fail` (243), `tests/panic` (60) |
+
+Not covered by a test: that two runs of one program draw the same random
+numbers (criterion 6 shows it for `battle.12am`), and `exit` with a non-zero
+status.
+
+### Open questions, settled
+
+- **Hardening flags.** The compiler wrapper's fortify flag needs
+  optimisation and can't be undone by a later flag, so the flake clears
+  `NIX_HARDENING_ENABLE` in the dev shell, in the package's check phase and
+  in the `midnight` wrapper. Programs are built with the flags of the mode
+  table and no others.
+- **Sanitizers on darwin.** Not run. The buffer accounting does not depend
+  on LeakSanitizer; the flags evaluate.
+- **Measuring peak memory.** `hyperfine` 1.20, whose JSON export reports peak
+  resident memory in bytes on Linux and macOS.
+
+### Differences from the design
+
+- **Extra C flags.** The suite passes `-Wall -Wextra -Werror` through an
+  environment variable, `MIDNIGHT_CFLAGS`, which is also there for users.
+- **Warnings silenced in generated C.** Three clang warnings are turned off
+  by pragma because valid programs trigger them: comparing a value with
+  itself, assigning a variable to itself, and comparing a `Float32` field
+  with a constant it can't hold exactly.
+- **Where the error limit is applied.** The checker returns every error; the
+  renderer prints the first 20 and then `note: N more errors not shown`.
+- **Syntax-level rules are reported by the parser.** Chained comparisons,
+  `def ==`, a query with no terms and a misplaced `require` are syntax
+  errors, with dedicated messages.
+- **Recursion and return types.** A recursive function must declare its
+  return type only when a call's value is needed to infer it. The reference
+  now says so; a recursive function that returns nothing has no type to
+  declare.
+- **Leaving the program.** Run-time errors and `exit` flush both standard
+  streams and call `_Exit`, so that LeakSanitizer does not replace the
+  status in debug builds.
+- **`sleep` flushes standard output first**, so text drawn in a loop shows
+  through a pipe.
+- **Float text.** Positional notation is used for decimal exponents from -5
+  up to 15, exponent form elsewhere. The reference now says so.
+- **`restrict` and hoisting** are also withheld when a block contains a
+  nested `each` or touches the parameter of an enclosing one, since two
+  pointers could then name one column.
+- **The reference** gained four clarifications: the recursion rule, the
+  exponent thresholds of Float text, that construction and `to_s` keep the
+  declared field order, and that the newline after `do |…|` and before `end`
+  may be left out on a one-line block.
+
+### Known limits
+
+- Inside parentheses and brackets a newline never ends a statement, as the
+  reference says. An `if` written there needs `then` after its condition,
+  and each of its branches holds one statement.
+- Deeply nested expressions are limited by the compiler's stack; there is no
+  depth diagnostic.
+- A counting loop whose inclusive bound is the largest `Int` does not end.
+- Removing several components in one `remove` looks the destination table up
+  by hash each time; a single-component `remove` uses the cached edge.
+- The runtime and the generated code have not been compiled on macOS or on
+  aarch64.
