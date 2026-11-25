@@ -1,6 +1,6 @@
 # 0003 — Moving less: rows in place of columns, one submission in place of many
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0002
 
 ## Goal
@@ -523,37 +523,6 @@ round trip each, 0.125 with one submission and one wait.
 **The four new benchmarks on 0.2.7** are in the table under "Goal". Today
 `stats` counts 2 uploads and 1 download a tick for `gpu_despawn`, 4 and 2
 for `gpu_tag`, 1 and 1 for `gpu_rare_write` and for `gpu_overwrite`.
-
-### Open questions for review
-
-1. **What a plan line means, and what `stats` counts.** Proposed above: a
-   line is still a column and two systems; `rows` marks the lines that move
-   rows; every line a structural change causes is one. `stats` counts
-   columns, rows, submissions and waits, and no bytes: a column's bytes
-   follow from its table, rows are small, and what 0003 makes worth
-   counting is rows and waits. The alternative for the plan is to list
-   only arrays and waits, and leave rows sent out of it; then a `stats`
-   count could have no line.
-2. **When a block starts.** Proposed: consecutive GPU systems share a
-   submission, and it is submitted without a wait when an ordinary system
-   follows, which keeps today's overlap of GPU work with the ordinary
-   systems after it, for about 0.012 ms at each such point. The
-   alternative submits only where something is needed: one submission per
-   tick in more programs, but a heavy block followed by a heavy ordinary
-   system then run one after the other. Only timing differs. A block that
-   can fail is reported when its `each` ends either way.
-3. **The charge.** Proposed: rows travel alone until they have cost as
-   much as the column, by two fixed numbers measured on one machine. The
-   alternatives: always a row (a loop of `e[C]` reads over a GPU column
-   then waits once per entity), or numbers measured when the program
-   starts (the same program would then move different things on different
-   machines, and `stats` would not be repeatable).
-4. **A `despawn` uploads a row of a column that is current on both
-   sides** and moves the row in GPU memory for one current only on the
-   GPU. One rule ("the row is moved where its data is") and the cheaper
-   operation in each case, but the plan line `rows on despawn` for
-   `Velocity` and none for `Position` needs its sentence in the reference.
-5. **`MIDNIGHT_GPU=rows`** is a word users can see, added for the tests.
 
 ### Slices
 
