@@ -648,4 +648,136 @@ double mn_clock(void);
  * returns at once for zero or less. */
 void mn_sleep(double seconds);
 
+/* ---- GPU systems ------------------------------------------------------------- */
+
+/*
+ * A GPU block is one `each` of a `gpu system`. Generated code describes
+ * each block with a static MnGpuBlock and runs it with mn_gpu_run. The
+ * runtime runs the block's shader when a device is in use and the block
+ * fits it, and calls the block's C implementation otherwise. Both mean the
+ * same thing:
+ *
+ * - The block runs once for every row of every table its outer query
+ *   matches. A run reads and writes its own row of the outer columns.
+ * - The nested query is read from a snapshot: for each inner column, the
+ *   rows of every table the nested query matches, one table after another
+ *   in the query's table order, as they were when mn_gpu_run was called.
+ * - The uniform words are fixed when mn_gpu_run is called.
+ * - A failing operation records its site and the run goes on. When every
+ *   run has finished, mn_gpu_run reports the lowest site recorded, as a
+ *   run-time error.
+ *
+ * Uniform words. A block's uniform data is `uniform_words` 32-bit words,
+ * at least MN_GPU_HEADER_WORDS. The runtime fills the header and the
+ * block's `fill` writes the rest:
+ *
+ *     word 0  u32  rows of the table being run
+ *     word 1  u32  rows of the snapshot (0 without a nested query)
+ *     word 2  u32  seed: the low 32 bits of the seed last given to srand,
+ *                  exclusive-or the high 32 bits
+ *     word 3  u32  the block's `id`
+ *     word 4  i32  Time.tick, wrapped to 32 bits
+ *     word 5  f32  Time.dt
+ *     word 6  f32  Time.elapsed
+ *     word 7       zero
+ *
+ * The shader. `wgsl` is one module with the compute entry point `main`,
+ * `@workgroup_size(64)`. The run for row
+ *
+ *     global_invocation_id.x + global_invocation_id.y * MN_GPU_ROW_SPAN
+ *
+ * does nothing when that is not below word 0. Its bindings, all in group
+ * 0, are numbered in this order:
+ *
+ *     the uniform words          var<uniform>, a struct of 32-bit scalars
+ *     each outer column          var<storage, read_write> array<u32> when
+ *                                `write`, var<storage, read> otherwise
+ *     each inner column          var<storage, read> array<u32>
+ *     the error word             var<storage, read_write> atomic<u32>, only
+ *                                when `fallible`
+ *
+ * A column buffer holds the column's bytes exactly as CPU memory does,
+ * padded with zeros to a whole number of words. The shader lowers the
+ * error word to a site with atomicMin; it starts at UINT32_MAX.
+ */
+
+/* In place of a component id: the handles of the rows (MnEntity, 8 bytes). */
+#define MN_GPU_ENTITIES UINT32_MAX
+#define MN_GPU_HEADER_WORDS 8
+#define MN_GPU_ROW_SPAN (65535u * 64u)
+
+typedef struct MnGpuColumn {
+    uint32_t component; /* a component id, or MN_GPU_ENTITIES */
+    uint32_t size;      /* bytes per row; a multiple of 4 when `write` */
+    bool write;         /* outer columns only */
+} MnGpuColumn;
+
+/* An operation that can fail. A program's sites are in source order, so
+ * the lowest index is the earliest in the source. */
+typedef struct MnGpuSite {
+    MnLoc loc;
+    const char *message; /* "division by zero" */
+} MnGpuSite;
+
+/* What the C implementation of a block is given for one table. */
+typedef struct MnGpuRun {
+    const uint32_t *uniform;
+    /* One array per outer column, in order: the table's own. */
+    void *const *outer;
+    /* One array per inner column, in order: the snapshot. */
+    const void *const *inner;
+    /* Lower it to the site of a failing operation. */
+    uint32_t *error;
+} MnGpuRun;
+
+typedef struct MnGpuBlock {
+    const char *system; /* the system's name, for messages */
+    uint32_t each;      /* which `each` of the system, from 1 */
+    uint32_t id;        /* unique in the program */
+    MnQuery *outer;
+    const MnGpuColumn *outer_columns; /* no component twice */
+    uint32_t outer_count;
+    MnQuery *inner; /* NULL without a nested query */
+    const MnGpuColumn *inner_columns;
+    uint32_t inner_count;
+    uint32_t uniform_words;
+    /* Writes words MN_GPU_HEADER_WORDS and up. NULL when there are none. */
+    void (*fill)(uint32_t *words);
+    /* Runs every row of one table. */
+    void (*cpu)(const MnGpuRun *run);
+    const char *wgsl;
+    bool fallible;
+    /* The program's sites. NULL unless `fallible`. */
+    const MnGpuSite *sites;
+    /* Runtime-private. Initialise to NULL. */
+    void *state;
+} MnGpuBlock;
+
+void mn_gpu_run(MnGpuBlock *block);
+
+/* Whether any column has a GPU copy. */
+extern bool mn_gpu_active;
+
+void mn_gpu_sync(MnTable *table, uint32_t component, bool write);
+
+/* Makes the CPU copy of a column current, and with `write` the only
+ * current one. Ordinary generated code calls it before it uses mn_column
+ * on a component that some GPU block names, once per table per loop. The
+ * runtime does the same itself before a structural change to a table. */
+static inline void mn_sync(MnTable *table, uint32_t component, bool write) {
+    if (mn_gpu_active) mn_gpu_sync(table, component, write);
+}
+
+/* mn_get for a component that some GPU block names. */
+static inline void *mn_get_synced(MnEntity e, uint32_t component, size_t size,
+                                  bool write, MnLoc loc) {
+    if (mn_gpu_active && mn_alive(e)) {
+        uint32_t table = mn_world.slots[e.index].table;
+        if (table != MN_NO_TABLE) {
+            mn_gpu_sync(mn_world.tables[table], component, write);
+        }
+    }
+    return mn_get(e, component, size, loc);
+}
+
 #endif

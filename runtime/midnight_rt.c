@@ -1482,6 +1482,9 @@ double mn_float_round_digits(double value, int64_t digits) {
 
 static uint64_t mn_random[4];
 
+/* Word 2 of the uniform data of every GPU block. */
+static uint32_t mn_gpu_seed;
+
 static uint64_t rotate_left(uint64_t value, int by) {
     return (value << by) | (value >> (64 - by));
 }
@@ -1501,6 +1504,7 @@ static uint64_t random_next(void) {
 }
 
 void mn_srand(int64_t seed) {
+    mn_gpu_seed = (uint32_t)seed ^ (uint32_t)((uint64_t)seed >> 32);
     /* splitmix64 */
     uint64_t state = (uint64_t)seed;
     for (int i = 0; i < 4; i++) {
@@ -1562,6 +1566,128 @@ void mn_sleep(double seconds) {
         if (left.tv_nsec > 999999999) left.tv_nsec = 999999999;
     }
     while (nanosleep(&left, &left) == -1 && errno == EINTR) {
+    }
+}
+
+/* ---- GPU systems --------------------------------------------------------- */
+
+bool mn_gpu_active = false;
+
+/* No column has a GPU copy. */
+void mn_gpu_sync(MnTable *table, uint32_t component, bool write) {
+    (void)table;
+    (void)component;
+    (void)write;
+}
+
+/* What mn_gpu_run keeps for a block between calls. */
+typedef struct MnGpuScratch {
+    uint32_t *uniform;
+    void **outer;
+    const void **inner;
+    /* One buffer per inner column, grown as needed. */
+    void **snapshots;
+    size_t *snapshot_sizes;
+} MnGpuScratch;
+
+static MnGpuScratch *gpu_scratch(MnGpuBlock *block) {
+    if (block->state) return block->state;
+    MnGpuScratch *scratch = mn_calloc(1, sizeof *scratch);
+    scratch->uniform = mn_calloc(block->uniform_words, sizeof(uint32_t));
+    scratch->outer = mn_calloc(block->outer_count + 1, sizeof(void *));
+    scratch->inner = mn_calloc(block->inner_count + 1, sizeof(void *));
+    scratch->snapshots = mn_calloc(block->inner_count + 1, sizeof(void *));
+    scratch->snapshot_sizes = mn_calloc(block->inner_count + 1, sizeof(size_t));
+    block->state = scratch;
+    return scratch;
+}
+
+static void *gpu_column(const MnTable *table, const MnGpuColumn *column) {
+    if (column->component == MN_GPU_ENTITIES) return table->entities;
+    return table->columns[column->component];
+}
+
+static bool gpu_writes(const MnGpuBlock *block, uint32_t component) {
+    for (uint32_t i = 0; i < block->outer_count; i++) {
+        const MnGpuColumn *column = &block->outer_columns[i];
+        if (column->component == component && column->write) return true;
+    }
+    return false;
+}
+
+/* Points scratch->inner at the snapshot of each inner column and returns
+ * its row count. A column the block does not write, in the only table
+ * with rows, stands for itself; anything else is copied. */
+static uint32_t gpu_snapshot(const MnGpuBlock *block, MnGpuScratch *scratch) {
+    MnQuery *query = block->inner;
+    if (!query) return 0;
+    mn_query_update(query);
+    uint64_t rows = 0;
+    uint32_t populated = 0;
+    const MnTable *only = NULL;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        const MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        rows += table->count;
+        populated++;
+        only = table;
+    }
+    if (rows > UINT32_MAX) mn_out_of_memory();
+    for (uint32_t i = 0; i < block->inner_count; i++) {
+        const MnGpuColumn *column = &block->inner_columns[i];
+        if (populated == 1 && !gpu_writes(block, column->component)) {
+            scratch->inner[i] = gpu_column(only, column);
+            continue;
+        }
+        size_t size = mn_mul((size_t)rows, column->size);
+        if (size > scratch->snapshot_sizes[i]) {
+            scratch->snapshots[i] = mn_realloc(scratch->snapshots[i], size);
+            scratch->snapshot_sizes[i] = size;
+        }
+        char *out = scratch->snapshots[i];
+        for (uint32_t t = 0; t < query->table_count; t++) {
+            const MnTable *table = query->tables[t];
+            if (table->count == 0) continue;
+            size_t bytes = (size_t)table->count * column->size;
+            memcpy(out, gpu_column(table, column), bytes);
+            out += bytes;
+        }
+        scratch->inner[i] = scratch->snapshots[i];
+    }
+    return (uint32_t)rows;
+}
+
+void mn_gpu_run(MnGpuBlock *block) {
+    MnGpuScratch *scratch = gpu_scratch(block);
+    MnQuery *query = block->outer;
+    mn_query_update(query);
+
+    uint32_t *uniform = scratch->uniform;
+    float dt = (float)mn_time.dt;
+    float elapsed = (float)mn_time.elapsed;
+    uniform[1] = gpu_snapshot(block, scratch);
+    uniform[2] = mn_gpu_seed;
+    uniform[3] = block->id;
+    uniform[4] = (uint32_t)mn_time.tick;
+    memcpy(&uniform[5], &dt, sizeof dt);
+    memcpy(&uniform[6], &elapsed, sizeof elapsed);
+    uniform[7] = 0;
+    if (block->fill) block->fill(uniform);
+
+    uint32_t error = UINT32_MAX;
+    MnGpuRun run = {uniform, scratch->outer, scratch->inner, &error};
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        const MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        uniform[0] = table->count;
+        for (uint32_t i = 0; i < block->outer_count; i++) {
+            scratch->outer[i] = gpu_column(table, &block->outer_columns[i]);
+        }
+        block->cpu(&run);
+    }
+    if (error != UINT32_MAX) {
+        const MnGpuSite *site = &block->sites[error];
+        mn_panic(site->loc, "%s", site->message);
     }
 }
 
