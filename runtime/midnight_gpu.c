@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <webgpu/webgpu.h>
 #include <webgpu/wgpu.h>
@@ -262,9 +263,43 @@ static void submit(WGPUCommandEncoder encoder) {
     gpu.pending = true;
 }
 
+static uint64_t now_ns(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec;
+}
+
+/* How long a wait polls without blocking before it blocks. */
+#define SPIN_NS 50000u
+
+/* Polls the device until a callback sets `*done`. Polls without blocking
+ * for up to SPIN_NS, which spares a short wait the sleep and wake-up of a
+ * blocking poll, then blocks. The bound changes only how long the wait
+ * takes, never what it returns. */
+static void device_poll_until(const int *done) {
+    uint64_t start = now_ns();
+    while (*done == 0 && now_ns() - start < SPIN_NS) {
+        wgpuDevicePoll(gpu.device, false, NULL);
+    }
+    while (*done == 0) wgpuDevicePoll(gpu.device, true, NULL);
+}
+
+static void on_work_done(WGPUQueueWorkDoneStatus status, void *done,
+                         void *unused) {
+    (void)unused;
+    *(int *)done = status == WGPUQueueWorkDoneStatus_Success ? 1 : -1;
+}
+
 void mn_gpu_device_wait(void) {
     if (!gpu.pending) return;
-    wgpuDevicePoll(gpu.device, true, NULL);
+    int done = 0;
+    WGPUQueueWorkDoneCallbackInfo callback = {0};
+    callback.mode = WGPUCallbackMode_AllowProcessEvents;
+    callback.callback = on_work_done;
+    callback.userdata1 = &done;
+    wgpuQueueOnSubmittedWorkDone(gpu.queue, callback);
+    device_poll_until(&done);
+    if (done < 0) gpu_fail("the device did not finish its work");
     gpu.pending = false;
 }
 
@@ -285,7 +320,7 @@ static const void *buffer_read(const Buffer *buffer, uint64_t bytes) {
     callback.userdata1 = &done;
     wgpuBufferMapAsync(buffer->handle, WGPUMapMode_Read, 0, (size_t)bytes,
                        callback);
-    while (done == 0) wgpuDevicePoll(gpu.device, true, NULL);
+    device_poll_until(&done);
     gpu.pending = false;
     if (done < 0) gpu_fail("can't read a buffer back");
     return wgpuBufferGetConstMappedRange(buffer->handle, 0, (size_t)bytes);
