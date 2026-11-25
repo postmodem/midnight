@@ -428,7 +428,7 @@ and Mesa's `llvmpipe` for software Vulkan.
 | 10 | Every command in the README was run as written. |
 
 `MIDNIGHT_TEST_GPU=hardware cargo test` and `nix run .#gpu-test` ran the 49
-programs on the RTX 5090 in release mode. Every output is exact except
+programs on the RTX 5090 as release and as debug builds, 98 runs. Every output is exact except
 `examples/nbody.12am`, which is within its tolerance on both devices.
 
 ### Measured with generated shaders
@@ -538,6 +538,18 @@ The reference's "What a GPU system costs" carries these figures.
 - **Build flags.** Generated C is compiled with `-DMN_GPU_SYSTEMS` when the
   program declares a GPU system, and with `-DMN_GPU` when
   `MIDNIGHT_GPU_FLAGS` is set and the GPU runtime is linked.
+- **A debug build has a `dlopen` of its own.** Under AddressSanitizer every
+  `dlopen` goes through the sanitizer's, and the dynamic loader then looks
+  for a library named without a directory in the executable's runpath, not
+  in that of the library that asked (LLVM issue 28164, open since 2016).
+  NVIDIA's driver opens `libxcb-glx.so.0` and others that way, so where
+  libraries are found through runpaths, as on NixOS, a debug build found no
+  NVIDIA device. In a debug build of a program with a GPU system,
+  `midnight_gpu.c` defines `dlopen` to jump to the C library's, which
+  leaves the caller as it was. Fixed in 0.2.4; until then debug builds ran
+  on another adapter or on the CPU. The suite's hardware mode now runs
+  debug builds too, and `gpu_driver_finds_its_parts` checks the behaviour
+  with a stand-in driver on any device.
 - **Leaks a driver leaves are passed over.** In a debug build, LeakSanitizer
   skips a leak whose allocation came through a library that is no longer
   loaded when the program ends. RADV leaves one such allocation. Every
@@ -545,9 +557,6 @@ The reference's "What a GPU system costs" carries these figures.
 
 ### Known limits
 
-- A debug build cannot use an NVIDIA device: the driver fails to start
-  under AddressSanitizer. Such a build uses another adapter if the machine
-  has one, and the CPU otherwise. `apps.gpu-test` runs release builds only.
 - `%` on `Float` at 32 bits is not the exact remainder; the reference says
   how far off it can be. The sign of a zero result of `%` and `**` can
   differ from what ordinary code gives.

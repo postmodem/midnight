@@ -4,6 +4,11 @@
  * section of midnight_rt.h for how generated code describes a block.
  */
 
+/* For RTLD_NEXT. */
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include "midnight_gpu.h"
 
 #include <stdarg.h>
@@ -110,6 +115,49 @@ const char *__lsan_default_suppressions(void) {
 /* Keeps the table of suppressions used off standard error. */
 const char *__lsan_default_options(void);
 const char *__lsan_default_options(void) { return "print_suppressions=0"; }
+#endif
+
+#if defined(MN_GPU_LEAK_CHECKED) && defined(__linux__) &&                      \
+    defined(__has_attribute)
+#if __has_attribute(musttail)
+#include <dlfcn.h>
+
+/* AddressSanitizer's dlopen, when the runtime has one under this name. */
+extern void *__interceptor_dlopen(const char *file, int mode)
+    __attribute__((weak));
+
+/* The program's dlopen, in place of AddressSanitizer's.
+ *
+ * The dynamic loader looks for a library named without a directory in the
+ * runpath of whoever called dlopen. AddressSanitizer puts a dlopen of its
+ * own in the executable, which calls the C library's, so the caller the
+ * loader sees is always the executable. A GPU driver that opens its other
+ * parts by name is then searched for in the wrong runpath, fails to start
+ * wherever libraries are found through runpaths, and the program finds no
+ * such device.
+ *
+ * This one jumps to the C library's dlopen without calling it, which
+ * leaves the caller as it was. Two things AddressSanitizer's dlopen does
+ * are kept:
+ *
+ * - It refuses RTLD_DEEPBIND, which it cannot work with. Such a call is
+ *   handed to it.
+ * - After the call it tells its symbolizer that the list of loaded
+ *   libraries is out of date. Nothing can be done after a jump, so that is
+ *   done before it, through AddressSanitizer's dlclose, which tells the
+ *   symbolizer the same thing: the program itself is opened and closed.
+ *   The list is read again when it is next needed. */
+void *dlopen(const char *file, int mode) {
+    static void *(*next)(const char *, int);
+    if (!next) next = (void *(*)(const char *, int))dlsym(RTLD_NEXT, "dlopen");
+    if ((mode & RTLD_DEEPBIND) && __interceptor_dlopen) {
+        return __interceptor_dlopen(file, mode);
+    }
+    void *program = next(NULL, RTLD_LAZY);
+    if (program) dlclose(program);
+    __attribute__((musttail)) return next(file, mode);
+}
+#endif
 #endif
 
 /* ---- Failures ------------------------------------------------------------ */

@@ -171,10 +171,6 @@ offers, such as an array larger than the largest buffer the device binds.
 An error from the device after start-up prints `midnight: GPU error: …` and
 ends the program with status 70.
 
-A debug build cannot use an NVIDIA device: the driver fails to start under
-AddressSanitizer. Such a build uses another adapter if the machine has one,
-and the CPU otherwise.
-
 ## Benchmarks
 
 ```sh
@@ -224,10 +220,11 @@ differ from the expected output by the tolerance the program states in its
 ```sh
 MIDNIGHT_TEST_GPU=hardware cargo test    # in the dev shell, on the machine's GPU
 MIDNIGHT_TEST_GPU=software cargo test    # in the dev shell, on software Vulkan
-nix run .#gpu-test                       # release builds on the machine's GPU
+nix run .#gpu-test                       # the packaged compiler, on the machine's GPU
 ```
 
-A run that finds no device, or runs a GPU system on the CPU, fails. The
+Every program runs as a release and as a debug build. A run that finds no
+device, or runs a GPU system on the CPU, fails. The
 software mode points programs at the Vulkan driver file named in
 `MIDNIGHT_TEST_SOFTWARE_ICD`, which the dev shell sets to Mesa's `llvmpipe`.
 The suite tests the compiler cargo built, or the one `MIDNIGHT_BIN` names.

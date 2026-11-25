@@ -124,7 +124,7 @@
           };
           text = ''
             cd ${src}
-            exec ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan
+            exec ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan gpu_driver_finds_its_parts
           '';
         };
 
@@ -269,13 +269,14 @@
             pkgs.runCommand "midnight-gpu-tests"
               {
                 MIDNIGHT_BIN = lib.getExe midnight;
+                MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
                 MIDNIGHT_TEST_GPU = "software";
                 MIDNIGHT_TEST_SOFTWARE_ICD = softwareIcdFor pkgs;
               }
               ''
                 export HOME=$TMPDIR XDG_RUNTIME_DIR=$TMPDIR
                 cd ${src}
-                ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan
+                ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan gpu_driver_finds_its_parts
                 touch $out
               '';
         }

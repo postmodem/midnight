@@ -25,9 +25,11 @@
 //! `gpu_programs` and `gpu_stats_match_plan` do nothing unless
 //! `MIDNIGHT_TEST_GPU` names where GPU systems are to run:
 //!
-//! - `software`: on Mesa's `llvmpipe`, release and debug builds.
-//!   `MIDNIGHT_TEST_SOFTWARE_ICD` is the path of its Vulkan driver file.
-//! - `hardware`: on the machine's hardware device, release builds.
+//! - `software`: on Mesa's `llvmpipe`. `MIDNIGHT_TEST_SOFTWARE_ICD` is the
+//!   path of its Vulkan driver file.
+//! - `hardware`: on the machine's hardware device.
+//!
+//! Either way every program runs as a release and as a debug build.
 //!
 //! `gpu_programs` runs every program of `tests/run`, `tests/panic` and
 //! `examples` that declares a GPU system. Standard output must match
@@ -46,6 +48,7 @@
 //! repository root.
 
 use std::collections::BTreeSet;
+use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -84,13 +87,6 @@ impl Device {
             Some(other) => {
                 panic!("MIDNIGHT_TEST_GPU is `{other}`: expected `software` or `hardware`")
             }
-        }
-    }
-
-    fn modes(self) -> &'static [Mode] {
-        match self {
-            Device::Software => &MODES,
-            Device::Hardware => &[Mode::Release],
         }
     }
 }
@@ -722,7 +718,7 @@ fn gpu_programs() {
     for (name, sources, stops) in &groups {
         dirs.push(scratch(name));
         for source in sources.iter().filter(|source| declares_gpu_system(source)) {
-            for mode in device.modes() {
+            for mode in &MODES {
                 jobs.push((dirs.len() - 1, source, *stops, *mode));
             }
         }
@@ -752,7 +748,7 @@ fn gpu_programs() {
     note(&format!(
         "gpu_programs: {} runs of {} programs on {}",
         jobs.len(),
-        jobs.len() / device.modes().len(),
+        jobs.len() / MODES.len(),
         devices.join(" and ")
     ));
     for line in inexact.into_inner().unwrap() {
@@ -789,7 +785,7 @@ fn gpu_stats_match_plan() {
 
     let dir = scratch("gpu-stats");
     let devices = Mutex::new(BTreeSet::new());
-    let failures = for_each_parallel(device.modes(), |mode| {
+    let failures = for_each_parallel(&MODES, |mode| {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
         let label = format!("{STATS_PROGRAM} ({mode:?})");
@@ -816,7 +812,7 @@ fn gpu_stats_match_plan() {
         Ok(())
     });
     let _ = std::fs::remove_dir_all(&dir);
-    report("runs with stats", device.modes().len(), failures);
+    report("runs with stats", MODES.len(), failures);
     let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
     note(&format!(
         "gpu_stats_match_plan: uploads {} and downloads {} in every tick after the first on {}",
@@ -943,6 +939,134 @@ fn a_program_states_its_tolerance_in_a_comment() {
     assert!(stated_tolerance("# tolerance: small\n").is_err());
     assert!(stated_tolerance("# tolerance: -1\n").is_err());
     assert!(stated_tolerance("# tolerance: 0\n").is_err());
+}
+
+/// A library the stand-in driver opens by name.
+const PROBE_PART: &str = "int mn_probe_part(void) { return 1; }\n";
+
+/// A Vulkan driver that offers nothing. When it is loaded it opens another
+/// library by name, as real drivers open their other parts, and says on
+/// standard error whether the dynamic loader found it.
+const PROBE_DRIVER: &str = r#"#include <dlfcn.h>
+#include <stdio.h>
+
+__attribute__((constructor)) static void probe(void) {
+    void *part = dlopen("libmn_probe_part.so", RTLD_NOW);
+    fprintf(stderr, "probe driver: part %s\n", part ? "found" : "missing");
+}
+
+void *vk_icdGetInstanceProcAddr(void *instance, const char *name);
+void *vk_icdGetInstanceProcAddr(void *instance, const char *name) {
+    (void)instance;
+    (void)name;
+    return 0;
+}
+"#;
+
+/// Runs the C compiler that programs are built with.
+fn cc(args: &[&OsStr]) {
+    let cc = std::env::var_os("MIDNIGHT_CC").unwrap_or_else(|| "cc".into());
+    let output = Command::new(&cc)
+        .args(args)
+        .output()
+        .expect("run the C compiler");
+    assert!(output.status.success(), "{}", text(&output.stderr));
+}
+
+/// A GPU driver finds the libraries it opens by name, in a release and in
+/// a debug build. The dynamic loader looks for such a library in the
+/// runpath of the library that asked, and a debug build must not put
+/// AddressSanitizer's `dlopen` between the two. The driver is a stand-in
+/// that the Vulkan loader loads beside the real one, so the test needs no
+/// particular device.
+#[test]
+fn gpu_driver_finds_its_parts() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    let dir = scratch("gpu-driver");
+    let parts = dir.join("parts");
+    std::fs::create_dir_all(&parts).expect("create a directory");
+    let part_source = dir.join("part.c");
+    let driver_source = dir.join("driver.c");
+    let driver = dir.join("libmn_probe_driver.so");
+    std::fs::write(&part_source, PROBE_PART).expect("write a source file");
+    std::fs::write(&driver_source, PROBE_DRIVER).expect("write a source file");
+    cc(&[
+        "-shared".as_ref(),
+        "-fPIC".as_ref(),
+        part_source.as_os_str(),
+        "-o".as_ref(),
+        parts.join("libmn_probe_part.so").as_os_str(),
+    ]);
+    // The part is found through the driver's runpath and no other way.
+    let mut runpath = OsString::from("-Wl,--enable-new-dtags,-rpath,");
+    runpath.push(&parts);
+    cc(&[
+        "-shared".as_ref(),
+        "-fPIC".as_ref(),
+        driver_source.as_os_str(),
+        "-o".as_ref(),
+        driver.as_os_str(),
+        &runpath,
+    ]);
+    let manifest = dir.join("probe.json");
+    std::fs::write(
+        &manifest,
+        format!(
+            "{{\"file_format_version\": \"1.0.0\", \
+             \"ICD\": {{\"library_path\": {:?}, \"api_version\": \"1.3.0\"}}}}\n",
+            driver.to_string_lossy()
+        ),
+    )
+    .expect("write the driver's manifest");
+
+    let source = Path::new(STATS_PROGRAM);
+    let failures = for_each_parallel(&MODES, |mode| {
+        let exe = exe_path(&dir, source, *mode);
+        build(source, &exe, *mode)?;
+        let mut command = Command::new(&exe);
+        match device {
+            Device::Software => {
+                let mut drivers = OsString::from(&manifest);
+                drivers.push(":");
+                drivers.push(software_driver());
+                command
+                    .env("VK_DRIVER_FILES", drivers)
+                    .env_remove("VK_ADD_DRIVER_FILES")
+                    .env("MIDNIGHT_GPU", "software");
+            }
+            Device::Hardware => {
+                command
+                    .env("VK_ADD_DRIVER_FILES", &manifest)
+                    .env_remove("MIDNIGHT_GPU");
+            }
+        }
+        let output = command.output().expect("run program");
+        let stderr = text(&output.stderr);
+        let label = format!("{STATS_PROGRAM} ({mode:?})");
+        if !output.status.success() {
+            return Err(format!(
+                "{label}: exited with {:?}\n--- stderr\n{stderr}---",
+                output.status.code()
+            ));
+        }
+        if stderr.contains("probe driver: part missing") {
+            return Err(format!(
+                "{label}: a driver could not open its own library by name\n--- stderr\n{stderr}---"
+            ));
+        }
+        if !stderr.contains("probe driver: part found") {
+            return Err(format!(
+                "{label}: the stand-in driver was not loaded\n--- stderr\n{stderr}---"
+            ));
+        }
+        Ok(())
+    });
+    report("runs with a stand-in driver", MODES.len(), failures);
 }
 
 #[test]

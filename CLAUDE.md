@@ -40,7 +40,7 @@ nix develop -c cargo fmt
 nix develop -c cargo run -- run FILE.12am  # also: build, check, emit-c; add --debug
 nix flake check                            # package, clippy, rustfmt, nixfmt, GPU programs on llvmpipe
 nix run .#bench                            # timings against bench/baseline.c
-nix run .#gpu-test                         # GPU programs on this machine's GPU, release builds
+nix run .#gpu-test                         # GPU programs on this machine's GPU, both build modes
 MIDNIGHT_TEST_GPU=software nix develop -c cargo test   # the suite, plus GPU programs on llvmpipe
 MIDNIGHT_TEST_GPU=hardware nix develop -c cargo test   # the suite, plus GPU programs on this machine's GPU
 ```
@@ -86,11 +86,12 @@ command that needs it.
 - `examples/NAME.12am` with `NAME.out`: as `tests/run`.
 - Every program above runs with `MIDNIGHT_GPU=off`: GPU systems run their CPU
   implementation, so the suite needs no device and is exact.
-- GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe, release and debug)
-  or `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU, release only), the
-  tests `gpu_programs` and `gpu_stats_match_plan` also run. Without it they
-  do nothing. `checks.gpu` is the software mode in the build sandbox;
-  `apps.gpu-test` is the hardware mode.
+- GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe) or
+  `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU), the tests
+  `gpu_programs`, `gpu_stats_match_plan` and `gpu_driver_finds_its_parts`
+  also run, on release and debug builds. Without it they do nothing.
+  `checks.gpu` is the software mode in the build sandbox; `apps.gpu-test`
+  is the hardware mode.
   - `gpu_programs` runs every program of `tests/run`, `tests/panic` and
     `examples` that declares a GPU system on the device. Output must match
     `NAME.out`: exactly, or, when the program has a `# tolerance: T` line,
@@ -101,8 +102,14 @@ command that needs it.
   - `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
     `MIDNIGHT_GPU=stats` and requires every tick after the first to make the
     uploads and downloads `midnight plan` lists.
-  - Both print the device they ran on. GPU mode never rewrites expected
-    files.
+  - `gpu_driver_finds_its_parts` builds a stand-in Vulkan driver that opens
+    another library by name, and requires that library to be found through
+    the driver's runpath. A debug build has a `dlopen` of its own in
+    `midnight_gpu.c` for this: AddressSanitizer's would make the dynamic
+    loader search the executable's runpath, and a driver such as NVIDIA's
+    would not start.
+  - The first two print the device they ran on. GPU mode never rewrites
+    expected files.
   - The dev shell sets `MIDNIGHT_TEST_SOFTWARE_ICD`, the Vulkan driver file
     the software mode passes to programs as `VK_DRIVER_FILES`.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
