@@ -29,17 +29,14 @@ mod tests;
 use std::collections::{HashMap, HashSet};
 
 use crate::ast;
-use crate::diag::{Diagnostic, MAX_ERRORS};
+use crate::diag::Diagnostic;
 use crate::source::{SourceMap, Span};
 use crate::tir::{self, ComponentId, ConstId, EnumId, FuncId, LocalId, RecordId, ResourceId, Type};
 
-/// Checks a whole program. Reports every independent error, up to
-/// [`MAX_ERRORS`], in source order.
-pub fn check(
-    program: &ast::Program,
-    _sources: &SourceMap,
-) -> Result<tir::Program, Vec<Diagnostic>> {
-    let mut checker = Checker::new();
+/// Checks a whole program. Reports every independent error, in source
+/// order.
+pub fn check(program: &ast::Program, sources: &SourceMap) -> Result<tir::Program, Vec<Diagnostic>> {
+    let mut checker = Checker::new(sources);
     checker.declare(program);
     checker.resolve_signatures();
     checker.check_constants();
@@ -61,6 +58,10 @@ const BUILTIN_TYPES: &[&str] = &[
 
 /// Built-in functions, called as `name` or `name(…)`.
 const BUILTIN_FUNCTIONS: &[&str] = &["min", "max", "rand", "srand", "clock", "sleep", "exit"];
+
+/// The hint on a `Float` where an `Int` is required.
+const FLOAT_TO_INT: &str =
+    "a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`";
 
 /// What a capitalized name refers to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -209,6 +210,7 @@ enum ReadOnly {
     Const(String),
     OnParam(String),
     ListParam(String),
+    IndexParam(String),
     CountParam(String),
     TimeField(&'static str),
 }
@@ -232,6 +234,9 @@ impl ReadOnly {
             ReadOnly::ListParam(name) => format!(
                 "`{name}` is a parameter of a list iteration, a read-only copy; loop over indexes to change the list"
             ),
+            ReadOnly::IndexParam(name) => {
+                format!("`{name}` is the index of a list iteration, which is read-only")
+            }
             ReadOnly::CountParam(name) => {
                 format!("`{name}` is the counter of a counting loop, which is read-only")
             }
@@ -311,6 +316,33 @@ struct LocalMeta {
     written: bool,
     /// Where the local was created.
     span: Span,
+    /// The local is a parameter of a `do` block.
+    block_param: bool,
+}
+
+/// The variables of one block.
+struct Scope {
+    names: Vec<(String, LocalId)>,
+    /// What the block belongs to, as messages name it: "the `if`". `None`
+    /// for the scope of a whole body.
+    construct: Option<&'static str>,
+}
+
+impl Scope {
+    fn new(construct: Option<&'static str>) -> Scope {
+        Scope {
+            names: Vec::new(),
+            construct,
+        }
+    }
+}
+
+/// A variable whose block has ended.
+struct Ended {
+    name: String,
+    local: LocalId,
+    /// The construct whose block it belonged to.
+    construct: &'static str,
 }
 
 /// The state of the body being checked: its locals, scopes and loops.
@@ -318,7 +350,11 @@ struct FnCtx {
     kind: BodyKind,
     locals: Vec<tir::Local>,
     meta: Vec<LocalMeta>,
-    scopes: Vec<Vec<(String, LocalId)>>,
+    scopes: Vec<Scope>,
+    /// The variables of every block that has ended, oldest first.
+    ended: Vec<Ended>,
+    /// In a constant expression: its error has been reported.
+    const_reported: bool,
     /// In a method: the `self` local and its record.
     self_: Option<(LocalId, RecordId)>,
     /// One entry per enclosing loop: whether a `break` targets it.
@@ -340,7 +376,9 @@ impl FnCtx {
             kind,
             locals: Vec::new(),
             meta: Vec::new(),
-            scopes: vec![Vec::new()],
+            scopes: vec![Scope::new(None)],
+            ended: Vec::new(),
+            const_reported: false,
             self_: None,
             loops: Vec::new(),
             unreachable: false,
@@ -355,7 +393,7 @@ impl FnCtx {
         self.scopes
             .iter()
             .rev()
-            .flat_map(|scope| scope.iter().rev())
+            .flat_map(|scope| scope.names.iter().rev())
             .find(|(n, _)| n == name)
             .map(|(_, id)| *id)
     }
@@ -371,12 +409,13 @@ impl FnCtx {
     fn names(&self) -> Vec<String> {
         self.scopes
             .iter()
-            .flat_map(|scope| scope.iter().map(|(n, _)| n.clone()))
+            .flat_map(|scope| scope.names.iter().map(|(n, _)| n.clone()))
             .collect()
     }
 }
 
 struct Checker<'a> {
+    sources: &'a SourceMap,
     errors: Vec<Diagnostic>,
     globals: HashMap<String, (Global, Span)>,
     fn_names: HashMap<String, (FnSym, Span)>,
@@ -419,8 +458,9 @@ fn is_number(ty: &Type) -> bool {
 }
 
 impl<'a> Checker<'a> {
-    fn new() -> Checker<'a> {
+    fn new(sources: &'a SourceMap) -> Checker<'a> {
         Checker {
+            sources,
             errors: Vec::new(),
             globals: HashMap::new(),
             fn_names: HashMap::new(),
@@ -467,11 +507,56 @@ impl<'a> Checker<'a> {
             self.type_name(expected),
             self.type_name(found)
         );
+        let label = label.or_else(|| {
+            (*expected == Type::Int && *found == Type::Float).then(|| FLOAT_TO_INT.to_string())
+        });
         let mut diagnostic = Diagnostic::new(message, span);
         if let Some(label) = label {
             diagnostic = diagnostic.label(label);
         }
         self.error(diagnostic);
+    }
+
+    /// The source text of a span, when it is short and on one line.
+    fn snippet(&self, span: Span) -> Option<&str> {
+        let text = &self.sources.file(span.file).text;
+        let text = text.get(span.start as usize..span.end as usize)?;
+        (text.chars().count() <= 40 && !text.contains('\n')).then_some(text)
+    }
+
+    /// Reports a name that ends in `?` or `!` where only function and
+    /// method names may. `what` is "variable", "parameter", …
+    fn plain_name(&mut self, what: &str, name: &str, span: Span) {
+        if let Some(mark) = name.chars().last().filter(|c| matches!(c, '?' | '!')) {
+            self.err_label(
+                format!("{what} name `{name}` can't end in `{mark}`"),
+                span,
+                "only function and method names can",
+            );
+        }
+    }
+
+    /// Opens the scope of a block. `construct` names what the block
+    /// belongs to: "the `if`".
+    fn push_scope(&mut self, construct: Option<&'static str>) {
+        self.cx.scopes.push(Scope::new(construct));
+    }
+
+    /// Closes the innermost scope and remembers its variables, so that a
+    /// later use of one can be explained.
+    fn pop_scope(&mut self) {
+        let Some(scope) = self.cx.scopes.pop() else {
+            return;
+        };
+        if let Some(construct) = scope.construct {
+            for (name, local) in scope.names {
+                self.cx.ended.push(Ended {
+                    name,
+                    local,
+                    construct,
+                });
+            }
+        }
     }
 
     /// A type as it is written in source.
@@ -543,6 +628,7 @@ impl<'a> Checker<'a> {
             .scopes
             .last_mut()
             .expect("a body always has a scope")
+            .names
             .push((name.to_string(), id));
         id
     }
@@ -560,6 +646,7 @@ impl<'a> Checker<'a> {
             readonly: None,
             written: false,
             span: Span::new(crate::source::FileId(0), 0, 0),
+            block_param: false,
         });
         id
     }
@@ -571,7 +658,6 @@ impl<'a> Checker<'a> {
             let mut errors = std::mem::take(&mut self.errors);
             errors.sort_by_key(|d| (d.span.file.0, d.span.start, d.span.end));
             errors.dedup_by(|a, b| a.span == b.span && a.message == b.message);
-            errors.truncate(MAX_ERRORS);
             return Err(errors);
         }
 

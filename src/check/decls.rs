@@ -59,6 +59,7 @@ impl<'a> Checker<'a> {
                     }
                 }
                 ast::Item::System(decl) => {
+                    self.plain_name("system", &decl.name.name, decl.name.span);
                     if self.claim_fn(&decl.name, FnSym::System) {
                         self.systems.push(SystemInfo { decl, body: None });
                     }
@@ -237,6 +238,7 @@ impl<'a> Checker<'a> {
                 self.duplicate(&field.name.name, field.name.span, first);
                 continue;
             }
+            self.plain_name("field", &field.name.name, field.name.span);
             let ty = self.resolve_type(&field.ty, TypeUse::Field);
             fields.push(FieldInfo {
                 name: field.name.name.clone(),
@@ -346,6 +348,7 @@ impl<'a> Checker<'a> {
                 let first = first.span;
                 self.duplicate(&param.name.name, param.name.span, first);
             }
+            self.plain_name("parameter", &param.name.name, param.name.span);
             let ty = self.resolve_type(&param.ty, TypeUse::Parameter);
             params.push(ParamInfo {
                 name: param.name.name.clone(),

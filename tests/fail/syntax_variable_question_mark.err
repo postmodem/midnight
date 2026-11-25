@@ -1,1 +1,5 @@
-TODO
+error: variable name `ready?` can't end in `?`
+ --> tests/fail/syntax_variable_question_mark.grem:4:1
+  |
+4 | ready? = true
+  | ^^^^^^ only function and method names can

@@ -58,6 +58,9 @@ def greet
 end
 ";
 
+const FLOAT_TO_INT: &str =
+    "a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`";
+
 /// `body` after the shared declarations.
 fn with(body: &str) -> String {
     format!("{DECLS}{body}\n")
@@ -369,7 +372,7 @@ fn type_mismatch_states_both_types() {
         "def f -> Int\n  return 1.5\nend",
         "expected `Int`, found `Float`",
         "1.5",
-        "",
+        FLOAT_TO_INT,
     );
     one(
         "v = Vec2()\nv.x = \"a\"",
@@ -410,7 +413,7 @@ fn list_types_do_not_convert() {
         "xs: [Int] = [1, 2.5]",
         "expected `Int`, found `Float`",
         "2.5",
-        "",
+        FLOAT_TO_INT,
     );
     one("x: Int = []", "expected `Int`, found `[]`", "[]", "");
 }
@@ -820,7 +823,7 @@ fn block_parameters_other_than_query_parameters_are_read_only() {
         "xs = [1]\nxs.each_with_index do |x, i|\n  i += 1\nend",
         "can't assign to `i`",
         "i",
-        "`i` is a parameter of a list iteration, a read-only copy; loop over indexes to change the list",
+        "`i` is the index of a list iteration, which is read-only",
     );
     one(
         "3.times do |i|\n  i += 1\nend",
@@ -897,13 +900,20 @@ fn a_variable_keeps_its_type() {
         "count = 0\ncount = 1.5",
         "can't assign `Float` to `count`, which is `Int`",
         "1.5",
-        "a variable keeps the type of its first value",
+        FLOAT_TO_INT,
+    );
+    assert_eq!(
+        note(&with("count = 0\ncount = 1.5")),
+        (
+            "a variable keeps the type of its first value: `count` gets its type here".to_string(),
+            "count".to_string()
+        )
     );
     one(
         "xs = [1]\nxs = [1.5]",
         "expected `Int`, found `Float`",
         "1.5",
-        "",
+        FLOAT_TO_INT,
     );
 }
 
@@ -942,18 +952,85 @@ fn block_parameters_must_not_reuse_names() {
 
 #[test]
 fn variables_belong_to_their_block() {
-    one(
-        "if true\n  inner = 1\nend\nputs inner",
+    let text = with("if true\n  inner = 1\nend\nputs inner");
+    assert_error(
+        &text,
         "unknown variable or function `inner`",
         "inner",
-        "",
+        "`inner` was created inside the `if` and ends with it; create it before the `if`",
+    );
+    assert_eq!(
+        note(&text),
+        ("`inner` is created here".to_string(), "inner".to_string())
     );
     one(
         "3.times do |i|\n  last = i\nend\nputs last",
         "unknown variable or function `last`",
         "last",
+        "`last` was created inside the `do` block and ends with it; create it before the `do` block",
+    );
+    // Each construct is named.
+    for (body, construct) in [
+        ("unless false\n  v = 1\nend", "the `unless`"),
+        ("if false\n  puts 1\nelse\n  v = 1\nend", "the `if`"),
+        ("v = 1 if true", "the `if`"),
+        ("case 1\nwhen 1 then v = 1\nend", "the `case`"),
+        ("while false\n  v = 1\nend", "the `while`"),
+        ("until true\n  v = 1\nend", "the `until`"),
+        ("loop do\n  v = 1\n  break\nend", "the `loop`"),
+        ("[1].each do |x|\n  v = x\nend", "the `do` block"),
+        ("each Position do |pos|\n  v = 1\nend", "the `each`"),
+        ("on Hit do |hit|\n  v = 1\nend", "the `on`"),
+    ] {
+        one(
+            &format!("{body}\nputs v"),
+            "unknown variable or function `v`",
+            "v",
+            &format!(
+                "`v` was created inside {construct} and ends with it; create it before {construct}"
+            ),
+        );
+    }
+    // The explanation wins over a suggestion of a similar name.
+    one(
+        "counts = 0\nif true\n  count = 1\nend\nputs count",
+        "unknown variable or function `count`",
+        "count",
+        "`count` was created inside the `if` and ends with it; create it before the `if`",
+    );
+    // Blocks of other functions do not count.
+    one(
+        "def f\n  if true\n    hidden = 1\n  end\nend\nputs hidden",
+        "unknown variable or function `hidden`",
+        "hidden",
         "",
     );
+}
+
+#[test]
+fn block_parameters_end_with_their_block() {
+    const LABEL: &str = "`i` is a block parameter and ends with its block";
+    one(
+        "3.times do |i|\n  puts i\nend\nputs i",
+        "unknown variable or function `i`",
+        "i",
+        LABEL,
+    );
+    one(
+        "[1].each_with_index do |x, i|\nend\ni += 1",
+        "unknown variable or function `i`",
+        "i",
+        LABEL,
+    );
+    one(
+        "each Entity do |i|\nend\nputs i",
+        "unknown variable or function `i`",
+        "i",
+        LABEL,
+    );
+    let errors = diagnostics(&with("on Hit do |i|\nend\nputs i"));
+    assert_eq!(errors[0].label.as_deref(), Some(LABEL));
+    assert!(errors[0].notes.is_empty());
 }
 
 // ----- queries -----
@@ -1509,7 +1586,7 @@ fn case_values() {
         "case 1\nwhen \"a\" then puts 1\nend",
         "expected `Int`, found `String`",
         "\"a\"",
-        "",
+        "`when` values are compared with the `case` value, which is `Int`",
     );
     one(
         "x = case 1\nwhen 1 then \"a\"\nend",
@@ -1702,13 +1779,43 @@ fn defaults_and_constants_are_constant_expressions() {
         "def seed -> Int\n  4\nend\nstruct S\n  x: Int = seed\nend\n",
         "not a constant expression",
         "seed",
-        DEFAULT,
+        &format!("`seed` is a function call; {DEFAULT}"),
     );
     assert_error(
         "struct S\n  x: Float = rand\nend\n",
         "not a constant expression",
         "rand",
-        DEFAULT,
+        &format!("`rand` is a function call; {DEFAULT}"),
+    );
+    one(
+        "N = clamp(1, 2, 3)",
+        "not a constant expression",
+        "clamp(1, 2, 3)",
+        &format!("`clamp(…)` is a function call; {CONSTANT}"),
+    );
+    // One report for the whole expression, at its first offending part.
+    one(
+        "size = 4\nAREA = size * size",
+        "not a constant expression",
+        "size",
+        &format!("`size` is a variable; {CONSTANT}"),
+    );
+    assert_eq!(
+        diagnostics(&with("size = 4\nAREA = size * size"))[0]
+            .span
+            .start as usize,
+        DECLS.len() + "size = 4\nAREA = ".len()
+    );
+    one(
+        "size = 4\nAREA = [size, rand(3), \"abc\".length]",
+        "not a constant expression",
+        "size",
+        &format!("`size` is a variable; {CONSTANT}"),
+    );
+    // Each constant expression gets its own report.
+    assert_eq!(
+        errors(&with("size = 4\nA = size\nB = size + size")).len(),
+        2
     );
     assert_error(
         "resource R\n  e: Entity = spawn\nend\n",
@@ -1835,7 +1942,7 @@ fn do_blocks_belong_to_loops() {
         "1.5.times do\nend",
         "expected `Int`, found `Float`",
         "1.5",
-        "",
+        FLOAT_TO_INT,
     );
     one(
         "5.each do |x|\nend",
@@ -1993,17 +2100,17 @@ fn a_failed_expression_does_not_cascade() {
 }
 
 #[test]
-fn at_most_twenty_errors_are_reported() {
+fn every_error_is_returned_however_many() {
     let text: String = (0..30).map(|i| format!("puts zzzzzzzz{i}\n")).collect();
     let errors = diagnostics(&text);
-    assert_eq!(errors.len(), MAX_ERRORS);
+    assert_eq!(errors.len(), 30);
     assert_eq!(
         errors[0].message,
         "unknown variable or function `zzzzzzzz0`"
     );
     assert_eq!(
-        errors[19].message,
-        "unknown variable or function `zzzzzzzz19`"
+        errors[29].message,
+        "unknown variable or function `zzzzzzzz29`"
     );
 }
 
@@ -2077,4 +2184,195 @@ fn a_query_has_a_term() {
         "World.count(with: Player)",
         "to match on filters alone, start with `Entity`",
     );
+}
+
+#[test]
+fn only_function_and_method_names_end_in_a_mark() {
+    const LABEL: &str = "only function and method names can";
+    assert_error(
+        "ready? = true\nputs 1\n",
+        "variable name `ready?` can't end in `?`",
+        "ready?",
+        LABEL,
+    );
+    assert_error(
+        "go!: Int = 1\n",
+        "variable name `go!` can't end in `!`",
+        "go!",
+        LABEL,
+    );
+    assert_error(
+        "def f(ok?: Bool)\nend\n",
+        "parameter name `ok?` can't end in `?`",
+        "ok?",
+        LABEL,
+    );
+    assert_error(
+        "3.times do |i!|\nend\n",
+        "block parameter name `i!` can't end in `!`",
+        "i!",
+        LABEL,
+    );
+    assert_error(
+        "struct S\n  done?: Bool\nend\n",
+        "field name `done?` can't end in `?`",
+        "done?",
+        LABEL,
+    );
+    assert_error(
+        "system move!\nend\n",
+        "system name `move!` can't end in `!`",
+        "move!",
+        LABEL,
+    );
+    // The variable still exists, so its uses are not reported again.
+    assert_error(
+        "ready? = true\nputs ready?\n",
+        "variable name `ready?` can't end in `?`",
+        "ready?",
+        LABEL,
+    );
+    ok(
+        "def ready? -> Bool\n  true\nend\ndef go!\nend\nstruct S\n  n: Int\n  def zero? -> Bool\n    n == 0\n  end\nend\ngo!\nputs ready?, S(0).zero?\n",
+    );
+}
+
+#[test]
+fn a_variable_is_not_called() {
+    one(
+        "total = 5\nputs total(1)",
+        "unknown function `total`",
+        "total",
+        "`total` is a variable; `total(…)` always calls a function",
+    );
+    // A function of that name is still called.
+    ok(&with("greet = 5\ngreet()\nputs greet"));
+}
+
+#[test]
+fn a_float_does_not_convert_to_int() {
+    one(
+        "def double(n: Int) -> Int\n  n * 2\nend\nputs double(2.5)",
+        "expected `Int`, found `Float`",
+        "2.5",
+        FLOAT_TO_INT,
+    );
+    one(
+        "count: Int = 2.5",
+        "expected `Int`, found `Float`",
+        "2.5",
+        FLOAT_TO_INT,
+    );
+    one(
+        "Score.points = 1.5",
+        "expected `Int`, found `Float`",
+        "1.5",
+        FLOAT_TO_INT,
+    );
+    // Compact integer fields and elements.
+    one(
+        "h = Health()\nh.hp = 1.5",
+        "expected `Int`, found `Float`",
+        "1.5",
+        FLOAT_TO_INT,
+    );
+    one(
+        "h = Health(hp: 1.5)",
+        "expected `Int`, found `Float`",
+        "1.5",
+        FLOAT_TO_INT,
+    );
+    one(
+        "xs: [UInt8] = []\nxs.push(0.5)",
+        "expected `Int`, found `Float`",
+        "0.5",
+        FLOAT_TO_INT,
+    );
+    one(
+        "xs = [1]\nputs xs[0.5]",
+        "expected `Int`, found `Float`",
+        "0.5",
+        FLOAT_TO_INT,
+    );
+    // A label that says more about the place takes precedence.
+    one(
+        "case 1\nwhen 1.5 then puts 1\nend",
+        "expected `Int`, found `Float`",
+        "1.5",
+        "`when` values are compared with the `case` value, which is `Int`",
+    );
+}
+
+#[test]
+fn a_compound_assignment_that_would_store_a_float_in_an_int() {
+    let text = with("n = 1\nn += 0.5");
+    assert_error(
+        &text,
+        "can't assign `Float` to `n`, which is `Int`",
+        "n += 0.5",
+        "`n + 0.5` is a `Float`",
+    );
+    assert_eq!(
+        note(&text),
+        ("`n` gets its type here".to_string(), "n".to_string())
+    );
+    one(
+        "n = 1\nx = 2.5\nn *= x",
+        "can't assign `Float` to `n`, which is `Int`",
+        "n *= x",
+        "`n * x` is a `Float`",
+    );
+    one(
+        "n = 1\nn -= 1 + 0.5",
+        "can't assign `Float` to `n`, which is `Int`",
+        "n -= 1 + 0.5",
+        "`n - (1 + 0.5)` is a `Float`",
+    );
+    one(
+        "n = 7\nn /= 2.0",
+        "can't assign `Float` to `n`, which is `Int`",
+        "n /= 2.0",
+        "`n / 2.0` is a `Float`",
+    );
+    one(
+        "n = 7\nn %= 2.0",
+        "can't assign `Float` to `n`, which is `Int`",
+        "n %= 2.0",
+        "`n % 2.0` is a `Float`",
+    );
+    // Fields and elements, with the type as declared; no note.
+    let text = with("h = Health()\nh.max += 0.5");
+    assert_error(
+        &text,
+        "can't assign `Float` to `h.max`, which is `Int`",
+        "h.max += 0.5",
+        "`h.max + 0.5` is a `Float`",
+    );
+    assert!(diagnostics(&text)[0].notes.is_empty());
+    one(
+        "h = Health()\nh.hp -= 0.5",
+        "can't assign `Float` to `h.hp`, which is `UInt8`",
+        "h.hp -= 0.5",
+        "`h.hp - 0.5` is a `Float`",
+    );
+    one(
+        "Score.points += 0.5",
+        "can't assign `Float` to `Score.points`, which is `Int`",
+        "Score.points += 0.5",
+        "`Score.points + 0.5` is a `Float`",
+    );
+    one(
+        "xs = [1]\nxs[0] += 0.5",
+        "can't assign `Float` to `xs[0]`, which is `Int`",
+        "xs[0] += 0.5",
+        "`xs[0] + 0.5` is a `Float`",
+    );
+    // Other mismatches keep the plain wording.
+    one(
+        "n = 1\nn += \"a\"",
+        "expected `Int`, found `String`",
+        "\"a\"",
+        "",
+    );
+    ok(&with("n = 1\nn += 2\nx = 1.5\nx += 1\nx -= 0.5"));
 }

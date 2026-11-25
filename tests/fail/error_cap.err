@@ -117,3 +117,5 @@ error: unknown variable or function `missing_20`
    |
 23 | puts missing_20
    |      ^^^^^^^^^^
+
+note: 5 more errors not shown

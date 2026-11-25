@@ -7,8 +7,8 @@ use crate::source::Span;
 use crate::tir::{self, BinOp, ExprKind, LocalId, StmtKind, Type};
 
 use super::{
-    BUILTIN_NAMES, BodyKind, Checker, Global, Mode, ReadOnly, Resolved, Ret, RetSite, TypeUse, mk,
-    util,
+    BUILTIN_NAMES, BodyKind, Checker, FLOAT_TO_INT, Global, Mode, ReadOnly, Resolved, Ret, RetSite,
+    TypeUse, mk, util,
 };
 
 /// How a block ends.
@@ -35,16 +35,28 @@ fn is_loop(expr: &ast::Expr) -> bool {
 }
 
 impl Checker<'_> {
-    /// Checks a block in a scope of its own.
+    /// Checks the block of a whole body in a scope of its own.
     pub(super) fn block(
         &mut self,
         block: &ast::Block,
         mode: Mode,
         expected: Option<&Type>,
     ) -> (tir::Block, Tail) {
-        self.cx.scopes.push(Vec::new());
+        self.scoped_block(None, block, mode, expected)
+    }
+
+    /// Checks a block in a scope of its own. `construct` names what the
+    /// block belongs to: "the `if`".
+    pub(super) fn scoped_block(
+        &mut self,
+        construct: Option<&'static str>,
+        block: &ast::Block,
+        mode: Mode,
+        expected: Option<&Type>,
+    ) -> (tir::Block, Tail) {
+        self.push_scope(construct);
         let result = self.stmts(block.stmts.iter(), mode, expected);
-        self.cx.scopes.pop();
+        self.pop_scope();
         result
     }
 
@@ -107,7 +119,12 @@ impl Checker<'_> {
             ast::StmtKind::Emit(event) => self.emit(event)?,
             ast::StmtKind::While { cond, negate, body } => {
                 let cond = self.condition(cond, *negate);
-                let (_, body, saw_break) = self.loop_body(Vec::new(), body);
+                let construct = if *negate {
+                    "the `until`"
+                } else {
+                    "the `while`"
+                };
+                let (_, body, saw_break) = self.loop_body(construct, Vec::new(), body);
                 let cond = cond?;
                 if matches!(cond.kind, ExprKind::Bool(true)) && !saw_break {
                     self.cx.unreachable = true;
@@ -115,7 +132,7 @@ impl Checker<'_> {
                 StmtKind::While { cond, body }
             }
             ast::StmtKind::Loop { body } => {
-                let (_, body, saw_break) = self.loop_body(Vec::new(), body);
+                let (_, body, saw_break) = self.loop_body("the `loop`", Vec::new(), body);
                 if !saw_break {
                     self.cx.unreachable = true;
                 }
@@ -170,6 +187,7 @@ impl Checker<'_> {
         ty: &ast::TypeExpr,
         value: &ast::Expr,
     ) -> Option<StmtKind> {
+        self.plain_name("variable", &name.name, name.span);
         let ty = self.resolve_type(ty, TypeUse::Variable);
         let init = self.store_opt(value, ty.as_ref());
         if let Some(existing) = self.cx.lookup(&name.name) {
@@ -207,6 +225,7 @@ impl Checker<'_> {
             && self.cx.lookup(name).is_none()
             && !self.is_self_field(name)
         {
+            self.plain_name("variable", name, target.span);
             let init = self.value(value, None);
             let ty = init.as_ref().map(|v| v.ty.clone());
             let local = self.declare_local(name, target.span, ty, tir::LocalKind::Var, None);
@@ -270,11 +289,17 @@ impl Checker<'_> {
                     self.type_name(&value.ty),
                     self.type_name(&ty)
                 );
-                self.error(
-                    Diagnostic::new(message, value.span)
-                        .label("a variable keeps the type of its first value")
-                        .note(format!("`{name}` gets its type here"), first),
-                );
+                const KEEPS: &str = "a variable keeps the type of its first value";
+                let diagnostic = Diagnostic::new(message, value.span);
+                self.error(if value.ty == Type::Float && ty == Type::Int {
+                    diagnostic
+                        .label(FLOAT_TO_INT)
+                        .note(format!("{KEEPS}: `{name}` gets its type here"), first)
+                } else {
+                    diagnostic
+                        .label(KEEPS)
+                        .note(format!("`{name}` gets its type here"), first)
+                });
                 return None;
             }
             let value = self.convert(value, &place.ty, None)?;
@@ -290,7 +315,40 @@ impl Checker<'_> {
         };
         let builtin = tir::CompoundOp::Builtin(bin);
         let (compound, value) = match &ty {
-            Type::Int | Type::Float => (builtin, self.store(value, &ty)),
+            Type::Int => match self.value(value, Some(&Type::Int)) {
+                Some(checked) if checked.ty == Type::Float => {
+                    // The result of the operator would be a `Float`.
+                    let target = described.unwrap_or_else(|| "this".to_string());
+                    let operand = match (&value.kind, self.snippet(value.span)) {
+                        (
+                            ast::ExprKind::Binary { .. } | ast::ExprKind::Ternary { .. },
+                            Some(text),
+                        ) => {
+                            format!("({text})")
+                        }
+                        (_, Some(text)) => text.to_string(),
+                        (_, None) => "…".to_string(),
+                    };
+                    let mut diagnostic = Diagnostic::new(
+                        format!(
+                            "can't assign `Float` to `{target}`, which is `{}`",
+                            self.type_name(&place.ty)
+                        ),
+                        span,
+                    )
+                    .label(format!("`{target} {symbol} {operand}` is a `Float`"));
+                    if let tir::PlaceKind::Local(local) = place.kind {
+                        let first = self.cx.meta[local.0].span;
+                        diagnostic =
+                            diagnostic.note(format!("`{target}` gets its type here"), first);
+                    }
+                    self.error(diagnostic);
+                    return None;
+                }
+                Some(checked) => (builtin, self.convert(checked, &Type::Int, None)),
+                None => (builtin, None),
+            },
+            Type::Float => (builtin, self.store(value, &ty)),
             Type::String if bin == BinOp::Add => (builtin, self.store(value, &Type::String)),
             Type::String | Type::List(_) if bin == BinOp::Mul => {
                 (builtin, self.store(value, &Type::Int))
@@ -444,19 +502,23 @@ impl Checker<'_> {
                 format!("`{name}` is a field of `self`"),
             );
         }
-        self.declare_local(name, spec.name.span, spec.ty, spec.kind, spec.readonly)
+        self.plain_name("block parameter", name, spec.name.span);
+        let local = self.declare_local(name, spec.name.span, spec.ty, spec.kind, spec.readonly);
+        self.cx.meta[local.0].block_param = true;
+        local
     }
 
     /// Checks the body of a loop with its block parameters in scope.
-    /// Returns the parameters' locals, the body, and whether a `break`
-    /// leaves the loop.
+    /// `construct` names the loop: "the `while`". Returns the parameters'
+    /// locals, the body, and whether a `break` leaves the loop.
     fn loop_body(
         &mut self,
+        construct: &'static str,
         params: Vec<ParamSpec<'_>>,
         body: &ast::Block,
     ) -> (Vec<LocalId>, tir::Block, bool) {
         let before = self.cx.unreachable;
-        self.cx.scopes.push(Vec::new());
+        self.push_scope(Some(construct));
         let locals: Vec<LocalId> = params
             .into_iter()
             .map(|spec| self.declare_param(spec))
@@ -464,7 +526,7 @@ impl Checker<'_> {
         self.cx.loops.push(false);
         let (block, _) = self.stmts(body.stmts.iter(), Mode::Stmt, None);
         let saw_break = self.cx.loops.pop().unwrap_or(false);
-        self.cx.scopes.pop();
+        self.pop_scope();
         self.cx.unreachable = before;
         (locals, block, saw_break)
     }
@@ -521,7 +583,7 @@ impl Checker<'_> {
                         readonly: Some(ReadOnly::CountParam(param.name.clone())),
                     })
                     .collect();
-                let (locals, body, _) = self.loop_body(specs, &block.body);
+                let (locals, body, _) = self.loop_body("the `do` block", specs, &block.body);
                 if !arity_ok || !params_ok {
                     return None;
                 }
@@ -578,10 +640,14 @@ impl Checker<'_> {
                             _ => None,
                         },
                         kind: tir::LocalKind::Var,
-                        readonly: Some(ReadOnly::ListParam(param.name.clone())),
+                        readonly: Some(if i == 1 {
+                            ReadOnly::IndexParam(param.name.clone())
+                        } else {
+                            ReadOnly::ListParam(param.name.clone())
+                        }),
                     })
                     .collect();
-                let (locals, body, _) = self.loop_body(specs, &block.body);
+                let (locals, body, _) = self.loop_body("the `do` block", specs, &block.body);
                 elem.as_ref()?;
                 if !arity_ok || !params_ok {
                     return None;
@@ -646,7 +712,7 @@ impl Checker<'_> {
                 }
             })
             .collect();
-        let (locals, body, _) = self.loop_body(specs, body);
+        let (locals, body, _) = self.loop_body("the `each`", specs, body);
         if !count_ok {
             return None;
         }
@@ -736,7 +802,7 @@ impl Checker<'_> {
                 readonly: Some(ReadOnly::OnParam(param.name.clone())),
             })
             .collect();
-        let (locals, body, _) = self.loop_body(specs, body);
+        let (locals, body, _) = self.loop_body("the `on`", specs, body);
         let (event, _) = found?;
         if !params_ok {
             return None;

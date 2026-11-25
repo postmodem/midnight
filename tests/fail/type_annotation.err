@@ -2,4 +2,4 @@ error: expected `Int`, found `Float`
  --> tests/fail/type_annotation.grem:4:14
   |
 4 | count: Int = 2.5
-  |              ^^^
+  |              ^^^ a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`

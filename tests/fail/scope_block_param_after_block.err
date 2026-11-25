@@ -2,4 +2,4 @@ error: unknown variable or function `i`
  --> tests/fail/scope_block_param_after_block.grem:7:6
   |
 7 | puts i
-  |      ^
+  |      ^ `i` is a block parameter and ends with its block

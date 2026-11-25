@@ -2,4 +2,9 @@ error: unknown variable or function `label`
  --> tests/fail/scope_after_if.grem:8:6
   |
 8 | puts label
-  |      ^^^^^
+  |      ^^^^^ `label` was created inside the `if` and ends with it; create it before the `if`
+note: `label` is created here
+ --> tests/fail/scope_after_if.grem:6:3
+  |
+6 |   label = "ok"
+  |   -----

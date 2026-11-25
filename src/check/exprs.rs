@@ -128,7 +128,23 @@ impl Checker<'_> {
         expected: Option<&Type>,
     ) -> Option<tir::Expr> {
         if self.cx.const_use().is_some() && !constant_form(e) {
-            self.not_constant(e.span);
+            let is_function = |name: &str| {
+                matches!(self.fn_names.get(name), Some((FnSym::Func(_), _)))
+                    || BUILTIN_FUNCTIONS.contains(&name)
+            };
+            let offender = match &e.kind {
+                ast::ExprKind::Var(name) if self.top_vars.contains(name) => {
+                    Some(format!("`{name}` is a variable"))
+                }
+                ast::ExprKind::Var(name) if is_function(name) => {
+                    Some(format!("`{name}` is a function call"))
+                }
+                ast::ExprKind::Call { name, .. } => {
+                    Some(format!("`{}(…)` is a function call", name.name))
+                }
+                _ => None,
+            };
+            self.not_constant_because(e.span, offender);
             return None;
         }
         let span = e.span;
@@ -351,17 +367,28 @@ impl Checker<'_> {
     }
 
     pub(super) fn not_constant(&mut self, span: Span) {
+        self.not_constant_because(span, None);
+    }
+
+    /// Reports the first part of a constant expression that is not
+    /// constant. `offender` says what it is: "`size` is a variable".
+    fn not_constant_because(&mut self, span: Span, offender: Option<String>) {
+        if self.cx.const_reported {
+            return;
+        }
+        self.cx.const_reported = true;
         let what = match self.cx.const_use() {
             Some(ConstUse::Constant(_)) => "a constant's value",
             _ => "a field default",
         };
-        self.err_label(
-            "not a constant expression",
-            span,
-            format!(
-                "{what} can use literals, constants, enum variants, operators, constructors, list literals and `Math` functions"
-            ),
+        let allowed = format!(
+            "{what} can use literals, constants, enum variants, operators, constructors, list literals and `Math` functions"
         );
+        let label = match offender {
+            Some(offender) => format!("{offender}; {allowed}"),
+            None => allowed,
+        };
+        self.err_label("not a constant expression", span, label);
     }
 
     pub(super) fn stray_block(&mut self, name: &ast::Ident) {
@@ -583,7 +610,27 @@ impl Checker<'_> {
         candidates.extend(self.function_names());
         let mut diagnostic =
             Diagnostic::new(format!("unknown variable or function `{name}`"), span);
-        if self_method {
+        let ended = self
+            .cx
+            .ended
+            .iter()
+            .rev()
+            .find(|ended| ended.name == name)
+            .map(|ended| (ended.construct, &self.cx.meta[ended.local.0]));
+        if let Some((construct, meta)) = ended {
+            // The name was a variable of a block that has ended.
+            diagnostic = if meta.block_param {
+                diagnostic.label(format!(
+                    "`{name}` is a block parameter and ends with its block"
+                ))
+            } else {
+                diagnostic
+                    .label(format!(
+                        "`{name}` was created inside {construct} and ends with it; create it before {construct}"
+                    ))
+                    .note(format!("`{name}` is created here"), meta.span)
+            };
+        } else if self_method {
             diagnostic = diagnostic.label(format!(
                 "the method takes arguments: write `self.{name}(…)`"
             ));
@@ -735,7 +782,12 @@ impl Checker<'_> {
         let candidates = self.function_names();
         let mut diagnostic =
             Diagnostic::new(format!("unknown function `{}`", name.name), name.span);
-        if let Some((_, record)) = self.cx.self_
+        if self.cx.lookup(&name.name).is_some() {
+            diagnostic = diagnostic.label(format!(
+                "`{0}` is a variable; `{0}(…)` always calls a function",
+                name.name
+            ));
+        } else if let Some((_, record)) = self.cx.self_
             && self.method(record, &name.name).is_some()
         {
             diagnostic = diagnostic.label(format!(
@@ -1658,16 +1710,18 @@ impl Checker<'_> {
     }
 
     /// Checks one branch block and records whether control leaves it.
-    /// `before` is whether the branch itself was unreachable.
+    /// `construct` names what the branch belongs to: "the `if`". `before`
+    /// is whether the branch itself was unreachable.
     fn branch(
         &mut self,
+        construct: &'static str,
         block: &ast::Block,
         mode: Mode,
         expected: Option<&Type>,
         before: bool,
     ) -> Branch {
         self.cx.unreachable = before;
-        let (checked, tail) = self.block(block, mode, expected);
+        let (checked, tail) = self.scoped_block(Some(construct), block, mode, expected);
         let diverges = self.cx.unreachable;
         self.cx.unreachable = before;
         Branch {
@@ -1708,9 +1762,12 @@ impl Checker<'_> {
         };
 
         let before = self.cx.unreachable;
-        let mut branches = vec![self.branch(then, branch_mode, branch_expected, before)];
+        let construct = if *negate { "the `unless`" } else { "the `if`" };
+        let mut branches = vec![self.branch(construct, then, branch_mode, branch_expected, before)];
         match else_ {
-            Some(else_) => branches.push(self.branch(else_, branch_mode, branch_expected, before)),
+            Some(else_) => {
+                branches.push(self.branch(construct, else_, branch_mode, branch_expected, before));
+            }
             None => branches.push(Branch {
                 block: tir::Block {
                     stmts: Vec::new(),
@@ -1759,6 +1816,7 @@ impl Checker<'_> {
         else {
             return None;
         };
+        const CASE: &str = "the `case`";
         let span = e.span;
         let mut failed = false;
         let subject_value = self.value(subject, None);
@@ -1793,7 +1851,20 @@ impl Checker<'_> {
             let mut cond: Option<tir::Expr> = None;
             let mut ok = !arm.values.is_empty();
             for value in &arm.values {
-                let value = self.store_opt(value, subject_ty.as_ref());
+                let value = match &subject_ty {
+                    Some(ty) => {
+                        let label = format!(
+                            "`when` values are compared with the `case` value, which is `{}`",
+                            self.type_name(ty)
+                        );
+                        self.value(value, Some(ty))
+                            .and_then(|value| self.convert(value, ty, Some(label)))
+                    }
+                    None => {
+                        self.probe(value);
+                        None
+                    }
+                };
                 let (Some(value), Some(local), Some(ty)) = (value, local, &subject_ty) else {
                     ok = false;
                     continue;
@@ -1870,10 +1941,10 @@ impl Checker<'_> {
         let before = self.cx.unreachable;
         let mut branches: Vec<Branch> = Vec::new();
         for arm in arms {
-            branches.push(self.branch(&arm.body, branch_mode, branch_expected, before));
+            branches.push(self.branch(CASE, &arm.body, branch_mode, branch_expected, before));
         }
         if let Some(else_) = else_ {
-            branches.push(self.branch(else_, branch_mode, branch_expected, before));
+            branches.push(self.branch(CASE, else_, branch_mode, branch_expected, before));
         }
         self.cx.unreachable =
             before || (has_else && !branches.is_empty() && branches.iter().all(|b| b.diverges));
