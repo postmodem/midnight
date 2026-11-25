@@ -2,8 +2,8 @@
 //! printers read.
 //!
 //! A run keeps each outer component it uses in a local variable of the
-//! component's 32-bit form: the fields the block reads are loaded when the
-//! run starts and the fields it assigns are stored when it ends. The
+//! component's 32-bit form: the fields the block reads or assigns are loaded
+//! when the run starts and the fields it assigns are stored when it ends. The
 //! parameters of the nested `each` are loaded the same way from the
 //! snapshot, once per round. Everything else is ordinary code on locals.
 
@@ -666,10 +666,14 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                             row_size,
                             storage: leaf.storage,
                         };
-                        if Paths::covers(&paths.read, &leaf.path) {
+                        let read = Paths::covers(&paths.read, &leaf.path);
+                        let written = Paths::covers(&paths.write, &leaf.path);
+                        // A field the block assigns is loaded too: a run that
+                        // does not reach the assignment stores what was there.
+                        if read || written {
                             loads.push(assign(place.clone(), Expr::Load(cell.clone())));
                         }
-                        if Paths::covers(&paths.write, &leaf.path) {
+                        if written {
                             assert!(*write, "a write through a term that is not marked written");
                             stores.push(Stmt::Store(cell, place));
                         }

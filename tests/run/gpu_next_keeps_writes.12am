@@ -1,5 +1,6 @@
 # `next` directly inside a GPU block ends the run for that entity and keeps
-# what the run has written. Inside a loop of the block, `next` and `break`
+# what the run has written; a field whose assignment the run did not reach
+# keeps the value it had. Inside a loop of the block, `next` and `break`
 # belong to that loop.
 component Step
   a: Int32
@@ -26,9 +27,9 @@ gpu system steps
   end
 end
 
-spawn Step(0, 0, 0)
-spawn Step(0, 0, 1)
-spawn Step(0, 0, 2)
+spawn Step(0, 7, 0)
+spawn Step(0, 7, 1)
+spawn Step(0, 7, 2)
 World.tick
 each Step do |step|
   puts step
