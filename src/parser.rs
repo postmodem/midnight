@@ -52,6 +52,28 @@ struct Parser<'a> {
     /// arrives too early, the first of these is the likeliest block to be
     /// missing its `end`.
     misaligned: Vec<Open>,
+    /// How many `(` and `[` of expressions are open.
+    enclosed: u32,
+    /// Whether the condition of an `if`, `unless`, `while` or `until` is
+    /// being parsed.
+    in_condition: bool,
+}
+
+/// The label of the error for a `do` block after something that is not a
+/// loop.
+const DO_BLOCK_TAKERS: &str =
+    "only `times`, `upto`, `downto`, `each` and `each_with_index` take one";
+
+fn is_assign_op(kind: &T) -> bool {
+    matches!(
+        kind,
+        T::Assign
+            | T::PlusAssign
+            | T::MinusAssign
+            | T::StarAssign
+            | T::SlashAssign
+            | T::PercentAssign
+    )
 }
 
 fn is_declaration(kw: Kw) -> bool {
@@ -79,6 +101,8 @@ impl<'a> Parser<'a> {
             prev_end: tokens[0].span.start,
             open: Vec::new(),
             misaligned: Vec::new(),
+            enclosed: 0,
+            in_condition: false,
         }
     }
 
@@ -158,6 +182,22 @@ impl<'a> Parser<'a> {
         self.expect(kind, label)
     }
 
+    /// Opens a `(` or `[` of an expression, whose span it returns.
+    fn open_bracket(&mut self) -> Span {
+        self.enclosed += 1;
+        self.advance().span
+    }
+
+    /// Consumes the bracket `kind` that closes the one at `open`, after an
+    /// expression.
+    fn close_bracket(&mut self, open: Span, kind: T, label: &str) -> Parse<&'a Token> {
+        if is_assign_op(&self.peek().kind) {
+            return Err(self.assignment_in_expression());
+        }
+        self.enclosed = self.enclosed.saturating_sub(1);
+        self.close(open, kind, label)
+    }
+
     fn skip_newlines(&mut self) {
         while self.at(T::Newline) {
             self.advance();
@@ -185,6 +225,120 @@ impl<'a> Parser<'a> {
             _ => format!("unexpected `{}`", self.source(token.span)),
         };
         Diagnostic::new(message, token.span).label(label)
+    }
+
+    /// An error at the next token, which comes where an expression has
+    /// just ended.
+    fn unexpected_after_expr(&self, label: impl Into<String>) -> Diagnostic {
+        if is_assign_op(&self.peek().kind) {
+            self.assignment_in_expression()
+        } else {
+            self.unexpected(label)
+        }
+    }
+
+    /// The error for an assignment operator inside an expression.
+    fn assignment_in_expression(&self) -> Diagnostic {
+        let token = self.peek();
+        let label = if self.in_condition && token.kind == T::Assign {
+            "to compare, write `==`; to assign, use a line of its own"
+        } else {
+            "assign on a line of its own, then use the variable"
+        };
+        Diagnostic::new("assignment is a statement, not an expression", token.span).label(label)
+    }
+
+    /// The error for a keyword where a name is being introduced.
+    fn keyword_as_name(&self) -> Diagnostic {
+        let token = self.peek();
+        let message = format!(
+            "`{}` is a keyword and can't be used as a name",
+            self.source(token.span)
+        );
+        let label = if token.kind == T::Kw(Kw::Gpu) {
+            "`gpu` is reserved for GPU systems"
+        } else {
+            "choose a different name"
+        };
+        Diagnostic::new(message, token.span).label(label)
+    }
+
+    /// Whether a statement begins by assigning to a keyword or declaring
+    /// a variable named by one.
+    fn assigns_to_keyword(&self) -> bool {
+        let next = &self.peek_at(1).kind;
+        matches!(self.peek().kind, T::Kw(kw) if kw != Kw::Self_)
+            && (is_assign_op(next) || *next == T::Colon)
+    }
+
+    /// The error for an argument that follows the function or method at
+    /// `callee` without parentheses, if the next token begins one on the
+    /// same line.
+    fn bare_argument(&self, callee: Span) -> Option<Diagnostic> {
+        let first = self.peek();
+        let begins_argument = matches!(
+            first.kind,
+            T::Int(_)
+                | T::Float(_)
+                | T::Str(_)
+                | T::Ident(_)
+                | T::Const(_)
+                | T::Kw(Kw::True | Kw::False | Kw::Self_)
+        );
+        let between = Span::new(self.file, callee.end, first.span.start);
+        if self.enclosed > 0 || !begins_argument || self.source(between).contains('\n') {
+            return None;
+        }
+        // The arguments run to the end of the statement.
+        let mut depth = 0u32;
+        let mut end = first.span.end;
+        for token in &self.tokens[self.pos..] {
+            match token.kind {
+                T::Newline | T::Eof | T::InterpEnd => break,
+                T::LParen | T::LBracket => depth += 1,
+                T::RParen | T::RBracket if depth > 0 => depth -= 1,
+                T::RParen | T::RBracket => break,
+                T::Kw(
+                    Kw::If
+                    | Kw::Unless
+                    | Kw::Do
+                    | Kw::Then
+                    | Kw::End
+                    | Kw::Else
+                    | Kw::Elsif
+                    | Kw::When,
+                ) if depth == 0 => break,
+                _ => {}
+            }
+            end = token.span.end;
+        }
+        let callee = self.source(callee);
+        let arguments = self.source(Span::new(self.file, first.span.start, end));
+        let label = if callee.contains('\n') || arguments.contains('\n') {
+            "put the arguments in parentheses".to_string()
+        } else {
+            format!("write `{callee}({arguments})`")
+        };
+        Some(Diagnostic::new("a call with arguments needs parentheses", first.span).label(label))
+    }
+
+    /// Rejects a `do` that follows a function call, a constructor or a
+    /// plain name.
+    fn check_no_do_block(&self, expr: &Expr) -> Parse<()> {
+        if !self.at_kw(Kw::Do) {
+            return Ok(());
+        }
+        let (name, span) = match &expr.kind {
+            ExprKind::Call { name, .. } | ExprKind::Construct { name, .. } => {
+                (name.name.as_str(), name.span)
+            }
+            ExprKind::Var(name) | ExprKind::Const(name) => (name.as_str(), expr.span),
+            _ => return Ok(()),
+        };
+        Err(
+            Diagnostic::new(format!("`{name}` does not take a `do` block"), span)
+                .label(DO_BLOCK_TAKERS),
+        )
     }
 
     fn unclosed(open: Open) -> Diagnostic {
@@ -289,25 +443,45 @@ impl<'a> Parser<'a> {
     fn then(&mut self) -> Parse<()> {
         if self.eat(T::Kw(Kw::Then)) {
             Ok(())
+        } else if is_assign_op(&self.peek().kind) {
+            Err(self.assignment_in_expression())
         } else {
             self.header_end("expected `then` or a newline")
         }
     }
 
+    /// The condition of an `if`, `unless`, `while` or `until`.
+    fn condition(&mut self) -> Parse<Expr> {
+        let outer = std::mem::replace(&mut self.in_condition, true);
+        let cond = self.expr()?;
+        if is_assign_op(&self.peek().kind) {
+            return Err(self.assignment_in_expression());
+        }
+        self.in_condition = outer;
+        Ok(cond)
+    }
+
     /// Statements up to a token that closes a block.
     fn block(&mut self) -> Parse<Block> {
         let at = self.prev_end;
+        let in_condition = std::mem::replace(&mut self.in_condition, false);
+        let enclosed = std::mem::replace(&mut self.enclosed, 0);
         let mut stmts = Vec::new();
         loop {
             self.skip_newlines();
+            if self.assigns_to_keyword() {
+                return Err(self.keyword_as_name());
+            }
             if self.at_closer() {
                 break;
             }
             stmts.push(self.statement()?);
             if !self.at(T::Newline) && !self.at_closer() {
-                return Err(self.unexpected("expected a newline"));
+                return Err(self.unexpected_after_expr("expected a newline"));
             }
         }
+        self.in_condition = in_condition;
+        self.enclosed = enclosed;
         let span = match (stmts.first(), stmts.last()) {
             (Some(first), Some(last)) => first.span.to(last.span),
             _ => Span::new(self.file, at, at),
@@ -356,10 +530,7 @@ impl<'a> Parser<'a> {
             T::Const(_) => Err(self.unexpected(format!(
                 "expected {what}, which begins with a lowercase letter"
             ))),
-            T::Kw(_) => Err(self.unexpected(format!(
-                "expected {what}, and `{}` is a keyword",
-                self.source(token.span)
-            ))),
+            T::Kw(_) => Err(self.keyword_as_name()),
             _ => Err(self.unexpected(format!("expected {what}"))),
         }
     }
@@ -415,6 +586,9 @@ impl<'a> Parser<'a> {
         let mut items = Vec::new();
         loop {
             self.skip_newlines();
+            if self.assigns_to_keyword() {
+                return Err(self.keyword_as_name());
+            }
             match self.peek().kind {
                 T::Eof | T::InterpEnd => return Ok(items),
                 T::Kw(Kw::End) => {
@@ -428,10 +602,16 @@ impl<'a> Parser<'a> {
                 }
                 _ => {}
             }
-            items.push(self.item()?);
+            let item = self.item()?;
             if !self.at(T::Newline) && !self.at_closer() {
-                return Err(self.unexpected("expected a newline"));
+                return Err(match item {
+                    Item::Stmt(_) | Item::Const(_) => {
+                        self.unexpected_after_expr("expected a newline")
+                    }
+                    _ => self.unexpected("expected a newline"),
+                });
             }
+            items.push(item);
         }
     }
 
@@ -455,6 +635,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.advance();
                 let value = self.command_expr()?;
+                self.check_no_do_block(&value)?;
                 Ok(Item::Const(ConstDecl { name, value }))
             }
             _ => self.statement().map(Item::Stmt),
@@ -503,6 +684,7 @@ impl<'a> Parser<'a> {
             self.skip_newlines();
             let token = self.peek();
             match (&token.kind, &self.peek_at(1).kind) {
+                (T::Kw(_), T::Colon) => return Err(self.keyword_as_name()),
                 (T::Kw(Kw::End) | T::Eof | T::InterpEnd, _) => break,
                 (T::Kw(Kw::Def), _) if methods_allowed => methods.push(self.def()?),
                 (T::Kw(Kw::Def), _) => {
@@ -613,11 +795,18 @@ impl<'a> Parser<'a> {
             T::Const(_) => {
                 return Err(self.unexpected("function names begin with a lowercase letter"));
             }
-            T::Kw(_) => {
-                return Err(self.unexpected(format!(
-                    "expected a function name, and `{}` is a keyword",
-                    self.source(token.span)
-                )));
+            T::Kw(_) => return Err(self.keyword_as_name()),
+            T::EqEq | T::NotEq => {
+                return Err(Diagnostic::new(
+                    format!(
+                        "`{}` is provided for every type and can't be redefined",
+                        self.source(token.span)
+                    ),
+                    token.span,
+                ));
+            }
+            T::Lt | T::Le | T::Gt | T::Ge | T::Pow | T::Bang | T::AndAnd | T::OrOr => {
+                return Err(self.unexpected("a method can define `+`, `-`, `*`, `/`, `%` and `-@`"));
             }
             _ => return Err(self.unexpected("expected a function name")),
         };
@@ -668,6 +857,12 @@ impl<'a> Parser<'a> {
         let keyword = self.opened("system");
         let name = self.ident("a system name")?;
         let span = keyword.to(name.span);
+        if self.at(T::LParen) {
+            return Err(
+                Diagnostic::new("a system takes no parameters", self.peek().span)
+                    .label("systems read what they need from resources and queries"),
+            );
+        }
         self.header_end("expected a newline")?;
         let body = self.block()?;
         self.end()?;
@@ -707,7 +902,7 @@ impl<'a> Parser<'a> {
             _ => return Ok(stmt),
         };
         self.advance();
-        let cond = Box::new(self.expr()?);
+        let cond = Box::new(self.condition()?);
         let span = self.span_from(start);
         let then = Block {
             span: stmt.span,
@@ -738,6 +933,7 @@ impl<'a> Parser<'a> {
                 let ty = self.type_expr()?;
                 self.expect(T::Assign, "expected `=` and a value")?;
                 let value = self.command_expr()?;
+                self.check_no_do_block(&value)?;
                 Ok(StmtKind::VarDecl { name, ty, value })
             }
             (T::Kw(Kw::Return), _) => {
@@ -789,12 +985,14 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 let target = self.command_expr()?;
+                self.check_no_do_block(&target)?;
                 let Some(op) = self.assign_op() else {
                     return Ok(StmtKind::Expr(target));
                 };
                 Self::check_place(&target)?;
                 self.advance();
                 let value = self.command_expr()?;
+                self.check_no_do_block(&value)?;
                 Ok(StmtKind::Assign { target, op, value })
             }
         }
@@ -899,7 +1097,7 @@ impl<'a> Parser<'a> {
     /// `while cond … end` or `until cond … end`
     fn while_loop(&mut self, word: &'static str, negate: bool) -> Parse<StmtKind> {
         self.opened(word);
-        let cond = self.expr()?;
+        let cond = self.condition()?;
         self.header_end("expected a newline")?;
         let body = self.block()?;
         self.end()?;
@@ -1018,7 +1216,9 @@ impl<'a> Parser<'a> {
             return Ok(cond);
         }
         let then = self.expr()?;
-        self.expect(T::Colon, "expected `:` and the other branch")?;
+        if !self.eat(T::Colon) {
+            return Err(self.unexpected_after_expr("expected `:` and the other branch"));
+        }
         let else_ = self.expr()?;
         let span = cond.span.to(else_.span);
         Ok(Expr {
@@ -1206,6 +1406,12 @@ impl<'a> Parser<'a> {
                     } else {
                         None
                     };
+                    if args.is_none()
+                        && block.is_none()
+                        && let Some(error) = self.bare_argument(self.span_from(start))
+                    {
+                        return Err(error);
+                    }
                     ExprKind::Member {
                         recv: Box::new(expr),
                         name,
@@ -1214,9 +1420,9 @@ impl<'a> Parser<'a> {
                     }
                 }
                 T::LBracket => {
-                    let open = self.advance().span;
+                    let open = self.open_bracket();
                     let index = self.expr()?;
-                    self.close(open, T::RBracket, "expected `]`")?;
+                    self.close_bracket(open, T::RBracket, "expected `]`")?;
                     ExprKind::Index {
                         recv: Box::new(expr),
                         index: Box::new(index),
@@ -1241,7 +1447,7 @@ impl<'a> Parser<'a> {
 
     /// `(arg, name: arg)`, from the `(`.
     fn args(&mut self) -> Parse<Vec<Arg>> {
-        let open = self.advance().span;
+        let open = self.open_bracket();
         let mut args = Vec::new();
         if !self.at(T::RParen) {
             loop {
@@ -1264,13 +1470,14 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.close(open, T::RParen, "expected `,` or `)`")?;
+        self.close_bracket(open, T::RParen, "expected `,` or `)`")?;
         Ok(args)
     }
 
     /// Comma-separated expressions up to the bracket `close`, whose opening
     /// bracket at `open` has been consumed.
     fn expr_list(&mut self, open: Span, close: T, label: &str) -> Parse<Vec<Expr>> {
+        self.enclosed += 1;
         let mut items = Vec::new();
         if self.peek().kind != close {
             loop {
@@ -1280,7 +1487,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.close(open, close, label)?;
+        self.close_bracket(open, close, label)?;
         Ok(items)
     }
 
@@ -1330,7 +1537,12 @@ impl<'a> Parser<'a> {
                         name,
                         args: self.args()?,
                     },
-                    (false, true) => ExprKind::Var(name.name),
+                    (false, true) => {
+                        if let Some(error) = self.bare_argument(token.span) {
+                            return Err(error);
+                        }
+                        ExprKind::Var(name.name)
+                    }
                     (false, false) => ExprKind::Const(name.name),
                 }
             }
@@ -1355,9 +1567,9 @@ impl<'a> Parser<'a> {
                 ExprKind::List(self.expr_list(token.span, T::RBracket, "expected `,` or `]`")?)
             }
             T::LParen => {
-                self.advance();
+                self.open_bracket();
                 let inner = self.expr()?;
-                self.close(token.span, T::RParen, "expected `)`")?;
+                self.close_bracket(token.span, T::RParen, "expected `)`")?;
                 inner.kind
             }
             T::Kw(Kw::If) => return self.if_expr("if", false),
@@ -1402,7 +1614,7 @@ impl<'a> Parser<'a> {
                     let mut inner = Parser::new(self.file, self.text, tokens);
                     let expr = inner.expr()?;
                     if !inner.at(T::InterpEnd) {
-                        return Err(inner.unexpected("expected `}`"));
+                        return Err(inner.unexpected_after_expr("expected `}`"));
                     }
                     parts.push(StrPart::Expr(expr));
                 }
@@ -1420,7 +1632,7 @@ impl<'a> Parser<'a> {
     /// An `if` from its condition to the `end`, which a chain of `elsif`s
     /// shares. `start` is the `if`, `unless` or `elsif` keyword.
     fn if_rest(&mut self, start: Span, negate: bool) -> Parse<Expr> {
-        let cond = Box::new(self.expr()?);
+        let cond = Box::new(self.condition()?);
         self.then()?;
         let then = self.block()?;
         let else_ = match self.peek().kind {
@@ -1466,6 +1678,9 @@ impl<'a> Parser<'a> {
     fn case_expr(&mut self) -> Parse<Expr> {
         let keyword = self.opened("case");
         let subject = Box::new(self.expr()?);
+        if is_assign_op(&self.peek().kind) {
+            return Err(self.assignment_in_expression());
+        }
         self.header_end("expected a newline")?;
         self.skip_newlines();
         if !self.at_closer() {

@@ -1,5 +1,5 @@
-# expect: syntax error: `tag` is a keyword and can't name a variable; a type name is expected after `tag`, found `=`
-# at: line 4, the `=` after `tag`
+# expect: syntax error: `tag` is a keyword and can't be used as a name
+# at: line 4, the word `tag`
 
 tag = "boss"
 puts 1

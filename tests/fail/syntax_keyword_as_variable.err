@@ -1,5 +1,5 @@
-error: unexpected `=`
- --> tests/fail/syntax_keyword_as_variable.grem:4:5
+error: `tag` is a keyword and can't be used as a name
+ --> tests/fail/syntax_keyword_as_variable.grem:4:1
   |
 4 | tag = "boss"
-  |     ^ expected a type name
+  | ^^^ choose a different name

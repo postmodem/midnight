@@ -1,5 +1,5 @@
-error: unexpected `do`
- --> tests/fail/do_block_on_function.grem:8:11
+error: `repeat` does not take a `do` block
+ --> tests/fail/do_block_on_function.grem:8:1
   |
 8 | repeat(3) do
-  |           ^^ expected a newline
+  | ^^^^^^ only `times`, `upto`, `downto`, `each` and `each_with_index` take one

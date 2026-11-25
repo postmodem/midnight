@@ -1,5 +1,5 @@
-error: unexpected `==`
+error: `==` is provided for every type and can't be redefined
  --> tests/fail/struct_redefines_equality.grem:8:7
   |
 8 |   def ==(other: Vec2) -> Bool
-  |       ^^ expected a function name
+  |       ^^

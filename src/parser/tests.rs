@@ -1205,12 +1205,13 @@ fn the_hello_example() {
 fn unexpected_tokens() {
     assert_error("x = )", "unexpected `)`", ")", "expected an expression");
     assert_error("puts 1 2", "unexpected `2`", "2", "expected a newline");
-    assert_error("foo bar", "unexpected `bar`", "bar", "expected a newline");
+    assert_error("foo() bar", "unexpected `bar`", "bar", "expected a newline");
     assert_error("x = {", "unexpected `{`", "{", "expected an expression");
     assert_error("foo(a b)", "unexpected `b`", "b", "expected `,` or `)`");
     assert_error("[1 2]", "unexpected `2`", "2", "expected `,` or `]`");
+    assert_error("[a b]", "unexpected `b`", "b", "expected `,` or `]`");
     assert_error(
-        "x = y \"s\"",
+        "x = 1 \"s\"",
         "unexpected string",
         "\"s\"",
         "expected a newline",
@@ -1221,12 +1222,6 @@ fn unexpected_tokens() {
         "unexpected `c`",
         "c",
         "expected a constant or variant name, which begins with an uppercase letter",
-    );
-    assert_error(
-        "if x = 1\nend",
-        "unexpected `=`",
-        "=",
-        "expected `then` or a newline",
     );
     assert_error(
         "x = gpu",
@@ -1583,7 +1578,7 @@ fn interpolation_errors() {
         "}",
         "expected an expression",
     );
-    assert_error("puts \"#{a b}\"", "unexpected `b`", "b", "expected `}`");
+    assert_error("puts \"#{1 b}\"", "unexpected `b`", "b", "expected `}`");
     assert_error(
         "puts \"#{a +}\"",
         "unexpected `}`",
@@ -1619,7 +1614,212 @@ fn assignment_targets() {
     assert_error("a + b = 3", message, "a + b", other);
     assert_error("Team::Red = 1", message, "Team::Red", other);
     assert_error("-x = 1", message, "-x", other);
-    assert_error("a = b = 1", "unexpected `=`", "=", "expected a newline");
+}
+
+#[test]
+fn assignment_inside_an_expression() {
+    let message = "assignment is a statement, not an expression";
+    let apart = "assign on a line of its own, then use the variable";
+    let compare = "to compare, write `==`; to assign, use a line of its own";
+    for (text, start, label) in [
+        ("y = (x = 2)", 7, apart),
+        ("puts(y = 2)", 7, apart),
+        ("f(a, b = 2)", 7, apart),
+        ("xs = [a = 1]", 8, apart),
+        ("xs[i = 0]", 5, apart),
+        ("a = b = 1", 6, apart),
+        ("X = y = 1", 6, apart),
+        ("puts x = 1", 7, apart),
+        ("c ? a = 1 : 2", 6, apart),
+        ("puts \"#{n = 1}\"", 10, apart),
+        ("case x = 1\nend", 7, apart),
+        ("case x\nwhen y = 1\nend", 14, apart),
+        ("if x = 5\nend", 5, compare),
+        ("if (x = 5)\nend", 6, compare),
+        ("unless x = 5\nend", 9, compare),
+        ("if a\nelsif x = 5\nend", 13, compare),
+        ("while x = next_one\nend", 8, compare),
+        ("until (x = 5) > 3\nend", 9, compare),
+        ("puts 1 if x = 5", 12, compare),
+        ("if x += 1\nend", 5, apart),
+        ("if a\n  y = (x = 2)\nend", 14, apart),
+    ] {
+        let error = error(text);
+        assert_eq!(error.message, message, "{text:?}");
+        assert_eq!(error.span.start, start, "{text:?}");
+        assert_eq!(
+            error.span.end - error.span.start,
+            1 + u32::from(text.contains("+=")),
+            "{text:?}"
+        );
+        assert_eq!(error.label.as_deref(), Some(label), "{text:?}");
+    }
+    // Where `=` can't follow for another reason, that reason is given.
+    assert_error(
+        "def f(a = 1)\nend",
+        "unexpected `=`",
+        "=",
+        "expected `:` and the parameter's type",
+    );
+    assert_error("x = = 1", "unexpected `=`", "=", "expected an expression");
+}
+
+#[test]
+fn calls_without_parentheses() {
+    let message = "a call with arguments needs parentheses";
+    assert_error("x = double 4", message, "4", "write `double(4)`");
+    assert_error("foo bar", message, "bar", "write `foo(bar)`");
+    assert_error(
+        "add 1, 2 + 3 if ready",
+        message,
+        "1",
+        "write `add(1, 2 + 3)`",
+    );
+    assert_error("xs.push 4", message, "4", "write `xs.push(4)`");
+    assert_error(
+        "puts greet \"hi\"",
+        message,
+        "\"hi\"",
+        "write `greet(\"hi\")`",
+    );
+    assert_error(
+        "x = wrap Vec2(1, 2), true",
+        message,
+        "Vec2",
+        "write `wrap(Vec2(1, 2), true)`",
+    );
+    assert_error("puts \"#{double n}\"", message, "n", "write `double(n)`");
+    assert_error("if ready go end", message, "go", "write `ready(go)`");
+    assert_error("3.times do |i| show i end", message, "i", "write `show(i)`");
+    assert_error(
+        "a.b\n  .c d",
+        message,
+        "d",
+        "put the arguments in parentheses",
+    );
+    // Brackets and `-` after a name are indexing, a call and subtraction.
+    assert_dumps(&[
+        ("x [1]", "x[1]"),
+        ("f (1)", "f(1)"),
+        ("x -1", "(x - 1)"),
+        ("f(a,\n  b)", "f(a, b)"),
+    ]);
+    // Inside brackets a missing comma is the likelier mistake.
+    assert_error("f(a\n  b)", "unexpected `b`", "b", "expected `,` or `)`");
+}
+
+#[test]
+fn do_blocks_on_calls_that_take_none() {
+    let label = "only `times`, `upto`, `downto`, `each` and `each_with_index` take one";
+    assert_error(
+        "repeat(3) do\n  puts 1\nend",
+        "`repeat` does not take a `do` block",
+        "repeat",
+        label,
+    );
+    assert_error(
+        "repeat do\nend",
+        "`repeat` does not take a `do` block",
+        "repeat",
+        label,
+    );
+    assert_error(
+        "x = build(1) do |b|\nend",
+        "`build` does not take a `do` block",
+        "build",
+        label,
+    );
+    assert_error(
+        "v: Vec2 = Vec2(1, 2) do\nend",
+        "`Vec2` does not take a `do` block",
+        "Vec2",
+        label,
+    );
+    assert_error(
+        "while ready do\nend",
+        "unexpected `do`",
+        "do",
+        "expected a newline",
+    );
+}
+
+#[test]
+fn keywords_as_names() {
+    for (text, word) in [
+        ("tag = \"boss\"", "tag"),
+        ("end = 5", "end"),
+        ("loop += 1", "loop"),
+        ("each: Int = 1", "each"),
+        ("def f\n  on = true\nend", "on"),
+        ("def f(event: Int)\nend", "event"),
+        ("def end\nend", "end"),
+        ("def loop(n: Int)\nend", "loop"),
+        ("struct A\n  tag: Int\nend", "tag"),
+        ("struct A\n  end: Int\nend", "end"),
+        ("3.times do |on|\nend", "on"),
+        ("system each\nend", "each"),
+    ] {
+        let error = error(text);
+        assert_eq!(
+            error.message,
+            format!("`{word}` is a keyword and can't be used as a name"),
+            "{text:?}"
+        );
+        assert_eq!(marked(text, error.span), word, "{text:?}");
+        assert_eq!(
+            error.span.start as usize,
+            text.find(word).unwrap(),
+            "{text:?}"
+        );
+        assert_eq!(
+            error.label.as_deref(),
+            Some("choose a different name"),
+            "{text:?}"
+        );
+    }
+    assert_error(
+        "gpu = 1",
+        "`gpu` is a keyword and can't be used as a name",
+        "gpu",
+        "`gpu` is reserved for GPU systems",
+    );
+    // `self` is left for the checker, which says why it is read-only.
+    assert_eq!(dump("self = 1"), "self = 1");
+}
+
+#[test]
+fn equality_can_not_be_defined() {
+    for (text, op) in [
+        (
+            "struct V\n  def ==(other: V) -> Bool\n    true\n  end\nend",
+            "==",
+        ),
+        ("def !=(other: V)\nend", "!="),
+    ] {
+        let error = error(text);
+        assert_eq!(
+            error.message,
+            format!("`{op}` is provided for every type and can't be redefined")
+        );
+        assert_eq!(marked(text, error.span), op);
+        assert_eq!(error.label, None);
+    }
+}
+
+#[test]
+fn systems_take_no_parameters() {
+    assert_error(
+        "system move(dt: Float)\nend",
+        "a system takes no parameters",
+        "(",
+        "systems read what they need from resources and queries",
+    );
+    assert_error(
+        "system move()\nend",
+        "a system takes no parameters",
+        "(",
+        "systems read what they need from resources and queries",
+    );
 }
 
 #[test]
@@ -1714,12 +1914,6 @@ fn query_errors() {
         "x",
         "remove these",
     );
-    assert_error(
-        "3.times do |on|\nend",
-        "unexpected `on`",
-        "on",
-        "expected a block parameter, and `on` is a keyword",
-    );
 }
 
 #[test]
@@ -1743,7 +1937,7 @@ fn control_flow_errors() {
         "expected a newline",
     );
     assert_error(
-        "if a b end",
+        "if a > 0 b end",
         "unexpected `b`",
         "b",
         "expected `then` or a newline",
@@ -1766,15 +1960,15 @@ fn declaration_errors() {
         "function names begin with a lowercase letter",
     );
     assert_error(
-        "def end\nend",
-        "unexpected `end`",
-        "end",
-        "expected a function name, and `end` is a keyword",
+        "def <(o: A)\nend",
+        "unexpected `<`",
+        "<",
+        "a method can define `+`, `-`, `*`, `/`, `%` and `-@`",
     );
     assert_error(
-        "def ==(o: A)\nend",
-        "unexpected `==`",
-        "==",
+        "def (o: A)\nend",
+        "unexpected `(`",
+        "(",
         "expected a function name",
     );
     assert_error(

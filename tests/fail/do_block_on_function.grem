@@ -1,5 +1,5 @@
 # expect: a function call can't take a `do` block (blocks are not values; `do … end` is accepted only by the loop forms)
-# at: line 8, the keyword `do`
+# at: line 8, the function name `repeat`
 
 def repeat(n: Int)
   puts n

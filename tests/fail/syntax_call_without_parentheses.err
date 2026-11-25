@@ -1,5 +1,5 @@
-error: unexpected `4`
+error: a call with arguments needs parentheses
  --> tests/fail/syntax_call_without_parentheses.grem:8:12
   |
 8 | x = double 4
-  |            ^ expected a newline
+  |            ^ write `double(4)`

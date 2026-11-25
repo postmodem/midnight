@@ -1,5 +1,5 @@
-error: unexpected `=`
+error: assignment is a statement, not an expression
  --> tests/fail/syntax_assignment_as_expression.grem:5:8
   |
 5 | y = (x = 2)
-  |        ^ expected `)`
+  |        ^ assign on a line of its own, then use the variable

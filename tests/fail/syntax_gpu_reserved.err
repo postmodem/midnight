@@ -1,4 +1,4 @@
-error: unexpected `gpu`
+error: `gpu` is a keyword and can't be used as a name
  --> tests/fail/syntax_gpu_reserved.grem:4:1
   |
 4 | gpu = 1
