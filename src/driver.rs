@@ -12,7 +12,7 @@ const DEBUG_FLAGS: &[&str] = &[
     "-g",
     "-fwrapv",
     "-fsanitize=address,undefined",
-    "-DGR_DEBUG",
+    "-DMN_DEBUG",
 ];
 
 /// Compiles `c_source` and the runtime into the executable `out`.

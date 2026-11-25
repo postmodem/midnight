@@ -152,7 +152,7 @@ fn run(name: &str, c: &str) -> Option<String> {
             "-g",
             "-fwrapv",
             "-fsanitize=address,undefined",
-            "-DGR_DEBUG",
+            "-DMN_DEBUG",
         ],
     ];
     let mut outputs = Vec::new();
