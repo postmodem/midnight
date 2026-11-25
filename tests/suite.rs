@@ -671,11 +671,16 @@ fn run_gpu_program(
     } else {
         (0, String::new())
     };
-    if run.status != Some(status) || run.stderr != expected_stderr {
+    if run.status != Some(status) {
         return Err(format!(
-            "{label}: exited with {:?}, expected {status}\n--- expected stderr\n{expected_stderr}\
-             --- stdout\n{}--- stderr\n{}---",
+            "{label}: exited with {:?}, expected {status}\n--- stdout\n{}--- stderr\n{}---",
             run.status, run.stdout, run.stderr
+        ));
+    }
+    if run.stderr != expected_stderr {
+        return Err(format!(
+            "{label}: standard error differs\n--- expected\n{expected_stderr}--- actual\n{}---",
+            run.stderr
         ));
     }
     if stops {
@@ -736,6 +741,7 @@ fn gpu_programs() {
     for dir in &dirs {
         let _ = std::fs::remove_dir_all(dir);
     }
+    report("runs on a device", jobs.len(), failures);
     let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
     note(&format!(
         "gpu_programs: {} runs of {} programs on {}",
@@ -746,7 +752,6 @@ fn gpu_programs() {
     for line in inexact.into_inner().unwrap() {
         note(&line);
     }
-    report("runs on a device", jobs.len(), failures);
 }
 
 #[test]
@@ -805,6 +810,7 @@ fn gpu_stats_match_plan() {
         Ok(())
     });
     let _ = std::fs::remove_dir_all(&dir);
+    report("runs with stats", device.modes().len(), failures);
     let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
     note(&format!(
         "gpu_stats_match_plan: uploads {} and downloads {} in every tick after the first on {}",
@@ -812,7 +818,6 @@ fn gpu_stats_match_plan() {
         planned.1,
         devices.join(" and ")
     ));
-    report("runs with stats", device.modes().len(), failures);
 }
 
 #[test]
