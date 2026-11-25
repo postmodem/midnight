@@ -1,6 +1,6 @@
 # 0002 — GPU systems: run data-parallel systems on the GPU
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0001
 - **Tested on:** —
 
@@ -70,7 +70,7 @@ reports those transfers so the cost is visible before the program runs.
   only into programs that declare a GPU system; a check that runs the GPU
   tests on software Vulkan; `apps.gpu-test` and `apps.bench-gpu`.
 - `examples/nbody.12am`, two benchmarks, and the reference updated. The
-  reference becomes Midnight 0.2.
+  reference becomes Midnight 0.2 and the compiler 0.2.0.
 
 ## Non-goals
 
@@ -81,7 +81,7 @@ reports those transfers so the cost is visible before the program runs.
 - `e[C]`, `e.has?`, `e.alive?` and `World.count` inside a GPU system.
 - Collecting a result across entities into a resource (a sum, a minimum).
 - Running ordinary systems, or the CPU implementation of a GPU system, on
-  several CPU threads.
+  several CPU threads. A threading spec follows this one.
 - Spatial structures. A nested query still visits every pair.
 - Bit-identical results between the GPU and the CPU implementation.
 - Moving rows between tables on the GPU. A structural change to a table

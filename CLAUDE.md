@@ -12,6 +12,10 @@ together with a C runtime. `README.md` has the overview.
 - `specs/NNNN-name.md` is one spec per change, with a status line, acceptance
   criteria and, once implemented, an Outcome. Work starts from an approved
   spec. A draft spec is not to be implemented.
+- The language and the compiler share one version, `0.MINOR.PATCH`, in
+  `Cargo.toml` and in the first line of the reference. A spec that changes
+  the reference raises the minor number. A fix to the compiler or the
+  runtime that leaves the reference alone raises the patch number.
 - Three files are contracts between stages. Change them deliberately and
   update both sides in the same commit:
   - `src/ast.rs`: parser to checker.
