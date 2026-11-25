@@ -3,7 +3,8 @@
 # anything to the power 0 is 1, a zero base gives 0 or an infinity by the
 # sign of the exponent, and a negative base has a power only for a whole
 # exponent, negative when that is odd; an infinite exponent is whole and not
-# odd. `%` on `Float` by zero is NaN.
+# odd. 1 to any power, and -1 to an infinite one, is 1. `%` on `Float` by
+# zero is NaN.
 component Power
   base: Float32
   exponent: Float32
@@ -27,7 +28,7 @@ gpu system raise
   end
 end
 
-[[0.0, 0.0], [5.5, 0.0], [-3.0, 0.0], [0.0, 2.0], [0.0, -1.0], [-2.0, 3.0], [-2.0, 2.0], [-2.0, -2.0], [-8.0, 0.5], [-2.0, 2.5], [-2.0, 1.0 / 0.0], [-0.5, 1.0 / 0.0], [-2.0, -1.0 / 0.0]].each do |pair|
+[[0.0, 0.0], [5.5, 0.0], [-3.0, 0.0], [0.0, 2.0], [0.0, -1.0], [-2.0, 3.0], [-2.0, 2.0], [-2.0, -2.0], [-8.0, 0.5], [-2.0, 2.5], [-2.0, 1.0 / 0.0], [-0.5, 1.0 / 0.0], [-2.0, -1.0 / 0.0], [1.0, 1.0 / 0.0], [1.0, 0.0 / 0.0], [-1.0, 1.0 / 0.0], [-1.0, -1.0 / 0.0]].each do |pair|
   spawn Power(pair[0], pair[1], 0.0)
 end
 spawn Remainder(5.5, 0.0, 0.0, false)

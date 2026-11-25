@@ -255,6 +255,20 @@ fn define(name: &str) -> Func {
             Ty::F32,
             vec![
                 if_(binary(Eq, b(), float(0.0)), vec![ret(float(1.0))]),
+                // 1 to any power, and -1 to an infinite one, is 1.
+                if_(binary(Eq, a(), float(1.0)), vec![ret(float(1.0))]),
+                if_(
+                    binary(
+                        And,
+                        binary(Eq, a(), float(-1.0)),
+                        binary(
+                            Eq,
+                            binary(BitAnd, bits(Ty::U32, b()), Expr::Hex(ABS_MASK)),
+                            Expr::Hex(INFINITY_BITS),
+                        ),
+                    ),
+                    vec![ret(float(1.0))],
+                ),
                 if_(
                     binary(Gt, a(), float(0.0)),
                     vec![ret(math(MathFn::Pow, vec![a(), b()]))],

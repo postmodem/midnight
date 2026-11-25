@@ -856,7 +856,8 @@ when ordinary code calls it and at 32 bits when a GPU block does.
   of the divisor, as at 64 bits. The smallest `Int` divided by -1 wraps to
   itself, with remainder 0.
 - **`**` on `Int`** wraps.
-- **`**` on `Float`.** Anything to the power 0 is 1. A positive base uses
+- **`**` on `Float`.** Anything to the power 0 is 1, and so is 1 to any
+  power and -1 to an infinite one. A positive base uses
   the power function of the GPU, or of C on the CPU, which need not be
   exact: `6.0 ** 3.0` may be 215.99994 on a GPU. A zero base gives 0 for a
   positive exponent and `Infinity` for a negative one. A negative base gives
