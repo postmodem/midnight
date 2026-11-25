@@ -8,14 +8,21 @@ const RUNTIME_C: &str = include_str!("../runtime/midnight_rt.c");
 const GPU_H: &str = include_str!("../runtime/midnight_gpu.h");
 const GPU_C: &str = include_str!("../runtime/midnight_gpu.c");
 
-const RELEASE_FLAGS: &[&str] = &["-O2", "-fwrapv"];
+const RELEASE_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off"];
 const DEBUG_FLAGS: &[&str] = &[
     "-O0",
     "-g",
     "-fwrapv",
+    "-ffp-contract=off",
     "-fsanitize=address,undefined",
     "-DMN_DEBUG",
 ];
+
+/// Flags for the machine `midnight` runs on, in both modes.
+#[cfg(target_arch = "x86_64")]
+const TARGET_FLAGS: &[&str] = &["-march=x86-64-v3"];
+#[cfg(not(target_arch = "x86_64"))]
+const TARGET_FLAGS: &[&str] = &[];
 
 /// Compiles `c_source` and the runtime into the executable `out`. `gpu`
 /// says whether the program declares a GPU system. The error is a message
@@ -84,6 +91,7 @@ fn compile_in(
     let mut command = Command::new(&cc);
     command.arg("-std=c11");
     command.args(if debug { DEBUG_FLAGS } else { RELEASE_FLAGS });
+    command.args(TARGET_FLAGS);
     if let Ok(extra) = std::env::var("MIDNIGHT_CFLAGS") {
         command.args(extra.split_whitespace());
     }

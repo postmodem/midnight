@@ -112,10 +112,16 @@ runtime (`runtime/`) by the C compiler named in `MIDNIGHT_CC`, or `cc`. The
 packaged compiler defaults to the clang from the pinned nixpkgs.
 `MIDNIGHT_CFLAGS` adds flags to that invocation.
 
-| Mode    | Flag      | C flags                                       | Extra checks          |
-| ------- | --------- | --------------------------------------------- | --------------------- |
-| release | (default) | `-O2 -fwrapv`                                 | none                  |
-| debug   | `--debug` | `-O0 -g -fwrapv -fsanitize=address,undefined` | allocation accounting |
+| Mode    | Flag      | C flags                                                           | Extra checks          |
+| ------- | --------- | ----------------------------------------------------------------- | --------------------- |
+| release | (default) | `-O2 -fwrapv -ffp-contract=off`                                   | none                  |
+| debug   | `--debug` | `-O0 -g -fwrapv -ffp-contract=off -fsanitize=address,undefined`   | allocation accounting |
+
+On x86-64 both modes add `-march=x86-64-v3`, so a built program needs a
+CPU with AVX2 and FMA: Intel since 2013 (not every low-end Pentium and
+Celeron) and AMD since 2015. `MIDNIGHT_CFLAGS=-march=x86-64` builds for
+any x86-64 CPU. `-ffp-contract=off` keeps a `Float` result the same
+whichever level a program is built for.
 
 The checks the language defines (list bounds, missing components, division
 by zero) are on in both modes. A debug build also counts live string and list

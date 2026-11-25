@@ -11,7 +11,11 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 midnight build "$BENCH_SRC/examples/bench.12am" -o "$work/bench"
-"$cc" -std=c11 -O2 -fwrapv -o "$work/baseline" "$BENCH_SRC/bench/baseline.c" -lm
+march=()
+if [ "$(uname -m)" = x86_64 ]; then
+  march=(-march=x86-64-v3)
+fi
+"$cc" -std=c11 -O2 -fwrapv -ffp-contract=off "${march[@]}" -o "$work/baseline" "$BENCH_SRC/bench/baseline.c" -lm
 midnight build "$BENCH_SRC/bench/churn.12am" -o "$work/churn"
 
 # Prints the value of one `key: value` line of a program's saved output.
