@@ -644,7 +644,8 @@ void gr_srand_clock(void);
 
 /* Real seconds since the program started. */
 double gr_clock(void);
-/* Pauses for that many real seconds; returns at once for zero or less. */
+/* Flushes standard output, then pauses for that many real seconds;
+ * returns at once for zero or less. */
 void gr_sleep(double seconds);
 
 #endif
