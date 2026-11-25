@@ -2,7 +2,9 @@
 
 A compiled, Ruby-flavored language built around entities, components and
 systems. The compiler is Rust with no crates; it emits C11 that is built
-together with a C runtime. `README.md` has the overview.
+together with a C runtime. For each `each` of a `gpu system` it also emits a
+WGSL shader, which the runtime runs through `wgpu-native`. `README.md` has
+the overview.
 
 ## What defines what
 
@@ -20,9 +22,12 @@ together with a C runtime. `README.md` has the overview.
   update both sides in the same commit:
   - `src/ast.rs`: parser to checker.
   - `src/tir.rs`: checker to emitter. The typed program is the only thing a
-    backend reads.
+    backend or `midnight plan` reads.
   - `runtime/midnight_rt.h`: generated C to runtime. Its comments are
-    requirements on `midnight_rt.c`.
+    requirements on `midnight_rt.c`. Its "GPU systems" section is also the
+    contract for generated shaders, and a requirement on `midnight_gpu.c`.
+- `runtime/midnight_gpu.h` is what `midnight_rt.c` and `midnight_gpu.c` need
+  from each other. Generated code never includes it.
 
 ## Commands
 
@@ -48,9 +53,13 @@ command that needs it.
 - No crates. The lexer, parser, diagnostics and argument parsing are written
   by hand, and `Cargo.lock` lists one package.
 - No `unsafe` in the compiler.
-- The runtime is C11 with libc and libm only, and must stay free of anything
-  that depends on addresses, hash order of pointers or wall-clock time
-  (apart from `clock`, `sleep` and `srand` with no argument).
+- `midnight_rt.c` is C11 with libc and libm only. `midnight_gpu.c` is C11
+  with libc, libm and `wgpu-native`, and is compiled only into programs with
+  a GPU system; a program without one links neither it nor `wgpu-native`.
+- Both must stay free of anything that makes a program's output depend on
+  addresses, hash order of pointers or wall-clock time (apart from `clock`,
+  `sleep` and `srand` with no argument). With `midnight_gpu.c`, output may
+  depend on the device only as "Determinism" in the reference allows.
 - All-zero bytes are a valid value of every type. Generated code and the
   runtime both rely on it.
 - Generated C and the runtime are compiled with `-Wall -Wextra -Werror` under
@@ -58,7 +67,9 @@ command that needs it.
   report and no live string or list buffer.
 - Never set `LD_LIBRARY_PATH`. The flake clears `NIX_HARDENING_ENABLE`
   wherever `midnight` invokes the C compiler, so programs are built with the
-  flags in the README's mode table and no others.
+  flags in the README's mode table and no others. A program with a GPU
+  system adds `MIDNIGHT_GPU_FLAGS`, whose runpaths are how it finds
+  `wgpu-native` and the Vulkan loader.
 
 ## Tests
 

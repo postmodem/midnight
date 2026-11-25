@@ -1,0 +1,41 @@
+# tolerance: 0.002
+# `**` on `Float` in a GPU block where the language fixes the result:
+# anything to the power 0 is 1, a zero base gives 0 or an infinity by the
+# sign of the exponent, and a negative base has a power only for a whole
+# exponent, negative when that is odd. `%` on `Float` by zero is NaN.
+component Power
+  base: Float32
+  exponent: Float32
+  result: Float32
+end
+
+component Remainder
+  a: Float32
+  b: Float32
+  result: Float32
+  missing: Bool
+end
+
+gpu system raise
+  each Power do |power|
+    power.result = power.base ** power.exponent
+  end
+  each Remainder do |rem|
+    rem.result = rem.a % rem.b
+    rem.missing = rem.result.nan?
+  end
+end
+
+[[0.0, 0.0], [5.5, 0.0], [-3.0, 0.0], [0.0, 2.0], [0.0, -1.0], [-2.0, 3.0], [-2.0, 2.0], [-2.0, -2.0], [-8.0, 0.5], [-2.0, 2.5]].each do |pair|
+  spawn Power(pair[0], pair[1], 0.0)
+end
+spawn Remainder(5.5, 0.0, 0.0, false)
+spawn Remainder(0.0, 0.0, 0.0, false)
+spawn Remainder(-5.5, 2.0, 0.0, true)
+World.tick
+each Power do |power|
+  puts "#{power.base} ** #{power.exponent} = #{power.result.round(3)}"
+end
+each Remainder do |rem|
+  puts "#{rem.a} % #{rem.b} = #{rem.result.round(3)} #{rem.missing}"
+end

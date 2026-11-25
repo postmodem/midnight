@@ -683,6 +683,14 @@ void mn_sleep(double seconds);
  *     word 6  f32  Time.elapsed
  *     word 7       zero
  *
+ * From word MN_GPU_HEADER_WORDS the layout belongs to generated code, and
+ * a program has one, the same for every block, so that a function several
+ * blocks call reads the same words in each. Every constant and resource
+ * field that GPU code reads has its words there, in the order they are
+ * first read. A block's `fill` writes the ones the block reads, and its
+ * `uniform_words` ends after the last of them. A constant whose value the
+ * compiler knows is a literal in the code and has no word.
+ *
  * The shader. `wgsl` is one module with the compute entry point `main`,
  * `@workgroup_size(64)`. The run for row
  *

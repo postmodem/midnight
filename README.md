@@ -45,10 +45,32 @@ out by hand: components in contiguous arrays, no per-object headers, fields
 as small as you declare them. The `move` system above compiles to a counted
 loop over two arrays that the C compiler vectorizes.
 
+A system marked `gpu` runs its queries as compute shaders over those same
+arrays, and on the CPU, with the same meaning, where there is no GPU:
+
+```ruby
+component Body
+  x: Float32
+  y: Float32
+  vx: Float32
+  vy: Float32
+end
+
+gpu system drift
+  each Body do |body|
+    body.x += body.vx * Time.dt
+    body.y += body.vy * Time.dt
+  end
+end
+```
+
+[`examples/nbody.12am`](examples/nbody.12am) is a fuller one: gravity, every
+body against every other.
+
 - [`docs/language.md`](docs/language.md) is the language reference.
 - [`specs/`](specs/) holds one spec per change, with its acceptance criteria
   and outcome.
-- [`examples/`](examples/) has six programs, from `hello.12am` to a
+- [`examples/`](examples/) has seven programs, from `hello.12am` to a
   million-entity benchmark.
 
 ## Try it
@@ -63,6 +85,9 @@ nix run . -- run --debug examples/life.12am
 nix run . -- check examples/bounce.12am
 nix run . -- emit-c examples/move.12am
 nix run . -- build examples/move.12am -o move && ./move
+nix run . -- run examples/nbody.12am
+nix run . -- emit-wgsl examples/nbody.12am
+nix run . -- plan tests/plan/reader.12am
 ```
 
 ## The compiler
@@ -71,7 +96,9 @@ nix run . -- build examples/move.12am -o move && ./move
 midnight build FILE [-o OUT] [--debug]   compile to an executable
 midnight run FILE [--debug]              compile to a temporary directory and run
 midnight check FILE                      report errors without generating code
+midnight plan FILE                       print the CPU-GPU transfers of one tick
 midnight emit-c FILE                     print the generated C
+midnight emit-wgsl FILE                  print the shader of every GPU block
 midnight --version | --help
 ```
 
@@ -104,6 +131,50 @@ error: unknown component `Postion`
    |        ^^^^^^^ did you mean `Position`?
 ```
 
+## GPU systems
+
+For each `each` of a `gpu system` the compiler emits a WGSL compute shader,
+embedded in the executable as text, and a C function with the same meaning.
+The shaders run through [`wgpu-native`](https://github.com/gfx-rs/wgpu-native),
+on Vulkan on Linux and Metal on macOS, without a window. `midnight emit-wgsl`
+prints them, and `midnight plan` prints the transfers between CPU and GPU
+memory that one tick performs; the reference explains how to read a plan.
+
+Only a program that declares a GPU system is linked against `wgpu-native`,
+with the flags in `MIDNIGHT_GPU_FLAGS`, which the packaged compiler and the
+dev shell set. Without that variable `midnight` says so in one line and
+builds the program with the C functions only. A program with no GPU system
+depends on libc and libm alone.
+
+When it starts, a program with a GPU system picks the fastest hardware
+adapter. `MIDNIGHT_GPU` changes that. It is a comma-separated list of:
+
+| Word       | Meaning                                                         |
+| ---------- | --------------------------------------------------------------- |
+| `off`      | Use no device: every GPU system runs its C functions.           |
+| `software` | Accept an adapter that computes on the CPU (Mesa's `llvmpipe`) when there is no hardware one. |
+| `info`     | Print one line to standard error naming the device in use, or `no device`, and one line for each `each` of a GPU system that runs on the CPU, with the reason. |
+| `stats`    | Print one line to standard error at the end of each tick: the uploads and downloads it performed. |
+
+```sh
+MIDNIGHT_GPU=info,stats nix run . -- run tests/plan/reader.12am
+```
+
+A word that is not in the table is reported once, when the program starts.
+In a `stats` line one upload or download is one component array of one
+table. The first line is `tick 0`, and what top-level code transfers between
+two ticks is counted in the line of the tick that follows.
+
+With no device, because none was found or `off` is set, every GPU system runs
+on the CPU. A single `each` also does when it needs more than the device
+offers, such as an array larger than the largest buffer the device binds.
+An error from the device after start-up prints `midnight: GPU error: …` and
+ends the program with status 70.
+
+A debug build cannot use an NVIDIA device: the driver fails to start under
+AddressSanitizer. Such a build uses another adapter if the machine has one,
+and the CPU otherwise.
+
 ## Benchmarks
 
 ```sh
@@ -116,6 +187,15 @@ by hand) with the same C flags, and prints the time per tick of each, their
 ratio and their peak memory. It then runs `bench/churn.12am`, which measures
 `spawn`, `despawn`, `add`, `remove` and `e[C]`.
 
+```sh
+nix run .#bench-gpu
+```
+
+runs gravity among 16,384 bodies on the GPU and on the CPU and prints the
+time per tick of each. It then moves one million entities three ways and
+prints the time per tick of each: on the CPU; on the GPU with the data left
+there; and on the GPU with a CPU system reading the result in every tick.
+
 ## Working on it
 
 ```sh
@@ -125,20 +205,36 @@ cargo run -- run examples/hello.12am
 nix flake check
 ```
 
-`nix develop` provides the Rust toolchain, clang and `nixfmt`. `cargo test`
-runs the unit tests and every program under `tests/` and `examples/`, each in
-both build modes. `nix flake check` builds the package (which runs the same
-tests in the sandbox) and checks clippy, rustfmt and nixfmt.
+`nix develop` provides the Rust toolchain, clang and `nixfmt`, and sets
+`MIDNIGHT_GPU_FLAGS`. `cargo test` runs the unit tests and every program
+under `tests/` and `examples/`, each in both build modes, with GPU systems
+on the CPU. `nix flake check` builds the package (which runs the same tests
+in the sandbox) and checks clippy, rustfmt and nixfmt.
+
+The programs with GPU systems are also run on a device, where a number may
+differ from the expected output by the tolerance the program states in its
+`# tolerance:` comment:
+
+```sh
+MIDNIGHT_TEST_GPU=hardware cargo test    # in the dev shell, on the machine's GPU
+MIDNIGHT_TEST_GPU=software cargo test    # in the dev shell, on software Vulkan
+nix run .#gpu-test                       # release builds on the machine's GPU
+```
+
+On Linux, `nix flake check` includes `checks.gpu`, which runs them on Mesa's
+software Vulkan inside the build sandbox.
 
 ```
 src/            the compiler, one module per stage:
-                source, lexer, parser, check, emit, driver
-runtime/        midnight_rt.h, midnight_rt.c
+                source, lexer, parser, check, plan, emit, driver
+runtime/        midnight_rt.h, midnight_rt.c; midnight_gpu.h, midnight_gpu.c
+                for programs with a GPU system
 docs/           language.md
 examples/       programs with their expected output
 tests/run/      programs that must print exactly NAME.out
 tests/fail/     programs that must be rejected with exactly NAME.err
 tests/panic/    programs that must stop with the run-time error in NAME.err
+tests/plan/     programs whose transfer plan must be exactly NAME.plan
 bench/          baseline.c, churn.12am, bench.sh
 specs/          one spec per change
 ```
@@ -150,10 +246,11 @@ before committing it.
 
 ## Status
 
-Midnight 0.1 is the language core. It is tested on `x86_64-linux`; the flake
-also offers `aarch64-linux`, `x86_64-darwin` and `aarch64-darwin`, which
-evaluate but have not been run. What 0.1 leaves out is listed at the end of
-the reference.
+Midnight 0.2 is the language core and GPU systems. It is tested on
+`x86_64-linux`, GPU systems on an NVIDIA device and on Mesa's software
+Vulkan; the flake also offers `aarch64-linux`, `x86_64-darwin` and
+`aarch64-darwin`, which evaluate but have not been run. What 0.2 leaves out
+is listed at the end of the reference.
 
 ## License
 
