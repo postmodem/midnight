@@ -83,12 +83,14 @@ impl<'a> FnCx<'a, '_> {
     }
 
     fn assign(&mut self, place: &'a Place, value: &'a Expr) {
+        self.whole_store = true;
         let prepared = self.prepare(
             place,
             true,
             analysis::inert(value),
             analysis::local_safe(value),
         );
+        self.whole_store = false;
         let evaluated = self.rvalue(value);
         let managed = self.cx.managed(&value.ty);
         if !managed && prepared.direct() {

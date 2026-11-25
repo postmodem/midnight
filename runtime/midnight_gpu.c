@@ -42,17 +42,43 @@ typedef struct Buffer {
 
 enum { ON_CPU, ON_GPU, ON_BOTH };
 
+/* The marks a row of a GPU copy can have. */
+enum {
+    ROW_SEND = 1,   /* the value in CPU memory is newer */
+    ROW_BACK = 2,   /* the value has been copied to CPU memory too */
+    ROW_LISTED = 4, /* the row is in the column's list */
+};
+
+/* What a row handled alone costs, and what a round trip that brings rows
+ * of a column back costs, as bytes of the column moved whole. */
+#define ROW_CHARGE 25000u
+#define TRIP_CHARGE 400000u
+
 /* The GPU copy of one column of one table. */
 typedef struct Column {
     uint32_t component; /* a component id, or MN_GPU_ENTITIES */
     uint32_t size;      /* bytes per row */
     /* Which copy is current. */
     uint8_t where;
+    /* Listed whole for the next round trip. */
+    bool fetching;
     Buffer buffer;
     /* Changes whenever the contents of `buffer` do. */
     uint64_t version;
-    /* Listed for the next round trip. */
-    bool fetching;
+    /* The rest describes the GPU copy while it is current. The rows it
+     * holds; the table's rows past them are the tail, which only CPU memory
+     * has. */
+    uint32_t held;
+    /* The marks of each of the first `marks_capacity` rows, and the rows
+     * that have ROW_LISTED: every row with another mark is among them. */
+    uint8_t *marks;
+    uint32_t marks_capacity;
+    uint32_t *listed;
+    uint32_t listed_count;
+    uint32_t listed_capacity;
+    /* What rows handled alone have cost since a block last used the column
+     * or it last travelled whole, in bytes of the column moved whole. */
+    uint64_t charge;
 } Column;
 
 struct MnGpuTable {
@@ -63,11 +89,15 @@ struct MnGpuTable {
     uint32_t current;
 };
 
-/* A column of a table to bring back in the next round trip, and where in
- * the readback buffer it goes. */
+/* In place of a row: every row the GPU copy holds. */
+#define ALL_ROWS UINT32_MAX
+
+/* A column of a table, or one row of it, to bring back in the next round
+ * trip, and where in the readback buffer it goes. */
 typedef struct Fetch {
     MnTable *table;
     uint32_t component;
+    uint32_t row;
     uint64_t offset;
 } Fetch;
 
@@ -113,6 +143,12 @@ static struct {
     uint64_t bytes_capacity;
     uint64_t *contents;
     uint32_t contents_capacity;
+    /* Working space: the rows of a column to send, in order, and the CPU
+     * values of the rows to send of a column brought back whole. */
+    uint32_t *rows;
+    uint32_t rows_capacity;
+    unsigned char *saved;
+    uint64_t saved_capacity;
     /* Why the last block refused runs on the CPU. */
     char reason[200];
 } gpu;
@@ -465,13 +501,87 @@ static Column *column_for(MnTable *table, const MnGpuColumn *named) {
     return column;
 }
 
+/* ---- Marks --------------------------------------------------------------- */
+
+static uint8_t row_marks(const Column *column, uint32_t row) {
+    return row < column->marks_capacity ? column->marks[row] : 0;
+}
+
+/* Gives a row a mark, listing the row if it is not listed. */
+static void row_mark(Column *column, uint32_t row, uint8_t mark) {
+    if (row >= column->marks_capacity) {
+        uint32_t capacity = column->marks_capacity ? column->marks_capacity : 64;
+        while (capacity <= row) capacity *= 2;
+        column->marks = mn_realloc(column->marks, capacity);
+        memset(column->marks + column->marks_capacity, 0,
+               capacity - column->marks_capacity);
+        column->marks_capacity = capacity;
+    }
+    if (!(column->marks[row] & ROW_LISTED)) {
+        if (column->listed_count == column->listed_capacity) {
+            uint32_t capacity =
+                column->listed_capacity ? column->listed_capacity * 2 : 16;
+            column->listed =
+                mn_realloc(column->listed, capacity * sizeof(uint32_t));
+            column->listed_capacity = capacity;
+        }
+        column->listed[column->listed_count++] = row;
+        column->marks[row] |= ROW_LISTED;
+    }
+    column->marks[row] |= mark;
+}
+
+/* Takes the marks in `clear` from every listed row, and takes the rows
+ * left with neither ROW_SEND nor ROW_BACK off the list. */
+static void marks_clear(Column *column, uint8_t clear) {
+    uint32_t kept = 0;
+    for (uint32_t i = 0; i < column->listed_count; i++) {
+        uint32_t row = column->listed[i];
+        uint8_t marks = column->marks[row] & ~clear;
+        if (marks & (ROW_SEND | ROW_BACK)) {
+            column->marks[row] = marks;
+            column->listed[kept++] = row;
+        } else {
+            column->marks[row] = 0;
+        }
+    }
+    column->listed_count = kept;
+}
+
+/* Whether CPU memory has the current value of a row of a column whose GPU
+ * copy is current: the CPU copy is current too, or the row is in the tail,
+ * to send or brought back. */
+static bool cpu_has(const Column *column, uint32_t row) {
+    return column->where != ON_GPU || row >= column->held ||
+           (row_marks(column, row) & (ROW_SEND | ROW_BACK)) != 0;
+}
+
+/* Adds `bytes` to the charge of a column and returns true, unless that
+ * would take it above the size of the column: then the column is to be
+ * handled whole, and the charge is left as it is. With `rows`, rows always
+ * travel alone. */
+static bool charge(const MnTable *table, Column *column, uint64_t bytes) {
+    if (mn_gpu_rows) return true;
+    uint64_t whole = (uint64_t)table->count * column->size;
+    if (column->charge + bytes > whole) return false;
+    column->charge += bytes;
+    return true;
+}
+
+/* ---- Column copies ------------------------------------------------------- */
+
 /* Records which copy of a column is current, and keeps mn_gpu_active true
  * exactly while some component column has a current GPU copy, and
  * mn_gpu_only exactly while some component column's GPU copy is the only
- * current one. */
+ * current one. A GPU copy that stops being current forgets its rows. */
 static void column_set(MnTable *table, Column *column, uint8_t where) {
     uint8_t was = column->where;
     column->where = where;
+    if (where == ON_CPU) {
+        marks_clear(column, ROW_SEND | ROW_BACK);
+        column->charge = 0;
+        column->held = 0;
+    }
     if (was == where) return;
     bool counted = column->component != MN_GPU_ENTITIES;
     if ((was != ON_CPU) != (where != ON_CPU)) {
@@ -494,35 +604,114 @@ static void column_set(MnTable *table, Column *column, uint8_t where) {
     mn_gpu_only = gpu.alone != 0;
 }
 
-/* Gives the GPU copy a buffer that has room for the table's rows, in
- * place of one that has not. Its contents are lost. */
-static void column_room(MnTable *table, Column *column) {
+/* Gives the GPU copy a buffer that has room for the table's rows, in place
+ * of one that has not. With `keep`, the rows the copy holds are copied to
+ * the new buffer in GPU memory; otherwise the contents are lost. */
+static void column_room(MnTable *table, Column *column, bool keep) {
     uint64_t need = round4((uint64_t)table->count * column->size);
     if (column->buffer.size >= need) return;
     uint64_t roomy = round4((uint64_t)table->capacity * column->size);
+    Buffer old = column->buffer;
+    column->buffer = (Buffer){0};
     buffer_make(&column->buffer, roomy <= gpu.max_binding ? roomy : need,
                 COLUMN_USAGE);
+    uint64_t kept = round4((uint64_t)column->held * column->size);
+    if (keep && old.handle && kept != 0) {
+        buffer_copy(&old, 0, &column->buffer, 0, kept);
+    }
+    buffer_drop(&old);
 }
 
-/* Makes the GPU copy current: copies the column up if only the CPU copy
- * is, into a buffer that has room for the table's rows. */
+/* Copies the column up whole, into a buffer that has room for the table's
+ * rows. Both copies are current afterwards. */
 static void column_upload(MnTable *table, Column *column) {
-    if (column->where != ON_CPU) return;
     uint64_t bytes = (uint64_t)table->count * column->size;
-    column_room(table, column);
+    column_set(table, column, ON_CPU);
+    column_room(table, column, false);
     buffer_write(&column->buffer, 0, column_data(table, column), bytes);
     column->version = ++gpu.serial;
     column_set(table, column, ON_BOTH);
+    column->held = table->count;
     if (column->component != MN_GPU_ENTITIES) mn_gpu_uploads++;
+}
+
+/* Writes rows `first` up to `end` of the table's array to the GPU copy, as
+ * the words that cover them; past the table's last row, the words are
+ * padded with zeros. */
+static void column_write_rows(MnTable *table, Column *column, uint32_t first,
+                              uint32_t end) {
+    const unsigned char *data = column_data(table, column);
+    uint64_t start = ((uint64_t)first * column->size) & ~(uint64_t)3;
+    uint64_t stop = round4((uint64_t)end * column->size);
+    uint64_t limit = (uint64_t)table->count * column->size;
+    if (stop <= limit) {
+        queue_write(&column->buffer, start, data + start, stop - start);
+        return;
+    }
+    uint64_t last = stop - 4;
+    queue_write(&column->buffer, start, data + start, last - start);
+    unsigned char word[4] = {0, 0, 0, 0};
+    memcpy(word, data + last, (size_t)(limit - last));
+    queue_write(&column->buffer, last, word, 4);
+}
+
+static int row_order(const void *a, const void *b) {
+    uint32_t x = *(const uint32_t *)a;
+    uint32_t y = *(const uint32_t *)b;
+    return (x > y) - (x < y);
+}
+
+/* Makes the GPU copy of a column current for a block that uses it. If only
+ * the CPU copy is current, the column is copied up whole. Otherwise the
+ * buffer is made large enough, keeping the rows it holds, and the rows to
+ * send and the tail are written, rows next to each other in one write. */
+static void column_ready(MnTable *table, Column *column) {
+    if (column->where == ON_CPU) {
+        column_upload(table, column);
+        return;
+    }
+    column_room(table, column, true);
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < column->listed_count; i++) {
+        uint32_t row = column->listed[i];
+        if (!(column->marks[row] & ROW_SEND) || row >= column->held) continue;
+        if (count == gpu.rows_capacity) {
+            gpu.rows_capacity = gpu.rows_capacity ? gpu.rows_capacity * 2 : 64;
+            gpu.rows = mn_realloc(gpu.rows, gpu.rows_capacity * sizeof(uint32_t));
+        }
+        gpu.rows[count++] = row;
+    }
+    if (count > 1) qsort(gpu.rows, count, sizeof(uint32_t), row_order);
+    uint32_t at = 0;
+    while (at < count) {
+        uint32_t end = at + 1;
+        while (end < count && gpu.rows[end] == gpu.rows[end - 1] + 1) end++;
+        column_write_rows(table, column, gpu.rows[at], gpu.rows[end - 1] + 1);
+        at = end;
+    }
+    uint32_t tail = table->count > column->held ? table->count - column->held : 0;
+    if (tail != 0) column_write_rows(table, column, column->held, table->count);
+    if (count + tail != 0) {
+        column->version = ++gpu.serial;
+        if (column->component != MN_GPU_ENTITIES) mn_gpu_rows_up += count + tail;
+    }
+    marks_clear(column, ROW_SEND);
+    column->held = table->count;
+    column->charge = 0;
+}
+
+/* Gets the GPU copy of a column ready for a block that overwrites it: a
+ * buffer large enough and nothing else. */
+static void column_overwrite(MnTable *table, Column *column) {
+    column_room(table, column, false);
+    marks_clear(column, ROW_SEND | ROW_BACK);
+    column->held = table->count;
+    column->charge = 0;
 }
 
 /* ---- Round trips --------------------------------------------------------- */
 
-/* Lists a column for the next round trip, when only its GPU copy is
- * current and it is not listed yet. */
-static void fetch_column(MnTable *table, Column *column) {
-    if (column->where != ON_GPU || column->fetching) return;
-    column->fetching = true;
+static Fetch *fetch_push(MnTable *table, Column *column, uint32_t row) {
     if (gpu.fetch_count == gpu.fetch_capacity) {
         uint32_t capacity = gpu.fetch_capacity ? gpu.fetch_capacity * 2 : 16;
         gpu.fetches = mn_realloc(gpu.fetches, capacity * sizeof(Fetch));
@@ -531,19 +720,75 @@ static void fetch_column(MnTable *table, Column *column) {
     Fetch *fetch = &gpu.fetches[gpu.fetch_count++];
     fetch->table = table;
     fetch->component = column->component;
+    fetch->row = row;
     fetch->offset = 0;
+    return fetch;
 }
 
-/* The bytes a listed column brings back. */
+/* Lists a column for the next round trip, when only its GPU copy is
+ * current and it is not listed yet. */
+static void fetch_column(MnTable *table, Column *column) {
+    if (column->where != ON_GPU || column->fetching) return;
+    column->fetching = true;
+    fetch_push(table, column, ALL_ROWS);
+}
+
+/* Lists a row for the next round trip, when CPU memory lacks it. It counts
+ * as brought back from now on. */
+static void fetch_row(MnTable *table, Column *column, uint32_t row) {
+    if (cpu_has(column, row)) return;
+    row_mark(column, row, ROW_BACK);
+    fetch_push(table, column, row);
+}
+
+/* The bytes a listed column or row brings back. */
 static uint64_t fetch_bytes(const Fetch *fetch, const Column *column) {
-    return round4((uint64_t)fetch->table->count * column->size);
+    if (fetch->row != ALL_ROWS) return column->size;
+    return round4((uint64_t)column->held * column->size);
 }
 
-/* Brings back every column listed since the last round trip: the copies
- * into the readback buffer are recorded in the open encoder, which is
- * submitted, and the program waits once, or as many times as the largest
- * buffer needs. Both copies of those columns are current afterwards. No
- * column may be created between listing and bringing back. */
+/* Copies a column brought back whole to the table's array, from `from`,
+ * except the rows to send, which keep their values in CPU memory. Both
+ * copies are current afterwards. */
+static void fetch_whole(MnTable *table, Column *column,
+                        const unsigned char *from) {
+    unsigned char *data = column_data(table, column);
+    size_t size = column->size;
+    uint64_t sends = 0;
+    for (uint32_t i = 0; i < column->listed_count; i++) {
+        if (column->marks[column->listed[i]] & ROW_SEND) sends++;
+    }
+    if (sends * size > gpu.saved_capacity) {
+        gpu.saved = mn_realloc(gpu.saved, (size_t)(sends * size));
+        gpu.saved_capacity = sends * size;
+    }
+    unsigned char *saved = gpu.saved;
+    for (uint32_t i = 0; i < column->listed_count; i++) {
+        uint32_t row = column->listed[i];
+        if (!(column->marks[row] & ROW_SEND)) continue;
+        memcpy(saved, data + (size_t)row * size, size);
+        saved += size;
+    }
+    memcpy(data, from, (size_t)column->held * size);
+    saved = gpu.saved;
+    for (uint32_t i = 0; i < column->listed_count; i++) {
+        uint32_t row = column->listed[i];
+        if (!(column->marks[row] & ROW_SEND)) continue;
+        memcpy(data + (size_t)row * size, saved, size);
+        saved += size;
+    }
+    marks_clear(column, ROW_BACK);
+    column->charge = 0;
+    column->fetching = false;
+    column_set(table, column, ON_BOTH);
+    if (column->component != MN_GPU_ENTITIES) mn_gpu_downloads++;
+}
+
+/* Brings back every column and row listed since the last round trip: the
+ * copies into the readback buffer are recorded in the open encoder, which
+ * is submitted, and the program waits once, or as many times as the
+ * largest buffer needs. No column may be created between listing and
+ * bringing back. */
 static void fetch_run(void) {
     uint32_t first = 0;
     while (first < gpu.fetch_count) {
@@ -558,6 +803,7 @@ static void fetch_run(void) {
             total += bytes;
             end++;
         }
+        const unsigned char *from = NULL;
         if (total != 0) {
             if (gpu.readback.size < total) {
                 uint64_t roomy = gpu.readback.size * 2;
@@ -569,31 +815,71 @@ static void fetch_run(void) {
                 Fetch *fetch = &gpu.fetches[i];
                 Column *column = column_find(fetch->table, fetch->component);
                 uint64_t bytes = fetch_bytes(fetch, column);
+                uint64_t at = fetch->row == ALL_ROWS
+                                  ? 0
+                                  : (uint64_t)fetch->row * column->size;
                 if (bytes != 0) {
-                    buffer_copy(&column->buffer, 0, &gpu.readback, fetch->offset,
-                                bytes);
+                    buffer_copy(&column->buffer, at, &gpu.readback,
+                                fetch->offset, bytes);
                 }
             }
             encoder_submit();
-            const unsigned char *from = buffer_read(&gpu.readback, total);
-            for (uint32_t i = first; i < end; i++) {
-                Fetch *fetch = &gpu.fetches[i];
-                Column *column = column_find(fetch->table, fetch->component);
-                memcpy(column_data(fetch->table, column), from + fetch->offset,
-                       (size_t)fetch->table->count * column->size);
-            }
-            wgpuBufferUnmap(gpu.readback.handle);
+            from = buffer_read(&gpu.readback, total);
         }
         for (uint32_t i = first; i < end; i++) {
             Fetch *fetch = &gpu.fetches[i];
             Column *column = column_find(fetch->table, fetch->component);
-            column->fetching = false;
-            column_set(fetch->table, column, ON_BOTH);
-            mn_gpu_downloads++;
+            const unsigned char *bytes = from ? from + fetch->offset : NULL;
+            if (fetch->row == ALL_ROWS) {
+                fetch_whole(fetch->table, column, bytes);
+                continue;
+            }
+            memcpy((unsigned char *)column_data(fetch->table, column) +
+                       (size_t)fetch->row * column->size,
+                   bytes, column->size);
+            if (column->component != MN_GPU_ENTITIES) mn_gpu_rows_down++;
         }
+        if (from) wgpuBufferUnmap(gpu.readback.handle);
         first = end;
     }
     gpu.fetch_count = 0;
+}
+
+/* Makes the CPU copy of a column the only current one, bringing it back
+ * first if only the GPU copy is current. */
+static void column_to_cpu(MnTable *table, Column *column) {
+    if (column->where == ON_GPU) {
+        fetch_column(table, column);
+        fetch_run();
+    }
+    column_set(table, column, ON_CPU);
+}
+
+/* Marks a row to send, unless the GPU copy does not hold it or it is
+ * marked already. When the charge does not allow it, the CPU copy becomes
+ * the only current one instead. */
+static void row_send(MnTable *table, Column *column, uint32_t row) {
+    if (row >= column->held || (row_marks(column, row) & ROW_SEND)) return;
+    if (charge(table, column, ROW_CHARGE)) {
+        row_mark(column, row, ROW_SEND);
+    } else {
+        column_to_cpu(table, column);
+    }
+}
+
+void mn_gpu_row(MnTable *table, uint32_t row, uint32_t component,
+                uint32_t use) {
+    Column *column = column_find(table, component);
+    if (!column || column->where == ON_CPU) return;
+    if (use != MN_ROW_WHOLE && !cpu_has(column, row)) {
+        if (charge(table, column, ROW_CHARGE + TRIP_CHARGE)) {
+            fetch_row(table, column, row);
+        } else {
+            fetch_column(table, column);
+        }
+        fetch_run();
+    }
+    if (use != MN_ROW_READ) row_send(table, column, row);
 }
 
 void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count) {
@@ -616,14 +902,6 @@ void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count) {
 void mn_gpu_wrote(MnTable *table, uint32_t component) {
     Column *column = column_find(table, component);
     if (column) column_set(table, column, ON_CPU);
-}
-
-void mn_gpu_sync(MnTable *table, uint32_t component, bool write) {
-    Column *column = column_find(table, component);
-    if (!column) return;
-    fetch_column(table, column);
-    fetch_run();
-    if (write) column_set(table, column, ON_CPU);
 }
 
 void mn_gpu_reclaim(MnTable *table) {
@@ -928,7 +1206,7 @@ static Buffer *snapshot_ready(const MnGpuBlock *block, Block *state,
     MnQuery *query = block->inner;
     if (only && !block_writes(block, named->component)) {
         Column *column = column_for(only, named);
-        column_upload(only, column);
+        column_ready(only, column);
         return &column->buffer;
     }
 
@@ -953,7 +1231,7 @@ static Buffer *snapshot_ready(const MnGpuBlock *block, Block *state,
         MnTable *table = query->tables[t];
         if (table->count == 0) continue;
         Column *column = column_for(table, named);
-        column_upload(table, column);
+        column_ready(table, column);
         gpu.contents[count++] = table->id;
         gpu.contents[count++] = table->count;
         gpu.contents[count++] = column->version;
@@ -1112,9 +1390,9 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
             const MnGpuColumn *named = &block->outer_columns[i];
             Column *column = column_for(table, named);
             if (named->overwrite) {
-                column_room(table, column);
+                column_overwrite(table, column);
             } else {
-                column_upload(table, column);
+                column_ready(table, column);
             }
             bound[1 + i] = column->buffer;
         }
@@ -1155,6 +1433,7 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
             buffer_use(&column->buffer);
             if (!block->outer_columns[i].write) continue;
             column->version = ++gpu.serial;
+            marks_clear(column, ROW_SEND | ROW_BACK);
             column_set(table, column, ON_GPU);
         }
     }
@@ -1277,6 +1556,8 @@ void mn_gpu_device_finish(void) {
         if (!copies) continue;
         for (uint32_t i = 0; i < copies->count; i++) {
             buffer_drop(&copies->columns[i].buffer);
+            free(copies->columns[i].marks);
+            free(copies->columns[i].listed);
         }
         free(copies->columns);
         free(copies);
@@ -1286,9 +1567,13 @@ void mn_gpu_device_finish(void) {
     free(gpu.bytes);
     free(gpu.contents);
     free(gpu.fetches);
+    free(gpu.rows);
+    free(gpu.saved);
     gpu.bytes = NULL;
     gpu.contents = NULL;
     gpu.fetches = NULL;
+    gpu.rows = NULL;
+    gpu.saved = NULL;
     gpu.current = 0;
     gpu.alone = 0;
     mn_gpu_active = false;

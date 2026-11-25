@@ -1622,6 +1622,7 @@ void mn_sleep(double seconds) {
 
 bool mn_gpu_active = false;
 bool mn_gpu_only = false;
+bool mn_gpu_rows = false;
 
 uint64_t mn_gpu_uploads;
 uint64_t mn_gpu_downloads;
@@ -1632,10 +1633,12 @@ uint64_t mn_gpu_waits;
 
 #ifndef MN_GPU
 /* No column has a GPU copy. */
-void mn_gpu_sync(MnTable *table, uint32_t component, bool write) {
+void mn_gpu_row(MnTable *table, uint32_t row, uint32_t component,
+                uint32_t use) {
     (void)table;
+    (void)row;
     (void)component;
-    (void)write;
+    (void)use;
 }
 
 void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count) {
@@ -1656,6 +1659,7 @@ static struct {
     bool software;
     bool info;
     bool stats;
+    bool rows;
 } gpu_options;
 
 /* A tick has ended whose `stats` line is not printed yet. */
@@ -1814,6 +1818,7 @@ static void gpu_start(void) {
         {"software", &gpu_options.software},
         {"info", &gpu_options.info},
         {"stats", &gpu_options.stats},
+        {"rows", &gpu_options.rows},
     };
     const size_t word_count = sizeof words / sizeof words[0];
     const char *list = getenv("MIDNIGHT_GPU");
@@ -1835,6 +1840,7 @@ static void gpu_start(void) {
     }
 
     const char *device = NULL;
+    mn_gpu_rows = gpu_options.rows;
 #ifdef MN_GPU
     if (!gpu_options.off) device = mn_gpu_device_start(gpu_options.software);
 #endif

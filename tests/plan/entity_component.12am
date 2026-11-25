@@ -1,0 +1,59 @@
+# expect: `e[C]` moves one row. `move` writes Position, so only its GPU copy
+# is current, and reads Velocity, so both copies of that are. `peek` reads
+# one Position: its row comes back, a `rows` download. `nudge` writes part
+# of one Position: the row comes back first, then is sent with the next
+# `move`. `place` replaces one Position whole: nothing comes back, and the
+# row is sent; `move` is sent the rows `place` left, the last system to
+# leave any. `steer` writes part of one Velocity: CPU memory has it, so
+# nothing comes back, and the row is sent with the next `move`.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+component Watch
+  target: Entity
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system peek
+  each Watch do |watch|
+    puts watch.target[Position].x
+  end
+end
+
+system nudge
+  each Watch do |watch|
+    watch.target[Position].y += 1.0
+  end
+end
+
+system place
+  each Watch do |watch|
+    watch.target[Position] = Position(0.0, 0.0)
+  end
+end
+
+system steer
+  each Watch do |watch|
+    watch.target[Velocity].dx = 2.0
+  end
+end
+
+e = spawn Position(1.0, 2.0), Velocity(1.0, 0.0)
+spawn Watch(e)
+3.times do
+  World.tick
+end

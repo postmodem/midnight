@@ -1,7 +1,8 @@
 # expect: what a system's functions do counts as the system's. `audit`
 # reaches a query of Position through two calls: a download. `pin` writes
 # Position of one entity through `e[Position]` in a function: it finds the
-# CPU copy current after `audit`, and `move` uploads what it left.
+# CPU copy current after `audit`, and `move` is sent the row it wrote, a
+# `rows` line.
 # `World.count` and `has?` read no column.
 
 component Position

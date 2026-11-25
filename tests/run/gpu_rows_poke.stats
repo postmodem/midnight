@@ -1,8 +1,8 @@
-tick 0: 2 uploads, 1 download, 0 rows up, 0 rows down, 2 submissions, 2 waits
-tick 1: 0 uploads, 1 download, 0 rows up, 0 rows down, 2 submissions, 2 waits
-tick 2: 0 uploads, 1 download, 0 rows up, 0 rows down, 2 submissions, 2 waits
-tick 3: 1 upload, 1 download, 0 rows up, 0 rows down, 2 submissions, 2 waits
-tick 4: 1 upload, 0 downloads, 0 rows up, 0 rows down, 1 submission, 1 wait
-tick 5: 1 upload, 1 download, 0 rows up, 0 rows down, 2 submissions, 2 waits
-tick 6: 0 uploads, 1 download, 0 rows up, 0 rows down, 2 submissions, 2 waits
-tick 7: 2 uploads, 1 download, 0 rows up, 0 rows down, 2 submissions, 2 waits
+tick 0: 2 uploads, 0 downloads, 0 rows up, 1 row down, 2 submissions, 2 waits
+tick 1: 0 uploads, 0 downloads, 0 rows up, 1 row down, 2 submissions, 2 waits
+tick 2: 0 uploads, 0 downloads, 0 rows up, 1 row down, 2 submissions, 2 waits
+tick 3: 0 uploads, 0 downloads, 1 row up, 0 rows down, 1 submission, 1 wait
+tick 4: 0 uploads, 0 downloads, 1 row up, 0 rows down, 1 submission, 1 wait
+tick 5: 0 uploads, 1 download, 1 row up, 3 rows down, 5 submissions, 5 waits
+tick 6: 0 uploads, 1 download, 0 rows up, 3 rows down, 5 submissions, 5 waits
+tick 7: 0 uploads, 1 download, 3 rows up, 0 rows down, 2 submissions, 2 waits

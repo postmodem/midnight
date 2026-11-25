@@ -88,6 +88,8 @@ pub struct Transfer {
     pub from: String,
     /// The system that needs the copy.
     pub to: String,
+    /// Set when only the rows concerned move, not the whole array.
+    pub rows: bool,
     /// Set when the transfer happens only because of a structural change.
     pub cause: Option<Structural>,
 }
@@ -115,6 +117,7 @@ pub fn plan(program: &Program) -> Vec<Transfer> {
             component: program.components[t.component].name.clone(),
             from: name(t.from),
             to: name(t.to),
+            rows: t.rows,
             cause: t.cause,
         })
         .collect()
@@ -134,9 +137,15 @@ pub fn render(transfers: &[Transfer]) -> String {
             t.component,
             route(t),
         );
-        if let Some(cause) = t.cause {
-            line.push_str("   on ");
-            line.push_str(cause.name());
+        let mark = match (t.rows, t.cause) {
+            (false, None) => String::new(),
+            (false, Some(cause)) => format!("on {}", cause.name()),
+            (true, None) => "rows".to_string(),
+            (true, Some(cause)) => format!("rows on {}", cause.name()),
+        };
+        if !mark.is_empty() {
+            line.push_str("   ");
+            line.push_str(&mark);
         }
         out.push_str(line.trim_end());
         out.push('\n');
@@ -150,10 +159,15 @@ const TICK_LIMIT: usize = 16;
 /// What one step does with one component.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Uses {
+    /// As a query term: read, and assigned.
     read: bool,
     write: bool,
-    /// Whether the first read overwrites: it assigns the whole component,
-    /// in every row it visits, before reading it.
+    /// Through `e[C]`: the row read, and the row written.
+    row_read: bool,
+    row_write: bool,
+    /// Whether the first of those uses overwrites: a query term whose body
+    /// assigns the whole component, in every row it visits, before reading
+    /// it.
     overwrite: bool,
     /// The first structural change that touches the component.
     change: Option<Structural>,
@@ -320,11 +334,13 @@ impl Step {
         let mut uses = Uses::default();
         for used in &self.uses {
             if used.component == component && used.filter.reaches(kind, kinds) {
-                if !uses.read {
+                if !uses.any() && used.uses.any() {
                     uses.overwrite = used.uses.overwrite;
                 }
                 uses.read |= used.uses.read;
                 uses.write |= used.uses.write;
+                uses.row_read |= used.uses.row_read;
+                uses.row_write |= used.uses.row_write;
                 if uses.change.is_none() {
                     uses.change = used.uses.change;
                 }
@@ -335,10 +351,15 @@ impl Step {
 }
 
 impl Uses {
-    /// Records a read, which overwrites the component when `overwrite` is
-    /// set, unless it comes after another read.
+    /// Whether the component's values are used at all.
+    fn any(&self) -> bool {
+        self.read || self.write || self.row_read || self.row_write
+    }
+
+    /// Records a use as a query term, which overwrites the component when
+    /// `overwrite` is set, unless it comes after another use.
     fn first(&mut self, overwrite: bool) {
-        if !self.read {
+        if !self.any() {
             self.overwrite = overwrite;
         }
         self.read = true;
@@ -377,6 +398,22 @@ enum Current {
     Both,
 }
 
+/// Rows that CPU memory has newer values of than the GPU copy, left by step
+/// `by`. `cause` is set while only structural changes have left them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Rows {
+    by: usize,
+    cause: Option<Structural>,
+}
+
+/// What the plan knows of a column: which copy is current and, while the
+/// GPU copy is, any rows waiting to be sent to it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct State {
+    current: Current,
+    rows: Option<Rows>,
+}
+
 #[derive(PartialEq, Eq)]
 struct RawTransfer {
     /// Where in the tick it happens: the step's position and the
@@ -386,11 +423,13 @@ struct RawTransfer {
     component: usize,
     from: usize,
     to: usize,
+    /// Set when only the rows concerned move, not the whole array.
+    rows: bool,
     cause: Option<Structural>,
 }
 
 /// The state of every column: by component, then by kind of table.
-type Columns = Vec<Vec<(u32, Current)>>;
+type Columns = Vec<Vec<(u32, State)>>;
 
 /// The transfers of a tick that ends as it began, with or without the
 /// structural changes. Ticks are followed from a world of `columns`
@@ -402,9 +441,12 @@ fn steady_tick(
     top_level: usize,
     changes: bool,
 ) -> Vec<RawTransfer> {
-    let start = Current::Cpu {
-        by: top_level,
-        cause: None,
+    let start = State {
+        current: Current::Cpu {
+            by: top_level,
+            cause: None,
+        },
+        rows: None,
     };
     let mut columns: Columns = (0..columns)
         .map(|component| kinds.holding(component).map(|kind| (kind, start)).collect())
@@ -448,60 +490,73 @@ fn visit(
     at: (usize, usize),
     component: usize,
     uses: Uses,
-    column: &mut Current,
+    state: &mut State,
     changes: bool,
 ) -> Option<RawTransfer> {
     let plain = uses.read || uses.write;
     let change = if changes { uses.change } else { None };
-    if !plain && change.is_none() {
+    if !uses.any() && change.is_none() {
         return None;
     }
-    let mut transfer = None;
-    if step.gpu {
-        if let Current::Cpu { by, cause } = *column
-            && !uses.overwrite
-        {
-            transfer = Some(RawTransfer {
-                at,
-                direction: Direction::Upload,
-                component,
-                from: by,
-                to: step.who,
-                cause,
-            });
-            *column = Current::Both;
-        }
-        if uses.write {
-            *column = Current::Gpu { by: step.who };
-        }
-        return transfer;
-    }
-    if let Current::Gpu { by } = *column
-        && !(plain && uses.overwrite)
-    {
-        transfer = Some(RawTransfer {
+    let transfer = |direction, from, rows, cause| {
+        Some(RawTransfer {
             at,
-            direction: Direction::Download,
+            direction,
             component,
-            from: by,
+            from,
             to: step.who,
-            cause: if plain { None } else { change },
-        });
-        *column = Current::Both;
+            rows,
+            cause,
+        })
+    };
+    let mut moved = None;
+    if step.gpu {
+        if !uses.overwrite {
+            if let Current::Cpu { by, cause } = state.current {
+                moved = transfer(Direction::Upload, by, false, cause);
+                state.current = Current::Both;
+            } else if let Some(rows) = state.rows {
+                moved = transfer(Direction::Upload, rows.by, true, rows.cause);
+            }
+        }
+        state.rows = None;
+        if uses.write {
+            state.current = Current::Gpu { by: step.who };
+        }
+        return moved;
+    }
+    if let Current::Gpu { by } = state.current {
+        if plain && !uses.overwrite {
+            moved = transfer(Direction::Download, by, false, None);
+            state.current = Current::Both;
+        } else if !plain && change.is_some() {
+            moved = transfer(Direction::Download, by, false, change);
+            state.current = Current::Both;
+        } else if !plain && uses.row_read {
+            moved = transfer(Direction::Download, by, true, None);
+        }
     }
     if uses.write {
-        *column = Current::Cpu {
+        state.current = Current::Cpu {
             by: step.who,
             cause: None,
         };
     } else if change.is_some() {
-        let written = matches!(*column, Current::Cpu { cause: None, .. });
-        *column = Current::Cpu {
+        let written = matches!(state.current, Current::Cpu { cause: None, .. });
+        state.current = Current::Cpu {
             by: step.who,
             cause: if written { None } else { change },
         };
     }
-    transfer
+    if matches!(state.current, Current::Cpu { .. }) {
+        state.rows = None;
+    } else if uses.row_write {
+        state.rows = Some(Rows {
+            by: step.who,
+            cause: None,
+        });
+    }
+    moved
 }
 
 /// The steps of one tick, in order, and what the program spawns, adds and
@@ -726,7 +781,17 @@ impl<'p> Walker<'p> {
             }
             StmtKind::Assign { place, value } => {
                 self.expr(value);
-                self.place(place);
+                match &place.kind {
+                    PlaceKind::Component {
+                        entity, component, ..
+                    } => {
+                        self.expr(entity);
+                        self.record(*component, Filter::any(component.0), |uses| {
+                            uses.row_write = true;
+                        });
+                    }
+                    _ => self.place(place),
+                }
             }
             StmtKind::CompoundAssign { place, op, value } => {
                 self.place(place);
@@ -892,7 +957,10 @@ impl<'p> Walker<'p> {
                 write,
             } => {
                 self.expr(entity);
-                self.read(*component, *write, false, Filter::any(component.0));
+                self.record(*component, Filter::any(component.0), |uses| {
+                    uses.row_read = true;
+                    uses.row_write |= *write;
+                });
             }
             PlaceKind::Field { base, .. } => self.place(base),
             PlaceKind::Index { base, index } => {

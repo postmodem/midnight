@@ -32,7 +32,8 @@
 //! Either way every program runs as a release and as a debug build.
 //!
 //! `gpu_programs` runs every program of `tests/run`, `tests/panic` and
-//! `examples` that declares a GPU system. Standard output must match
+//! `examples` that declares a GPU system, as it is and again with
+//! `MIDNIGHT_GPU=rows`. Standard output must match
 //! `NAME.out`: exactly, or, when the program has a `# tolerance: T` line,
 //! with each `Float` within `T * max(1, |expected|)` of the expected one and
 //! everything else exact. A `tests/panic` program must exit 1 with exactly
@@ -46,9 +47,10 @@
 //!
 //! `gpu_stats_match_expected` runs every program of `tests/run` that has a
 //! `NAME.stats` file with `MIDNIGHT_GPU=stats`, and its `stats` lines must
-//! be exactly that file. With `UPDATE_EXPECT=1` the release run writes the
-//! file instead: `.stats` files are the only expected files GPU mode
-//! writes.
+//! be exactly that file. When there is a `NAME.rows.stats` too, it runs the
+//! program again with `MIDNIGHT_GPU=stats,rows` against that file. With
+//! `UPDATE_EXPECT=1` the release run writes the files instead: `.stats`
+//! files are the only expected files GPU mode writes.
 //!
 //! The compiler is the one cargo built, or `MIDNIGHT_BIN` when that is set.
 //! Programs are found relative to the working directory, which must be the
@@ -689,10 +691,11 @@ fn run_on_device(exe: &Path, device: Device, more: &[&str]) -> Result<DeviceRun,
     Ok(run)
 }
 
-/// Builds a program in one mode and runs it on `device`. One that `stops`
-/// must exit 1 with exactly `NAME.err`; any other must exit 0, print
-/// `NAME.out` within the tolerance it states, and print nothing else to
-/// standard error. Returns the device and the largest difference from
+/// Builds a program in one mode and runs it on `device` twice: as it is,
+/// and with `MIDNIGHT_GPU=rows`, which makes every row travel alone. One
+/// that `stops` must exit 1 with exactly `NAME.err`; any other must exit 0,
+/// print `NAME.out` within the tolerance it states, and print nothing else
+/// to standard error. Returns the device and the largest difference from
 /// `NAME.out`.
 fn run_gpu_program(
     dir: &Path,
@@ -703,45 +706,69 @@ fn run_gpu_program(
 ) -> Result<(String, f64), String> {
     let exe = exe_path(dir, source, mode);
     build(source, &exe, mode)?;
-    let label = format!("{} ({mode:?})", source.display());
     let read = |path: &Path| {
-        std::fs::read_to_string(path)
-            .map_err(|error| format!("{label}: can't read {}: {error}", path.display()))
+        std::fs::read_to_string(path).map_err(|error| {
+            format!(
+                "{}: can't read {}: {error}",
+                source.display(),
+                path.display()
+            )
+        })
     };
-    let run = run_on_device(&exe, device, &[]).map_err(|message| format!("{label}: {message}"))?;
     let (status, expected_stderr) = if stops {
         (1, read(&source.with_extension("err"))?)
     } else {
         (0, String::new())
     };
-    if run.status != Some(status) {
-        return Err(format!(
-            "{label}: exited with {:?}, expected {status}\n--- stdout\n{}--- stderr\n{}---",
-            run.status, run.stdout, run.stderr
-        ));
-    }
-    if run.stderr != expected_stderr {
-        return Err(format!(
-            "{label}: standard error differs\n--- expected\n{expected_stderr}--- actual\n{}---",
-            run.stderr
-        ));
-    }
-    if stops {
-        return Ok((run.device, 0.0));
-    }
-    let tolerance =
-        stated_tolerance(&read(source)?).map_err(|message| format!("{label}: {message}"))?;
+    let tolerance = if stops {
+        None
+    } else {
+        stated_tolerance(&read(source)?)
+            .map_err(|message| format!("{}: {message}", source.display()))?
+    };
     let out_path = source.with_extension("out");
-    let expected = read(&out_path)?;
-    match compare_output(&expected, &run.stdout, tolerance) {
-        Ok(difference) => Ok((run.device, difference)),
-        Err(message) => Err(format!(
-            "{label}: standard output differs from {}: {message}\n\
-             --- expected\n{expected}--- actual\n{}---",
-            out_path.display(),
-            run.stdout
-        )),
+    let expected = if stops {
+        String::new()
+    } else {
+        read(&out_path)?
+    };
+    let mut found = (String::new(), 0.0f64);
+    for more in [&[][..], &["rows"][..]] {
+        let label = match more {
+            [] => format!("{} ({mode:?})", source.display()),
+            _ => format!("{} ({mode:?}, rows)", source.display()),
+        };
+        let run =
+            run_on_device(&exe, device, more).map_err(|message| format!("{label}: {message}"))?;
+        if run.status != Some(status) {
+            return Err(format!(
+                "{label}: exited with {:?}, expected {status}\n--- stdout\n{}--- stderr\n{}---",
+                run.status, run.stdout, run.stderr
+            ));
+        }
+        if run.stderr != expected_stderr {
+            return Err(format!(
+                "{label}: standard error differs\n--- expected\n{expected_stderr}--- actual\n{}---",
+                run.stderr
+            ));
+        }
+        found.0 = run.device;
+        if stops {
+            continue;
+        }
+        match compare_output(&expected, &run.stdout, tolerance) {
+            Ok(difference) => found.1 = found.1.max(difference),
+            Err(message) => {
+                return Err(format!(
+                    "{label}: standard output differs from {}: {message}\n\
+                     --- expected\n{expected}--- actual\n{}---",
+                    out_path.display(),
+                    run.stdout
+                ));
+            }
+        }
     }
+    Ok(found)
 }
 
 #[test]
@@ -787,7 +814,7 @@ fn gpu_programs() {
     report("runs on a device", jobs.len(), failures);
     let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
     note(&format!(
-        "gpu_programs: {} runs of {} programs on {}",
+        "gpu_programs: {} builds of {} programs, each run as it is and with rows, on {}",
         jobs.len(),
         jobs.len() / MODES.len(),
         devices.join(" and ")
@@ -813,8 +840,8 @@ fn gpu_stats_match_plan() {
     let mut planned = (0, 0);
     for line in plan.lines() {
         assert!(
-            !line.contains("   on "),
-            "{STATS_PROGRAM}: the plan has a transfer that not every tick performs\n{plan}"
+            !line.contains("   on ") && !line.ends_with(" rows"),
+            "{STATS_PROGRAM}: the plan has a transfer that is not a whole array in every tick\n{plan}"
         );
         match line.split_whitespace().next() {
             Some("upload") => planned.0 += 1,
@@ -895,30 +922,38 @@ fn gpu_stats_match_expected() {
         .iter()
         .flat_map(|source| MODES.map(|mode| (source, mode)))
         .collect();
-    let devices = Mutex::new(BTreeSet::new());
+    let devices: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
     let failures = for_each_parallel(&jobs, |(source, mode)| {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
-        let label = format!("{} ({mode:?})", source.display());
-        let run = run_on_device(&exe, device, &["stats"])
-            .map_err(|message| format!("{label}: {message}"))?;
-        if run.status != Some(0) || !run.stderr.is_empty() {
-            return Err(format!(
-                "{label}: exited with {:?}\n--- stderr\n{}---",
-                run.status, run.stderr
-            ));
+        let runs = [
+            (vec!["stats"], "stats", ""),
+            (vec!["stats", "rows"], "rows.stats", ", rows"),
+        ];
+        for (words, extension, how) in runs {
+            let expected = source.with_extension(extension);
+            if !expected.exists() {
+                continue;
+            }
+            let label = format!("{} ({mode:?}{how})", source.display());
+            let run = run_on_device(&exe, device, &words)
+                .map_err(|message| format!("{label}: {message}"))?;
+            if run.status != Some(0) || !run.stderr.is_empty() {
+                return Err(format!(
+                    "{label}: exited with {:?}\n--- stderr\n{}---",
+                    run.status, run.stderr
+                ));
+            }
+            devices.lock().unwrap().insert(run.device);
+            // Only the release run may write the expected file; debug must
+            // match it.
+            if update_expect() && *mode == Mode::Debug {
+                continue;
+            }
+            expect(&expected, &run.stats, "the `stats` lines")
+                .map_err(|message| format!("{label}: {message}"))?;
         }
-        devices.lock().unwrap().insert(run.device);
-        // Only the release run may write the expected file; debug must match it.
-        if update_expect() && *mode == Mode::Debug {
-            return Ok(());
-        }
-        expect(
-            &source.with_extension("stats"),
-            &run.stats,
-            "the `stats` lines",
-        )
-        .map_err(|message| format!("{label}: {message}"))
+        Ok(())
     });
     let _ = std::fs::remove_dir_all(&dir);
     report("runs with stats", jobs.len(), failures);

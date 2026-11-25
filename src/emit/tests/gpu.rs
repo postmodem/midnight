@@ -527,8 +527,14 @@ fn ordinary_code_syncs_what_gpu_blocks_name() {
     );
     assert_lacks(report, "mn_wrote");
     let main = function_text(&c, "static void run_main(void)");
-    assert_has(main, "= mn_get_synced(first_0, 0, sizeof(T_Body), true, ");
-    assert_has(main, "= mn_get_synced(first_0, 0, sizeof(T_Body), false, ");
+    assert_has(
+        main,
+        "= mn_get_synced(first_0, 0, sizeof(T_Body), MN_ROW_PART, ",
+    );
+    assert_has(
+        main,
+        "= mn_get_synced(first_0, 0, sizeof(T_Body), MN_ROW_READ, ",
+    );
     assert_has(main, "= mn_get(first_0, 1, sizeof(T_Other), ");
     assert_seq(
         function_text(&c, "static void S_drift(void)"),
@@ -538,6 +544,29 @@ fn ordinary_code_syncs_what_gpu_blocks_name() {
             "mn_gpu_submit();",
             "}",
         ],
+    );
+}
+
+/// `e[C]` tells the runtime what it does with the row: reads it, writes
+/// part of it, or replaces it whole, which needs nothing brought back.
+#[test]
+fn an_entity_component_says_what_it_does_with_the_row() {
+    let c = emit_c(
+        "gpu_rows",
+        "component Body\n  x: Float32\n  y: Float32\nend\n\n\
+         gpu system drift\n  each Body do |body|\n    body.x += 1.0\n  end\nend\n\n\
+         e = spawn Body(1.0, 2.0)\nWorld.tick\n\
+         puts e[Body].x\ne[Body].y = 3.0\ne[Body].x += 1.0\ne[Body] = Body(4.0, 5.0)\n",
+    );
+    let main = function_text(&c, "static void run_main(void)");
+    let uses: Vec<&str> = main
+        .lines()
+        .filter_map(|line| line.split("sizeof(T_Body), ").nth(1))
+        .map(|rest| rest.split(',').next().unwrap())
+        .collect();
+    assert_eq!(
+        uses,
+        ["MN_ROW_READ", "MN_ROW_PART", "MN_ROW_PART", "MN_ROW_WHOLE"]
     );
 }
 

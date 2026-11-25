@@ -829,15 +829,27 @@ static inline void mn_wrote(MnTable *table, uint32_t component) {
     if (mn_gpu_active) mn_gpu_wrote(table, component);
 }
 
-void mn_gpu_sync(MnTable *table, uint32_t component, bool write);
+/* What `e[C]` does with the component. */
+enum {
+    MN_ROW_READ,  /* reads it */
+    MN_ROW_PART,  /* writes part of it: `e[C].f = v`, `e[C].f += v` */
+    MN_ROW_WHOLE, /* replaces it: `e[C] = v` */
+};
+
+/* Makes the CPU copy of one row of a column current for `use`: brings it
+ * back unless CPU memory has it, and for a write marks it to send with the
+ * next block that uses the column. When that would cost more than the
+ * whole column, the column moves whole instead. */
+void mn_gpu_row(MnTable *table, uint32_t row, uint32_t component,
+                uint32_t use);
 
 /* mn_get for a component that some GPU block names. */
 static inline void *mn_get_synced(MnEntity e, uint32_t component, size_t size,
-                                  bool write, MnLoc loc) {
-    if (mn_gpu_active && mn_alive(e)) {
-        uint32_t table = mn_world.slots[e.index].table;
-        if (table != MN_NO_TABLE) {
-            mn_gpu_sync(mn_world.tables[table], component, write);
+                                  uint32_t use, MnLoc loc) {
+    if ((use == MN_ROW_READ ? mn_gpu_only : mn_gpu_active) && mn_alive(e)) {
+        const MnSlot *slot = &mn_world.slots[e.index];
+        if (slot->table != MN_NO_TABLE) {
+            mn_gpu_row(mn_world.tables[slot->table], slot->row, component, use);
         }
     }
     return mn_get(e, component, size, loc);

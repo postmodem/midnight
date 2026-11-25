@@ -208,6 +208,9 @@ pub(super) struct FnCx<'a, 'c> {
     /// For each `View` local of a term that can have a GPU copy and that
     /// the body assigns: the flag that records an assignment.
     pub flags: HashMap<usize, String>,
+    /// Set while the place of a plain assignment is prepared: an `e[C]`
+    /// that is the whole place is replaced, not read.
+    pub whole_store: bool,
     /// Values loaded before the loops of the enclosing `each`es.
     pub hoists: Vec<HashMap<HoistKey, String>>,
     pub each_depth: usize,
@@ -242,6 +245,7 @@ impl<'a, 'c> FnCx<'a, 'c> {
             }],
             views: HashMap::new(),
             flags: HashMap::new(),
+            whole_store: false,
             hoists: Vec::new(),
             each_depth: 0,
             ret,
@@ -268,6 +272,7 @@ impl<'a, 'c> FnCx<'a, 'c> {
             }],
             views: HashMap::new(),
             flags: HashMap::new(),
+            whole_store: false,
             hoists: Vec::new(),
             each_depth: 0,
             ret: Type::Void,

@@ -32,6 +32,10 @@ void *mn_realloc(void *memory, size_t size);
 extern uint64_t mn_gpu_uploads;
 extern uint64_t mn_gpu_downloads;
 
+/* Set by `rows` in MIDNIGHT_GPU: a row always travels alone, whatever it
+ * costs. */
+extern bool mn_gpu_rows;
+
 /* Rows of component columns written to a GPU copy other than by whole
  * columns, and rows brought back alone; submissions to the queue, and
  * waits for the device, of any kind. Since the last `stats` line. */

@@ -1,8 +1,10 @@
 # expect: top-level code that runs between ticks is the step `top level`,
 # after the last system. The loop that ticks reads Position of one entity:
-# a download. It sets that entity's Velocity before the tick: an upload, and
-# no download because no GPU block writes Velocity. The spawns and the write
-# to Position before the loop are set-up and not part of a tick.
+# its row comes back alone, a `rows` download. It sets that entity's
+# Velocity before the tick: the row is sent with the next block, a `rows`
+# upload, and nothing comes back because no GPU block writes Velocity. The
+# spawns and the write to Position before the loop are set-up and not part
+# of a tick.
 
 component Position
   x: Float32

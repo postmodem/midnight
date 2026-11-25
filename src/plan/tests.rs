@@ -63,29 +63,39 @@ fn assert_plan(rest: &str, expected: &[&str]) {
 
 #[test]
 fn renders_the_columns_lined_up() {
-    let line = |direction, from: &str, to: &str, cause| Transfer {
+    let line = |direction, from: &str, to: &str, rows, cause| Transfer {
         direction,
         component: "Position".to_string(),
         from: from.to_string(),
         to: to.to_string(),
+        rows,
         cause,
     };
     let transfers = [
-        line(Direction::Download, "move", "report", None),
+        line(Direction::Download, "move", "report", false, None),
         line(
             Direction::Download,
             "move",
             "reap",
+            false,
             Some(Structural::Despawn),
         ),
-        line(Direction::Upload, "reap", "move", Some(Structural::Despawn)),
+        line(Direction::Upload, "poke", "move", true, None),
+        line(
+            Direction::Upload,
+            "reap",
+            "move",
+            true,
+            Some(Structural::Despawn),
+        ),
     ];
     assert_eq!(
         render(&transfers),
         "\
 download  Position  move -> report
 download  Position  move -> reap     on despawn
-upload    Position  reap -> move     on despawn
+upload    Position  poke -> move     rows
+upload    Position  reap -> move     rows on despawn
 "
     );
     assert_eq!(render(&[]), "");
@@ -99,6 +109,7 @@ fn pads_to_the_widest_component_and_route() {
             component: "Hp".to_string(),
             from: TOP_LEVEL.to_string(),
             to: "regenerate".to_string(),
+            rows: false,
             cause: Some(Structural::Spawn),
         },
         Transfer {
@@ -106,6 +117,7 @@ fn pads_to_the_widest_component_and_route() {
             component: "Position".to_string(),
             from: "a".to_string(),
             to: "b".to_string(),
+            rows: false,
             cause: Some(Structural::Add),
         },
     ];
@@ -127,6 +139,8 @@ fn every_short_tick_settles_and_its_marked_transfers_are_the_added_ones() {
     let uses = |read, write, change| Uses {
         read,
         write,
+        row_read: false,
+        row_write: false,
         overwrite: false,
         change,
     };
@@ -164,9 +178,12 @@ fn every_short_tick_settles_and_its_marked_transfers_are_the_added_ones() {
             };
             let table_kinds = Kinds::new(&steps, &shapes);
             for changes in [false, true] {
-                let start = Current::Cpu {
-                    by: steps.len(),
-                    cause: None,
+                let start = State {
+                    current: Current::Cpu {
+                        by: steps.len(),
+                        cause: None,
+                    },
+                    rows: None,
                 };
                 let mut columns: Columns = vec![vec![(1, start)]];
                 let settled = (0..TICK_LIMIT).any(|_| {
@@ -529,7 +546,7 @@ end
 }
 
 #[test]
-fn an_indexed_read_downloads() {
+fn an_indexed_read_brings_its_row_back() {
     assert_plan(
         "
 tag Tracked
@@ -540,12 +557,28 @@ system watch
   end
 end
 ",
-        &["download  Position  move -> watch"],
+        &["download  Position  move -> watch   rows"],
     );
 }
 
 #[test]
-fn an_indexed_write_downloads_and_uploads() {
+fn an_indexed_write_of_the_whole_component_brings_nothing_back() {
+    assert_plan(
+        "
+tag Tracked
+
+system pin
+  each Entity, with: Tracked do |e|
+    e[Position] = Position(0.0, 0.0)
+  end
+end
+",
+        &["upload    Position  pin -> move   rows"],
+    );
+}
+
+#[test]
+fn an_indexed_write_sends_its_row_and_a_part_brings_it_back_first() {
     assert_plan(
         "
 tag Tracked
@@ -563,9 +596,9 @@ system swap
 end
 ",
         &[
-            "upload    Position  pin -> move",
-            "upload    Velocity  swap -> move",
-            "download  Position  move -> pin",
+            "upload    Position  pin -> move    rows",
+            "upload    Velocity  swap -> move   rows",
+            "download  Position  move -> pin    rows",
         ],
     );
 }
@@ -917,7 +950,7 @@ e = spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
   puts e[Position].x
 end
 ",
-        &["download  Position  move -> top level"],
+        &["download  Position  move -> top level   rows"],
     );
 }
 
@@ -933,7 +966,7 @@ while frame < 3
   frame += 1
 end
 ",
-        &["upload    Velocity  top level -> move"],
+        &["upload    Velocity  top level -> move   rows"],
     );
 }
 
@@ -1016,7 +1049,7 @@ e = spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
 end
 puts e[Position].x
 ",
-        &["upload    Velocity  top level -> move"],
+        &["upload    Velocity  top level -> move   rows"],
     );
     assert_plan(
         "
@@ -1026,7 +1059,7 @@ e = spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
   puts e[Position].x
 end
 ",
-        &["download  Position  move -> top level"],
+        &["download  Position  move -> top level   rows"],
     );
 }
 

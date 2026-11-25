@@ -22,9 +22,9 @@ enum Root {
         id: usize,
         cty: String,
         loc: String,
-        /// For a component that can have a GPU copy: whether this use
-        /// writes it.
-        sync: Option<bool>,
+        /// For a component that can have a GPU copy: what this use does
+        /// with it, an `MN_ROW_` constant.
+        sync: Option<&'static str>,
     },
 }
 
@@ -178,7 +178,13 @@ impl<'a> FnCx<'a, '_> {
                     id: component.0,
                     cty: self.cx.cty(&Type::Record(record)),
                     loc: self.cx.loc(root_place.span),
-                    sync: self.cx.gpu.named[component.0].then_some(*write),
+                    sync: self.cx.gpu.named[component.0].then_some(if !*write {
+                        "MN_ROW_READ"
+                    } else if chain.len() == 1 && self.whole_store {
+                        "MN_ROW_WHOLE"
+                    } else {
+                        "MN_ROW_PART"
+                    }),
                 };
                 (root, false, Dep::World)
             }
@@ -252,8 +258,8 @@ impl<'a> FnCx<'a, '_> {
             } => {
                 let name = self.fresh("p");
                 let get = match sync {
-                    Some(write) => format!(
-                        "mn_get_synced({}, {id}, sizeof({cty}), {write}, {loc})",
+                    Some(usage) => format!(
+                        "mn_get_synced({}, {id}, sizeof({cty}), {usage}, {loc})",
                         entity.c
                     ),
                     None => format!("mn_get({}, {id}, sizeof({cty}), {loc})", entity.c),
