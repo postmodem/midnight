@@ -388,7 +388,14 @@ static void columns_download(MnTable *table, Column **columns, uint32_t count) {
         }
         if (total != 0) {
             if (gpu.readback.size < total) {
-                buffer_make(&gpu.readback, total, READBACK_USAGE);
+                /* Sized by the table's capacity, as the columns are. */
+                uint64_t roomy = 0;
+                for (uint32_t i = first; i < end; i++) {
+                    roomy += round4((uint64_t)table->capacity * columns[i]->size);
+                }
+                if (roomy > gpu.max_buffer) roomy = gpu.max_buffer;
+                buffer_make(&gpu.readback, roomy > total ? roomy : total,
+                            READBACK_USAGE);
             }
             WGPUCommandEncoder encoder =
                 wgpuDeviceCreateCommandEncoder(gpu.device, NULL);
