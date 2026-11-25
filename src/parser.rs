@@ -256,7 +256,7 @@ impl<'a> Parser<'a> {
             self.source(token.span)
         );
         let label = if token.kind == T::Kw(Kw::Gpu) {
-            "`gpu` is reserved for GPU systems"
+            "`gpu` goes before `system`: `gpu system name`"
         } else {
             "choose a different name"
         };
@@ -626,7 +626,11 @@ impl<'a> Parser<'a> {
             (T::Kw(Kw::Enum), _) => self.enumeration().map(Item::Enum),
             (T::Kw(Kw::Tag), _) => self.tag().map(Item::Tag),
             (T::Kw(Kw::Def), _) => self.def().map(Item::Def),
-            (T::Kw(Kw::System), _) => self.system().map(Item::System),
+            (T::Kw(Kw::System), _) => self.system(false).map(Item::System),
+            (T::Kw(Kw::Gpu), T::Kw(Kw::System)) => {
+                self.advance();
+                self.system(true).map(Item::System)
+            }
             (T::Const(name), T::Assign) => {
                 let name = Ident {
                     name: name.clone(),
@@ -853,7 +857,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn system(&mut self) -> Parse<SystemDecl> {
+    fn system(&mut self, gpu: bool) -> Parse<SystemDecl> {
         let keyword = self.opened("system");
         let name = self.ident("a system name")?;
         let span = keyword.to(name.span);
@@ -866,7 +870,12 @@ impl<'a> Parser<'a> {
         self.header_end("expected a newline")?;
         let body = self.block()?;
         self.end()?;
-        Ok(SystemDecl { name, body, span })
+        Ok(SystemDecl {
+            gpu,
+            name,
+            body,
+            span,
+        })
     }
 
     // Statements
@@ -1576,7 +1585,7 @@ impl<'a> Parser<'a> {
             T::Kw(Kw::Unless) => return self.if_expr("unless", true),
             T::Kw(Kw::Case) => return self.case_expr(),
             T::Kw(Kw::Gpu) => {
-                return Err(self.unexpected("`gpu` is reserved for GPU systems"));
+                return Err(self.unexpected("`gpu` goes before `system`: `gpu system name`"));
             }
             T::Kw(
                 Kw::Puts

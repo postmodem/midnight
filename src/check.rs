@@ -685,6 +685,7 @@ impl<'a> Checker<'a> {
             .into_iter()
             .map(|s| tir::System {
                 name: s.decl.name.name.clone(),
+                gpu: s.decl.gpu,
                 body: s.body.expect(CHECKED),
                 span: s.decl.span,
             })

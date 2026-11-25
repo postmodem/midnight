@@ -298,7 +298,12 @@ fn item(item: &Item) -> String {
         Item::Enum(decl) => format!("enum {} {{ {} }}", decl.name.name, names(&decl.variants)),
         Item::Tag(tag) => format!("tag {}", tag.name.name),
         Item::Def(f) => func(f),
-        Item::System(system) => format!("system {} {}", system.name.name, block(&system.body)),
+        Item::System(system) => format!(
+            "{}system {} {}",
+            if system.gpu { "gpu " } else { "" },
+            system.name.name,
+            block(&system.body)
+        ),
         Item::Const(constant) => {
             format!("const {} = {}", constant.name.name, expr(&constant.value))
         }
@@ -933,6 +938,7 @@ fn functions_and_systems() {
             "system move { each Position |pos| { pos.x += 1 } }",
         ),
         ("system idle\nend", "system idle {}"),
+        ("gpu system idle\nend", "gpu system idle {}"),
     ]);
 }
 
@@ -1227,7 +1233,7 @@ fn unexpected_tokens() {
         "x = gpu",
         "unexpected `gpu`",
         "gpu",
-        "`gpu` is reserved for GPU systems",
+        "`gpu` goes before `system`: `gpu system name`",
     );
     assert_error(
         "x = puts 1",
@@ -1781,7 +1787,7 @@ fn keywords_as_names() {
         "gpu = 1",
         "`gpu` is a keyword and can't be used as a name",
         "gpu",
-        "`gpu` is reserved for GPU systems",
+        "`gpu` goes before `system`: `gpu system name`",
     );
     // `self` is left for the checker, which says why it is read-only.
     assert_eq!(dump("self = 1"), "self = 1");

@@ -192,6 +192,7 @@ pub fn function(
 pub fn system(p: &mut Program, name: &str, body: Body) {
     p.systems.push(System {
         name: name.to_string(),
+        gpu: false,
         body,
         span: S,
     });

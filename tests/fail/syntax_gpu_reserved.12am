@@ -1,4 +1,4 @@
-# expect: syntax error: `gpu` is a reserved word (it has no use in 0.1) and can't name a variable
+# expect: syntax error: `gpu` is a keyword (it goes before `system`) and can't name a variable
 # at: line 4, the word `gpu`
 
 gpu = 1

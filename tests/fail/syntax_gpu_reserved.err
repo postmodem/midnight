@@ -2,4 +2,4 @@ error: `gpu` is a keyword and can't be used as a name
  --> tests/fail/syntax_gpu_reserved.12am:4:1
   |
 4 | gpu = 1
-  | ^^^ `gpu` is reserved for GPU systems
+  | ^^^ `gpu` goes before `system`: `gpu system name`

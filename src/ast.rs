@@ -110,6 +110,8 @@ pub struct Param {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SystemDecl {
+    /// Declared `gpu system`.
+    pub gpu: bool,
     pub name: Ident,
     pub body: Block,
     pub span: Span,

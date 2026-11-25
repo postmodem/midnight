@@ -280,6 +280,9 @@ pub struct Func {
 #[derive(Clone, Debug)]
 pub struct System {
     pub name: String,
+    /// Declared `gpu system`. The statements of the body are then all
+    /// `Each`, and the checker has applied the rules for GPU systems.
+    pub gpu: bool,
     pub body: Body,
     pub span: Span,
 }
