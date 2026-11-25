@@ -1,0 +1,36 @@
+# `/` and `%` on `Int` by a literal power of two in a GPU block, which a
+# device computes with a shift and a mask: the quotient rounds toward
+# negative infinity and the remainder takes the sign of the divisor, for
+# negative values and at the ends of the 32-bit range.
+component N
+  v: Int32
+  q1: Int32
+  q2: Int32
+  q8: Int32
+  q1024: Int32
+  r1: Int32
+  r2: Int32
+  r8: Int32
+  r1024: Int32
+end
+
+gpu system split
+  each N do |n|
+    n.q1 = n.v / 1
+    n.q2 = n.v / 2
+    n.q8 = n.v / 8
+    n.q1024 = n.v / 1024
+    n.r1 = n.v % 1
+    n.r2 = n.v % 2
+    n.r8 = n.v % 8
+    n.r1024 = n.v % 1024
+  end
+end
+
+[-2147483648, -1025, -1024, -9, -8, -7, -1, 0, 1, 7, 8, 9, 1023, 1024, 2147483647].each do |v|
+  spawn N(v, 0, 0, 0, 0, 0, 0, 0, 0)
+end
+World.tick
+each N do |n|
+  puts "#{n.v}: #{n.q1} #{n.q2} #{n.q8} #{n.q1024} #{n.r1} #{n.r2} #{n.r8} #{n.r1024}"
+end

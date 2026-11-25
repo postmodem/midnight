@@ -20,9 +20,9 @@ use super::super::analysis::{self, Folded, LocalUse, Node, Use};
 use super::super::names;
 use super::helpers;
 use super::ir::{
-    BinOp, Cell, Expr, Func, Library, MathFn, Param, Stmt, Storage, Ty, UnOp, Uses, assign, call,
-    choose, closure, compare, field, float, float_arith, if_, int_arith, let_, logic, not, unary,
-    var,
+    BinOp, Cell, Expr, Func, Library, MathFn, Param, Stmt, Storage, Ty, UnOp, Uses, assign, binary,
+    call, choose, closure, compare, field, float, float_arith, if_, int_arith, let_, logic, not,
+    unary, var,
 };
 use super::layout::{
     HEADER, Layouts, Leaf, Source, Uniforms, WORD_DT, WORD_ELAPSED, WORD_SNAPSHOT_ROWS, WORD_TICK,
@@ -787,7 +787,8 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             }
             StmtKind::Assign { place, value } => {
                 let evaluated = self.expr(value);
-                let stored = self.narrow(evaluated, &place.ty, value.span, Some(value));
+                let range = int_range(value, &self.lo.folded);
+                let stored = self.narrow(evaluated, &place.ty, value.span, range);
                 let target = self.lvalue(place);
                 self.out.push(assign(target, stored));
             }
@@ -807,7 +808,12 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 match op {
                     CompoundOp::Builtin(op) => {
                         let result = self.binary(*op, &value_type, current, operand, stmt.span);
-                        let stored = self.narrow(result, &place.ty, stmt.span, None);
+                        let range = match &place.ty {
+                            Type::Compact(compact) => compact.int_range().unwrap_or(FULL),
+                            _ => FULL,
+                        };
+                        let range = binary_range(*op, range, int_range(value, &self.lo.folded));
+                        let stored = self.narrow(result, &place.ty, stmt.span, range);
                         self.out.push(assign(target, stored));
                     }
                     CompoundOp::Method(func) => {
@@ -1017,7 +1023,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
 
     /// Converts a value for a field of type `storage`. A store into a
     /// narrow integer field is checked unless the value is known to fit.
-    fn narrow(&mut self, value: Val, storage: &Type, span: Span, source: Option<&TExpr>) -> Expr {
+    fn narrow(&mut self, value: Val, storage: &Type, span: Span, range: (i64, i64)) -> Expr {
         let Type::Compact(compact) = storage else {
             return value.e;
         };
@@ -1031,20 +1037,11 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             Compact::UInt32 => unreachable!("the checker rejects a store into a `UInt32` field"),
         };
         let (low, high) = compact.int_range().expect("an integer type");
-        let fits = match (&value.e, source) {
-            (Expr::I32(literal), _) => (low..=high).contains(&i64::from(*literal)),
-            (_, Some(source)) => match &source.kind {
-                ExprKind::Read(Place {
-                    ty: Type::Compact(from),
-                    ..
-                }) if !matches!(from, Compact::Int32 | Compact::UInt32) => from
-                    .int_range()
-                    .is_some_and(|(from_low, from_high)| low <= from_low && from_high <= high),
-                _ => false,
-            },
-            _ => false,
+        let range = match value.e {
+            Expr::I32(literal) => (i64::from(literal), i64::from(literal)),
+            _ => range,
         };
-        if fits {
+        if low <= range.0 && range.1 <= high {
             return value.e;
         }
         let message = format!("value does not fit in {}", compact.name());
@@ -1107,7 +1104,12 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     .zip(fields)
                     .zip(&prog.records[record.0].fields)
                 {
-                    inits.push(self.narrow(value, &item.ty, init.span, Some(init)));
+                    inits.push(self.narrow(
+                        value,
+                        &item.ty,
+                        init.span,
+                        int_range(init, &self.lo.folded),
+                    ));
                 }
                 if inits.is_empty() {
                     inits.push(Expr::U32(0));
@@ -1321,6 +1323,24 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                         // The low 32 bits of the 64-bit result are the
                         // 32-bit result.
                         Val::literal(Expr::I32(value as i32), Ty::I32)
+                    } else if let Expr::I32(divisor) = right.e
+                        && divisor > 0
+                        && divisor & (divisor - 1) == 0
+                        && op != TBinOp::Pow
+                    {
+                        // By a power of two, rounding toward negative
+                        // infinity is an arithmetic shift, and a remainder
+                        // with the divisor's sign is the low bits.
+                        let e = if op == TBinOp::Div {
+                            binary(BinOp::Shr, left.e, Expr::U32(divisor.trailing_zeros()))
+                        } else {
+                            binary(BinOp::BitAnd, left.e, Expr::I32(divisor - 1))
+                        };
+                        Val {
+                            e,
+                            ty: Ty::I32,
+                            fixed: left.fixed,
+                        }
                     } else if safe {
                         self.helper(plain, vec![left, right], Ty::I32)
                     } else {
@@ -1444,5 +1464,126 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 "the checker keeps strings, lists, the clock and the seed out of GPU code"
             ),
         }
+    }
+}
+
+/// Every value of a 32-bit `Int`.
+const FULL: (i64, i64) = (i32::MIN as i64, i32::MAX as i64);
+
+/// The range of an arithmetic result, or every value when it may wrap.
+fn within_32(low: i64, high: i64) -> (i64, i64) {
+    if FULL.0 <= low && high <= FULL.1 {
+        (low, high)
+    } else {
+        FULL
+    }
+}
+
+/// The values a 32-bit `Int` operation can give, from the ranges of its
+/// operands. An operation that can fail is given a range only when its
+/// operands rule the failure out.
+fn binary_range(
+    op: TBinOp,
+    (a_low, a_high): (i64, i64),
+    (b_low, b_high): (i64, i64),
+) -> (i64, i64) {
+    match op {
+        TBinOp::Add => within_32(a_low + b_low, a_high + b_high),
+        TBinOp::Sub => within_32(a_low - b_high, a_high - b_low),
+        TBinOp::Mul => {
+            let corners = [
+                a_low * b_low,
+                a_low * b_high,
+                a_high * b_low,
+                a_high * b_high,
+            ];
+            within_32(
+                corners.into_iter().min().unwrap_or(0),
+                corners.into_iter().max().unwrap_or(0),
+            )
+        }
+        // By a positive divisor `/` rounds toward negative infinity: it
+        // rises with `a`, and the divisor moves it one way for each sign of
+        // `a`, so the corners bound it.
+        TBinOp::Div if b_low > 0 => (
+            a_low.div_euclid(b_low).min(a_low.div_euclid(b_high)),
+            a_high.div_euclid(b_low).max(a_high.div_euclid(b_high)),
+        ),
+        // `%` takes the sign of the divisor, and is `a` itself below it.
+        TBinOp::Mod if b_low > 0 && a_low >= 0 => (0, a_high.min(b_high - 1)),
+        TBinOp::Mod if b_low > 0 => (0, b_high - 1),
+        TBinOp::Mod if b_high < 0 => (b_low + 1, 0),
+        _ => FULL,
+    }
+}
+
+/// The values an `Int` expression of GPU code can have, worked out from
+/// literals, known constants, the types of compact fields, and the
+/// operations on them.
+fn int_range(expr: &TExpr, folded: &[Option<Folded>]) -> (i64, i64) {
+    match &expr.kind {
+        ExprKind::Int(value) => within_32(*value, *value),
+        ExprKind::Read(Place {
+            kind: PlaceKind::Const(id),
+            ..
+        }) => match folded[id.0] {
+            Some(Folded::Int(value)) => within_32(value, value),
+            _ => FULL,
+        },
+        ExprKind::Read(Place {
+            ty: Type::Compact(compact),
+            ..
+        }) => compact
+            .int_range()
+            .map_or(FULL, |range| within_32(range.0, range.1)),
+        ExprKind::Unary {
+            op: TUnOp::Neg,
+            expr: inner,
+        } => {
+            let (low, high) = int_range(inner, folded);
+            within_32(-high, -low)
+        }
+        ExprKind::Binary { op, lhs, rhs } => {
+            binary_range(*op, int_range(lhs, folded), int_range(rhs, folded))
+        }
+        ExprKind::Builtin { op, args } => match (op, args.as_slice()) {
+            (Builtin::IntAbs, [value]) => {
+                let (low, high) = int_range(value, folded);
+                if low == FULL.0 {
+                    FULL
+                } else if low >= 0 {
+                    (low, high)
+                } else if high <= 0 {
+                    (-high, -low)
+                } else {
+                    (0, high.max(-low))
+                }
+            }
+            // `v < lo ? lo : (v > hi ? hi : v)`: whatever `v` is, the
+            // result lies between the lowest and the highest bound.
+            (Builtin::IntClamp, [_, low, high]) => {
+                let (low, high) = (int_range(low, folded), int_range(high, folded));
+                (low.0.min(high.0), low.1.max(high.1))
+            }
+            (Builtin::IntMin, [a, b]) => {
+                let (a, b) = (int_range(a, folded), int_range(b, folded));
+                (a.0.min(b.0), a.1.min(b.1))
+            }
+            (Builtin::IntMax, [a, b]) => {
+                let (a, b) = (int_range(a, folded), int_range(b, folded));
+                (a.0.max(b.0), a.1.max(b.1))
+            }
+            // A failed `rand(n)` gives 0.
+            (Builtin::RandInt, [n]) => (0, (int_range(n, folded).1 - 1).max(0)),
+            _ => FULL,
+        },
+        ExprKind::If { then, else_, .. } => match (&then.value, &else_.value) {
+            (Some(a), Some(b)) => {
+                let (a, b) = (int_range(a, folded), int_range(b, folded));
+                (a.0.min(b.0), a.1.max(b.1))
+            }
+            _ => FULL,
+        },
+        _ => FULL,
     }
 }

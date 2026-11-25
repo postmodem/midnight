@@ -11,8 +11,8 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 249 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-334 in `tests/fail`, 78 in `tests/panic`, 12 in `tests/plan`.
+Counts: 251 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+334 in `tests/fail`, 80 in `tests/panic`, 12 in `tests/plan`.
 
 ## A first program, The model
 
@@ -414,6 +414,7 @@ by the program itself.
 | `Float` `%` takes the divisor's sign | `gpu_div_mod` |
 | `abs`, `clamp`, `min`, `max`, `to_f`, `round(digits)`, the `Math` functions, `**` on `Float` with either sign of base | `gpu_numbers`, `gpu_float_literals` |
 | `**` on `Float`: a zero exponent, a zero base with an exponent of either sign, a negative base with a whole, a fractional and an infinite exponent, a base of 1 with an infinite and a NaN exponent, a base of -1 with an infinite exponent | `gpu_float_power` |
+| `/` and `%` by a literal power of two: the quotient rounds toward negative infinity and the remainder takes the divisor's sign, for negative values and at the ends of the range | `gpu_power_of_two_divisors` |
 | `%` on `Float` by zero is NaN | `gpu_float_power` |
 | `%` on `Float` where rounding to 32 bits shows (`1000000.3125 % 0.1`), and beyond a quotient of 16,777,216 | not covered: the CPU and a GPU are allowed different results |
 | `Math::PI` and `Math::E` | `gpu_replace_component` |
@@ -557,6 +558,7 @@ by the program itself.
 | A component's fields are ordered to minimise padding; `Bool` and enum fields take one byte | `layout` (the size is asserted by a separate harness step) |
 | A component a GPU block writes is rounded up to a multiple of 4 bytes; one that GPU blocks only read keeps its size | `gpu_odd_row_size`, `gpu_field_types` (the generated C asserts the size and every offset of each component a GPU block names); the unit tests `a_written_component_is_whole_words` and `a_read_only_column_can_have_rows_of_any_size` in `src/emit/tests/gpu.rs` |
 | What a GPU system costs: the fixed cost of a block, the cost of a transfer, the copy a nested `each` reads | not observable from a program's output; `nix run .#bench-gpu` measures the first two |
+| A store of a value the compiler can bound within the field is not an operation that can fail: each rule, and the nearest case that does not fit | the unit test `a_store_whose_range_fits_is_not_checked` in `src/emit/tests/gpu.rs`; `gpu_narrow_ranges` (values at the ends of each range, no check left in the shader), `panic/gpu_store_clamp_too_wide`, `panic/gpu_store_mod_too_wide` |
 | The other layout and cost facts (tables, 20 bytes per entity, tags take no space, costs of operations) | not observable from a program's output; not covered |
 
 ## Errors
@@ -695,6 +697,8 @@ the rule for where a column lives.
 | | `rand(n)` with `n <= 0` | `panic/gpu_rand_not_positive` | `rand: the argument must be positive` |
 | | `UInt8` above, compound assignment | `panic/gpu_store_uint8` | `value does not fit in UInt8` |
 | | `Int8` below | `panic/gpu_store_int8` | `value does not fit in Int8` |
+| | `Int8`, a value clamped to one beyond the field | `panic/gpu_store_clamp_too_wide` | `value does not fit in Int8` |
+| | `UInt8`, a value modulo one beyond the field | `panic/gpu_store_mod_too_wide` | `value does not fit in UInt8` |
 | | `Int16` above, constructor argument | `panic/gpu_store_int16` | `value does not fit in Int16` |
 | | `UInt16` negative, field of a struct in a component | `panic/gpu_store_uint16` | `value does not fit in UInt16` |
 | | in a function the block calls: the line in the function | `panic/gpu_failure_in_function` | `modulo by zero` |

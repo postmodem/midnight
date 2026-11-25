@@ -445,7 +445,7 @@ fn sites_are_in_source_order() {
         &c,
         "g32_mod_checked(g, cell_0.f_n, cell_0.f_m, 2u) + g32_div_checked(g, 7, cell_0.f_n, 3u);",
     );
-    assert_has(&c, "cell_0.f_n = g32_div(t0, 4);");
+    assert_has(&c, "cell_0.f_n = t0 >> 2u;");
     assert_has(&c, ".fallible = true,");
     assert_has(&c, ".sites = gpu_sites,");
 
@@ -665,7 +665,7 @@ fn a_division_by_a_known_constant_is_not_checked() {
     let split = wgsl::module(&lowered, &lowered.blocks[0]);
     assert_has(
         &split,
-        "(g32_div(cell_0.f_n, 16i) + g32_mod(cell_0.f_n, 9i)) + g32_div(cell_0.f_n, 8i);",
+        "((cell_0.f_n >> 4u) + g32_mod(cell_0.f_n, 9i)) + (cell_0.f_n >> 3u);",
     );
     assert_lacks(&split, "g_error");
     let by_none = wgsl::module(&lowered, &lowered.blocks[1]);
@@ -845,4 +845,153 @@ fn the_nested_each_runs_eight_rows_per_round() {
     let plain = &shaders[1];
     assert!(!plain.contains("j_whole"), "{plain}");
     assert_has(plain, "for (var j: u32 = 0u; j < u.w1; j = j + 1u) {");
+}
+
+const RANGES: &str = "\
+LIMIT = 100
+
+component C
+  i8: Int8
+  u8: UInt8
+  i16: Int16
+  u16: UInt16
+  n: Int32
+end
+
+gpu system fit_clamp
+  each C do |c|
+    c.i8 = (c.n * 3).clamp(-128, 127)
+  end
+end
+
+gpu system check_clamp
+  each C do |c|
+    c.i8 = c.n.clamp(-128, 128)
+  end
+end
+
+gpu system fit_mod
+  each C do |c|
+    c.u8 = c.n % 256
+  end
+end
+
+gpu system check_mod
+  each C do |c|
+    c.u8 = c.n % 257
+  end
+end
+
+gpu system fit_mod_negative_divisor
+  each C do |c|
+    c.i8 = c.n % -128
+  end
+end
+
+gpu system check_mod_negative_divisor
+  each C do |c|
+    c.u8 = c.n % -2
+  end
+end
+
+gpu system fit_div
+  each C do |c|
+    c.i8 = c.i16 / 300
+  end
+end
+
+gpu system check_div
+  each C do |c|
+    c.i8 = c.i16 / 200
+  end
+end
+
+gpu system fit_arithmetic
+  each C do |c|
+    c.i16 = c.i8 * 256 + c.u8
+  end
+end
+
+gpu system check_arithmetic
+  each C do |c|
+    c.i16 = c.i8 * 256 + c.u8 + 1
+  end
+end
+
+gpu system fit_compound
+  each C do |c|
+    c.u8 %= 7
+  end
+end
+
+gpu system check_compound
+  each C do |c|
+    c.i8 %= 200
+  end
+end
+
+gpu system fit_min_max_abs
+  each C do |c|
+    c.u8 = max(min(c.n, 255), 0)
+    c.u16 = c.i16.abs
+    c.i8 = -(c.n % LIMIT)
+  end
+end
+
+gpu system check_min
+  each C do |c|
+    c.u8 = min(c.n, 255)
+  end
+end
+
+gpu system check_abs
+  each C do |c|
+    c.i16 = c.i16.abs
+  end
+end
+
+gpu system fit_rand_and_if
+  each C do |c|
+    c.u8 = rand(256)
+    c.i8 = c.n > 0 ? 127 : -128
+  end
+end
+
+gpu system check_rand
+  each C do |c|
+    c.u8 = rand(257)
+  end
+end
+
+gpu system check_if
+  each C do |c|
+    c.i8 = c.n > 0 ? 127 : c.u8
+  end
+end
+
+gpu system check_local
+  each C do |c|
+    k = c.n % 10
+    c.i8 = k
+  end
+end
+";
+
+/// A store into a compact field is checked unless the value's range,
+/// worked out from literals, constants, compact fields and the operations
+/// on them, fits the field. Each `fit_` block is the case of a rule that
+/// fits, each `check_` block the nearest case that does not.
+#[test]
+fn a_store_whose_range_fits_is_not_checked() {
+    let (program, _) = compile(RANGES);
+    let shaders = shaders(RANGES);
+    for (system, shader) in program.systems.iter().zip(&shaders) {
+        let checked = shader.contains("g32_to_");
+        if system.name.starts_with("fit_") {
+            assert!(!checked, "{}\n{shader}", system.name);
+        } else {
+            assert!(checked, "{}\n{shader}", system.name);
+        }
+    }
+    assert_eq!(shaders.len(), 19);
 }

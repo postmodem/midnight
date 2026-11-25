@@ -1339,14 +1339,22 @@ What follows from this:
   the next GPU block uploads what it needs again.
 - **Keep operations that can fail out of blocks that run in every tick.**
   Reading the result back makes the program wait for the block. `Float`
-  arithmetic cannot fail, and neither can a store into an `Int32` field, or
-  an operation whose right-hand number the compiler knows: `/` or `%` by one
+  arithmetic cannot fail, and neither can a store into an `Int32` field, a
+  store of a value the compiler knows fits the field, or an operation whose
+  right-hand number the compiler knows: `/` or `%` by one
   that is not zero, `**` with an exponent that is not
   negative, `rand(n)` with a positive `n`. The compiler knows a literal, an
   `Int` constant made from literals and other such constants with `+`, `-`,
   `*`, `/`, `%` and `**`, and arithmetic on those. It does not know a
   resource field, a field of a struct constant, or a constant made by a
   call.
+  A value fits a compact field when the compiler can bound it: from
+  literals and known constants, the compact fields it reads, and `+`, `-`,
+  `*`, `/` by a positive number, `%` by a number of one sign, `clamp`,
+  `min`, `max`, `abs`, unary `-`, `rand(n)` and a conditional's two values,
+  when no step can wrap. `(c.small + 1).clamp(-128, 127)` and
+  `(c.wide + 1) % 65536` fit; `c.small + 1` does not, and the value of a
+  local variable is not followed.
 - **Leave small worlds on the CPU.** For a light system on few entities, the
   fixed cost of a block is more than the loop it replaces.
 - **A nested `each` reads a copy** of the arrays it names, made in GPU memory
