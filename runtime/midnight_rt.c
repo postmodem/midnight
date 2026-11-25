@@ -50,7 +50,12 @@ _Noreturn void mn_panic(MnLoc loc, const char *format, ...) {
     mn_leave(1);
 }
 
-_Noreturn void mn_exit(int64_t status) { mn_leave((int)(status & 0xff)); }
+static void gpu_stats_line(void);
+
+_Noreturn void mn_exit(int64_t status) {
+    gpu_stats_line();
+    mn_leave((int)(status & 0xff));
+}
 
 /* ---- Memory -------------------------------------------------------------- */
 
@@ -774,6 +779,7 @@ static void gpu_tick_end(void);
 static void tick(void) {
     MnWorld *w = &mn_world;
     const MnProgram *program = w->program;
+    gpu_stats_line();
     w->in_tick = true;
     for (uint32_t i = 0; i < program->system_count; i++) program->systems[i]();
     w->in_tick = false;
@@ -1636,6 +1642,9 @@ static struct {
     bool stats;
 } gpu_options;
 
+/* A tick has ended whose `stats` line is not printed yet. */
+static bool stats_pending;
+
 /* What mn_gpu_run keeps for a block between calls. */
 typedef struct MnGpuScratch {
     MnGpuBlock *block;
@@ -1812,23 +1821,31 @@ static void gpu_start(void) {
     }
 }
 
-/* Waits for the device and prints the `stats` line of the tick that is
- * ending. */
+/* Waits for the device. With `stats`, the tick's line is printed when the
+ * next tick starts or the program ends, so that it also counts what the
+ * top-level code after the tick transfers. */
 static void gpu_tick_end(void) {
 #ifdef MN_GPU
     mn_gpu_device_wait();
 #endif
-    if (!gpu_options.stats) return;
+    if (gpu_options.stats) stats_pending = true;
+}
+#endif
+
+/* Prints the `stats` line of the last tick that ended, if it has not been
+ * printed. */
+static void gpu_stats_line(void) {
+    if (!stats_pending) return;
+    stats_pending = false;
     fflush(stdout);
     fprintf(stderr, "midnight: gpu: tick %lld: %llu upload%s, %llu download%s\n",
-            (long long)mn_time.tick, (unsigned long long)mn_gpu_uploads,
+            (long long)(mn_time.tick - 1), (unsigned long long)mn_gpu_uploads,
             mn_gpu_uploads == 1 ? "" : "s",
             (unsigned long long)mn_gpu_downloads,
             mn_gpu_downloads == 1 ? "" : "s");
     mn_gpu_uploads = 0;
     mn_gpu_downloads = 0;
 }
-#endif
 
 /* Releases what mn_gpu_run kept for every block, then the device. */
 static void gpu_finish(void) {
@@ -1922,6 +1939,7 @@ static void world_destroy(void) {
 #endif
 
 void mn_finish(void) {
+    gpu_stats_line();
     fflush(stdout);
     gpu_finish();
 #ifdef MN_DEBUG

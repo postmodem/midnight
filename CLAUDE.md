@@ -100,8 +100,9 @@ command that needs it.
     exactly `NAME.err`. A run that finds no device, or runs a GPU block on
     the CPU, fails.
   - `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
-    `MIDNIGHT_GPU=stats` and requires every tick after the first to make the
-    uploads and downloads `midnight plan` lists.
+    `MIDNIGHT_GPU=stats` and requires every tick but the first and the last
+    to make the uploads and downloads `midnight plan` lists. The last line
+    also counts what the code after the loop transfers.
   - `gpu_driver_finds_its_parts` builds a stand-in Vulkan driver that opens
     another library by name, and requires that library to be found through
     the driver's runpath. A debug build has a `dlopen` of its own in

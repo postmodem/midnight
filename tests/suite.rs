@@ -791,7 +791,7 @@ fn gpu_stats_match_plan() {
         let label = format!("{STATS_PROGRAM} ({mode:?})");
         let run =
             run_on_device(&exe, device, true).map_err(|message| format!("{label}: {message}"))?;
-        if run.status != Some(0) || run.ticks.len() < 2 {
+        if run.status != Some(0) || run.ticks.len() < 3 {
             return Err(format!(
                 "{label}: exited with {:?} after {} ticks\n--- stderr\n{}---",
                 run.status,
@@ -799,7 +799,9 @@ fn gpu_stats_match_plan() {
                 run.stderr
             ));
         }
-        for (tick, counts) in run.ticks.iter().enumerate().skip(1) {
+        // The last line also counts the top-level code after the loop.
+        let last = run.ticks.len() - 1;
+        for (tick, counts) in run.ticks.iter().enumerate().take(last).skip(1) {
             if *counts != planned {
                 return Err(format!(
                     "{label}: tick {tick} made {} uploads and {} downloads; \
@@ -815,7 +817,7 @@ fn gpu_stats_match_plan() {
     report("runs with stats", MODES.len(), failures);
     let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
     note(&format!(
-        "gpu_stats_match_plan: uploads {} and downloads {} in every tick after the first on {}",
+        "gpu_stats_match_plan: uploads {} and downloads {} in every tick but the first and the last on {}",
         planned.0,
         planned.1,
         devices.join(" and ")

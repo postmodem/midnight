@@ -154,7 +154,7 @@ adapter. `MIDNIGHT_GPU` changes that. It is a comma-separated list of:
 | `off`      | Use no device: every GPU system runs its C functions.           |
 | `software` | Accept an adapter that computes on the CPU (Mesa's `llvmpipe`) when there is no hardware one. |
 | `info`     | Print one line to standard error naming the device in use, or `no device`, and one line for each `each` of a GPU system that runs on the CPU, with the reason. |
-| `stats`    | Print one line to standard error at the end of each tick: the uploads and downloads it performed. |
+| `stats`    | Print one line to standard error for each tick: the uploads and downloads of its systems and of the top-level code after it. |
 
 ```sh
 MIDNIGHT_GPU=info,stats nix run . -- run tests/plan/reader.12am
@@ -162,8 +162,10 @@ MIDNIGHT_GPU=info,stats nix run . -- run tests/plan/reader.12am
 
 A word that is not in the table is reported once, when the program starts.
 In a `stats` line one upload or download is one component array of one
-table. The first line is `tick 0`, and what top-level code transfers between
-two ticks is counted in the line of the tick that follows.
+table. The first line is `tick 0`. A line is printed when the next tick
+starts, or when the program ends, so it counts what top-level code
+transfers after the tick, as `midnight plan` does; the last line also counts
+the code after the loop that ticks.
 
 With no device, because none was found or `off` is set, every GPU system runs
 on the CPU. A single `each` also does when it needs more than the device
