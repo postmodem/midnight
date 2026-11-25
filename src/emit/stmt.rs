@@ -454,6 +454,9 @@ impl<'a> FnCx<'a, '_> {
                         .expect("a tag is not a query term");
                     let cty = self.cx.cty(&Type::Record(record));
                     let konst = if *write { "" } else { "const " };
+                    if self.cx.gpu.named[component.0] {
+                        self.line(&format!("mn_sync(table{sfx}, {}, {write});", component.0));
+                    }
                     self.line(&format!(
                         "{konst}{cty} *{restrict}c{sfx}{index} = mn_column(table{sfx}, {});",
                         component.0

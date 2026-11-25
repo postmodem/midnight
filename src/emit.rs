@@ -3,12 +3,14 @@
 //! The file is laid out as: file names and string literals, types, helper
 //! prototypes, list element descriptions, constants and resources, the
 //! static data of queries, bundles and event cursors, function prototypes,
-//! helpers, the program's functions and systems, and last the tables that
-//! describe the program to the runtime and `main`.
+//! helpers, the code and descriptions of GPU blocks, the program's
+//! functions and systems, and last the tables that describe the program to
+//! the runtime and `main`.
 
 mod analysis;
 mod body;
 mod expr;
+mod gpu;
 mod names;
 mod place;
 mod stmt;
@@ -49,6 +51,13 @@ pub fn emit(program: &Program, sources: &SourceMap) -> String {
     Cx::new(program, sources).program()
 }
 
+/// The shader of every GPU block of a program, each after a comment line
+/// that names its system and which `each` of the system it is.
+pub fn emit_wgsl(program: &Program, sources: &SourceMap) -> String {
+    let cx = Cx::new(program, sources);
+    gpu::wgsl::listing(&gpu::lower(program, &cx.folded, cx.gpu.wide.clone()))
+}
+
 /// What is shared by everything generated for one program.
 struct Cx<'a> {
     prog: &'a Program,
@@ -74,6 +83,8 @@ struct Cx<'a> {
     static_count: usize,
     /// For each function, whether generated code calls it.
     func_used: Vec<bool>,
+    /// What GPU systems require of the code of everything else.
+    gpu: gpu::Plan,
 }
 
 impl<'a> Cx<'a> {
@@ -104,6 +115,7 @@ impl<'a> Cx<'a> {
             statics: String::new(),
             static_count: 0,
             func_used: vec![false; prog.funcs.len()],
+            gpu: gpu::Plan::new(prog),
         }
     }
 
@@ -125,8 +137,8 @@ impl<'a> Cx<'a> {
         format!("((MnString)&str{index})")
     }
 
-    /// A `MnLoc` expression for the line a span starts on.
-    fn loc(&mut self, span: Span) -> String {
+    /// The static array that holds the name of a span's file.
+    fn file(&mut self, span: Span) -> String {
         let next = self.files.len();
         let index = *self.files.entry(span.file.0).or_insert(next);
         if index == next {
@@ -137,7 +149,13 @@ impl<'a> Cx<'a> {
                 names::c_string(name.as_bytes())
             );
         }
-        format!("(MnLoc){{src{index}, {}}}", self.sources.line(span))
+        format!("src{index}")
+    }
+
+    /// A `MnLoc` expression for the line a span starts on.
+    fn loc(&mut self, span: Span) -> String {
+        let file = self.file(span);
+        format!("(MnLoc){{{file}, {}}}", self.sources.line(span))
     }
 
     /// A `#line` directive for the line a span starts on.
@@ -230,9 +248,20 @@ impl<'a> Cx<'a> {
             let line = self.line_directive(func.span);
             let _ = writeln!(defs, "{line}\n{header} {{\n{body}}}\n");
         }
+        let lowered = gpu::lower(prog, &self.folded, self.gpu.wide.clone());
         for system in &prog.systems {
             let header = format!("static void {}(void)", names::system(&system.name));
-            let body = FnCx::new(&mut self, &system.body, Type::Void).function(&system.body);
+            let body = if system.gpu {
+                // A GPU system runs its blocks in order.
+                lowered
+                    .blocks
+                    .iter()
+                    .filter(|block| std::ptr::eq(block.system, system.name.as_str()))
+                    .map(|block| format!("    mn_gpu_run(&{});\n", gpu::c::block_name(block.id)))
+                    .collect()
+            } else {
+                FnCx::new(&mut self, &system.body, Type::Void).function(&system.body)
+            };
             protos.push((header.clone(), None));
             let line = self.line_directive(system.span);
             let _ = writeln!(defs, "{line}\n{header} {{\n{body}}}\n");
@@ -247,6 +276,7 @@ impl<'a> Cx<'a> {
         let _ = writeln!(defs, "{RESET_LINE}");
         let _ = writeln!(defs, "static void drop_globals(void) {{\n{drop}}}\n");
         let tables = self.tables();
+        let gpu_section = gpu::c::section(&lowered, &mut self);
 
         let mut out = String::new();
         out.push_str("#include \"midnight_rt.h\"\n\n#include <math.h>\n\n");
@@ -279,6 +309,7 @@ impl<'a> Cx<'a> {
         }
         out.push_str("static void run_main(void);\n\n");
         out.push_str(&self.helper_defs);
+        out.push_str(&gpu_section);
         out.push_str(&defs);
         out.push_str(&tables);
         out.push_str(

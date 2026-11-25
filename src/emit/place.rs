@@ -22,6 +22,9 @@ enum Root {
         id: usize,
         cty: String,
         loc: String,
+        /// For a component that can have a GPU copy: whether this use
+        /// writes it.
+        sync: Option<bool>,
     },
 }
 
@@ -157,7 +160,9 @@ impl<'a> FnCx<'a, '_> {
                 Some(name) => (Root::Lv(name), false, Dep::Fixed),
                 None => (Root::Lv(time_lvalue(*field).to_string()), false, Dep::World),
             },
-            PlaceKind::Component { component, .. } => {
+            PlaceKind::Component {
+                component, write, ..
+            } => {
                 let record = self.cx.prog.components[component.0]
                     .record
                     .expect("a tag has no value to reach");
@@ -166,6 +171,7 @@ impl<'a> FnCx<'a, '_> {
                     id: component.0,
                     cty: self.cx.cty(&Type::Record(record)),
                     loc: self.cx.loc(root_place.span),
+                    sync: self.cx.gpu.named[component.0].then_some(*write),
                 };
                 (root, false, Dep::World)
             }
@@ -235,12 +241,17 @@ impl<'a> FnCx<'a, '_> {
                 id,
                 cty,
                 loc,
+                sync,
             } => {
                 let name = self.fresh("p");
-                self.line(&format!(
-                    "{konst}{cty} *{name} = mn_get({}, {id}, sizeof({cty}), {loc});",
-                    entity.c
-                ));
+                let get = match sync {
+                    Some(write) => format!(
+                        "mn_get_synced({}, {id}, sizeof({cty}), {write}, {loc})",
+                        entity.c
+                    ),
+                    None => format!("mn_get({}, {id}, sizeof({cty}), {loc})", entity.c),
+                };
+                self.line(&format!("{konst}{cty} *{name} = {get};"));
                 direct = false;
                 (name, true)
             }

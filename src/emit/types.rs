@@ -58,6 +58,53 @@ pub fn managed_records(prog: &Program) -> Vec<bool> {
         .collect()
 }
 
+/// The size in bytes of the integer an enum is stored as.
+pub fn enum_bytes(prog: &Program, id: EnumId) -> u32 {
+    match prog.enums[id.0].variants.len() {
+        0..=0x100 => 1,
+        0x101..=0x1_0000 => 2,
+        _ => 4,
+    }
+}
+
+/// The alignment of a type's C representation. `wide[record]` marks the
+/// records whose alignment is raised to 4.
+pub fn align_of(prog: &Program, wide: &[bool], ty: &Type) -> u32 {
+    match ty {
+        Type::Void | Type::Bool => 1,
+        Type::Int | Type::Float | Type::String | Type::List(_) => 8,
+        Type::Entity => 4,
+        Type::Compact(compact) => match compact {
+            Compact::Float32 | Compact::Int32 | Compact::UInt32 => 4,
+            Compact::Int16 | Compact::UInt16 => 2,
+            Compact::Int8 | Compact::UInt8 => 1,
+        },
+        Type::Enum(id) => enum_bytes(prog, *id),
+        Type::Record(id) => {
+            let fields = prog.records[id.0]
+                .fields
+                .iter()
+                .map(|field| align_of(prog, wide, &field.ty))
+                .max()
+                .unwrap_or(1);
+            if wide[id.0] { fields.max(4) } else { fields }
+        }
+    }
+}
+
+/// The members of a struct with these field types, largest alignment
+/// first, as indexes into the fields.
+pub fn layout_order<'t>(
+    prog: &Program,
+    wide: &[bool],
+    types: impl Iterator<Item = &'t Type>,
+) -> Vec<usize> {
+    let aligns: Vec<u32> = types.map(|ty| align_of(prog, wide, ty)).collect();
+    let mut order: Vec<usize> = (0..aligns.len()).collect();
+    order.sort_by_key(|&index| Reverse(aligns[index]));
+    order
+}
+
 impl Cx<'_> {
     pub fn cty(&self, ty: &Type) -> String {
         match ty {
@@ -105,44 +152,17 @@ impl Cx<'_> {
     }
 
     fn enum_cty(&self, id: EnumId) -> &'static str {
-        match self.prog.enums[id.0].variants.len() {
-            0..=0x100 => "uint8_t",
-            0x101..=0x1_0000 => "uint16_t",
+        match enum_bytes(self.prog, id) {
+            1 => "uint8_t",
+            2 => "uint16_t",
             _ => "uint32_t",
-        }
-    }
-
-    pub fn align(&self, ty: &Type) -> u32 {
-        match ty {
-            Type::Void | Type::Bool => 1,
-            Type::Int | Type::Float | Type::String | Type::List(_) => 8,
-            Type::Entity => 4,
-            Type::Compact(compact) => match compact {
-                Compact::Float32 | Compact::Int32 | Compact::UInt32 => 4,
-                Compact::Int16 | Compact::UInt16 => 2,
-                Compact::Int8 | Compact::UInt8 => 1,
-            },
-            Type::Enum(id) => match self.enum_cty(*id) {
-                "uint8_t" => 1,
-                "uint16_t" => 2,
-                _ => 4,
-            },
-            Type::Record(id) => self.prog.records[id.0]
-                .fields
-                .iter()
-                .map(|field| self.align(&field.ty))
-                .max()
-                .unwrap_or(1),
         }
     }
 
     /// The members of a struct with these field types, largest alignment
     /// first, as indexes into the fields.
     pub fn layout_order<'t>(&self, types: impl Iterator<Item = &'t Type>) -> Vec<usize> {
-        let aligns: Vec<u32> = types.map(|ty| self.align(ty)).collect();
-        let mut order: Vec<usize> = (0..aligns.len()).collect();
-        order.sort_by_key(|&index| Reverse(aligns[index]));
-        order
+        layout_order(self.prog, &self.gpu.wide, types)
     }
 
     /// The enum typedefs, then every record's struct, each after the
@@ -181,14 +201,23 @@ impl Cx<'_> {
         }
         let name = names::record(&item.name);
         let _ = writeln!(out, "typedef struct {name} {{");
+        // A record marked wide is aligned to 4 bytes through its first
+        // member, which rounds its size up to a multiple of 4 as well.
+        let mut widen = self.gpu.wide[record]
+            && item
+                .fields
+                .iter()
+                .all(|field| align_of(self.prog, &self.gpu.wide, &field.ty) < 4);
         for index in self.layout_order(item.fields.iter().map(|field| &field.ty)) {
             let field = &item.fields[index];
             let _ = writeln!(
                 out,
-                "    {} {};",
+                "    {}{} {};",
+                if widen { "_Alignas(4) " } else { "" },
                 self.cty(&field.ty),
                 names::field(&field.name)
             );
+            widen = false;
         }
         if item.fields.is_empty() {
             out.push_str("    char empty;\n");
