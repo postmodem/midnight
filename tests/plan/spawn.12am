@@ -1,8 +1,7 @@
 # expect: a tick in which nothing is spawned has no transfer. A spawn adds
-# a row to the columns of the components it lists: `hatch` downloads
-# Position, which `move` wrote, and `move` uploads Position and Velocity in
-# the next tick. `count` spawns only a component with no GPU copy and adds
-# nothing.
+# a row to the columns of the components it lists, and `move` is sent the
+# new rows of Position and Velocity in the next tick: nothing comes back.
+# `count` spawns only a component with no GPU copy and adds nothing.
 
 component Position
   x: Float32

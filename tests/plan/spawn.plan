@@ -1,3 +1,2 @@
-upload    Position  hatch -> move   on spawn
-upload    Velocity  hatch -> move   on spawn
-download  Position  move -> hatch   on spawn
+upload    Position  hatch -> move   rows on spawn
+upload    Velocity  hatch -> move   rows on spawn

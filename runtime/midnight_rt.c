@@ -346,14 +346,35 @@ static void table_grow(MnTable *table) {
     table->capacity = capacity;
 }
 
-/* Call before reading a table's arrays in order to change its rows, and
- * before adding, removing or moving a row: makes the CPU copy of every
- * column the only current one. */
-static inline void table_changing(MnTable *table) {
+/* Call before a row moves from `table` to another table: makes CPU memory
+ * have the row's value in every column but those in `skip`, which the
+ * move leaves behind. */
+static inline void table_moving(MnTable *table, uint32_t row,
+                                const uint32_t *skip, uint32_t skip_count) {
 #ifdef MN_GPU
-    if (table->gpu) mn_gpu_reclaim(table);
+    if (table->gpu && mn_gpu_only) {
+        mn_gpu_want_row(table, row, skip, skip_count);
+        mn_gpu_fetch();
+    }
 #else
     (void)table;
+    (void)row;
+    (void)skip;
+    (void)skip_count;
+#endif
+}
+
+/* Call before the value of a row is replaced in place. */
+static inline void table_replacing(MnTable *table, uint32_t row,
+                                   uint32_t component) {
+#ifdef MN_GPU
+    if (table->gpu && mn_gpu_active) {
+        mn_gpu_row(table, row, component, MN_ROW_WHOLE);
+    }
+#else
+    (void)table;
+    (void)row;
+    (void)component;
 #endif
 }
 
@@ -369,6 +390,9 @@ static inline uint32_t table_append(MnTable *table, MnEntity e) {
 /* Takes a row out by moving the last row into its place. The values of
  * the row are not dropped. */
 static void table_remove(MnTable *table, uint32_t row) {
+#ifdef MN_GPU
+    if (table->gpu && mn_gpu_active) mn_gpu_leave(table, row);
+#endif
     uint32_t last = --table->count;
     if (row == last) return;
     for (uint32_t i = 0; i < table->data_count; i++) {
@@ -408,7 +432,6 @@ static void spawn_now(MnEntity e, MnBundle *bundle, void *const *values) {
     const MnComponentInfo *info = w->program->components;
     uint32_t id = bundle_table(w->tables[0], bundle);
     MnTable *table = w->tables[id];
-    table_changing(table);
     uint32_t row = table_append(table, e);
     MnSlot *slot = &w->slots[e.index];
     slot->table = id;
@@ -441,9 +464,8 @@ static void add_now(MnEntity e, MnBundle *bundle, void *const *values) {
     uint32_t id = bundle_table(from, bundle);
     MnTable *to = w->tables[id];
     uint32_t to_row = from_row;
-    table_changing(from);
     if (to != from) {
-        table_changing(to);
+        table_moving(from, from_row, NULL, 0);
         to_row = table_append(to, e);
         for (uint32_t i = 0; i < from->data_count; i++) {
             uint32_t c = from->data[i];
@@ -456,6 +478,7 @@ static void add_now(MnEntity e, MnBundle *bundle, void *const *values) {
         uint32_t c = bundle->components[i];
         size_t size = info[c].size;
         if (size == 0) continue;
+        if (to == from) table_replacing(to, to_row, c);
         char *value = (char *)to->columns[c] + to_row * size;
         if (from->columns[c] && info[c].drop) info[c].drop(value);
         const void *given = values ? values[i] : NULL;
@@ -483,8 +506,7 @@ static void remove_now(MnEntity e, const uint32_t *components,
     uint32_t id = table_without(from, components, count);
     if (id == from->id) return;
     MnTable *to = w->tables[id];
-    table_changing(from);
-    table_changing(to);
+    table_moving(from, from_row, components, count);
     uint32_t to_row = table_append(to, e);
     for (uint32_t i = 0; i < to->data_count; i++) {
         uint32_t c = to->data[i];
@@ -509,7 +531,6 @@ static void despawn_now(MnEntity e) {
     MnSlot *slot = &w->slots[e.index];
     if (slot->table != MN_NO_TABLE) {
         MnTable *table = w->tables[slot->table];
-        table_changing(table);
         if (table->drop_count != 0) table_drop_row(table, slot->row);
         table_remove(table, slot->row);
         w->live_entities--;
@@ -583,11 +604,69 @@ static void command_push_bundle(uint32_t kind, MnEntity e, MnBundle *bundle,
     }
 }
 
+#ifdef MN_GPU
+/* Brings back, in one round trip, the rows that the queued `add`s and
+ * `remove`s will move to another table and that only a GPU copy has. A row
+ * brought back stays known as it moves, so applying the queue needs no
+ * round trip of its own. */
+static void commands_want_rows(void) {
+    MnWorld *w = &mn_world;
+    const MnComponentInfo *info = w->program->components;
+    unsigned char *at = w->commands;
+    unsigned char *end = at + w->command_len;
+    while (at < end) {
+        MnCommand command;
+        memcpy(&command, at, sizeof command);
+        at += sizeof command;
+        MnEntity e = command.entity;
+        MnTable *table = NULL;
+        uint32_t row = 0;
+        if (mn_alive(e) && w->slots[e.index].table != MN_NO_TABLE) {
+            table = w->tables[w->slots[e.index].table];
+            row = w->slots[e.index].row;
+        }
+        bool moves = false;
+        switch (command.kind) {
+        case MN_CMD_SPAWN:
+        case MN_CMD_ADD: {
+            MnBundle *bundle;
+            memcpy(&bundle, at, sizeof bundle);
+            at += round8(sizeof bundle);
+            for (uint32_t i = 0; i < bundle->count; i++) {
+                uint32_t c = bundle->components[i];
+                at += round8(info[c].size);
+                if (table && !table->columns[c]) moves = true;
+            }
+            if (command.kind == MN_CMD_ADD && moves) {
+                mn_gpu_want_row(table, row, NULL, 0);
+            }
+            break;
+        }
+        case MN_CMD_REMOVE: {
+            const uint32_t *components = (const uint32_t *)(void *)at;
+            for (uint32_t i = 0; i < command.count; i++) {
+                if (table && table->columns[components[i]]) moves = true;
+            }
+            if (moves) mn_gpu_want_row(table, row, components, command.count);
+            at += round8((size_t)command.count * sizeof(uint32_t));
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    mn_gpu_fetch();
+}
+#endif
+
 /* Goes through the queue in order and empties it. With `apply`, each
  * change is made; without, the queued values are only dropped. */
 static void commands_run(bool apply) {
     MnWorld *w = &mn_world;
     const MnComponentInfo *info = w->program->components;
+#ifdef MN_GPU
+    if (apply && mn_gpu_only) commands_want_rows();
+#endif
     unsigned char *at = w->commands;
     unsigned char *end = at + w->command_len;
     while (at < end) {

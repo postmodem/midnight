@@ -3,9 +3,9 @@
 # `report_cold` reads P only in tables without it, so they share no table and
 # nothing moves between them. `report_frozen` reads P in tables with Frozen;
 # `heat` makes Frozen entities Hot with `add`, so a table with both exists and
-# its P comes back every tick. The `add` downloads P to `heat` and uploads it
-# to `bump` in the tick after. The spawned tables alone (P with Hot, P alone,
-# P with Frozen) would give no line.
+# its P comes back every tick. The `add` brings the row of P back to `heat`
+# and sends it to `bump` in the tick after: `rows` lines. The spawned tables
+# alone (P with Hot, P alone, P with Frozen) would give no line.
 
 component P
   x: Int32

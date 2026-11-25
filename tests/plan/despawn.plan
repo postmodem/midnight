@@ -1,4 +1,2 @@
-upload    Position  reap -> move     on despawn
-upload    Velocity  reap -> move     on despawn
-download  Position  move -> reap     on despawn
+upload    Velocity  reap -> move     rows on despawn
 download  Position  move -> report

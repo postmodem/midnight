@@ -620,7 +620,7 @@ end
 }
 
 #[test]
-fn spawn_changes_every_component_of_the_table_it_makes_and_no_other() {
+fn spawn_sends_the_new_rows_of_the_table_it_makes_and_no_other() {
     assert_plan(
         "
 component Label
@@ -632,9 +632,8 @@ system emitter
 end
 ",
         &[
-            "upload    Position  emitter -> move   on spawn",
-            "upload    Velocity  emitter -> move   on spawn",
-            "download  Position  move -> emitter   on spawn",
+            "upload    Position  emitter -> move   rows on spawn",
+            "upload    Velocity  emitter -> move   rows on spawn",
         ],
     );
     assert_plan(
@@ -664,7 +663,7 @@ end
 }
 
 #[test]
-fn despawn_changes_every_component_with_a_gpu_copy() {
+fn despawn_sends_a_row_where_both_copies_are_current() {
     assert_plan(
         "
 component Lifetime
@@ -678,16 +677,12 @@ system reap
   end
 end
 ",
-        &[
-            "upload    Position  reap -> move   on despawn",
-            "upload    Velocity  reap -> move   on despawn",
-            "download  Position  move -> reap   on despawn",
-        ],
+        &["upload    Velocity  reap -> move   rows on despawn"],
     );
 }
 
 #[test]
-fn add_and_remove_change_every_component_with_a_gpu_copy() {
+fn add_and_remove_move_a_row_of_every_component_with_a_gpu_copy() {
     assert_plan(
         "
 tag Frozen
@@ -699,9 +694,9 @@ system freeze
 end
 ",
         &[
-            "upload    Position  freeze -> move   on add",
-            "upload    Velocity  freeze -> move   on add",
-            "download  Position  move -> freeze   on add",
+            "upload    Position  freeze -> move   rows on add",
+            "upload    Velocity  freeze -> move   rows on add",
+            "download  Position  move -> freeze   rows on add",
         ],
     );
     assert_plan(
@@ -715,9 +710,9 @@ system thaw
 end
 ",
         &[
-            "upload    Position  thaw -> move   on remove",
-            "upload    Velocity  thaw -> move   on remove",
-            "download  Position  move -> thaw   on remove",
+            "upload    Position  thaw -> move   rows on remove",
+            "upload    Velocity  thaw -> move   rows on remove",
+            "download  Position  move -> thaw   rows on remove",
         ],
     );
 }
@@ -741,9 +736,9 @@ system churn
 end
 ",
         &[
-            "upload    Position  churn -> move   on remove",
-            "upload    Velocity  churn -> move   on remove",
-            "download  Position  move -> churn   on remove",
+            "upload    Position  churn -> move   rows on remove",
+            "upload    Velocity  churn -> move   rows on remove",
+            "download  Position  move -> churn   rows on remove",
         ],
     );
 }
@@ -759,8 +754,8 @@ system reap
 end
 ",
         &[
-            "upload    Position  reap -> move   on despawn",
-            "upload    Velocity  reap -> move   on despawn",
+            "upload    Position  reap -> move   rows on despawn",
+            "upload    Velocity  reap -> move   rows on despawn",
             "download  Position  move -> reap",
         ],
     );
@@ -779,7 +774,7 @@ end
 ",
         &[
             "upload    Position  reap -> move",
-            "upload    Velocity  reap -> move   on despawn",
+            "upload    Velocity  reap -> move   rows on despawn",
             "download  Position  move -> reap",
         ],
     );
@@ -803,14 +798,14 @@ end
 ",
         &[
             "upload    Position  wrap -> move",
-            "upload    Velocity  reap -> move   on despawn",
+            "upload    Velocity  reap -> move   rows on despawn",
             "download  Position  move -> wrap",
         ],
     );
 }
 
 #[test]
-fn a_structural_change_before_a_writer_adds_its_own_download() {
+fn a_despawn_before_a_writer_moves_the_row_in_gpu_memory() {
     assert_plan(
         "
 system reap
@@ -827,8 +822,7 @@ end
 ",
         &[
             "upload    Position  wrap -> move",
-            "upload    Velocity  reap -> move   on despawn",
-            "download  Position  move -> reap   on despawn",
+            "upload    Velocity  reap -> move   rows on despawn",
             "download  Position  move -> wrap",
         ],
     );
@@ -851,15 +845,15 @@ system reap
 end
 ",
         &[
-            "upload    Position  reap -> move     on despawn",
-            "upload    Velocity  reap -> move     on despawn",
+            "upload    Position  reap -> move     rows on despawn",
+            "upload    Velocity  reap -> move     rows on despawn",
             "download  Position  move -> report",
         ],
     );
 }
 
 #[test]
-fn a_structural_change_before_a_reader_does_not_hide_its_download() {
+fn a_despawn_before_a_reader_leaves_its_download_unmarked() {
     let text = "
 component Position
   x: Float32
@@ -888,8 +882,6 @@ spawn Position(0.0)
     assert_eq!(
         plan_of(text),
         "\
-upload    Position  reap -> move     on despawn
-download  Position  move -> reap     on despawn
 download  Position  move -> report
 "
     );
@@ -1073,9 +1065,8 @@ fn top_level_structural_changes_between_ticks_are_marked() {
 end
 ",
         &[
-            "upload    Position  top level -> move   on spawn",
-            "upload    Velocity  top level -> move   on spawn",
-            "download  Position  move -> top level   on spawn",
+            "upload    Position  top level -> move   rows on spawn",
+            "upload    Velocity  top level -> move   rows on spawn",
         ],
     );
 }

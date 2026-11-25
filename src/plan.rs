@@ -3,20 +3,28 @@
 //!
 //! Only components that a GPU block names as a query term have a GPU copy.
 //! For each of them the plan follows which copy of the column is current
-//! (the CPU's, the GPU's or both) through one tick:
+//! (the CPU's, the GPU's or both) through one tick, and while the GPU copy
+//! is current, whether rows wait to be sent to it and which step left
+//! them:
 //!
 //! - A GPU block needs the GPU copy of every component in its outer and
-//!   nested queries. Where only the CPU copy is current that is an upload,
-//!   after which both are. A component the block writes is then current on
-//!   the GPU only. A component it overwrites needs no upload.
-//! - Ordinary code needs the CPU copy of every component it uses, as a
-//!   query term or through `e[C]`. Where only the GPU copy is current that
-//!   is a download, after which both are. A component it writes is then
-//!   current on the CPU only. A component its first loop over it
-//!   overwrites needs no download.
-//! - A structural change needs the CPU copy and leaves it the only current
-//!   one: `spawn` for the components it lists, `add`, `remove` and
-//!   `despawn` for every component.
+//!   nested queries. Where only the CPU copy is current that is an upload
+//!   of the array, after which both are; where rows wait, a `rows` upload.
+//!   A component the block writes is then current on the GPU only. A
+//!   component it overwrites needs neither.
+//! - An ordinary query term needs the CPU copy. Where only the GPU copy is
+//!   current that is a download of the array, after which both are. A
+//!   component it writes is then current on the CPU only. A component the
+//!   first use in the step overwrites needs no download.
+//! - `e[C]` moves one row. A read or a write of part of the component,
+//!   where only the GPU copy is current, is a `rows` download, after which
+//!   the GPU copy is still the only current one. A write leaves rows to
+//!   send unless only the CPU copy is current.
+//! - A structural change leaves rows to send unless only the CPU copy is
+//!   current, but a `despawn` where only the GPU copy is current moves the
+//!   row in GPU memory and leaves none. `add` and `remove`, where only the
+//!   GPU copy is current, are also a `rows` download. `spawn` touches the
+//!   components it lists, the others every component.
 //!
 //! Systems run in source order. An ordinary system is one step, with the
 //! functions it calls: what it needs is made current as it starts and what
@@ -31,10 +39,7 @@
 //! That is done twice. The transfers of a tick in which no structural
 //! change runs are the lines with no marker. The transfers that a tick has
 //! besides those when every structural change runs in every tick are
-//! marked with the operation: the download a change forces, and the upload
-//! that follows in the next tick. In such a tick a marked download takes
-//! the place of an unmarked download of the same component later in the
-//! tick.
+//! marked with the operation.
 
 use crate::tir::{
     Block, ComponentId, CompoundOp, Expr, ExprKind, FuncId, Place, PlaceKind, Program, Query, Stmt,
@@ -526,14 +531,14 @@ fn visit(
         return moved;
     }
     if let Current::Gpu { by } = state.current {
+        let moves_row = matches!(change, Some(Structural::Add | Structural::Remove));
         if plain && !uses.overwrite {
             moved = transfer(Direction::Download, by, false, None);
             state.current = Current::Both;
-        } else if !plain && change.is_some() {
-            moved = transfer(Direction::Download, by, false, change);
-            state.current = Current::Both;
         } else if !plain && uses.row_read {
             moved = transfer(Direction::Download, by, true, None);
+        } else if !plain && moves_row {
+            moved = transfer(Direction::Download, by, true, change);
         }
     }
     if uses.write {
@@ -541,19 +546,26 @@ fn visit(
             by: step.who,
             cause: None,
         };
-    } else if change.is_some() {
-        let written = matches!(state.current, Current::Cpu { cause: None, .. });
-        state.current = Current::Cpu {
-            by: step.who,
-            cause: if written { None } else { change },
-        };
     }
     if matches!(state.current, Current::Cpu { .. }) {
         state.rows = None;
-    } else if uses.row_write {
+        return moved;
+    }
+    if uses.row_write {
         state.rows = Some(Rows {
             by: step.who,
             cause: None,
+        });
+    }
+    // A structural change leaves rows to send, except a despawn where only
+    // the GPU copy is current: that row is moved in GPU memory.
+    if let Some(change) = change
+        && (change != Structural::Despawn || state.current == Current::Both)
+    {
+        let written = matches!(state.rows, Some(Rows { cause: None, .. }));
+        state.rows = Some(Rows {
+            by: step.who,
+            cause: if written { None } else { Some(change) },
         });
     }
     moved

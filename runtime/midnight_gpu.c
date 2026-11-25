@@ -79,6 +79,9 @@ typedef struct Column {
     /* What rows handled alone have cost since a block last used the column
      * or it last travelled whole, in bytes of the column moved whole. */
     uint64_t charge;
+    /* The round trip that last brought rows of the column back, when it
+     * is gpu.trip: that trip is charged already. */
+    uint64_t trip;
 } Column;
 
 struct MnGpuTable {
@@ -127,6 +130,10 @@ static struct {
     uint32_t fetch_capacity;
     /* Where columns are copied to be read back. */
     Buffer readback;
+    /* Where a row passes when it moves inside a column. */
+    Buffer scratch;
+    /* The round trip being put together. */
+    uint64_t trip;
     /* The command encoder that records work until it is submitted, and
      * the compute pass open in it; NULL when there is none. Each encoder
      * gets a serial of its own. */
@@ -904,17 +911,77 @@ void mn_gpu_wrote(MnTable *table, uint32_t component) {
     if (column) column_set(table, column, ON_CPU);
 }
 
-void mn_gpu_reclaim(MnTable *table) {
+/* ---- Structural changes -------------------------------------------------- */
+
+/* Takes marks from one row. Its place in the list stays until the list is
+ * next cleared. */
+static void row_unmark(Column *column, uint32_t row, uint8_t marks) {
+    if (row < column->marks_capacity) column->marks[row] &= ~marks;
+}
+
+/* Copies row `from` of the GPU copy over row `to`, through the scratch
+ * buffer: a copy inside one buffer is not allowed. The rows are whole
+ * words, since only a column a block writes has a GPU copy that is the
+ * only current one. */
+static void row_move(Column *column, uint32_t from, uint32_t to) {
+    uint64_t size = column->size;
+    if (gpu.scratch.size < size) buffer_make(&gpu.scratch, size, COLUMN_USAGE);
+    buffer_copy(&column->buffer, (uint64_t)from * size, &gpu.scratch, 0, size);
+    buffer_copy(&gpu.scratch, 0, &column->buffer, (uint64_t)to * size, size);
+    column->version = ++gpu.serial;
+}
+
+void mn_gpu_leave(MnTable *table, uint32_t row) {
+    struct MnGpuTable *copies = table->gpu;
+    if (!copies || copies->current == 0) return;
+    uint32_t last = table->count - 1;
+    for (uint32_t i = 0; i < copies->count; i++) {
+        Column *column = &copies->columns[i];
+        if (column->where == ON_CPU) continue;
+        if (row != last) {
+            if (cpu_has(column, last)) {
+                /* Moved in CPU memory: the place now differs from the GPU
+                 * copy, unless the copy does not hold it. */
+                row_unmark(column, row, ROW_BACK);
+                row_send(table, column, row);
+            } else if (charge(table, column, 2 * ROW_CHARGE)) {
+                row_move(column, last, row);
+                row_unmark(column, row, ROW_SEND | ROW_BACK);
+            } else {
+                column_to_cpu(table, column);
+            }
+        }
+        if (column->where == ON_CPU) continue;
+        row_unmark(column, last, ROW_SEND | ROW_BACK);
+        if (column->held > last) column->held = last;
+    }
+}
+
+void mn_gpu_want_row(MnTable *table, uint32_t row, const uint32_t *skip,
+                     uint32_t skip_count) {
     struct MnGpuTable *copies = table->gpu;
     if (!copies || copies->current == 0) return;
     for (uint32_t i = 0; i < copies->count; i++) {
-        fetch_column(table, &copies->columns[i]);
-    }
-    fetch_run();
-    for (uint32_t i = 0; i < copies->count; i++) {
-        column_set(table, &copies->columns[i], ON_CPU);
+        Column *column = &copies->columns[i];
+        if (column->where != ON_GPU || cpu_has(column, row)) continue;
+        uint32_t s = 0;
+        while (s < skip_count && skip[s] != column->component) s++;
+        if (s < skip_count) continue;
+        uint64_t cost = ROW_CHARGE + (column->trip == gpu.trip ? 0 : TRIP_CHARGE);
+        if (charge(table, column, cost)) {
+            column->trip = gpu.trip;
+            fetch_row(table, column, row);
+        } else {
+            fetch_column(table, column);
+        }
     }
 }
+
+void mn_gpu_fetch(void) {
+    fetch_run();
+    gpu.trip++;
+}
+
 
 /* ---- Blocks -------------------------------------------------------------- */
 
@@ -1531,6 +1598,7 @@ const char *mn_gpu_device_start(bool software) {
         return NULL;
     }
     gpu.queue = wgpuDeviceGetQueue(gpu.device);
+    gpu.trip = 1;
     gpu.max_buffer = limits.maxBufferSize;
     gpu.max_binding = limits.maxStorageBufferBindingSize < limits.maxBufferSize
                           ? limits.maxStorageBufferBindingSize
@@ -1564,6 +1632,7 @@ void mn_gpu_device_finish(void) {
         table->gpu = NULL;
     }
     buffer_drop(&gpu.readback);
+    buffer_drop(&gpu.scratch);
     free(gpu.bytes);
     free(gpu.contents);
     free(gpu.fetches);

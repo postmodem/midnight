@@ -1,9 +1,11 @@
-# expect: `add` and `remove` move a whole row to another table, so each
-# touches every column with a GPU copy. `freeze` adds a tag: it downloads
-# Heat, the only component a GPU block writes. `thaw` removes the tag right
-# after: the CPU copies are current by then, so it downloads nothing, and
-# the uploads of Heat and Rate in the next tick are named after it, the last
-# to change the columns. A tick with neither has no transfer.
+# expect: a tick with neither change has no transfer. `add` and `remove` move
+# a row to another table, so each touches every column with a GPU copy.
+# `freeze` adds a tag: the row of Heat, which only the GPU copy has, comes
+# back, a `rows` download, and in the new table the row of every component
+# waits to be sent. `thaw` removes the tag right after: Heat's row comes back
+# again, since bringing back rows leaves the GPU copy the only current one,
+# and the rows of Heat and Rate it leaves are sent with the next `cool`,
+# named after `thaw`, the last to leave any.
 
 component Heat
   value: Float32

@@ -1,6 +1,6 @@
-tick 0: 4 uploads, 2 downloads, 0 rows up, 1 row down, 4 submissions, 3 waits
-tick 1: 2 uploads, 2 downloads, 0 rows up, 1 row down, 4 submissions, 3 waits
-tick 2: 2 uploads, 2 downloads, 0 rows up, 1 row down, 4 submissions, 3 waits
-tick 3: 2 uploads, 2 downloads, 0 rows up, 1 row down, 4 submissions, 3 waits
-tick 4: 2 uploads, 2 downloads, 0 rows up, 1 row down, 4 submissions, 3 waits
-tick 5: 2 uploads, 3 downloads, 0 rows up, 1 row down, 5 submissions, 4 waits
+tick 0: 3 uploads, 0 downloads, 4 rows up, 1 row down, 4 submissions, 2 waits
+tick 1: 1 upload, 0 downloads, 4 rows up, 1 row down, 4 submissions, 2 waits
+tick 2: 1 upload, 0 downloads, 4 rows up, 1 row down, 4 submissions, 2 waits
+tick 3: 1 upload, 0 downloads, 4 rows up, 1 row down, 4 submissions, 2 waits
+tick 4: 1 upload, 0 downloads, 4 rows up, 1 row down, 4 submissions, 2 waits
+tick 5: 1 upload, 1 download, 4 rows up, 1 row down, 5 submissions, 3 waits

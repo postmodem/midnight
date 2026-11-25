@@ -1,3 +1,4 @@
-upload    Heat  thaw -> cool     on remove
-upload    Rate  thaw -> cool     on remove
-download  Heat  cool -> freeze   on add
+upload    Heat  thaw -> cool     rows on remove
+upload    Rate  thaw -> cool     rows on remove
+download  Heat  cool -> freeze   rows on add
+download  Heat  cool -> thaw     rows on remove

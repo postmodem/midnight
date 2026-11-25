@@ -10,7 +10,10 @@
  * Every column a GPU block names has, per table, a GPU buffer holding the
  * column's bytes, and one of three states: only the CPU copy is current,
  * only the GPU copy is, or both are. A column starts with the CPU copy
- * current.
+ * current. While the GPU copy is current, the rows a table gains are in
+ * CPU memory only until a block uses the column, and single rows can be
+ * newer in CPU memory, or brought back to it, without the whole column
+ * changing state.
  */
 
 #ifndef MIDNIGHT_GPU_H
@@ -69,9 +72,20 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
 /* Releases what mn_gpu_device_run kept for a block. */
 void mn_gpu_device_forget(void *state);
 
-/* Makes the CPU copy of every column of a table the only current one.
- * Call before the table's rows change. */
-void mn_gpu_reclaim(MnTable *table);
+/* Call before a row leaves a table, when the table's last row is about to
+ * take its place in CPU memory. Patches the GPU copy of each column: the
+ * last row's value is moved in GPU memory when CPU memory lacks it, and is
+ * otherwise sent with the next block that uses the column. */
+void mn_gpu_leave(MnTable *table, uint32_t row);
+
+/* Lists for the next round trip, in every column of the table but those
+ * in `skip`, the row's value when only the GPU copy has it. Call before a
+ * row moves to another table; mn_gpu_fetch brings it back. */
+void mn_gpu_want_row(MnTable *table, uint32_t row, const uint32_t *skip,
+                     uint32_t skip_count);
+
+/* Brings back everything listed, with one wait for the device at most. */
+void mn_gpu_fetch(void);
 
 /* Submits the work recorded so far without waiting. */
 void mn_gpu_device_submit(void);

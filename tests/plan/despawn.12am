@@ -1,10 +1,10 @@
 # expect: the line with no marker is the only transfer of a tick in which
-# nothing is despawned: `report` reads what `move` wrote. The marked lines
-# are what a despawn adds. It removes a row from every column, so `reap`
-# downloads Position, the only component a GPU block writes, and `move`
-# uploads Position and Velocity in the next tick. In a tick with a despawn
-# `report` finds the CPU copy current: the marked download takes the place
-# of the unmarked one. Age has no GPU copy and never appears.
+# nothing is despawned: `report` reads what `move` wrote. The marked line
+# is what a despawn adds. The table's last row takes the despawned row's
+# place: Position, which only the GPU copy has, is moved in GPU memory and
+# nothing travels; Velocity, current on both sides, is moved in CPU memory
+# and that row is sent with the next `move`. Age has no GPU copy and never
+# appears.
 
 component Position
   x: Float32
