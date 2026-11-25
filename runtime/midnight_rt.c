@@ -1778,15 +1778,16 @@ static void gpu_start(void) {
         {"info", &gpu_options.info},
         {"stats", &gpu_options.stats},
     };
+    const size_t word_count = sizeof words / sizeof words[0];
     const char *list = getenv("MIDNIGHT_GPU");
     while (list && *list != '\0') {
         size_t len = strcspn(list, ",");
         size_t i = 0;
-        while (i < 4 && (strlen(words[i].word) != len ||
-                         memcmp(words[i].word, list, len) != 0)) {
+        while (i < word_count && (strlen(words[i].word) != len ||
+                                  memcmp(words[i].word, list, len) != 0)) {
             i++;
         }
-        if (i < 4) {
+        if (i < word_count) {
             *words[i].option = true;
         } else if (len != 0) {
             fprintf(stderr, "midnight: MIDNIGHT_GPU: unknown word `%.*s`\n",
