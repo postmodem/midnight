@@ -7,6 +7,7 @@ mod driver;
 mod emit;
 mod lexer;
 mod parser;
+mod plan;
 mod source;
 mod tir;
 
@@ -21,6 +22,7 @@ Usage:
   midnight build FILE [-o OUT] [--debug]   compile to an executable
   midnight run FILE [--debug]              compile to a temporary directory and run
   midnight check FILE                      report errors without generating code
+  midnight plan FILE                       print the CPU-GPU transfers of one tick
   midnight emit-c FILE                     print the generated C
   midnight --version | --help
 
@@ -67,7 +69,10 @@ fn main() -> ExitCode {
 fn parse_args(args: &[String]) -> Result<Args, String> {
     let mut iter = args.iter();
     let command = iter.next().ok_or("no command given")?.clone();
-    if !matches!(command.as_str(), "build" | "run" | "check" | "emit-c") {
+    if !matches!(
+        command.as_str(),
+        "build" | "run" | "check" | "plan" | "emit-c"
+    ) {
         return Err(format!("unknown command `{command}`"));
     }
     let mut file = None;
@@ -97,6 +102,13 @@ fn parse_args(args: &[String]) -> Result<Args, String> {
 }
 
 fn run(args: &Args) -> u8 {
+    if args.command == "plan" {
+        let Some((program, _)) = check_file(&args.file) else {
+            return FAILURE;
+        };
+        print!("{}", plan::render(&plan::plan(&program)));
+        return 0;
+    }
     let Some(c_source) = compile(&args.file, args.command == "check") else {
         return FAILURE;
     };
@@ -133,6 +145,16 @@ fn run(args: &Args) -> u8 {
 /// Runs the front end and, unless `check_only`, the emitter. Prints
 /// diagnostics and returns `None` when the program has errors.
 fn compile(path: &Path, check_only: bool) -> Option<String> {
+    let (program, sources) = check_file(path)?;
+    if check_only {
+        return Some(String::new());
+    }
+    Some(emit::emit(&program, &sources))
+}
+
+/// Runs the front end. Prints diagnostics and returns `None` when the
+/// program has errors.
+fn check_file(path: &Path) -> Option<(tir::Program, SourceMap)> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) => {
@@ -149,10 +171,7 @@ fn compile(path: &Path, check_only: bool) -> Option<String> {
             eprint!("{}", diag::render(&sources, &diagnostics, color));
         })
         .ok()?;
-    if check_only {
-        return Some(String::new());
-    }
-    Some(emit::emit(&program, &sources))
+    Some((program, sources))
 }
 
 /// The root file's name without its extension, in the current directory.
