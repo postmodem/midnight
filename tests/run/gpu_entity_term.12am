@@ -1,0 +1,58 @@
+# `Entity` terms in the outer and the nested query: every entity finds the
+# nearest other one, skipping itself with `next if other == me`, and stores
+# its handle. An entity alone in the world finds `Entity.none`.
+component Spot
+  x: Float32
+end
+
+component Nearest
+  who: Entity
+  distance: Float32
+end
+
+component Lonely
+  who: Entity
+  others: Int32
+end
+
+gpu system find_nearest
+  each Entity, Spot, Nearest do |me, spot, nearest|
+    best = Entity.none
+    best_distance = 1000.0
+    each Entity, Spot do |other, theirs|
+      next if other == me
+      distance = (theirs.x - spot.x).abs
+      if distance < best_distance
+        best_distance = distance
+        best = other
+      end
+    end
+    nearest.who = best
+    nearest.distance = best_distance
+  end
+end
+
+gpu system find_company
+  each Entity, Lonely do |me, lonely|
+    found = Entity.none
+    each Entity, Lonely do |other, theirs|
+      if other != me
+        found = other
+        lonely.others += 1
+      end
+    end
+    lonely.who = found
+  end
+end
+
+spawn Spot(0.0), Nearest(Entity.none, 0.0)
+spawn Spot(1.0), Nearest(Entity.none, 0.0)
+spawn Spot(3.0), Nearest(Entity.none, 0.0)
+spawn Spot(7.5), Nearest(Entity.none, 0.0)
+alone = spawn Lonely(Entity.none, 0)
+alone[Lonely].who = alone
+World.tick
+each Entity, Nearest do |e, nearest|
+  puts "#{e}: #{nearest.who} at #{nearest.distance}"
+end
+puts alone[Lonely]

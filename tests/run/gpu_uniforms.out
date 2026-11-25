@@ -1,0 +1,6 @@
+Probe(f: 40.75, n: 1745749, dir: East, leads: false, tick: 0, dt: 0.25, elapsed: 0.0)
+Probe(f: 40.75, n: 1745749, dir: East, leads: false, tick: 0, dt: 0.25, elapsed: 0.0)
+Probe(f: 33.25, n: 1040110, dir: North, leads: false, tick: 2, dt: 0.5, elapsed: 0.75)
+Probe(f: 33.25, n: 1040110, dir: North, leads: true, tick: 2, dt: 0.5, elapsed: 0.75)
+5000000
+false

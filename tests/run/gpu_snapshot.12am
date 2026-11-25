@@ -1,0 +1,26 @@
+# Snapshot semantics: every entity takes the sum of all values as they were
+# when the `each` began. If a run saw what the runs before it wrote, the
+# three sums of the first tick would be 6, 11 and 20.
+component Cell
+  value: Int32
+end
+
+gpu system sum_all
+  each Cell do |cell|
+    total = 0
+    each Cell do |other|
+      total += other.value
+    end
+    cell.value = total
+  end
+end
+
+spawn Cell(1)
+spawn Cell(2)
+spawn Cell(3)
+2.times do
+  World.tick
+  each Cell do |cell|
+    puts cell.value
+  end
+end

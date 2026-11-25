@@ -1,0 +1,42 @@
+# `e[C]` in ordinary code on components a GPU block names: read and written
+# at the top level between ticks, and in an ordinary system that runs after
+# the GPU system, through a handle the GPU system stored.
+component Score
+  points: Int32
+  best: Entity
+end
+
+component Bonus
+  amount: Int32
+end
+
+gpu system rank
+  each Entity, Score do |me, score|
+    score.points += 1
+    top = me
+    most = score.points
+    each Entity, Score do |other, theirs|
+      if theirs.points >= most
+        most = theirs.points + 1
+        top = other
+      end
+    end
+    score.best = top
+  end
+end
+
+system reward
+  each Score, Bonus do |score, bonus|
+    score.best[Score].points += bonus.amount
+  end
+end
+
+low = spawn Score(1, Entity.none), Bonus(10)
+high = spawn Score(5, Entity.none)
+World.tick
+puts low[Score], high[Score]
+low[Score].points = 50
+high[Score] = Score(7, Entity.none)
+World.tick
+puts low[Score], high[Score]
+puts low[Score].best == low

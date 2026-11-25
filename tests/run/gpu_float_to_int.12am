@@ -1,0 +1,31 @@
+# `to_i`, `floor`, `ceil` and `round` in a GPU block: toward zero, down, up
+# and to the nearest with halves away from zero; the nearest 32-bit `Int`
+# when the `Float` is out of range, and 0 for NaN. The inputs are stored
+# values, exact in 32 bits.
+component Number
+  x: Float32
+  truncated: Int32
+  floored: Int32
+  raised: Int32
+  rounded: Int32
+  nan: Bool
+end
+
+gpu system convert
+  each Number do |number|
+    number.truncated = number.x.to_i
+    number.floored = number.x.floor
+    number.raised = number.x.ceil
+    number.rounded = number.x.round
+    number.nan = number.x.nan?
+  end
+end
+
+zero = 0.0
+[2.5, -2.5, 2.75, -2.75, 0.5, -0.5, 1.0, 3000000000.0, -3000000000.0, 2147483520.0, zero / zero, 1.0 / zero, -1.0 / zero].each do |x|
+  spawn Number(x, 0, 0, 0, 0, false)
+end
+World.tick
+each Number do |number|
+  puts "#{number.truncated} #{number.floored} #{number.raised} #{number.rounded} #{number.nan}"
+end

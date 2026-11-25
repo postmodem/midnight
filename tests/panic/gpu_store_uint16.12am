@@ -1,0 +1,21 @@
+# A compound assignment in a GPU block that takes a UInt16 field, inside a
+# struct inside a component, below zero.
+# Expected: value does not fit in UInt16
+struct Stock
+  count: UInt16
+end
+
+component Shelf
+  stock: Stock
+  sold: Int32
+end
+
+gpu system sell
+  each Shelf do |shelf|
+    shelf.stock.count -= shelf.sold
+  end
+end
+
+spawn Shelf(Stock(10), 10)
+spawn Shelf(Stock(10), 11)
+World.tick

@@ -1,0 +1,40 @@
+# `with:` and `without:` on the outer and on the nested query of a GPU
+# block, with one type and with a bracketed list. The filters name tags and
+# a component with a `String`, which only terms may not have.
+component Value
+  v: Int32
+end
+
+component Out
+  sum: Int32
+end
+
+component Label
+  text: String
+end
+
+tag Active
+tag Hidden
+
+gpu system collect
+  each Out, with: Active, without: Hidden do |out|
+    each Value, without: [Hidden, Label] do |value|
+      out.sum += value.v
+    end
+  end
+  each Out, with: [Active, Hidden] do |out|
+    each Value, with: Hidden do |value|
+      out.sum += value.v * 100
+    end
+  end
+end
+
+spawn Value(1), Out(0), Active
+spawn Value(2), Out(0), Active, Hidden
+spawn Value(4), Out(0)
+spawn Value(8), Out(0), Hidden
+spawn Value(16), Out(0), Label("named")
+World.tick
+each Out do |out|
+  puts out.sum
+end

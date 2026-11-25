@@ -1,0 +1,29 @@
+# A GPU block with no nested `each`: every entity's position moves by half
+# its velocity, in place, three times. Halves and quarters only, so every
+# result is exact.
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * 0.5
+    pos.y += vel.dy * 0.5
+  end
+end
+
+spawn Position(0.0, 0.0), Velocity(1.0, 2.0)
+spawn Position(10.0, -4.0), Velocity(-0.5, 0.25)
+spawn Position(1.5, 1.5), Velocity(0.0, 0.0)
+3.times do
+  World.tick
+end
+each Position do |pos|
+  puts "#{pos.x} #{pos.y}"
+end

@@ -1,0 +1,16 @@
+# A compound assignment in a GPU block that takes a UInt8 field above 255.
+# Expected: value does not fit in UInt8
+component Health
+  hp: UInt8
+  gain: Int32
+end
+
+gpu system heal
+  each Health do |health|
+    health.hp += health.gain
+  end
+end
+
+spawn Health(100, 50)
+spawn Health(200, 56)
+World.tick

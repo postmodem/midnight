@@ -1,0 +1,5 @@
+Entity(0v1): Entity(1v1) at 1.0
+Entity(1v1): Entity(0v1) at 1.0
+Entity(2v1): Entity(1v1) at 2.0
+Entity(3v1): Entity(2v1) at 4.5
+Lonely(who: Entity(none), others: 0)

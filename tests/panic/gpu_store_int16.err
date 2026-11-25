@@ -1,0 +1,1 @@
+tests/panic/gpu_store_int16.12am:17: runtime error: value does not fit in Int16

@@ -1,0 +1,18 @@
+# `Int` modulo by zero in the nested `each` of a GPU block.
+# Expected: modulo by zero
+component Ring
+  size: Int32
+  slot: Int32
+end
+
+gpu system place
+  each Ring do |ring|
+    each Ring do |other|
+      ring.slot += 7 % other.size
+    end
+  end
+end
+
+spawn Ring(3, 0)
+spawn Ring(0, 0)
+World.tick

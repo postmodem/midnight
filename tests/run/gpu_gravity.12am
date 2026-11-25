@@ -1,0 +1,44 @@
+# tolerance: 0.002
+# The gravity system of the specification on four bodies: every body is
+# pulled by every body as it was when the tick began, itself included (at
+# distance zero the pull has no direction, so it adds nothing).
+SOFTENING = 0.01
+
+component Body
+  x: Float32
+  y: Float32
+  vx: Float32
+  vy: Float32
+  mass: Float32
+end
+
+gpu system gravity
+  each Body do |a|
+    ax = 0.0
+    ay = 0.0
+    each Body do |b|
+      dx = b.x - a.x
+      dy = b.y - a.y
+      d2 = dx * dx + dy * dy + SOFTENING
+      pull = b.mass / (d2 * Math.sqrt(d2))
+      ax += dx * pull
+      ay += dy * pull
+    end
+    a.vx += ax * Time.dt
+    a.vy += ay * Time.dt
+    a.x += a.vx * Time.dt
+    a.y += a.vy * Time.dt
+  end
+end
+
+Time.dt = 0.0625
+spawn Body(0.0, 0.0, 0.0, 0.0, 10.0)
+spawn Body(2.0, 0.0, 0.0, 2.0, 1.0)
+spawn Body(-3.0, 0.5, 0.0, -1.5, 1.0)
+spawn Body(0.0, 4.0, 1.5, 0.0, 0.5)
+8.times do
+  World.tick
+end
+each Body do |body|
+  puts "#{body.x.round(3)} #{body.y.round(3)} #{body.vx.round(3)} #{body.vy.round(3)}"
+end

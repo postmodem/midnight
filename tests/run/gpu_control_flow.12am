@@ -1,0 +1,112 @@
+# Control flow in a GPU block: `if` with `elsif` and `else`, `unless`, the
+# modifier forms, `case` on an `Int`, a `Bool` and an enum as a statement
+# and as a value, the conditional operator, `while`, `until`, `loop` with
+# `break`, counting loops up and down with `next`, and `&&` and `||`, which
+# evaluate their right side only when it decides the result: the draws that
+# `drew` makes are counted.
+enum Size
+  Small
+  Medium
+  Large
+end
+
+component Input
+  n: Int32
+  size: Size
+  ready: Bool
+end
+
+component Output
+  branch: Int32
+  cased: Int32
+  looped: Int32
+  counted: Int32
+  draws: Int32
+  size: Size
+end
+
+def drew(answer: Bool) -> Bool
+  rand(10) >= 0 && answer
+end
+
+gpu system flow
+  each Input, Output do |input, output|
+    if input.n < 0
+      output.branch = 1
+    elsif input.n == 0
+      output.branch = 2
+    else
+      output.branch = 3
+    end
+    unless input.ready
+      output.branch += 10
+    end
+    output.branch += 100 if input.ready && input.n > 0
+    output.branch += 1000 unless input.ready || input.n > 0
+
+    case input.n
+    when 0 then output.cased = 1
+    when 1, 2
+      output.cased = 2
+    else
+      output.cased = 3
+    end
+    case input.ready
+    when true then output.cased += 10
+    when false then output.cased += 20
+    end
+    weight = case input.size
+             when Size::Small then 100
+             when Size::Medium then 200
+             when Size::Large then 300
+             end
+    output.cased += weight
+    output.size = input.n > 1 ? Size::Large : input.size
+
+    total = 0
+    i = 0
+    while i < input.n
+      total += i
+      i += 1
+    end
+    until i <= 0
+      i -= 2
+      total += 100
+    end
+    loop do
+      total += 1000
+      break if total > 2500
+    end
+    output.looped = total
+
+    count = 0
+    input.n.times do
+      count += 1
+    end
+    1.upto(4) do |k|
+      next if k == 2
+      count += k * 10
+    end
+    3.downto(input.n) do |k|
+      count += 1000
+      break if k == 2
+    end
+    output.counted = count
+
+    draws = 0
+    draws += 1 if input.ready && drew(true) && drew(true)
+    draws += 10 if input.ready || drew(true)
+    draws += 100 if drew(false) && drew(true)
+    draws += 1000 if drew(true) || drew(true)
+    output.draws = draws + rand(1000) * 10000
+  end
+end
+
+spawn Input(-1, Size::Small, true), Output(0, 0, 0, 0, 0, Size::Small)
+spawn Input(0, Size::Medium, false), Output(0, 0, 0, 0, 0, Size::Small)
+spawn Input(2, Size::Large, true), Output(0, 0, 0, 0, 0, Size::Small)
+spawn Input(5, Size::Small, false), Output(0, 0, 0, 0, 0, Size::Small)
+World.tick
+each Output do |output|
+  puts output
+end

@@ -1,0 +1,17 @@
+# `Int ** Int` with a negative exponent in a GPU block.
+# Expected: negative exponent
+component Growth
+  base: Int32
+  exponent: Int32
+  value: Int32
+end
+
+gpu system grow
+  each Growth do |growth|
+    growth.value = growth.base ** growth.exponent
+  end
+end
+
+spawn Growth(2, 10, 0)
+spawn Growth(2, -1, 0)
+World.tick

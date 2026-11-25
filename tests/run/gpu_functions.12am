@@ -1,0 +1,77 @@
+# Functions called from a GPU block compute at 32 bits while they are
+# called from it, and at 64 bits when ordinary code calls them: the same
+# `def`, two results. Functions call functions, return early, loop, and read
+# a constant and a resource.
+FACTOR = 1000000
+
+resource Tuning
+  bonus: Int = 7
+end
+
+def scaled(n: Int) -> Int
+  n * FACTOR
+end
+
+def sees_small(x: Float) -> Bool
+  x + 0.00000001 > x
+end
+
+def exact(n: Int) -> Float
+  n.to_f + 1.0
+end
+
+def collatz(n: Int) -> Int
+  steps = 0
+  value = n
+  while value != 1
+    if value % 2 == 0
+      value /= 2
+    else
+      value = value * 3 + 1
+    end
+    steps += 1
+  end
+  steps
+end
+
+def bounded(n: Int) -> Int
+  return 0 if n < 0
+  return 100 if n > 100
+  n + Tuning.bonus
+end
+
+def twice_bounded(n: Int) -> Int
+  bounded(bounded(n))
+end
+
+component Sample
+  n: Int32
+  scaled: Int32
+  small: Bool
+  exact: Float32
+  steps: Int32
+  bounded: Int32
+end
+
+gpu system apply
+  each Sample do |s|
+    s.scaled = scaled(s.n) / 1000
+    s.small = sees_small(1.0)
+    s.exact = exact(16777216)
+    s.steps = collatz(s.n)
+    s.bounded = twice_bounded(s.n - 5000)
+  end
+end
+
+spawn Sample(5000, 0, true, 0.0, 0, 0)
+spawn Sample(5027, 0, true, 0.0, 0, 0)
+spawn Sample(27, 0, true, 0.0, 0, 0)
+World.tick
+each Sample do |s|
+  puts s
+end
+puts scaled(5000) / 1000
+puts sees_small(1.0)
+puts exact(16777216)
+puts collatz(5000), collatz(5027), collatz(27)
+puts twice_bounded(27)

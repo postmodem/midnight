@@ -1,0 +1,61 @@
+# Every kind of field a GPU block can read and write: Float32, the four
+# narrow integers, Int32, Bool, an enum, an Entity, and a struct of narrow
+# fields, read and written as a whole and field by field. The component is
+# 28 bytes; its one- and two-byte fields share words.
+enum Mode
+  Idle
+  Busy
+  Done
+end
+
+struct Pair
+  lo: Int8
+  hi: UInt16
+end
+
+component Packed
+  f: Float32
+  i8: Int8
+  i16: Int16
+  i32: Int32
+  u8: UInt8
+  u16: UInt16
+  flag: Bool
+  mode: Mode
+  friend: Entity
+  pair: Pair
+end
+
+gpu system churn
+  each Entity, Packed do |me, p|
+    p.f = p.f * 2.0 + 0.5
+    p.i8 = -p.i8
+    p.i16 -= 1000
+    p.i32 *= 3
+    p.u8 += 1
+    p.u16 = p.u16 * 2
+    p.flag = !p.flag
+    p.mode = case p.mode
+             when Mode::Idle then Mode::Busy
+             when Mode::Busy then Mode::Done
+             else Mode::Idle
+             end
+    if p.friend == Entity.none
+      p.friend = me
+    else
+      p.friend = Entity.none
+    end
+    p.pair.hi += 1
+    old = p.pair
+    p.pair = Pair(old.lo - 1, old.hi * 2)
+  end
+end
+
+spawn Packed(1.25, 127, 32767, 700000000, 253, 15000, false, Mode::Idle, Entity.none, Pair(0, 0))
+spawn Packed(-1.25, -5, -30768, -1, 0, 0, true, Mode::Done, Entity.none, Pair(-126, 16382))
+2.times do
+  World.tick
+  each Packed do |p|
+    puts p
+  end
+end

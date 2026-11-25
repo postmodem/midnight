@@ -1,0 +1,21 @@
+# Two different operations fail in one `each` of a GPU system. The first
+# entity fails on the later line and the second on the earlier one: the
+# error names the operation that is earliest in the source, whichever run
+# it failed in.
+# Expected: division by zero, on the line of the `/`
+component Gauge
+  reading: UInt8
+  scale: Int32
+  boost: Int32
+end
+
+gpu system adjust
+  each Gauge do |gauge|
+    ratio = 100 / gauge.scale
+    gauge.reading = ratio + gauge.boost
+  end
+end
+
+spawn Gauge(0, 1, 200)
+spawn Gauge(0, 0, 0)
+World.tick

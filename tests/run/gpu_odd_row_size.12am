@@ -1,0 +1,55 @@
+# Components a GPU block only reads keep their natural size, which need not
+# be a multiple of four bytes: Tiny is 3 bytes, Shorts is 6 and Kind is 1.
+# Six rows put every field at each position within a word. The component
+# the block writes, Sum, is whole words.
+enum Shape
+  Round
+  Square
+end
+
+component Tiny
+  a: UInt8
+  b: Int8
+  lit: Bool
+end
+
+component Shorts
+  p: Int16
+  q: UInt16
+  r: Int16
+end
+
+component Kind
+  shape: Shape
+end
+
+component Sum
+  own: Int32
+  all: Int32
+end
+
+gpu system read_odd
+  each Tiny, Shorts, Kind, Sum do |tiny, shorts, kind, sum|
+    sum.own = tiny.a + tiny.b + shorts.p + shorts.q + shorts.r
+    sum.own += 100000 if tiny.lit
+    sum.own += 200000 if kind.shape == Shape::Square
+    total = 0
+    each Tiny, Shorts, Kind do |t, s, k|
+      total += t.a * 2 + t.b + s.p - s.r + s.q
+      total += 1000000 if t.lit
+      total += 10000000 if k.shape == Shape::Square
+    end
+    sum.all = total
+  end
+end
+
+spawn Tiny(1, -1, true), Shorts(-2, 3, 4), Kind(Shape::Round), Sum(0, 0)
+spawn Tiny(200, 100, false), Shorts(1000, 40000, -1000), Kind(Shape::Square), Sum(0, 0)
+spawn Tiny(255, -128, true), Shorts(-32768, 65535, 32767), Kind(Shape::Square), Sum(0, 0)
+spawn Tiny(0, 127, false), Shorts(7, 0, -7), Kind(Shape::Round), Sum(0, 0)
+spawn Tiny(16, -16, true), Shorts(256, 257, 258), Kind(Shape::Round), Sum(0, 0)
+spawn Tiny(128, -2, false), Shorts(-1, 32768, -1), Kind(Shape::Square), Sum(0, 0)
+World.tick
+each Sum do |sum|
+  puts sum
+end

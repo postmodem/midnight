@@ -1,0 +1,4 @@
+Counter(n: 101, through_outer: 101, through_nested: 1)
+Counter(n: 102, through_outer: 102, through_nested: 2)
+Counter(n: 201, through_outer: 201, through_nested: 101)
+Counter(n: 202, through_outer: 202, through_nested: 102)

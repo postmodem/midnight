@@ -1,0 +1,50 @@
+# Queries that match several tables. The six entities are in six tables.
+# `grow` writes Mass in all six while its nested `each` reads all six as they
+# were; `add_up` runs over the four tables that have Total and reads Mass
+# from all six.
+component Mass
+  m: Int32
+end
+
+component Total
+  sum: Int32
+end
+
+tag Heavy
+tag Marked
+
+gpu system grow
+  each Mass do |mass|
+    heavier = 0
+    each Mass do |other|
+      heavier += 1 if other.m > mass.m
+    end
+    mass.m += heavier
+  end
+end
+
+gpu system add_up
+  each Total do |total|
+    each Mass do |mass|
+      total.sum += mass.m
+    end
+  end
+end
+
+spawn Mass(1), Total(0)
+spawn Mass(2), Total(0), Heavy
+spawn Mass(4), Total(0), Marked
+spawn Mass(8), Total(0), Heavy, Marked
+spawn Mass(16)
+spawn Mass(32), Heavy
+2.times do
+  World.tick
+  each Mass do |mass|
+    print mass.m, " "
+  end
+  puts
+  each Total do |total|
+    print total.sum, " "
+  end
+  puts
+end

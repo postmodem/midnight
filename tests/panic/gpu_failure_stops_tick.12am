@@ -1,0 +1,26 @@
+# A failure in a GPU block stops the program when that `each` ends: the
+# next `each` of the system, which would fail with another message, does
+# not run, and neither does the system after it, which would end the
+# program with status 3.
+# Expected: negative exponent
+component Charge
+  level: Int32
+  rate: Int32
+end
+
+gpu system charge
+  each Charge do |charge|
+    charge.level = 2 ** charge.rate
+  end
+  each Charge do |charge|
+    charge.level = charge.level / (charge.rate + 1)
+  end
+end
+
+system leave
+  exit(3)
+end
+
+spawn Charge(0, 3)
+spawn Charge(0, -1)
+World.tick

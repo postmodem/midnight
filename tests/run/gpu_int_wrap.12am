@@ -1,0 +1,38 @@
+# `Int` is 32 bits wide in a GPU block and wraps: `+`, `-`, `*`, unary
+# minus, `abs` and `**`, on values read from fields and on literals. The
+# same expressions in ordinary code, at 64 bits, give the second half of the
+# output.
+component Wrap
+  big: Int32
+  small: Int32
+  sum: Int32
+  difference: Int32
+  product: Int32
+  negated: Int32
+  absolute: Int32
+  power: Int32
+  literal: Int32
+  back: Int32
+end
+
+gpu system wrap
+  each Wrap do |w|
+    w.sum = w.big + 1
+    w.difference = w.small - 1
+    w.product = w.big * 2
+    w.negated = -w.small
+    w.absolute = w.small.abs
+    w.power = 3 ** 21 + w.big ** 2
+    literal = 2147483647 + 1
+    w.literal = literal
+    w.back = (w.big + 1) - 1
+  end
+end
+
+spawn Wrap(2147483647, -2147483648, 0, 0, 0, 0, 0, 0, 0, 0)
+World.tick
+each Wrap do |w|
+  puts w.sum, w.difference, w.product, w.negated, w.absolute, w.power, w.literal, w.back
+  puts w.big + 1, w.small - 1, w.big * 2, -w.small, w.small.abs, 3 ** 21 + w.big ** 2
+  puts 2147483647 + 1, (w.big + 1) - 1
+end

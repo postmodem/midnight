@@ -1,0 +1,55 @@
+# Ordinary systems and a GPU system working on the same components within
+# one tick: `refill` writes Tank before the GPU system reads and writes it,
+# `report` reads what the GPU system wrote, and `drain` writes it again.
+# The top level reads and writes between ticks.
+component Tank
+  level: Int32
+  drawn: Int32
+end
+
+resource Log
+  seen: Int = 0
+end
+
+system refill
+  each Tank do |tank|
+    tank.level += 10
+  end
+end
+
+gpu system share
+  each Tank do |tank|
+    total = 0
+    each Tank do |other|
+      total += other.level
+    end
+    tank.drawn = total
+    tank.level *= 2
+  end
+end
+
+system report
+  each Tank do |tank|
+    Log.seen += tank.level + tank.drawn
+  end
+end
+
+system drain
+  each Tank do |tank|
+    tank.level -= 1
+  end
+end
+
+spawn Tank(1, 0)
+spawn Tank(2, 0)
+World.tick
+puts Log.seen
+each Tank do |tank|
+  puts tank
+  tank.level += 100
+end
+World.tick
+puts Log.seen
+each Tank do |tank|
+  puts tank
+end

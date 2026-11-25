@@ -1,0 +1,35 @@
+# `next` directly inside a GPU block ends the run for that entity and keeps
+# what the run has written. Inside a loop of the block, `next` and `break`
+# belong to that loop.
+component Step
+  a: Int32
+  b: Int32
+  c: Int32
+end
+
+gpu system steps
+  each Step do |step|
+    step.a = 1
+    next if step.c == 0
+    step.b = 2
+    if step.c == 1
+      step.b = 3
+      next
+    end
+    count = 0
+    10.times do |i|
+      next if i % 2 == 0
+      break if i > 6
+      count += i
+    end
+    step.c = count
+  end
+end
+
+spawn Step(0, 0, 0)
+spawn Step(0, 0, 1)
+spawn Step(0, 0, 2)
+World.tick
+each Step do |step|
+  puts step
+end

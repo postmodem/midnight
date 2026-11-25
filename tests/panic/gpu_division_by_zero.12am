@@ -1,0 +1,20 @@
+# `Int` division by zero in a GPU block. The run goes on with 0 as the
+# quotient, every other run finishes, and the program stops when the `each`
+# ends.
+# Expected: division by zero
+component Share
+  total: Int32
+  parts: Int32
+  each_gets: Int32
+end
+
+gpu system split
+  each Share do |share|
+    share.each_gets = share.total / share.parts
+  end
+end
+
+spawn Share(10, 2, 0)
+spawn Share(10, 0, 0)
+spawn Share(10, 5, 0)
+World.tick

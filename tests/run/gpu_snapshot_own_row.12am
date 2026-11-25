@@ -1,0 +1,29 @@
+# A run sees its own writes through the outer parameter, and its own entity
+# as it was when the `each` began through the parameter of the nested
+# `each`.
+component Counter
+  n: Int32
+  through_outer: Int32
+  through_nested: Int32
+end
+
+gpu system observe
+  each Entity, Counter do |me, counter|
+    counter.n += 100
+    each Entity, Counter do |other, theirs|
+      if other == me
+        counter.through_nested = theirs.n
+      end
+    end
+    counter.through_outer = counter.n
+  end
+end
+
+spawn Counter(1, 0, 0)
+spawn Counter(2, 0, 0)
+2.times do
+  World.tick
+  each Counter do |counter|
+    puts counter
+  end
+end

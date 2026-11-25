@@ -1,0 +1,16 @@
+# An assignment in a GPU block of a value below -128 to an Int8 field.
+# Expected: value does not fit in Int8
+component Offset
+  step: Int8
+  wanted: Int32
+end
+
+gpu system apply
+  each Offset do |offset|
+    offset.step = offset.wanted
+  end
+end
+
+spawn Offset(0, -128)
+spawn Offset(0, -129)
+World.tick

@@ -1,0 +1,25 @@
+# An operation that fails in a function called from a GPU block: the error
+# names the line in the function.
+# Expected: modulo by zero, on the line in `wrapped`
+def wrapped(value: Int, size: Int) -> Int
+  value % size
+end
+
+def twice_wrapped(value: Int, size: Int) -> Int
+  wrapped(wrapped(value, size), size)
+end
+
+component Wheel
+  angle: Int32
+  size: Int32
+end
+
+gpu system turn
+  each Wheel do |wheel|
+    wheel.angle = twice_wrapped(wheel.angle + 90, wheel.size)
+  end
+end
+
+spawn Wheel(350, 360)
+spawn Wheel(350, 0)
+World.tick

@@ -1,0 +1,4 @@
+Packed(f: 3.0, i8: -127, i16: 31767, i32: 2100000000, u8: 254, u16: 30000, flag: true, mode: Busy, friend: Entity(0v1), pair: Pair(lo: -1, hi: 2))
+Packed(f: -2.0, i8: 5, i16: -31768, i32: -3, u8: 1, u16: 0, flag: false, mode: Idle, friend: Entity(1v1), pair: Pair(lo: -127, hi: 32766))
+Packed(f: 6.5, i8: 127, i16: 30767, i32: 2005032704, u8: 255, u16: 60000, flag: false, mode: Done, friend: Entity(none), pair: Pair(lo: -2, hi: 6))
+Packed(f: -3.5, i8: -5, i16: -32768, i32: -9, u8: 2, u16: 0, flag: true, mode: Busy, friend: Entity(none), pair: Pair(lo: -128, hi: 65534))

@@ -1,0 +1,16 @@
+# `rand(n)` in a GPU block when `n` is not positive.
+# Expected: rand: the argument must be positive
+component Die
+  sides: Int32
+  face: Int32
+end
+
+gpu system roll
+  each Die do |die|
+    die.face = rand(die.sides)
+  end
+end
+
+spawn Die(6, 0)
+spawn Die(0, 0)
+World.tick

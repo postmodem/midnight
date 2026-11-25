@@ -1,0 +1,1 @@
+tests/panic/gpu_store_uint16.12am:15: runtime error: value does not fit in UInt16

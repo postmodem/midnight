@@ -1,0 +1,32 @@
+# The `each` blocks of one GPU system run in order, and each sees what the
+# ones before it wrote: the second block sums the values the first block
+# raised, and the third reads those sums.
+component Acc
+  v: Int32
+  sum: Int32
+  twice: Int32
+end
+
+gpu system three_steps
+  each Acc do |acc|
+    acc.v += 1
+  end
+  each Acc do |acc|
+    total = 0
+    each Acc do |other|
+      total += other.v
+    end
+    acc.sum = total
+  end
+  each Acc do |acc|
+    acc.twice = acc.sum * 2
+  end
+end
+
+spawn Acc(1, 0, 0)
+spawn Acc(2, 0, 0)
+spawn Acc(3, 0, 0)
+World.tick
+each Acc do |acc|
+  puts acc
+end

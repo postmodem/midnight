@@ -1,0 +1,4 @@
+Output(branch: 1, cased: 113, looped: 3000, counted: 2080, draws: 9471011, size: Small)
+Output(branch: 1012, cased: 221, looped: 3000, counted: 2080, draws: 2421010, size: Medium)
+Output(branch: 103, cased: 312, looped: 3101, counted: 2082, draws: 6191011, size: Large)
+Output(branch: 13, cased: 123, looped: 3310, counted: 85, draws: 4921010, size: Large)

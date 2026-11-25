@@ -1,0 +1,1 @@
+tests/panic/gpu_store_int8.12am:10: runtime error: value does not fit in Int8

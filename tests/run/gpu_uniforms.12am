@@ -1,0 +1,91 @@
+# What a GPU block reads besides its components: resource fields of every
+# plain kind, constants the compiler knows and constants it does not, and
+# the three fields of `Time`. They are read when the `each` begins, so a
+# change made between ticks is seen by the next tick. An `Int` wider than 32
+# bits wraps on the way in and a `Float` is rounded to 32 bits.
+enum Dir
+  North
+  East
+  South
+end
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+struct Limits
+  low: Int8
+  high: UInt16
+  spot: Vec2
+end
+
+resource Wind
+  speed: Float = 2.5
+  gusts: Int = 3
+  blowing: Bool = true
+  dir: Dir = Dir::East
+  origin: Vec2 = Vec2(1.0, 2.0)
+  level: UInt8 = 7
+  leader: Entity = Entity.none
+  big: Int = 5000000000
+  fine: Float = 16777217.0
+end
+
+LIMIT = 6
+HALF = 0.5
+ORIGIN = Vec2(10.0, 20.0)
+ROOT = Math.sqrt(16.0)
+HEADING = Dir::South
+LIMITS = Limits(-3, 40000, Vec2(0.25, 0.75))
+BIG = 5000000000
+FLAG = true
+
+component Probe
+  f: Float32
+  n: Int32
+  dir: Dir
+  leads: Bool
+  tick: Int32
+  dt: Float32
+  elapsed: Float32
+end
+
+def from_function -> Float
+  Wind.origin.y + ORIGIN.x + HALF
+end
+
+gpu system read_all
+  each Entity, Probe do |me, probe|
+    probe.f = Wind.speed + Wind.origin.x + ORIGIN.y + ROOT + LIMITS.spot.y + from_function
+    probe.n = Wind.gusts + Wind.level + LIMIT + LIMITS.low + LIMITS.high
+    probe.n += Wind.big / 1000 + BIG % 1000 if Wind.blowing && FLAG
+    probe.n += 1000000 if Wind.fine == 16777216.0
+    probe.dir = if Wind.dir == HEADING then Dir::North else Wind.dir end
+    probe.leads = me == Wind.leader
+    probe.tick = Time.tick
+    probe.dt = Time.dt
+    probe.elapsed = Time.elapsed
+  end
+end
+
+first = spawn Probe(0.0, 0, Dir::North, true, 0, 0.0, 0.0)
+second = spawn Probe(0.0, 0, Dir::North, true, 0, 0.0, 0.0)
+Time.dt = 0.25
+World.tick
+each Probe do |probe|
+  puts probe
+end
+Wind.speed = -2.5
+Wind.gusts = 100
+Wind.blowing = false
+Wind.dir = Dir::South
+Wind.origin = Vec2(0.5, 0.0)
+Wind.leader = second
+Time.dt = 0.5
+World.tick
+World.tick
+each Probe do |probe|
+  puts probe
+end
+puts Wind.big / 1000 + BIG % 1000, Wind.fine == 16777216.0

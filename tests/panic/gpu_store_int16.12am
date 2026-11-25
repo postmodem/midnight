@@ -1,0 +1,24 @@
+# An Int16 field of a struct built in a GPU block from a value above 32767:
+# the constructor checks it, on the line of that argument.
+# Expected: value does not fit in Int16
+struct Cell
+  column: Int16
+  row: Int16
+end
+
+component Cursor
+  at: Cell
+  jump: Int32
+end
+
+gpu system advance
+  each Cursor do |cursor|
+    cursor.at = Cell(
+      cursor.at.column + cursor.jump,
+      cursor.at.row)
+  end
+end
+
+spawn Cursor(Cell(32000, 0), 767)
+spawn Cursor(Cell(32000, 0), 768)
+World.tick

@@ -1,0 +1,58 @@
+# `rand` and `rand(n)` in a GPU block. A number depends on the seed, the
+# block, the tick, the entity and how many numbers the run has drawn, here
+# and in the functions it calls: so the lines below differ from entity to
+# entity, from tick to tick, from draw to draw and between the two blocks,
+# and are the same in every run. `srand` changes them. Drawing in a GPU
+# system leaves the ordinary generator where it was.
+component Dice
+  first: Int32
+  second: Int32
+  rolled: Int32
+  unit: Float32
+  other: Int32
+end
+
+def roll(n: Int) -> Int
+  rand(n)
+end
+
+gpu system throw
+  each Dice do |dice|
+    dice.first = rand(1000)
+    dice.second = rand(1000)
+    dice.rolled = roll(1000) + roll(1000) * 1000
+    dice.unit = rand
+  end
+  each Dice do |dice|
+    dice.other = rand(1000)
+  end
+end
+
+def show
+  each Dice do |dice|
+    bits = (dice.unit * 16777216.0).to_i
+    puts "#{dice.first} #{dice.second} #{dice.rolled} #{bits} #{dice.other}"
+  end
+end
+
+spawn Dice(0, 0, 0, 0.0, 0)
+spawn Dice(0, 0, 0, 0.0, 0)
+spawn Dice(0, 0, 0, 0.0, 0)
+World.tick
+show
+World.tick
+show
+
+srand(42)
+x1 = rand(1000000)
+x2 = rand(1000000)
+srand(42)
+y1 = rand(1000000)
+World.tick
+y2 = rand(1000000)
+puts x1 == y1 && x2 == y2
+show
+
+srand(7)
+World.tick
+show

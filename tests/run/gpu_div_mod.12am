@@ -1,0 +1,61 @@
+# tolerance: 0.002
+# `/` and `%` in a GPU block. On `Int` the quotient rounds toward negative
+# infinity and the remainder takes the sign of the divisor, by a variable
+# and by a constant; the smallest `Int` divided by -1 wraps. On `Float` the
+# remainder takes the sign of the divisor too, and no quotient is close to a
+# whole number.
+component Pair
+  a: Int32
+  b: Int32
+  quotient: Int32
+  remainder: Int32
+  by_three: Int32
+  mod_three: Int32
+  by_minus_three: Int32
+  mod_minus_three: Int32
+end
+
+component Reals
+  a: Float32
+  b: Float32
+  quotient: Float32
+  remainder: Float32
+end
+
+gpu system divide
+  each Pair do |pair|
+    pair.quotient = pair.a / pair.b
+    pair.remainder = pair.a % pair.b
+    pair.by_three = pair.a / 3
+    pair.mod_three = pair.a % 3
+    pair.by_minus_three = pair.a / -3
+    pair.mod_minus_three = pair.a % -3
+  end
+  each Reals do |reals|
+    reals.quotient = reals.a / reals.b
+    reals.remainder = reals.a % reals.b
+  end
+end
+
+spawn Pair(7, 2, 0, 0, 0, 0, 0, 0)
+spawn Pair(-7, 2, 0, 0, 0, 0, 0, 0)
+spawn Pair(7, -2, 0, 0, 0, 0, 0, 0)
+spawn Pair(-7, -2, 0, 0, 0, 0, 0, 0)
+spawn Pair(6, 3, 0, 0, 0, 0, 0, 0)
+spawn Pair(-6, 3, 0, 0, 0, 0, 0, 0)
+spawn Pair(0, -5, 0, 0, 0, 0, 0, 0)
+spawn Pair(-2147483648, -1, 0, 0, 0, 0, 0, 0)
+spawn Pair(2147483647, -1, 0, 0, 0, 0, 0, 0)
+spawn Reals(5.5, 2.0, 0.0, 0.0)
+spawn Reals(-5.5, 2.0, 0.0, 0.0)
+spawn Reals(5.5, -2.0, 0.0, 0.0)
+spawn Reals(-5.5, -2.0, 0.0, 0.0)
+spawn Reals(7.0, 1.5, 0.0, 0.0)
+World.tick
+each Pair do |pair|
+  print pair.quotient, " ", pair.remainder, " ", pair.by_three, " ", pair.mod_three, " "
+  puts "#{pair.by_minus_three} #{pair.mod_minus_three}"
+end
+each Reals do |reals|
+  puts "#{reals.quotient.round(3)} #{reals.remainder.round(3)}"
+end

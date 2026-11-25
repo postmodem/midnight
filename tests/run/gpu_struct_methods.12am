@@ -1,0 +1,76 @@
+# tolerance: 0.002
+# Structs in a GPU block: construction, fields, methods, operator methods,
+# unary minus, compound assignment through an operator method on a local and
+# on a field of a component, `==` on structs, and a struct with `Float`
+# fields, which is 32 bits wide here. Halves and quarters, so every result
+# is exact but the square root, whose sum is printed rounded.
+struct Vec2
+  x: Float32 = 0
+  y: Float32 = 0
+
+  def +(other: Vec2) -> Vec2
+    Vec2(x + other.x, y + other.y)
+  end
+
+  def -(other: Vec2) -> Vec2
+    Vec2(x - other.x, y - other.y)
+  end
+
+  def *(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+
+  def -@ -> Vec2
+    Vec2(-x, -y)
+  end
+
+  def dot(other: Vec2) -> Float
+    x * other.x + y * other.y
+  end
+
+  def length -> Float
+    Math.sqrt(self.dot(self))
+  end
+
+  def flipped -> Vec2
+    Vec2(y, x)
+  end
+end
+
+struct Wide
+  a: Float
+  n: Int
+
+  def total -> Float
+    a + n
+  end
+end
+
+component Mover
+  pos: Vec2
+  vel: Vec2
+  speed: Float32
+  same: Bool
+  wide: Float32
+end
+
+gpu system move
+  each Mover do |m|
+    step = m.vel * 0.5
+    m.pos += step
+    back = -step
+    back += Vec2(1.0, 1.0)
+    m.vel = m.vel - back.flipped * 0.25
+    m.speed = Vec2(3.0, 4.0).length + m.vel.dot(Vec2(1.0, 0.0))
+    m.same = m.pos == Vec2(1.0, 2.0) || m.pos.flipped != m.pos.flipped
+    wide = Wide(0.5, 2)
+    m.wide = wide.total + Wide(a: 1.0, n: 1).a
+  end
+end
+
+spawn Mover(Vec2(0.0, 0.0), Vec2(2.0, 4.0), 0.0, false, 0.0)
+spawn Mover(Vec2(8.0, -8.0), Vec2(-1.0, 0.5), 0.0, true, 0.0)
+World.tick
+each Mover do |m|
+  puts m.pos, m.vel, m.speed.round(2), m.same, m.wide
+end

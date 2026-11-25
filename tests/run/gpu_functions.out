@@ -1,0 +1,10 @@
+Sample(n: 5000, scaled: 705032, small: false, exact: 16777216.0, steps: 28, bounded: 14)
+Sample(n: 5027, scaled: 732032, small: false, exact: 16777216.0, steps: 134, bounded: 41)
+Sample(n: 27, scaled: 27000, small: false, exact: 16777216.0, steps: 111, bounded: 7)
+5000000
+true
+16777217.0
+28
+134
+111
+41

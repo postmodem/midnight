@@ -1,0 +1,1 @@
+tests/panic/gpu_rand_not_positive.12am:10: runtime error: rand: the argument must be positive

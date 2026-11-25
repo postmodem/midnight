@@ -1,0 +1,90 @@
+# tolerance: 0.02
+# The number built-ins in a GPU block: `abs`, `clamp`, `min` and `max` on
+# `Int` and `Float`, `to_f`, `round(digits)` with digits after and before
+# the point, the `Math` functions, and `**` on `Float` with a positive and
+# a negative base and on `Int`. Everything a GPU may round differently is
+# printed to two places.
+component Number
+  x: Float32
+  n: Int32
+end
+
+component Ints
+  absolute: Int32
+  clamped: Int32
+  least: Int32
+  most: Int32
+  power: Int32
+end
+
+component Floats
+  absolute: Float32
+  clamped: Float32
+  least: Float32
+  most: Float32
+  mixed: Float32
+  quarter: Float32
+  cents: Float32
+  tens: Float32
+end
+
+component Maths
+  root: Float32
+  sine: Float32
+  cosine: Float32
+  tangent: Float32
+  angle: Float32
+  grown: Float32
+  logged: Float32
+  squared: Float32
+  cubed: Float32
+  rooted: Float32
+end
+
+gpu system compute
+  each Number, Ints, Floats do |number, ints, floats|
+    ints.absolute = number.n.abs
+    ints.clamped = number.n.clamp(-5, 5)
+    ints.least = min(number.n, 4)
+    ints.most = max(number.n, 4)
+    ints.power = 3 ** number.n.abs + number.n ** 2
+    floats.absolute = number.x.abs
+    floats.clamped = number.x.clamp(-1.0, 2.0)
+    floats.least = min(number.x, 1.5)
+    floats.most = max(number.x, 1.5)
+    floats.mixed = min(number.n, number.x)
+    floats.quarter = number.n.to_f / 4.0
+    floats.cents = (number.x * 1.2345).round(2)
+    floats.tens = (number.x * 100.0 + 3.0).round(-1)
+  end
+  each Number, Maths do |number, maths|
+    x = number.x
+    maths.root = Math.sqrt(x.abs)
+    maths.sine = Math.sin(x)
+    maths.cosine = Math.cos(x)
+    maths.tangent = Math.tan(x)
+    maths.angle = Math.atan2(x, 2.0)
+    maths.grown = Math.exp(x / 4.0)
+    maths.logged = Math.log(x.abs + 1.0)
+    maths.squared = x ** 2.0
+    maths.cubed = (-x.abs) ** 3.0
+    maths.rooted = x.abs ** 0.5
+  end
+end
+
+spawn Number(2.5, -7), Ints(0, 0, 0, 0, 0), Floats(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Maths(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+spawn Number(-0.25, 12), Ints(0, 0, 0, 0, 0), Floats(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Maths(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+spawn Number(1.0, 3), Ints(0, 0, 0, 0, 0), Floats(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Maths(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+World.tick
+each Ints do |ints|
+  puts ints
+end
+each Floats do |f|
+  print f.absolute, " ", f.clamped, " ", f.least, " ", f.most, " ", f.mixed, " ", f.quarter, " "
+  puts "#{f.cents.round(2)} #{f.tens.round(2)}"
+end
+each Maths do |m|
+  print m.root.round(2), " ", m.sine.round(2), " ", m.cosine.round(2), " ", m.tangent.round(2), " "
+  print m.angle.round(2), " ", m.grown.round(2), " ", m.logged.round(2), " "
+  puts "#{m.squared.round(2)} #{(m.cubed * 10.0).round(2)} #{m.rooted.round(2)}"
+end

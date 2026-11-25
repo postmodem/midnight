@@ -1,0 +1,37 @@
+# `break` and `next` inside the nested `each` of a GPU block. The nested
+# `each` visits entities in the order an ordinary `each` would, so the count
+# before `break` is the entity's own position.
+component Item
+  rank: Int32
+end
+
+component Count
+  before: Int32
+  odd: Int32
+end
+
+gpu system count
+  each Item, Count do |item, count|
+    n = 0
+    each Item do |other|
+      break if other.rank == item.rank
+      n += 1
+    end
+    count.before = n
+  end
+  each Count do |count|
+    each Item do |other|
+      next if other.rank % 2 == 0
+      count.odd += 1
+    end
+  end
+end
+
+spawn Item(5), Count(0, 0)
+spawn Item(4), Count(0, 0)
+spawn Item(9), Count(0, 0)
+spawn Item(1), Count(0, 0)
+World.tick
+each Count do |count|
+  puts count
+end
