@@ -1,0 +1,10 @@
+error: constant `BIG` is 5000000000, which does not fit in 32 bits
+  --> tests/fail/gpu_function_constant_too_big.12am:11:10
+   |
+11 |   min(n, BIG)
+   |          ^^^ in a function called from a GPU system an `Int` holds -2147483648 to 2147483647
+note: GPU system `cap` calls `capped` here
+  --> tests/fail/gpu_function_constant_too_big.12am:16:14
+   |
+16 |     body.n = capped(body.n)
+   |              --------------

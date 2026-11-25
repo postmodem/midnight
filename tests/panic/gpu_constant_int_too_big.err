@@ -1,0 +1,1 @@
+tests/panic/gpu_constant_int_too_big.12am:17: runtime error: LIMITS.high is 5000000000, which does not fit in the 32-bit Int of a GPU system

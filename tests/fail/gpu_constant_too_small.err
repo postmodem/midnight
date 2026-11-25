@@ -1,0 +1,5 @@
+error: constant `BELOW` is -2147483649, which does not fit in 32 bits
+  --> tests/fail/gpu_constant_too_small.12am:14:26
+   |
+14 |     body.n = max(body.n, BELOW)
+   |                          ^^^^^ in a GPU system an `Int` holds -2147483648 to 2147483647

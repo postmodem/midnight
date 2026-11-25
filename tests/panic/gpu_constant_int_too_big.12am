@@ -1,0 +1,24 @@
+# A GPU block reads a struct constant whose `Int` field does not fit in 32
+# bits. The compiler does not work out a struct constant, so the program
+# stops when the block's `each` begins.
+# Expected: LIMITS.high is 5000000000, on the line of the `each`
+struct Limits
+  low: Int
+  high: Int
+end
+
+LIMITS = Limits(-5, 5000000000)
+
+component Level
+  n: Int32
+end
+
+gpu system clamp
+  each Level do |level|
+    level.n = max(level.n, LIMITS.low)
+  end
+end
+
+spawn Level(-9)
+World.tick
+puts "not reached"

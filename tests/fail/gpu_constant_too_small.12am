@@ -1,0 +1,16 @@
+# expect: constant `BELOW` is -2147483649, which does not fit in 32 bits; `LOWEST`, -2147483648, is fine on line 13
+# at: line 14, the name `BELOW`
+
+LOWEST = -2 ** 31
+BELOW = LOWEST - 1
+
+component Body
+  n: Int32
+end
+
+gpu system clamp
+  each Body do |body|
+    body.n = max(body.n, LOWEST)
+    body.n = max(body.n, BELOW)
+  end
+end

@@ -73,6 +73,24 @@ pub(super) fn name_list(names: &[String]) -> String {
     }
 }
 
+/// `a ** b` on `Int`, wrapping. `None` when the exponent is negative.
+pub(super) fn wrapping_pow(a: i64, b: i64) -> Option<i64> {
+    if b < 0 {
+        return None;
+    }
+    let mut result: i64 = 1;
+    let mut factor = a;
+    let mut left = b;
+    while left != 0 {
+        if left & 1 != 0 {
+            result = result.wrapping_mul(factor);
+        }
+        factor = factor.wrapping_mul(factor);
+        left >>= 1;
+    }
+    Some(result)
+}
+
 /// Integer division rounding toward negative infinity. `None` when the
 /// divisor is zero.
 pub(super) fn floor_div(a: i64, b: i64) -> Option<i64> {

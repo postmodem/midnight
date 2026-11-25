@@ -835,8 +835,16 @@ when ordinary code calls it and at 32 bits when a GPU block does.
   2,147,483,647 is a compile error, in a GPU block, in a function one calls,
   and in a field default that a constructor there uses.
 - **Values from outside.** Constants, resource fields and `Time` are
-  converted as they are read: a `Float` is rounded to 32 bits and an `Int`
-  wraps.
+  converted as they are read. A `Float` is rounded to 32 bits. An `Int`
+  must fit in 32 bits:
+  - An `Int` constant that does not fit is a compile error where GPU code
+    reads it.
+  - An `Int` resource field, and each `Int` field of a struct read from a
+    resource field or a constant, is checked when the `each` begins. One
+    that does not fit is a runtime error; see
+    [Runtime errors in a GPU system](#runtime-errors-in-a-gpu-system).
+    A field declared `Int32` or smaller always fits.
+  - `Time.tick` is the exception: it wraps.
 - **`Float` to `Int`.** `to_i`, `floor`, `ceil` and `round` give the nearest
   32-bit `Int` when the `Float` is out of range, and 0 for NaN.
 - **Storing.** Every `Int` fits an `Int32` field. A value stored in an
@@ -892,6 +900,18 @@ swarm.12am:41: runtime error: value does not fit in UInt8
 The messages are `division by zero`, `modulo by zero`, `negative exponent`,
 `rand: the argument must be positive` and `value does not fit in` followed
 by the field's type.
+
+One error comes before any run. When an `each` begins, every `Int` the block
+reads from outside, itself or through the functions it calls, must fit in
+32 bits: a resource field, and each `Int` field of a struct read from a
+resource field or a constant, whichever of the struct's fields the block
+uses. If one does not, the program stops there with status 1, before the
+block has run for any entity, and whether or not a run would have used the
+value. The message has the line of the `each` and names the value:
+
+```
+swarm.12am:38: runtime error: Config.limit is 5000000000, which does not fit in the 32-bit Int of a GPU system
+```
 
 ### Random numbers in a GPU system
 
@@ -1301,7 +1321,7 @@ What follows from this:
   Reading the result back makes the program wait for the block. `Float`
   arithmetic cannot fail, and neither can a store into an `Int32` field, or
   an operation whose right-hand number the compiler knows: `/` or `%` by one
-  that is not zero as a 32-bit value, `**` with an exponent that is not
+  that is not zero, `**` with an exponent that is not
   negative, `rand(n)` with a positive `n`. The compiler knows a literal, an
   `Int` constant made from literals and other such constants with `+`, `-`,
   `*`, `/`, `%` and `**`, and arithmetic on those. It does not know a
@@ -1344,10 +1364,13 @@ The runtime errors are:
 - storing an `Int` that does not fit in a compact integer field or element,
 - an `Int` raised to a negative power,
 - `rand(n)` with `n <= 0`,
-- `World.tick` or `World.run` called while a tick is in progress.
+- `World.tick` or `World.run` called while a tick is in progress,
+- an `Int` that does not fit in 32 bits where a GPU system reads it from a
+  resource field or a constant.
 
 In a GPU system an error is reported when the `each` it happened in ends,
-and its message names no value; see
+and its message names no value; the last error in the list is reported
+when the `each` begins. See
 [Runtime errors in a GPU system](#runtime-errors-in-a-gpu-system).
 
 There are no exceptions to catch in 0.2.

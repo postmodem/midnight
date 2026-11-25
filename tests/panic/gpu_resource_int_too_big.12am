@@ -1,0 +1,26 @@
+# A GPU block reads an `Int` resource field. In the first tick the value is
+# the largest that fits in 32 bits. Ordinary code then adds one, and the
+# next tick stops when the block's `each` begins, before any run.
+# Expected: Budget.limit is 2147483648, on the line of the `each`
+resource Budget
+  limit: Int = 2147483647
+end
+
+component Spend
+  n: Int32
+end
+
+gpu system spend
+  each Spend do |spend|
+    spend.n = min(spend.n + 1, Budget.limit)
+  end
+end
+
+spawn Spend(1)
+World.tick
+each Spend do |spend|
+  puts spend
+end
+Budget.limit += 1
+World.tick
+puts "not reached"

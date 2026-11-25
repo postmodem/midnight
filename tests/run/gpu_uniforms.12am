@@ -1,8 +1,9 @@
 # What a GPU block reads besides its components: resource fields of every
 # plain kind, constants the compiler knows and constants it does not, and
 # the three fields of `Time`. They are read when the `each` begins, so a
-# change made between ticks is seen by the next tick. An `Int` wider than 32
-# bits wraps on the way in and a `Float` is rounded to 32 bits.
+# change made between ticks is seen by the next tick. The largest and the
+# smallest `Int` that fit in 32 bits come in whole, and a `Float` is rounded
+# to 32 bits.
 enum Dir
   North
   East
@@ -28,7 +29,8 @@ resource Wind
   origin: Vec2 = Vec2(1.0, 2.0)
   level: UInt8 = 7
   leader: Entity = Entity.none
-  big: Int = 5000000000
+  big: Int = 2147483647
+  low: Int = -2147483648
   fine: Float = 16777217.0
 end
 
@@ -38,7 +40,7 @@ ORIGIN = Vec2(10.0, 20.0)
 ROOT = Math.sqrt(16.0)
 HEADING = Dir::South
 LIMITS = Limits(-3, 40000, Vec2(0.25, 0.75))
-BIG = 5000000000
+BIG = 2 ** 31 - 1
 FLAG = true
 
 component Probe
@@ -61,6 +63,7 @@ gpu system read_all
     probe.n = Wind.gusts + Wind.level + LIMIT + LIMITS.low + LIMITS.high
     probe.n += Wind.big / 1000 + BIG % 1000 if Wind.blowing && FLAG
     probe.n += 1000000 if Wind.fine == 16777216.0
+    probe.n += 10000000 if Wind.low + BIG == -1
     probe.dir = if Wind.dir == HEADING then Dir::North else Wind.dir end
     probe.leads = me == Wind.leader
     probe.tick = Time.tick
@@ -88,4 +91,4 @@ World.tick
 each Probe do |probe|
   puts probe
 end
-puts Wind.big / 1000 + BIG % 1000, Wind.fine == 16777216.0
+puts Wind.big / 1000 + BIG % 1000, Wind.low + BIG, Wind.fine == 16777216.0

@@ -1,16 +1,13 @@
-# expect: 2147483648 does not fit in 32 bits; 2147483647 and the constant `BIG` are fine
-# at: line 13, the literal `2147483648`
+# expect: 2147483648 does not fit in 32 bits; 2147483647 is fine
+# at: line 11, the literal `2147483648`
 
 component Body
   n: Int32
 end
 
-BIG = 4294967296
-
 gpu system clamp
   each Body do |body|
     body.n = min(body.n, 2147483647)
     limit = 2147483648
-    wrapped = BIG
   end
 end

@@ -711,7 +711,7 @@ impl<'a> Checker<'a> {
                     tir::BinOp::Mul => Some(a.wrapping_mul(b)),
                     tir::BinOp::Div => util::floor_div(a, b),
                     tir::BinOp::Mod => util::floor_mod(a, b),
-                    tir::BinOp::Pow => Some(a.wrapping_pow(u32::try_from(b).ok()?)),
+                    tir::BinOp::Pow => util::wrapping_pow(a, b),
                     _ => None,
                 }
             }

@@ -1,0 +1,20 @@
+# expect: constant `BIG` is 5000000000, which does not fit in 32 bits, in a function called from a GPU system; the ordinary call on line 20 is fine
+# at: line 11, the name `BIG`; note at line 16, the call `capped(body.n)`
+
+BIG = 5000000000
+
+component Body
+  n: Int32
+end
+
+def capped(n: Int) -> Int
+  min(n, BIG)
+end
+
+gpu system cap
+  each Body do |body|
+    body.n = capped(body.n)
+  end
+end
+
+puts capped(7)

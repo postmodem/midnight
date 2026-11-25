@@ -1,0 +1,28 @@
+# A GPU block reads a struct from a resource field, and an `Int` field
+# inside that struct is below what 32 bits hold. The message names the
+# field by its path. The block reads only the other field, `width`: the
+# struct comes in whole.
+# Expected: Board.grid.origin is -2147483649, on the line of the `each`
+struct Grid
+  width: Int = 8
+  origin: Int = 0
+end
+
+resource Board
+  grid: Grid = Grid()
+end
+
+component Cell
+  n: Int32
+end
+
+gpu system place
+  each Cell do |cell|
+    cell.n += Board.grid.width
+  end
+end
+
+spawn Cell(1)
+Board.grid.origin = -2147483649
+World.tick
+puts "not reached"

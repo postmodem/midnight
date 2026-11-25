@@ -1,0 +1,1 @@
+tests/panic/gpu_resource_int_too_big_unread.12am:24: runtime error: Budget.limit is 4294967296, which does not fit in the 32-bit Int of a GPU system

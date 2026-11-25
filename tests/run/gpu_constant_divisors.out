@@ -1,14 +1,14 @@
 16
 9
 -7
-2147483655
-Cell(n: 100, by_rows: 6, mod_odd: 1, down: -20, mod_huge: -2147483541, both: 14)
-Cell(n: -100, by_rows: -7, mod_odd: 8, down: 12, mod_huge: -100, both: -11)
-Cell(n: 7, by_rows: 0, mod_odd: 7, down: -1, mod_huge: -2147483634, both: 2)
+1073741831
+Cell(n: 100, by_rows: 6, mod_odd: 1, down: -20, mod_huge: 100, both: 14)
+Cell(n: -100, by_rows: -7, mod_odd: 8, down: 12, mod_huge: 1073741731, both: -11)
+Cell(n: 7, by_rows: 0, mod_odd: 7, down: -1, mod_huge: 7, both: 2)
 Cell(n: 0, by_rows: 0, mod_odd: 0, down: 0, mod_huge: 0, both: 2)
-Cell(n: -1, by_rows: -1, mod_odd: 8, down: -1, mod_huge: -1, both: 1)
+Cell(n: -1, by_rows: -1, mod_odd: 8, down: -1, mod_huge: 1073741830, both: 1)
 Wide(n: 100, by_rows: 6, mod_odd: 1, down: -20, mod_huge: 100, both: 14)
-Wide(n: -100, by_rows: -7, mod_odd: 8, down: 12, mod_huge: 2147483555, both: -11)
+Wide(n: -100, by_rows: -7, mod_odd: 8, down: 12, mod_huge: 1073741731, both: -11)
 Wide(n: 7, by_rows: 0, mod_odd: 7, down: -1, mod_huge: 7, both: 2)
 Wide(n: 0, by_rows: 0, mod_odd: 0, down: 0, mod_huge: 0, both: 2)
-Wide(n: -1, by_rows: -1, mod_odd: 8, down: -1, mod_huge: 2147483654, both: 1)
+Wide(n: -1, by_rows: -1, mod_odd: 8, down: -1, mod_huge: 1073741830, both: 1)

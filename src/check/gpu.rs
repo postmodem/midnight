@@ -20,7 +20,8 @@
 //!   of the nested `each` nor an `Entity` parameter;
 //! - calls of functions that do not recurse, and of the built-ins for
 //!   numbers, `Math`, `min`, `max`, `rand` and `rand(n)`;
-//! - `Int` literals that fit in 32 bits.
+//! - `Int` literals that fit in 32 bits, and no read of an `Int` constant
+//!   whose value the checker knows and that does not fit.
 //!
 //! The terms of a GPU block's query and of its nested `each` are `Entity`
 //! or components made of `Float32`, `Int32`, `Int16`, `Int8`, `UInt32`,
@@ -61,8 +62,14 @@ const NO_ORDER: &str = "runs have no order, so there is nothing to stop";
 
 /// Checks every GPU system of a program that has no other errors. `decls`
 /// holds the declaration of each system, in the order of
-/// [`Program::systems`]. Returns the diagnostics in source order.
-pub(super) fn check(program: &mut Program, decls: &[&ast::SystemDecl]) -> Vec<Diagnostic> {
+/// [`Program::systems`], and `known_ints` the value of each constant that
+/// is an `Int` the checker can compute. Returns the diagnostics in source
+/// order.
+pub(super) fn check(
+    program: &mut Program,
+    decls: &[&ast::SystemDecl],
+    known_ints: &[Option<i64>],
+) -> Vec<Diagnostic> {
     if !program.systems.iter().any(|system| system.gpu) {
         return Vec::new();
     }
@@ -70,6 +77,7 @@ pub(super) fn check(program: &mut Program, decls: &[&ast::SystemDecl]) -> Vec<Di
     let program = &*program;
     let mut pass = Pass {
         program,
+        known_ints,
         reached: vec![false; program.funcs.len()],
         calls,
         cycles: HashMap::new(),
@@ -173,6 +181,8 @@ enum Pos {
 
 struct Pass<'p> {
     program: &'p Program,
+    /// By constant: its value, when it is an `Int` the checker can compute.
+    known_ints: &'p [Option<i64>],
     /// The functions some GPU system has reached. Their bodies are checked
     /// or queued.
     reached: Vec<bool>,
@@ -806,6 +816,23 @@ impl<'a, 'p> Walk<'a, 'p> {
                         format!("constant `{}` can't be read {}", constant.name, self.here()),
                         place.span,
                         format!("it is {what}"),
+                    );
+                }
+                if let Some(value) = self.pass.known_ints[id.0]
+                    && i32::try_from(value).is_err()
+                {
+                    self.report(
+                        format!(
+                            "constant `{}` is {value}, which does not fit in 32 bits",
+                            constant.name
+                        ),
+                        place.span,
+                        format!(
+                            "{} an `Int` holds {} to {}",
+                            self.here(),
+                            i32::MIN,
+                            i32::MAX
+                        ),
                     );
                 }
             }

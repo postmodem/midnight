@@ -623,7 +623,7 @@ const DIVISORS: &str = "\
 W = 64
 H = W / 4
 ODD = H % 5 + 2 ** 3
-WRAPS = 65536 * 65536 / 1
+NONE = W % 8
 
 component Cell
   n: Int32
@@ -636,9 +636,9 @@ gpu system split
   end
 end
 
-gpu system wrapped
+gpu system by_none
   each Cell do |cell|
-    cell.q = cell.n / WRAPS
+    cell.q = cell.n / NONE
   end
 end
 ";
@@ -646,8 +646,7 @@ end
 /// A constant made by `/`, `%` or `**` that can't fail is known here, and
 /// so is such an operation on two constants in a block. A division by one
 /// that is not zero is no site, and a block without sites has no error
-/// word. A constant has its 64-bit value wrapped to 32 bits: one that
-/// wraps to zero is still a site.
+/// word. A division by a constant known to be zero is still a site.
 #[test]
 fn a_division_by_a_known_constant_is_not_checked() {
     let (program, sources) = compile(DIVISORS);
@@ -669,8 +668,8 @@ fn a_division_by_a_known_constant_is_not_checked() {
         "(g32_div(cell_0.f_n, 16i) + g32_mod(cell_0.f_n, 9i)) + g32_div(cell_0.f_n, 8i);",
     );
     assert_lacks(&split, "g_error");
-    let wrapped = wgsl::module(&lowered, &lowered.blocks[1]);
-    assert_has(&wrapped, "g32_div_checked(cell_0.f_n, 0i, 0u);");
+    let by_none = wgsl::module(&lowered, &lowered.blocks[1]);
+    assert_has(&by_none, "g32_div_checked(cell_0.f_n, 0i, 0u);");
 
     let c = emit_c("gpu_divisors", DIVISORS);
     assert_lacks(&c, "C_H");
@@ -753,4 +752,53 @@ fn a_uint32_field_of_a_term_is_carried_as_its_bits() {
         "c0[row].seen.serial = (uint32_t)cell_0.f_seen.f_serial;",
     );
     assert_lacks(&c, "c0[row].id");
+}
+
+const OUTSIDE: &str = "\
+struct Limits
+  low: Int
+  high: Int32
+  scale: Float
+end
+
+resource Budget
+  limit: Int = 5
+  small: Int16 = 5
+end
+
+LIMITS = Limits(1, 2, 0.5)
+EDGE = 2 ** 31 - 1
+
+component Cell
+  n: Int32
+end
+
+gpu system clamp
+  each Cell do |cell|
+    cell.n = min(cell.n, Budget.limit + Budget.small + LIMITS.high + EDGE)
+  end
+end
+";
+
+/// An `Int` that GPU code reads from a resource field or from a constant
+/// the compiler has not worked out is checked against 32 bits where the
+/// block's words are filled, with the name the source gives it and the
+/// line of the `each`. A field that is 32 bits or fewer is not checked.
+#[test]
+fn an_int_from_outside_is_checked_when_the_words_are_filled() {
+    let c = emit_c("gpu_outside", OUTSIDE);
+    assert_seq(
+        &c,
+        &[
+            "static void Gb0_fill(uint32_t *words) {",
+            "words[8] = (uint32_t)g32_int(R_Budget.limit, \"Budget.limit\", (MnLoc){src0, 20});",
+            "words[9] = (uint32_t)R_Budget.small;",
+            "words[10] = (uint32_t)g32_int(C_LIMITS.low, \"LIMITS.low\", (MnLoc){src0, 20});",
+            "words[11] = (uint32_t)C_LIMITS.high;",
+            "words[12] = g32_bits((float)C_LIMITS.scale);",
+        ],
+    );
+    // The known constant is a literal in the block.
+    assert_has(&c, "2147483647");
+    assert_lacks(&c, "C_EDGE");
 }

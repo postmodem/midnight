@@ -1,0 +1,5 @@
+error: constant `SPAN` is 4294967296, which does not fit in 32 bits
+  --> tests/fail/gpu_constant_too_big.12am:15:38
+   |
+15 |     share.each_gets += share.total / SPAN
+   |                                      ^^^^ in a GPU system an `Int` holds -2147483648 to 2147483647

@@ -1,0 +1,17 @@
+# expect: constant `SPAN` is 4294967296, which does not fit in 32 bits; `QUARTER`, made from it, fits and is fine on line 14
+# at: line 15, the name `SPAN`
+
+SPAN = 2 ** 34 / 4
+QUARTER = SPAN / 4
+
+component Share
+  total: Int32
+  each_gets: Int32
+end
+
+gpu system split
+  each Share do |share|
+    share.each_gets = share.total / QUARTER
+    share.each_gets += share.total / SPAN
+  end
+end

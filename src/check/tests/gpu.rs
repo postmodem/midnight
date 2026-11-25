@@ -725,3 +725,44 @@ end
         &it,
     );
 }
+
+#[test]
+fn a_known_constant_fits_in_32_bits_where_gpu_code_reads_it() {
+    let program = "\
+component Body
+  n: Int32
+end
+struct Limits
+  high: Int = 0
+end
+BIG = 2 ** 40
+EDGE = BIG / 512 - 1
+LOW = -EDGE - 1
+BELOW = LOW - 1
+LIMITS = Limits(BIG)
+gpu system clamp
+  each Body do |body|
+    body.n = max(min(body.n, EDGE), LOW) + LIMITS.high
+    LINE
+  end
+end
+puts BIG
+";
+    // A constant made from one that does not fit is judged by its own
+    // value, and a struct constant is not worked out here.
+    ok(&program.replace("LINE", "body.n += EDGE / 4"));
+
+    let holds = "in a GPU system an `Int` holds -2147483648 to 2147483647";
+    assert_error(
+        &program.replace("LINE", "body.n += BIG / 4"),
+        "constant `BIG` is 1099511627776, which does not fit in 32 bits",
+        "BIG",
+        holds,
+    );
+    assert_error(
+        &program.replace("LINE", "body.n = max(body.n, BELOW)"),
+        "constant `BELOW` is -2147483649, which does not fit in 32 bits",
+        "BELOW",
+        holds,
+    );
+}

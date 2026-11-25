@@ -12,7 +12,7 @@ reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
 Counts: 240 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-329 in `tests/fail`, 72 in `tests/panic`, 10 in `tests/plan`.
+333 in `tests/fail`, 75 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
 
@@ -356,7 +356,8 @@ Programs that follow every rule are checked by the unit tests in
 | A called function does not recurse: directly, through another function, through an operator, or further down the calls | `fail/gpu_recursion_direct`, `fail/gpu_recursion_mutual`, `fail/gpu_recursion_operator`, `fail/gpu_recursion_reached` |
 | A called function contains no query | `fail/gpu_function_each`, `fail/gpu_function_world_count` |
 | A function is reported on once, however many calls and systems reach it | `fail/gpu_function_puts` |
-| An `Int` literal fits in 32 bits, in a block, in a called function and in a field default a constructor uses; constants are not checked | `fail/gpu_int_literal_too_big`, `fail/gpu_int_literal_too_small`, `fail/gpu_function_int_literal`, `fail/gpu_int_literal_default` |
+| An `Int` literal fits in 32 bits, in a block, in a called function and in a field default a constructor uses | `fail/gpu_int_literal_too_big`, `fail/gpu_int_literal_too_small`, `fail/gpu_function_int_literal`, `fail/gpu_int_literal_default` |
+| An `Int` constant that GPU code reads fits in 32 bits: above, below, in a called function, in a field default a constructor uses; a constant made from one that does not fit is judged by its own value | `fail/gpu_constant_too_big`, `fail/gpu_constant_too_small`, `fail/gpu_function_constant_too_big`, `fail/gpu_constant_default_too_big`, `gpu_constant_divisors`; the unit test `a_known_constant_fits_in_32_bits_where_gpu_code_reads_it` in `src/check/tests/gpu.rs` |
 | Independent errors in one block are all reported | `fail/gpu_several` |
 
 ## What GPU systems compute
@@ -389,7 +390,8 @@ programs written from the specification.
 | Resource fields of every plain kind, known and unknown constants, struct constants | `gpu_uniforms`, `gpu_functions` |
 | `Time.tick`, `Time.dt`, `Time.elapsed` | `gpu_uniforms`, `gpu_gravity` |
 | Resources and `Time` are read when the `each` begins; a change between ticks is seen | `gpu_uniforms` |
-| An `Int` resource field or constant wider than 32 bits wraps; a `Float` one is rounded | `gpu_uniforms` |
+| The largest and the smallest `Int` that fit in 32 bits come in whole from a resource field and from a constant; a `Float` is rounded | `gpu_uniforms` |
+| An `Int` from outside that does not fit stops the program when the `each` begins: a resource field, a field of a struct in a resource field, a field of a struct constant; with no entity and no run that uses it | `panic/gpu_resource_int_too_big`, `panic/gpu_resource_int_too_small`, `panic/gpu_constant_int_too_big`, `panic/gpu_resource_int_too_big_unread`; the unit test `an_int_from_outside_is_checked_when_the_words_are_filled` in `src/emit/tests/gpu.rs` |
 | A `UInt32` field beside a GPU block: the block reads the other fields of its resource and filters by a component that has one, and ordinary code reads and writes it between runs | `gpu_uint32_beside` |
 | A struct with a `UInt32` field carried through a GPU block: values above the largest 32-bit `Int` come back unchanged and decide `==`, on the CPU and on a device | `gpu_uint32_carried` |
 | A component with `UInt32` fields as a term: the fields the block does not name keep their values, a struct that holds one is copied from field to field and compared across a nested `each` and between components, and what ordinary code changes between runs is seen | `gpu_uint32_term`; the unit test `a_uint32_field_of_a_term_is_carried_as_its_bits` in `src/emit/tests/gpu.rs` |
@@ -397,7 +399,7 @@ programs written from the specification.
 | `Float` is 32 bits: literals out of range, products that overflow or vanish, 16777217 | `gpu_float_literals`, `gpu_functions` |
 | `to_i`, `floor`, `ceil`, `round`: saturation, 0 for NaN, halves away from zero; `nan?` | `gpu_float_to_int` |
 | `Int` `/` floors and `%` takes the divisor's sign, by a variable and by a constant; the smallest `Int` by -1 | `gpu_div_mod` |
-| `/` and `%` by constants made by `/`, `%` and `**`: a constant has its 64-bit value, wrapped on the way in; the same operators between constants in the block work at 32 bits | `gpu_constant_divisors` |
+| `/` and `%` by constants made by `/`, `%` and `**`: a constant is worked out at 64 bits and fits in 32 where the block reads it; the same operators between constants in the block work at 32 bits | `gpu_constant_divisors` |
 | `Float` `%` takes the divisor's sign | `gpu_div_mod` |
 | `abs`, `clamp`, `min`, `max`, `to_f`, `round(digits)`, the `Math` functions, `**` on `Float` with either sign of base | `gpu_numbers`, `gpu_float_literals` |
 | `**` on `Float`: a zero exponent, a zero base with an exponent of either sign, a negative base with a whole, a fractional and an infinite exponent | `gpu_float_power` |
@@ -671,7 +673,6 @@ the rule for where a column lives.
 | `World.run` during a tick | in a system, under `World.tick` | `panic/world_run_in_system` | `World.run called while a tick is in progress` |
 | | in a system, under `World.run` | `panic/world_run_in_system_during_run` | `World.run called while a tick is in progress` |
 | A failure in a GPU system (the message names no value) | `Int` `/` by zero | `panic/gpu_division_by_zero` | `division by zero` |
-| | `Int` `/` by a constant that is not zero but wraps to zero on the way in | `panic/gpu_constant_divisor_wraps` | `division by zero` |
 | | `Int` `%` by zero, in the nested `each` | `panic/gpu_modulo_by_zero` | `modulo by zero` |
 | | `Int` `**` with a negative exponent | `panic/gpu_negative_exponent` | `negative exponent` |
 | | `rand(n)` with `n <= 0` | `panic/gpu_rand_not_positive` | `rand: the argument must be positive` |
@@ -684,6 +685,10 @@ the rule for where a column lives.
 | | operations fail in two files: the one in the file loaded first is reported | not covered | |
 | | a failed operation gives 0 and the run goes on; a failed `rand(n)` draws no number | not observable: the program stops | |
 | | nothing after the failing `each` runs | `panic/gpu_failure_stops_tick` | `negative exponent` |
+| An `Int` from outside that does not fit, in a GPU system (reported when the `each` begins, on its line) | resource field, one above the largest, after a tick in which it fitted | `panic/gpu_resource_int_too_big` | `Budget.limit is 2147483648, which does not fit in the 32-bit Int of a GPU system` |
+| | field of a struct in a resource field, one below the smallest; the block reads another field | `panic/gpu_resource_int_too_small` | `Board.grid.origin is -2147483649, which does not fit in the 32-bit Int of a GPU system` |
+| | field of a struct constant | `panic/gpu_constant_int_too_big` | `LIMITS.high is 5000000000, which does not fit in the 32-bit Int of a GPU system` |
+| | no entity matches, and the read is in a function behind a test | `panic/gpu_resource_int_too_big_unread` | `Budget.limit is 4294967296, which does not fit in the 32-bit Int of a GPU system` |
 
 ## Assumptions
 
@@ -883,8 +888,11 @@ against that header.
 | can't call `describe` in a GPU system, because it returns a `String`; the body of `describe` is not reported | `gpu_call_returns_string.12am` | 14 | GPU systems |
 | can't call `total` in a GPU system, because its parameter `values` is a `[Float]`; the list argument is part of the same report | `gpu_call_takes_list.12am` | 18 | GPU systems |
 | `clock` is not allowed in a GPU system | `gpu_clock.12am` | 10 | GPU systems |
+| constant `BIG` is 5000000000, which does not fit in 32 bits, in a field default that a constructor in a GPU system uses | `gpu_constant_default_too_big.12am` | 11 | GPU systems |
 | constant `STEPS` can't be read in a GPU system, because it is a `[Float]`: a list constant can't be iterated there | `gpu_constant_list.12am` | 12 | GPU systems |
 | constant `TITLE` can't be read in a GPU system, because it is a `String` | `gpu_constant_string.12am` | 12 | GPU systems |
+| constant `SPAN` is 4294967296, which does not fit in 32 bits; `QUARTER`, made from it, fits and is fine on line 14 | `gpu_constant_too_big.12am` | 15 | GPU systems |
+| constant `BELOW` is -2147483649, which does not fit in 32 bits; `LOWEST`, -2147483648, is fine on line 13 | `gpu_constant_too_small.12am` | 14 | GPU systems |
 | `despawn` is not allowed in a GPU system | `gpu_despawn.12am` | 10 | GPU systems |
 | nested `each` inside a branch in a GPU system | `gpu_each_in_branch.12am` | 11 | GPU systems |
 | nested `each` inside a loop in a GPU system | `gpu_each_in_loop.12am` | 11 | GPU systems |
@@ -893,6 +901,7 @@ against that header.
 | `emit` is not allowed in a GPU system | `gpu_emit.12am` | 14 | GPU systems |
 | `exit` is not allowed in a GPU system | `gpu_exit.12am` | 10 | GPU systems |
 | can't call `name_of` in a function called from a GPU system, because it returns a `String` | `gpu_function_bad_call.12am` | 13 | GPU systems |
+| constant `BIG` is 5000000000, which does not fit in 32 bits, in a function called from a GPU system; the ordinary call on line 20 is fine | `gpu_function_constant_too_big.12am` | 11 | GPU systems |
 | `each` is not allowed in a function called from a GPU system, with a note naming the system and the call; the write through its parameter is not a second error | `gpu_function_each.12am` | 10 | GPU systems |
 | 4294967296 does not fit in 32 bits, in a function called from a GPU system | `gpu_function_int_literal.12am` | 9 | GPU systems |
 | `String` values are not allowed in a function called from a GPU system | `gpu_function_local_string.12am` | 9 | GPU systems |
@@ -907,7 +916,7 @@ against that header.
 | `entity[Body]` is not allowed in a GPU system | `gpu_index_component.12am` | 14 | GPU systems |
 | `entity[Body]` is not allowed in a GPU system, when it is assigned through too | `gpu_index_component_write.12am` | 14 | GPU systems |
 | 4294967296 does not fit in 32 bits, for a field default that a constructor in a GPU system uses | `gpu_int_literal_default.12am` | 9 | GPU systems |
-| 2147483648 does not fit in 32 bits; 2147483647 and the constant `BIG` are fine | `gpu_int_literal_too_big.12am` | 13 | GPU systems |
+| 2147483648 does not fit in 32 bits; 2147483647 is fine | `gpu_int_literal_too_big.12am` | 11 | GPU systems |
 | -2147483649 does not fit in 32 bits; -2147483648 is fine | `gpu_int_literal_too_small.12am` | 11 | GPU systems |
 | `[Float]` values are not allowed in a GPU system: a list can't be iterated there | `gpu_list_iteration.12am` | 10 | GPU systems |
 | `[Int]` values are not allowed in a GPU system; the later uses of `steps` are quiet | `gpu_list_literal.12am` | 10 | GPU systems |

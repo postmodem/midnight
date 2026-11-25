@@ -47,6 +47,8 @@ pub struct Column {
 pub struct Block<'a> {
     /// The system's name.
     pub system: &'a str,
+    /// The `each` statement.
+    pub span: Span,
     /// Which `each` of the system, from 1.
     pub each: u32,
     /// Unique in the program, from 0.
@@ -169,6 +171,7 @@ struct Lower<'a> {
 /// it calls.
 struct Draft<'a> {
     system: &'a str,
+    span: Span,
     each: u32,
     outer_query: &'a Query,
     inner_query: Option<&'a Query>,
@@ -424,6 +427,7 @@ impl<'a> Lower<'a> {
         let block = cx.block.take().expect("set above");
         Draft {
             system: &system.name,
+            span: stmt.span,
             each,
             outer_query: query,
             inner_query: block.inner_query,
@@ -484,6 +488,7 @@ impl<'a> Lower<'a> {
             .unwrap_or(HEADER.len() as u32);
         Block {
             system: draft.system,
+            span: draft.span,
             each: draft.each,
             id,
             outer_query: draft.outer_query,
@@ -958,7 +963,9 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             PlaceKind::Const(id) => {
                 if let Some(value) = self.lo.folded[id.0] {
                     let e = match value {
-                        Folded::Int(value) => Expr::I32(value as i32),
+                        Folded::Int(value) => Expr::I32(i32::try_from(value).expect(
+                            "the checker rejects a known constant that does not fit in 32 bits",
+                        )),
                         Folded::Float(value) => float(value as f32),
                         Folded::Bool(value) => Expr::Bool(value),
                     };

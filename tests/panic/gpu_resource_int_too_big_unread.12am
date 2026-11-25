@@ -1,0 +1,31 @@
+# An `Int` resource field that does not fit stops the program although no
+# run uses it: no entity matches the block's query, and the read is in a
+# function, behind a test. What a block reads from outside is read when its
+# `each` begins.
+# Expected: Budget.limit is 4294967296, on the line of the `each`
+resource Budget
+  limit: Int = 4294967296
+end
+
+component Spend
+  n: Int32
+end
+
+tag Frozen
+
+def capped(n: Int) -> Int
+  if n > 100
+    return min(n, Budget.limit)
+  end
+  n
+end
+
+gpu system spend
+  each Spend, with: Frozen do |spend|
+    spend.n = capped(spend.n)
+  end
+end
+
+spawn Spend(1)
+World.tick
+puts "not reached"

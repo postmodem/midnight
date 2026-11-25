@@ -416,18 +416,18 @@ and Mesa's `llvmpipe` for software Vulkan.
 
 | #  | Result |
 | -- | ------ |
-| 1  | `nix flake check` passes. The package's check phase runs `cargo test`: 304 unit tests and the suite, with every GPU system on its CPU implementation, in both build modes. `checks.gpu` ran 92 runs of 46 programs on `llvmpipe` inside the sandbox (33 of `tests/run`, 12 of `tests/panic` and `examples/nbody.12am`, each in release and debug). `nix flake check --no-build --all-systems` passes. |
+| 1  | `nix flake check` passes. The package's check phase runs `cargo test`: 306 unit tests and the suite, with every GPU system on its CPU implementation, in both build modes. `checks.gpu` ran 98 runs of 49 programs on `llvmpipe` inside the sandbox (33 of `tests/run`, 15 of `tests/panic` and `examples/nbody.12am`, each in release and debug). `nix flake check --no-build --all-systems` passes. |
 | 2  | `MIDNIGHT_GPU=info midnight run examples/nbody.12am` prints `midnight: gpu: NVIDIA GeForce RTX 5090 (Vulkan)`. Against the `MIDNIGHT_GPU=off` run, 2 of the 32 printed numbers differ, by 0.00001, which is 6.0e-6 × max(1, \|position\|). Over all 256 bodies, unrounded, the largest difference is 9.5e-6 (7.8e-6 on `llvmpipe`). |
 | 3  | Two `MIDNIGHT_GPU=off` runs and one with `--debug` print the same bytes, those of `examples/nbody.out`. |
-| 4  | 86 `tests/fail/gpu_*` cases. For the rules the criterion lists: `gpu_output_puts`, `gpu_spawn` (and `gpu_despawn`, `gpu_add`, `gpu_remove`), `gpu_emit`, `gpu_index_component`, `gpu_term_string_field`, `gpu_term_float_field` and `gpu_term_int_field`, `gpu_uint32_read_term_field`, `gpu_write_resource`, `gpu_write_nested_param`, `gpu_each_two_deep`, `gpu_break`, `gpu_return`, `gpu_recursion_direct` and `gpu_recursion_mutual`, `gpu_function_each`, `gpu_int_literal_too_big`, `gpu_statement_outside_each`. |
-| 5  | 12 `tests/panic/gpu_*` cases: `/` and `%` by zero, a negative exponent, `rand(n)` with `n` not positive, a store that does not fit each of the four compact types, the earliest of several failures, a failure in a called function, a failure that stops the tick, and a constant divisor that wraps to zero. Each stops with its message and status 1 with `MIDNIGHT_GPU=off` in both build modes, and in `checks.gpu`. |
+| 4  | 90 `tests/fail/gpu_*` cases. For the rules the criterion lists: `gpu_output_puts`, `gpu_spawn` (and `gpu_despawn`, `gpu_add`, `gpu_remove`), `gpu_emit`, `gpu_index_component`, `gpu_term_string_field`, `gpu_term_float_field` and `gpu_term_int_field`, `gpu_uint32_read_term_field`, `gpu_write_resource`, `gpu_write_nested_param`, `gpu_each_two_deep`, `gpu_break`, `gpu_return`, `gpu_recursion_direct` and `gpu_recursion_mutual`, `gpu_function_each`, `gpu_int_literal_too_big`, `gpu_statement_outside_each`. |
+| 5  | 15 `tests/panic/gpu_*` cases: `/` and `%` by zero, a negative exponent, `rand(n)` with `n` not positive, a store that does not fit each of the four compact types, the earliest of several failures, a failure in a called function, a failure that stops the tick, and four for an `Int` from outside that does not fit in 32 bits. Each stops with its message and status 1 with `MIDNIGHT_GPU=off` in both build modes, and in `checks.gpu`. |
 | 6  | `nix run .#bench-gpu`, gravity on 16,384 bodies: 1.33 ms per tick on the GPU, 356 ms on the CPU, ratio 267. |
 | 7  | Same run, one million entities moved, ms per tick: 0.13 on the CPU; 0.04 on the GPU with the data left there; 0.78 on the GPU with a CPU system reading every tick. The app adds a fourth row, the reading program on the CPU: 0.53. Every run prints the same checksum. |
 | 8  | Same run. `gpu_move_read.12am`: the plan is `download  Position  move -> total`, and `stats` counts 0 uploads and 1 download in each of the 1,000 ticks after the first. `gpu_move.12am`: the plan is empty and `stats` counts none. The app exits 1 if either differs. |
 | 9  | `ldd` on the release build of `examples/hello.12am` lists `libm.so.6`, `libc.so.6` and the loader. The build of `examples/nbody.12am` adds `libwgpu_native.so`, `libvulkan.so.1`, `libgcc_s.so.1` and `libdl.so.2`. |
 | 10 | Every command in the README was run as written. |
 
-`MIDNIGHT_TEST_GPU=hardware cargo test` and `nix run .#gpu-test` ran the 46
+`MIDNIGHT_TEST_GPU=hardware cargo test` and `nix run .#gpu-test` ran the 49
 programs on the RTX 5090 in release mode. Every output is exact except
 `examples/nbody.12am`, which is within its tolerance on both devices.
 
@@ -492,6 +492,16 @@ The reference's "What a GPU system costs" carries these figures.
   32 bits. 0.2.0 rejected every such struct and component whole; review
   narrowed that in 0.2.1 (structs) and 0.2.2 (query terms). Criterion 4's
   case for a `UInt32` field is `gpu_uint32_read_term_field`.
+- **An `Int` from outside must fit in 32 bits.** The design let an `Int`
+  constant or resource field wrap on the way into GPU code. As built, an
+  `Int` constant that does not fit is a compile error where GPU code reads
+  it, and an `Int` resource field, or an `Int` field of a struct read from a
+  resource field or a constant, that does not fit is a run-time error when
+  the `each` begins, before any run and whether or not a run would use it.
+  The message names the value and has the line of the `each`. The check is
+  made on the CPU where the block's uniform words are written, so no block
+  becomes one that can fail and nothing is read back. Review asked for
+  this; it is 0.2.3. `Time.tick` still wraps.
 - **Constants are worked out by the compiler.** An `Int` constant made from
   literals and other such constants with `+`, `-`, `*`, `/`, `%` and `**`
   is a known number. It takes no uniform word, and `x / H` is not an
@@ -541,6 +551,10 @@ The reference's "What a GPU system costs" carries these figures.
 - `%` on `Float` at 32 bits is not the exact remainder; the reference says
   how far off it can be. The sign of a zero result of `%` and `**` can
   differ from what ordinary code gives.
+- `Time.tick` wraps to 32 bits in a GPU block after 2,147,483,647 ticks.
+- A struct constant with an `Int` field that does not fit is reported when
+  the program runs, not when it is compiled: the compiler does not work out
+  struct constants.
 - A divisor that is a resource field, a field of a struct constant or a
   constant made by a call still makes its block one that can fail, so its
   error word is read back in every tick.

@@ -1,0 +1,1 @@
+tests/panic/gpu_resource_int_too_small.12am:20: runtime error: Board.grid.origin is -2147483649, which does not fit in the 32-bit Int of a GPU system

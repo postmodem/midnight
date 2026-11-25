@@ -754,6 +754,14 @@ impl<'a> Checker<'a> {
                     .collect(),
             })
             .collect();
+        let known_ints: Vec<Option<i64>> = self
+            .consts
+            .iter()
+            .map(|c| match c.state {
+                ConstState::Done { int, .. } => int,
+                _ => None,
+            })
+            .collect();
         let consts = self
             .consts
             .into_iter()
@@ -780,7 +788,7 @@ impl<'a> Checker<'a> {
             systems,
             main,
         };
-        let errors = gpu::check(&mut program, &system_decls);
+        let errors = gpu::check(&mut program, &system_decls, &known_ints);
         if errors.is_empty() {
             Ok(program)
         } else {

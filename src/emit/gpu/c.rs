@@ -56,6 +56,15 @@ __attribute__((unused)) static inline uint32_t g32_bits(float value) {
     return bits;
 }
 
+/* An `Int` from outside as GPU code holds it. `what` names it. */
+__attribute__((unused)) static inline int32_t g32_int(int64_t value, const char *what, MnLoc loc) {
+    if (value < INT32_MIN || value > INT32_MAX) {
+        mn_panic(loc, \"%s is %lld, which does not fit in the 32-bit Int of a GPU system\", what,
+                 (long long)value);
+    }
+    return (int32_t)value;
+}
+
 __attribute__((unused)) static inline void g32_fail(Gcx *g, uint32_t site) {
     if (site < *g->error) *g->error = site;
 }
@@ -151,7 +160,7 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
         let inner_query = block.inner_query.map(|query| cx.query(query));
         let name = block_name(block.id);
 
-        let fill = fill(gpu, block);
+        let fill = fill(cx, gpu, block);
         out.push_str(&fill);
 
         let mut printer = Printer {
@@ -321,10 +330,32 @@ fn layout_asserts(gpu: &Lowered) -> String {
     out
 }
 
+/// Whether a value of this type has an `Int` in it.
+fn has_int(prog: &Program, ty: &Type) -> bool {
+    match ty {
+        Type::Int => true,
+        Type::Record(id) => prog.records[id.0]
+            .fields
+            .iter()
+            .any(|field| has_int(prog, &field.ty)),
+        _ => false,
+    }
+}
+
 /// The function that writes a block's uniform words after the header.
-/// Empty when the block has none.
-fn fill(gpu: &Lowered, block: &Block) -> String {
-    fn words(prog: &Program, ty: &Type, value: &str, word: &mut u32, out: &mut String) {
+/// Empty when the block has none. An `Int` that does not fit in 32 bits
+/// stops the program there, at the line of the block's `each`.
+fn fill(cx: &mut Cx, gpu: &Lowered, block: &Block) -> String {
+    /// Writes the words of `value`, which the source calls `what`.
+    fn words(
+        prog: &Program,
+        ty: &Type,
+        value: &str,
+        what: &str,
+        loc: &str,
+        word: &mut u32,
+        out: &mut String,
+    ) {
         let mut put = |out: &mut String, bits: String| {
             let _ = writeln!(out, "    words[{word}] = {bits};");
             *word += 1;
@@ -332,7 +363,14 @@ fn fill(gpu: &Lowered, block: &Block) -> String {
         match ty {
             Type::Float => put(out, format!("g32_bits((float){value})")),
             Type::Compact(Compact::Float32) => put(out, format!("g32_bits({value})")),
-            Type::Int | Type::Compact(_) | Type::Bool | Type::Enum(_) => {
+            Type::Int => put(
+                out,
+                format!(
+                    "(uint32_t)g32_int({value}, {}, {loc})",
+                    names::c_string(what.as_bytes())
+                ),
+            ),
+            Type::Compact(_) | Type::Bool | Type::Enum(_) => {
                 put(out, format!("(uint32_t){value}"));
             }
             Type::Entity => {
@@ -342,7 +380,8 @@ fn fill(gpu: &Lowered, block: &Block) -> String {
             Type::Record(id) => {
                 for field in &prog.records[id.0].fields {
                     let member = format!("{value}.{}", names::field(&field.name));
-                    words(prog, &field.ty, &member, word, out);
+                    let what = format!("{what}.{}", field.name);
+                    words(prog, &field.ty, &member, &what, loc, word, out);
                 }
             }
             Type::Void | Type::String | Type::List(_) => unreachable!(
@@ -354,6 +393,23 @@ fn fill(gpu: &Lowered, block: &Block) -> String {
         return String::new();
     }
     let prog = gpu.prog;
+    // The source file is named only by a block that has an `Int` to check.
+    let checks = block.entries.iter().any(|&entry| {
+        let ty = match gpu.uniforms.entries[entry].source {
+            Source::Const(id) => &prog.consts[id].ty,
+            Source::Resource(resource, index) => &prog.resources[resource].fields[index].ty,
+        };
+        has_int(prog, ty)
+    });
+    let loc = if checks {
+        format!(
+            "(MnLoc){{{}, {}}}",
+            cx.file(block.span),
+            cx.sources.line(block.span)
+        )
+    } else {
+        String::new()
+    };
     let mut out = format!(
         "static void {}_fill(uint32_t *words) {{\n",
         block_name(block.id)
@@ -365,7 +421,9 @@ fn fill(gpu: &Lowered, block: &Block) -> String {
             Source::Const(id) => {
                 let item = &prog.consts[id];
                 let value = names::constant(&item.name);
-                words(prog, &item.ty, &value, &mut word, &mut out);
+                words(
+                    prog, &item.ty, &value, &item.name, &loc, &mut word, &mut out,
+                );
             }
             Source::Resource(resource, index) => {
                 let item = &prog.resources[resource];
@@ -375,7 +433,8 @@ fn fill(gpu: &Lowered, block: &Block) -> String {
                     names::resource(&item.name),
                     names::field(&field.name)
                 );
-                words(prog, &field.ty, &value, &mut word, &mut out);
+                let what = format!("{}.{}", item.name, field.name);
+                words(prog, &field.ty, &value, &what, &loc, &mut word, &mut out);
             }
         }
     }

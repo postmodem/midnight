@@ -1,13 +1,13 @@
 # A GPU block divides by constants that are themselves made by `/`, `%` and
-# `**`. A constant is worked out at 64 bits and wraps to 32 bits on the way
-# into the block, so `HUGE`, 2147483655, is -2147483641 there; the same
-# operators between constants inside the block work at 32 bits. The
-# ordinary system does the same sums at 64 bits.
+# `**`. A constant is worked out at 64 bits, so `HUGE`, 1073741831, comes
+# from 2 ** 40, which no 32-bit `Int` holds; the same operators between
+# constants inside the block work at 32 bits. The ordinary system does the
+# same sums at 64 bits.
 WIDTH = 64
 ROWS = WIDTH / 4
 ODD = ROWS % 5 + 2 ** 3
 DOWN = -WIDTH / 10
-HUGE = 2 ** 40 / 2 ** 9 + 7
+HUGE = 2 ** 40 / 2 ** 10 + 7
 
 component Cell
   n: Int32
