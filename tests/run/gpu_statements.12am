@@ -1,0 +1,97 @@
+# Statements and expressions that a GPU block is lowered from in ways of
+# their own: a call whose value is not used (the draw it makes still
+# counts), a function that returns nothing, a `while` whose condition calls
+# a function, an `if` and a `case` used for a struct value, an `if` whose
+# branches run statements before their value (and change a variable that an
+# operand to their left has already read), and a block that uses none of its
+# parameters.
+struct Pair
+  a: Int32
+  b: Int32
+end
+
+component Slot
+  n: Int32
+  pair: Pair
+  drawn: Int32
+  looped: Int32
+  chosen: Int32
+  ordered: Int32
+end
+
+component Idle
+  n: Int32
+end
+
+def below(i: Int, limit: Int) -> Bool
+  i < limit
+end
+
+def nothing(n: Int)
+  unused = n + 1
+end
+
+def pick(n: Int) -> Pair
+  if n > 1
+    Pair(n, n * 2)
+  else
+    Pair(-n, 0)
+  end
+end
+
+gpu system work
+  each Slot do |slot|
+    rand(10)
+    nothing(slot.n)
+    below(1, 2)
+    slot.drawn = rand(1000)
+
+    i = 0
+    while below(i, slot.n)
+      i += 1
+    end
+    slot.looped = i
+
+    slot.pair = if slot.n == 2 then Pair(7, 8) else pick(slot.n) end
+    extra = case slot.n
+            when 1 then Pair(100, 0)
+            when 2 then Pair(200, 0)
+            else pick(slot.n)
+            end
+    slot.pair.b += extra.a
+
+    slot.chosen = if slot.n > 2
+      step = slot.n * 10
+      step + 1
+    else
+      step = slot.n * 100
+      step + 2
+    end
+
+    n = slot.n
+    slot.ordered = n + if n > 1
+      n = 100
+      n
+    else
+      n = 200
+      n + 1
+    end + n
+  end
+end
+
+gpu system rest
+  each Idle do |idle|
+  end
+end
+
+spawn Slot(1, Pair(0, 0), 0, 0, 0, 0)
+spawn Slot(2, Pair(0, 0), 0, 0, 0, 0)
+spawn Slot(3, Pair(0, 0), 0, 0, 0, 0)
+spawn Idle(5)
+World.tick
+each Slot do |slot|
+  puts slot
+end
+each Idle do |idle|
+  puts idle
+end

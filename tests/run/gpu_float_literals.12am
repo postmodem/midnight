@@ -1,0 +1,55 @@
+# `Float` literals and arithmetic on them in a GPU block, where a `Float` is
+# 32 bits wide: a literal beyond the range is an infinity, a product of
+# literals that overflows is an infinity, 16777217.0 is 16777216.0, and a
+# `Math` function of a literal is worked out when the block runs. The
+# second line of the output is the same code at 64 bits.
+component Probe
+  huge: Bool
+  overflow: Bool
+  rounded: Bool
+  negative: Bool
+  tiny: Bool
+  root: Float32
+end
+
+def is_huge -> Bool
+  1.0e39 == 1.0e39 * 2.0
+end
+
+def overflows -> Bool
+  1.0e30 * 1.0e30 == 1.0e39
+end
+
+def rounds -> Bool
+  16777217.0 == 16777216.0
+end
+
+def below_all -> Bool
+  -1.0e30 * 1.0e30 < -3.0e38
+end
+
+def vanishes -> Bool
+  1.0e-30 * 1.0e-30 == 0.0
+end
+
+def root -> Float
+  Math.sqrt(2.25) + Math.exp(0.0)
+end
+
+gpu system probe
+  each Probe do |probe|
+    probe.huge = is_huge
+    probe.overflow = overflows
+    probe.rounded = rounds
+    probe.negative = below_all
+    probe.tiny = vanishes
+    probe.root = root
+  end
+end
+
+spawn Probe(true, false, false, false, false, 0.0)
+World.tick
+each Probe do |probe|
+  puts "#{probe.huge} #{probe.overflow} #{probe.rounded} #{probe.negative} #{probe.tiny} #{probe.root.round(2)}"
+end
+puts "#{is_huge} #{overflows} #{rounds} #{below_all} #{vanishes} #{root.round(2)}"

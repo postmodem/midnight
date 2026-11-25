@@ -3,6 +3,7 @@
 //! is complete, by running them in both build modes.
 
 mod build;
+mod gpu;
 
 use std::path::PathBuf;
 use std::process::Command;

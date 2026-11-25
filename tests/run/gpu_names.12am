@@ -1,0 +1,47 @@
+# Names that mean something to a shader compiler or to C are fine in a GPU
+# system: fields, locals, parameters, functions, structs and components
+# called `target`, `filter`, `mod`, `type`, `f32`, `array`, `var`, `let`,
+# `fn`, `main`, `u`, `row`, `float`, `int`, `Words` and the like.
+struct Words
+  target: Int32
+  filter: Int32
+  double: Int32
+end
+
+component MnEntity
+  mod: Int32
+  type: Int32
+  f32: Int32
+  array: Int32
+  float: Float32
+  int: Words
+end
+
+def main(var: Int, fn: Int) -> Int
+  let = var + fn
+  let * 2
+end
+
+def select(u: Int, row: Int, g: Int) -> Int
+  j = u + row
+  c0 = j * g
+  t0 = c0 + 1
+  t0
+end
+
+gpu system switch
+  each MnEntity do |atomic|
+    vec3 = atomic.mod + 1
+    const = main(vec3, atomic.type)
+    discard = select(const, atomic.f32, 2)
+    atomic.array = discard
+    atomic.float = atomic.float * 2.0
+    atomic.int = Words(atomic.int.target + 1, atomic.int.filter + 2, atomic.int.double + 3)
+  end
+end
+
+spawn MnEntity(1, 2, 3, 0, 0.25, Words(10, 20, 30))
+World.tick
+each MnEntity do |atomic|
+  puts atomic
+end

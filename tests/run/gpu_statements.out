@@ -1,0 +1,4 @@
+Slot(n: 1, pair: Pair(a: -1, b: 100), drawn: 55, looped: 1, chosen: 102, ordered: 402)
+Slot(n: 2, pair: Pair(a: 7, b: 208), drawn: 623, looped: 2, chosen: 202, ordered: 202)
+Slot(n: 3, pair: Pair(a: 3, b: 9), drawn: 683, looped: 3, chosen: 31, ordered: 203)
+Idle(n: 5)
