@@ -189,9 +189,8 @@ functions in C and in WGSL. In strict mode:
   estimate of the 25-bit quotient or root. A first correction comes from
   the exact 64-bit residual (16-bit limbs), converted to float; a second
   from the residual after it, which then fits an `i32`; a last step of one
-  either way, and the remainder gives the sticky bit for rounding. No loop
-  and no fallback: in slice 1, a bit-by-bit fallback cost a quarter of the
-  time even though it almost never ran. The result is exact whenever the
+  either way, and the remainder gives the sticky bit for rounding. There
+  is no loop and no fallback. The result is exact whenever the
   estimate is within 2 ** -11 of the true value; WGSL bounds `/` on these
   operands to 2.5 units in the last place, about 2 ** -22, and `sqrt` is
   closer. A device further off is what the start-up check is for.
@@ -326,8 +325,7 @@ the CPU path (355 ms per tick).
 1. **Probe the cost.** Hand-written WGSL of strict gravity (barriers,
    integer `/` and `sqrt`, both forms) on the 5090 and llvmpipe, timed
    beside the default. If strict gravity is more than ten times the
-   default on the 5090, stop and report before going on. Done: 6.4 ×,
-   under "Measured in planning".
+   default on the 5090, stop and report before going on.
 2. Front end: `strict`, diagnostics, `tir`, `plan`.
 3. Lowering per mode, `Opaque`, the bit helpers, no folding; C pragma and
    `mn_strict_enter`/`leave`. Strict run tests pass on the CPU path.
@@ -373,23 +371,19 @@ and RADV on the Ryzen's iGPU (`VK_DRIVER_FILES` set to Mesa's
 
 ## Decisions
 
-Settled with Dave on 2026-11-25, together with the ten-times gate of
-slice 1.
-
 - **Per system, as a keyword.** The source says which systems are strict,
-  next to `gpu`; a program can keep a fast default for systems whose
-  results only need to agree closely; one source means one thing, as a
-  build flag would not.
+  next to `gpu`, and a program can keep a fast default for systems whose
+  results only need to agree closely.
 - **The CPU path of a strict block flushes subnormals; ordinary code does
   not.** Agreement needs the flush; nothing else should change.
-- **An unverified device is checked at start-up, not trusted or refused.**
-  The barrier rests on driver behaviour that no specification promises.
-  Running strict blocks on the CPU after a failed check keeps the
-  guarantee, as a GPU system without a device already does.
-- **`/` and `sqrt` as exact integer code** in the shader, not corrected
-  float code: the device's division then only has to be within 2 ** -11,
-  far looser than any bound WGSL allows, which matters on Metal, where it
-  may be worse than the 2 ULP seen here.
+- **Every device is checked at start-up.** The barrier rests on driver
+  behaviour that no specification promises. Running strict blocks on the
+  CPU after a failed check keeps the guarantee, as a GPU system without a
+  device already does.
+- **`/` and `sqrt` as exact integer code** in the shader: the device's
+  division only has to be within 2 ** -11, far looser than any bound WGSL
+  allows, which matters on Metal, where it may be worse than the 2 ULP
+  seen here.
 - **`%` stays the same formula**, now exact because its steps are.
 - **Flush before rounding**, because all four targets measured do it.
 - **`Math` functions and `**` are compile errors** in a strict system
