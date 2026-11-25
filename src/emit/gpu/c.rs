@@ -183,7 +183,11 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
                     Some(component) => (component.to_string(), component_cty(prog, component)),
                     None => ("MN_GPU_ENTITIES".to_string(), "MnEntity".to_string()),
                 };
-                let _ = writeln!(out, "    {{{id}, sizeof({cty}), {}}},", column.write);
+                let _ = writeln!(
+                    out,
+                    "    {{{id}, sizeof({cty}), {}, {}}},",
+                    column.write, column.overwrite
+                );
             }
             out.push_str("};\n");
             format!("{name}_{which}")

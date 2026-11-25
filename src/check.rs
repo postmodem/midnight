@@ -20,6 +20,7 @@ mod decls;
 mod exprs;
 mod gpu;
 mod members;
+mod overwrite;
 mod stmts;
 mod util;
 mod walk;
@@ -796,6 +797,7 @@ impl<'a> Checker<'a> {
         };
         let errors = gpu::check(&mut program, &system_decls, &known_ints);
         if errors.is_empty() {
+            overwrite::mark(&mut program);
             Ok(program)
         } else {
             Err(errors)

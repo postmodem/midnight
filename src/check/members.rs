@@ -1098,6 +1098,7 @@ impl Checker<'_> {
                         component,
                         write: false,
                         touched: false,
+                        overwritten: false,
                     })
             };
             checked.ok &= resolved.is_some() && !repeated;

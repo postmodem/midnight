@@ -42,6 +42,9 @@ pub struct Site {
 pub struct Column {
     pub component: Option<usize>,
     pub write: bool,
+    /// An outer column the block assigns whole, in every run, before it
+    /// reads it.
+    pub overwrite: bool,
 }
 
 pub struct Block<'a> {
@@ -454,6 +457,7 @@ impl<'a> Lower<'a> {
                     outer.push(Column {
                         component: None,
                         write: false,
+                        overwrite: false,
                     });
                     outer.len() - 1
                 }
@@ -622,6 +626,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                             columns.push(Column {
                                 component: None,
                                 write: false,
+                                overwrite: false,
                             });
                             columns.len() - 1
                         }
@@ -637,6 +642,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     component,
                     write,
                     touched,
+                    overwritten,
                 } => {
                     if !touched {
                         continue;
@@ -657,6 +663,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     columns.push(Column {
                         component: Some(component.0),
                         write: *write,
+                        overwrite: *overwritten && !inner,
                     });
                     loads.push(Stmt::Let {
                         name: name.clone(),

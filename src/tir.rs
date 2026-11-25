@@ -420,6 +420,12 @@ pub enum Term {
         /// of a term that is not touched is neither made current nor
         /// transferred: the term only picks the tables.
         touched: bool,
+        /// Whether the body assigns the whole component, in every run,
+        /// before anything can read it, as "The transfer plan" in the
+        /// reference defines it: the column's earlier values are never
+        /// needed. Only an outer term of a GPU block or a term of an
+        /// ordinary `each` can be.
+        overwritten: bool,
     },
 }
 

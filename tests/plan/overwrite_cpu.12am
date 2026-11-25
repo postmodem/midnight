@@ -1,0 +1,69 @@
+# expect: `step` writes all four components in GPU memory. `clear` assigns
+# Force whole before reading it, and `project` assigns every field of
+# Screen: neither needs what `step` wrote, so neither is downloaded. `fade`
+# assigns Heading in part and `damp` reads Spin before assigning it: both
+# are downloaded. All four are uploaded in the next tick, since `step`
+# reads them.
+
+component Force
+  fx: Float32
+  fy: Float32
+end
+
+component Screen
+  x: Float32
+  y: Float32
+end
+
+component Heading
+  a: Float32
+  b: Float32
+end
+
+component Spin
+  a: Float32
+  b: Float32
+end
+
+gpu system step
+  each Force, Screen, Heading, Spin do |force, screen, heading, spin|
+    force.fx += 1.0
+    force.fy += force.fx
+    screen.x += 1.0
+    screen.y += screen.x
+    heading.a += heading.b
+    spin.a += spin.b
+  end
+end
+
+system clear
+  each Force do |force|
+    force = Force(0.0, 0.0)
+  end
+end
+
+system project
+  each Screen do |screen|
+    scale = 2.0
+    screen.x = scale
+    screen.y = scale * 3.0
+  end
+end
+
+system fade
+  each Heading do |heading|
+    heading.a = 0.0
+  end
+end
+
+system damp
+  each Spin do |spin|
+    was = spin.a
+    spin = Spin(was * 0.5, 0.0)
+  end
+end
+
+spawn Force(0.0, 0.0), Screen(0.0, 0.0), Heading(0.0, 1.0), Spin(0.0, 1.0)
+3.times do
+  World.tick
+end

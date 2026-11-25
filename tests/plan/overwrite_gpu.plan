@@ -1,0 +1,5 @@
+upload    Lean     nudge -> push
+upload    Heading  nudge -> push
+download  Force    push -> nudge
+download  Lean     push -> nudge
+download  Heading  push -> nudge

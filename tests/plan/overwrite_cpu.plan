@@ -1,0 +1,6 @@
+upload    Force    clear -> step
+upload    Screen   project -> step
+upload    Heading  fade -> step
+upload    Spin     damp -> step
+download  Heading  step -> fade
+download  Spin     step -> damp

@@ -127,6 +127,7 @@ fn every_short_tick_settles_and_its_marked_transfers_are_the_added_ones() {
     let uses = |read, write, change| Uses {
         read,
         write,
+        overwrite: false,
         change,
     };
     let despawn = Some(Structural::Despawn);
@@ -415,7 +416,7 @@ end
 
 system cool
   each Heat do |heat|
-    heat.value = 0.0
+    heat.value *= 0.5
   end
 end
 

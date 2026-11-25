@@ -470,21 +470,26 @@ impl<'a> FnCx<'a, '_> {
         // assigned through a parameter is reported after its rows.
         let mut uses = Vec::new();
         let mut written = Vec::new();
+        let mut overwrites = false;
         for (index, (term, &param)) in query.terms.iter().zip(params).enumerate() {
             if let Term::Component {
                 component,
                 write,
                 touched: true,
+                overwritten,
             } = term
                 && self.cx.gpu.named[component.0]
             {
-                let usage = if *write {
+                let usage = if *overwritten {
+                    "MN_USE_OVERWRITE"
+                } else if *write {
                     "MN_USE_ASSIGN"
                 } else {
                     "MN_USE_READ"
                 };
                 uses.push(format!("{{{}, {usage}}}", component.0));
-                if *write {
+                overwrites |= *overwritten;
+                if *write && !*overwritten {
                     let flag = format!("w{sfx}_{index}");
                     self.line(&format!("bool {flag} = false;"));
                     self.flags.insert(param.0, flag.clone());
@@ -498,8 +503,13 @@ impl<'a> FnCx<'a, '_> {
                 "static const MnUse {list}[] = {{{}}};",
                 uses.join(", ")
             ));
+            let guard = if overwrites {
+                "mn_gpu_active"
+            } else {
+                "mn_gpu_only"
+            };
             self.line(&format!(
-                "if (mn_gpu_only) mn_gpu_use(&{q}, {list}, {});",
+                "if ({guard}) mn_gpu_use(&{q}, {list}, {});",
                 uses.len()
             ));
         }
@@ -528,6 +538,7 @@ impl<'a> FnCx<'a, '_> {
                     component,
                     write,
                     touched,
+                    ..
                 } => {
                     if !touched {
                         continue;

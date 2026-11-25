@@ -220,8 +220,8 @@ fn a_written_component_is_whole_words() {
         &c,
         "_Static_assert(sizeof(T_Armor) == 3, \"size of Armor\");",
     );
-    assert_has(&c, "{0, sizeof(T_Health), true},");
-    assert_has(&c, "{1, sizeof(T_Armor), false},");
+    assert_has(&c, "{0, sizeof(T_Health), true, true},");
+    assert_has(&c, "{1, sizeof(T_Armor), false, false},");
 }
 
 /// In a column with rows of 3 bytes, the word and the shift of a field
@@ -505,26 +505,27 @@ fn ordinary_code_syncs_what_gpu_blocks_name() {
             "T_Other *restrict c1 = mn_column(table, 1);",
         ],
     );
+    // The second loop overwrites Body: no flag, and the call is made
+    // whenever a GPU copy is current, to mark it stale.
     assert_seq(
         report,
         &[
-            "bool w_0 = false;",
-            "static const MnUse uses1[] = {{0, MN_USE_ASSIGN}};",
-            "if (mn_gpu_only) mn_gpu_use(&q1, uses1, 1);",
+            "mn_defer_enter();",
+            "static const MnUse uses1[] = {{0, MN_USE_OVERWRITE}};",
+            "if (mn_gpu_active) mn_gpu_use(&q1, uses1, 1);",
         ],
     );
     assert_seq(
         report,
         &[
-            "w_0 = true;",
+            "for (uint32_t i = 0; i < n; i++) {",
             "c0[i].x = (float)0.0;",
             "}",
-            "if (w_0) { mn_wrote(table, 0); w_0 = false; }",
             "}",
             "mn_defer_leave();",
         ],
     );
-    assert_lacks(report, "mn_wrote(table, 1)");
+    assert_lacks(report, "mn_wrote");
     let main = function_text(&c, "static void run_main(void)");
     assert_has(main, "= mn_get_synced(first_0, 0, sizeof(T_Body), true, ");
     assert_has(main, "= mn_get_synced(first_0, 0, sizeof(T_Body), false, ");

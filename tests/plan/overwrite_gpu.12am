@@ -1,0 +1,52 @@
+# expect: `nudge` writes all three components on the CPU, after `push` has
+# written them in GPU memory: three downloads. The first block of `push`
+# assigns every field of Force before reading it, so Force is not uploaded.
+# The second reads Lean's `a` before it assigns `b`, and the third leaves
+# Heading's `b` alone: both are uploaded.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Force
+  fx: Float32
+  fy: Float32
+end
+
+component Lean
+  a: Float32
+  b: Float32
+end
+
+component Heading
+  a: Float32
+  b: Float32
+end
+
+gpu system push
+  each Position, Force do |pos, force|
+    force.fx = pos.x * 2.0
+    force.fy = pos.y + 1.0
+  end
+  each Lean do |lean|
+    lean.a = 1.0
+    lean.b = lean.a + 1.0
+  end
+  each Heading do |heading|
+    heading.a = 7.0
+  end
+end
+
+system nudge
+  each Force, Lean, Heading do |force, lean, heading|
+    force.fx += 1.0
+    lean.b -= 1.0
+    heading.b += force.fy
+  end
+end
+
+spawn Position(1.0, 2.0), Force(0.0, 0.0), Lean(0.0, 0.0), Heading(0.0, 1.0)
+3.times do
+  World.tick
+end

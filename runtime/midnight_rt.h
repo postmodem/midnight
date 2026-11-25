@@ -731,6 +731,10 @@ typedef struct MnGpuColumn {
     uint32_t component; /* a component id, or MN_GPU_ENTITIES */
     uint32_t size;      /* bytes per row; a multiple of 4 when `write` */
     bool write;         /* outer columns only */
+    /* Outer columns only, and then `write` too: every run assigns the whole
+     * component before it reads it, so the values the column held before
+     * are never used. */
+    bool overwrite;
 } MnGpuColumn;
 
 /* An operation that can fail. A program's sites are in source order, so
@@ -795,8 +799,10 @@ extern bool mn_gpu_only;
 /* How an ordinary `each` uses the column of a component that some GPU
  * block names. */
 enum {
-    MN_USE_READ,   /* the body reads the parameter and never assigns it */
-    MN_USE_ASSIGN, /* the body can assign through the parameter */
+    MN_USE_READ,      /* the body reads the parameter and never assigns it */
+    MN_USE_ASSIGN,    /* the body can assign through the parameter */
+    MN_USE_OVERWRITE, /* every run assigns the whole component before it
+                         reads it, and the loop visits every row */
 };
 
 typedef struct MnUse {
@@ -806,9 +812,11 @@ typedef struct MnUse {
 
 /* Makes the CPU copy of each listed column current in every table of the
  * query that has rows, bringing back what it lacks with one wait for the
- * device at most. Generated code calls it before the table loop of an
- * ordinary `each` when mn_gpu_only is true, listing each term whose
- * component some GPU block names and whose parameter the body uses. */
+ * device at most; for MN_USE_OVERWRITE it makes the CPU copy the only
+ * current one and brings nothing back. Generated code calls it before the
+ * table loop of an ordinary `each`, listing each term whose component some
+ * GPU block names and whose parameter the body uses: when mn_gpu_only is
+ * true, or, if any use is MN_USE_OVERWRITE, when mn_gpu_active is. */
 void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count);
 
 void mn_gpu_wrote(MnTable *table, uint32_t component);

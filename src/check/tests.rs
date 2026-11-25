@@ -10,6 +10,7 @@ use crate::tir::{Expr, ExprKind, Place, PlaceKind, Stmt, StmtKind};
 
 mod diagnostics;
 mod gpu;
+mod overwrite;
 mod typed;
 
 fn parse(text: &str) -> (SourceMap, ast::Program) {

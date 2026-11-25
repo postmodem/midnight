@@ -494,17 +494,22 @@ static void column_set(MnTable *table, Column *column, uint8_t where) {
     mn_gpu_only = gpu.alone != 0;
 }
 
+/* Gives the GPU copy a buffer that has room for the table's rows, in
+ * place of one that has not. Its contents are lost. */
+static void column_room(MnTable *table, Column *column) {
+    uint64_t need = round4((uint64_t)table->count * column->size);
+    if (column->buffer.size >= need) return;
+    uint64_t roomy = round4((uint64_t)table->capacity * column->size);
+    buffer_make(&column->buffer, roomy <= gpu.max_binding ? roomy : need,
+                COLUMN_USAGE);
+}
+
 /* Makes the GPU copy current: copies the column up if only the CPU copy
  * is, into a buffer that has room for the table's rows. */
 static void column_upload(MnTable *table, Column *column) {
     if (column->where != ON_CPU) return;
     uint64_t bytes = (uint64_t)table->count * column->size;
-    uint64_t need = round4(bytes);
-    if (column->buffer.size < need) {
-        uint64_t roomy = round4((uint64_t)table->capacity * column->size);
-        buffer_make(&column->buffer, roomy <= gpu.max_binding ? roomy : need,
-                    COLUMN_USAGE);
-    }
+    column_room(table, column);
     buffer_write(&column->buffer, 0, column_data(table, column), bytes);
     column->version = ++gpu.serial;
     column_set(table, column, ON_BOTH);
@@ -597,7 +602,12 @@ void mn_gpu_use(MnQuery *query, const MnUse *uses, uint32_t count) {
         if (table->count == 0 || !table->gpu) continue;
         for (uint32_t i = 0; i < count; i++) {
             Column *column = column_find(table, uses[i].component);
-            if (column) fetch_column(table, column);
+            if (!column) continue;
+            if (uses[i].use == MN_USE_OVERWRITE) {
+                column_set(table, column, ON_CPU);
+            } else {
+                fetch_column(table, column);
+            }
         }
     }
     fetch_run();
@@ -767,15 +777,17 @@ static const char *block_unfit(const MnGpuBlock *block) {
 }
 
 /* Makes the CPU copy of every column the block uses current, with one
- * round trip, and the only current one for those it writes. */
+ * round trip and nothing brought back for a column it overwrites, and the
+ * only current one for those it writes. */
 static void block_to_cpu(const MnGpuBlock *block) {
     MnQuery *query = block->outer;
     for (uint32_t t = 0; t < query->table_count; t++) {
         MnTable *table = query->tables[t];
         if (table->count == 0) continue;
         for (uint32_t i = 0; i < block->outer_count; i++) {
-            Column *column = column_find(table, block->outer_columns[i].component);
-            if (column) fetch_column(table, column);
+            const MnGpuColumn *named = &block->outer_columns[i];
+            Column *column = column_find(table, named->component);
+            if (column && !named->overwrite) fetch_column(table, column);
         }
     }
     if (block->inner) {
@@ -1097,8 +1109,13 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         MnTable *table = outer->tables[t];
         if (table->count == 0) continue;
         for (uint32_t i = 0; i < block->outer_count; i++) {
-            Column *column = column_for(table, &block->outer_columns[i]);
-            column_upload(table, column);
+            const MnGpuColumn *named = &block->outer_columns[i];
+            Column *column = column_for(table, named);
+            if (named->overwrite) {
+                column_room(table, column);
+            } else {
+                column_upload(table, column);
+            }
             bound[1 + i] = column->buffer;
         }
         target_bind(block, state, t);

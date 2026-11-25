@@ -519,6 +519,7 @@ pub fn query(
                     component,
                     write,
                     touched: true,
+                    overwritten: false,
                 },
             })
             .collect(),

@@ -8,11 +8,12 @@
 //! - A GPU block needs the GPU copy of every component in its outer and
 //!   nested queries. Where only the CPU copy is current that is an upload,
 //!   after which both are. A component the block writes is then current on
-//!   the GPU only.
+//!   the GPU only. A component it overwrites needs no upload.
 //! - Ordinary code needs the CPU copy of every component it uses, as a
 //!   query term or through `e[C]`. Where only the GPU copy is current that
 //!   is a download, after which both are. A component it writes is then
-//!   current on the CPU only.
+//!   current on the CPU only. A component its first loop over it
+//!   overwrites needs no download.
 //! - A structural change needs the CPU copy and leaves it the only current
 //!   one: `spawn` for the components it lists, `add`, `remove` and
 //!   `despawn` for every component.
@@ -151,6 +152,9 @@ const TICK_LIMIT: usize = 16;
 struct Uses {
     read: bool,
     write: bool,
+    /// Whether the first read overwrites: it assigns the whole component,
+    /// in every row it visits, before reading it.
+    overwrite: bool,
     /// The first structural change that touches the component.
     change: Option<Structural>,
 }
@@ -316,6 +320,9 @@ impl Step {
         let mut uses = Uses::default();
         for used in &self.uses {
             if used.component == component && used.filter.reaches(kind, kinds) {
+                if !uses.read {
+                    uses.overwrite = used.uses.overwrite;
+                }
                 uses.read |= used.uses.read;
                 uses.write |= used.uses.write;
                 if uses.change.is_none() {
@@ -324,6 +331,17 @@ impl Step {
             }
         }
         uses
+    }
+}
+
+impl Uses {
+    /// Records a read, which overwrites the component when `overwrite` is
+    /// set, unless it comes after another read.
+    fn first(&mut self, overwrite: bool) {
+        if !self.read {
+            self.overwrite = overwrite;
+        }
+        self.read = true;
     }
 }
 
@@ -440,7 +458,9 @@ fn visit(
     }
     let mut transfer = None;
     if step.gpu {
-        if let Current::Cpu { by, cause } = *column {
+        if let Current::Cpu { by, cause } = *column
+            && !uses.overwrite
+        {
             transfer = Some(RawTransfer {
                 at,
                 direction: Direction::Upload,
@@ -456,7 +476,9 @@ fn visit(
         }
         return transfer;
     }
-    if let Current::Gpu { by } = *column {
+    if let Current::Gpu { by } = *column
+        && !(plain && uses.overwrite)
+    {
         transfer = Some(RawTransfer {
             at,
             direction: Direction::Download,
@@ -489,8 +511,8 @@ fn steps(program: &Program) -> (Vec<Step>, Shapes) {
     let mut on_gpu = vec![false; program.components.len()];
     for system in program.systems.iter().filter(|system| system.gpu) {
         for block in gpu_blocks(&system.body.block) {
-            for (component, _, _) in block {
-                on_gpu[component.0] = true;
+            for term in block {
+                on_gpu[term.component.0] = true;
             }
         }
     }
@@ -500,10 +522,10 @@ fn steps(program: &Program) -> (Vec<Step>, Shapes) {
         if system.gpu {
             for block in gpu_blocks(&system.body.block) {
                 let mut uses = Vec::new();
-                for (component, write, filter) in block {
-                    add_use(&mut uses, component.0, filter, |uses| {
-                        uses.read = true;
-                        uses.write |= write;
+                for term in block {
+                    add_use(&mut uses, term.component.0, term.filter, |uses| {
+                        uses.first(term.overwrite);
+                        uses.write |= term.write;
                     });
                 }
                 steps.push(Step {
@@ -534,38 +556,52 @@ fn steps(program: &Program) -> (Vec<Step>, Shapes) {
     (steps, shapes)
 }
 
-/// For each GPU block of a GPU system's body, the components of its outer
-/// query with whether the block writes them, then those of the nested
-/// queries directly inside it, which it only reads; each with the tables
-/// its query reaches. A term whose parameter the block never names is left
-/// out: the block does not need its column.
-fn gpu_blocks(body: &Block) -> impl Iterator<Item = Vec<(ComponentId, bool, Filter)>> + '_ {
+/// A touched component term of a query, and the tables the query reaches.
+struct TermUse {
+    component: ComponentId,
+    write: bool,
+    overwrite: bool,
+    filter: Filter,
+}
+
+/// For each GPU block of a GPU system's body, the terms of its outer query,
+/// then those of the nested queries directly inside it, which it only
+/// reads. A term whose parameter the block never names is left out: the
+/// block does not need its column.
+fn gpu_blocks(body: &Block) -> impl Iterator<Item = Vec<TermUse>> + '_ {
     body.stmts.iter().filter_map(|stmt| {
         let StmtKind::Each { query, body, .. } = &stmt.kind else {
             return None;
         };
-        let mut terms: Vec<(ComponentId, bool, Filter)> = components(query).collect();
+        let mut terms: Vec<TermUse> = components(query).collect();
         for inner in &body.stmts {
             if let StmtKind::Each { query, .. } = &inner.kind {
-                terms.extend(
-                    components(query).map(|(component, _, filter)| (component, false, filter)),
-                );
+                terms.extend(components(query).map(|term| TermUse {
+                    write: false,
+                    overwrite: false,
+                    ..term
+                }));
             }
         }
         Some(terms)
     })
 }
 
-/// The touched component terms of a query, with whether each is written
-/// and the tables the query reaches.
-fn components(query: &Query) -> impl Iterator<Item = (ComponentId, bool, Filter)> + '_ {
+/// The touched component terms of a query.
+fn components(query: &Query) -> impl Iterator<Item = TermUse> + '_ {
     let filter = Filter::query(query);
     query.terms.iter().filter_map(move |term| match *term {
         Term::Component {
             component,
             write,
             touched: true,
-        } => Some((component, write, filter.clone())),
+            overwritten,
+        } => Some(TermUse {
+            component,
+            write,
+            overwrite: overwritten,
+            filter: filter.clone(),
+        }),
         _ => None,
     })
 }
@@ -622,9 +658,9 @@ impl<'p> Walker<'p> {
         }
     }
 
-    fn read(&mut self, component: ComponentId, write: bool, filter: Filter) {
+    fn read(&mut self, component: ComponentId, write: bool, overwrite: bool, filter: Filter) {
         self.record(component, filter, |uses| {
-            uses.read = true;
+            uses.first(overwrite);
             uses.write |= write;
         });
     }
@@ -726,8 +762,8 @@ impl<'p> Walker<'p> {
             }
             StmtKind::Each { query, body, .. } => {
                 let outside = self.enter_loop(stmt);
-                for (component, write, filter) in components(query) {
-                    self.read(component, write, filter);
+                for term in components(query) {
+                    self.read(term.component, term.write, term.overwrite, term.filter);
                 }
                 self.block(body);
                 self.counting = outside;
@@ -856,7 +892,7 @@ impl<'p> Walker<'p> {
                 write,
             } => {
                 self.expr(entity);
-                self.read(*component, *write, Filter::any(component.0));
+                self.read(*component, *write, false, Filter::any(component.0));
             }
             PlaceKind::Field { base, .. } => self.place(base),
             PlaceKind::Index { base, index } => {
