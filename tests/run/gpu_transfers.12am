@@ -1,0 +1,49 @@
+# Columns that move between CPU and GPU memory in every tick. `steer` writes
+# Velocity before `move` reads it: an upload. `move` writes Position and
+# `wrap` reads and writes it: a download, and an upload in the next tick.
+# No ordinary code uses Age during a tick, so it is uploaded once and stays.
+# Every entity is in one table, so a line of the plan is one transfer; the
+# suite's GPU mode checks the `MIDNIGHT_GPU=stats` lines of this program
+# against its plan.
+component Position
+  x: Int32
+end
+
+component Velocity
+  dx: Int32
+end
+
+component Age
+  ticks: Int32
+end
+
+system steer
+  each Velocity do |vel|
+    vel.dx += 1
+  end
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx
+  end
+  each Age do |age|
+    age.ticks += 1
+  end
+end
+
+system wrap
+  each Position do |pos|
+    pos.x -= 20 if pos.x > 20
+  end
+end
+
+spawn Position(0), Velocity(0), Age(0)
+spawn Position(5), Velocity(2), Age(10)
+spawn Position(-4), Velocity(-3), Age(20)
+6.times do
+  World.tick
+end
+each Position, Velocity, Age do |pos, vel, age|
+  puts "#{pos.x} #{vel.dx} #{age.ticks}"
+end
