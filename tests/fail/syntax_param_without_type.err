@@ -1,5 +1,5 @@
 error: unexpected `)`
- --> tests/fail/syntax_param_without_type.grem:4:13
+ --> tests/fail/syntax_param_without_type.12am:4:13
   |
 4 | def double(n) -> Int
   |             ^ expected `:` and the parameter's type

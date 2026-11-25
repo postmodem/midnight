@@ -1,5 +1,5 @@
 error: tag `Frozen` can't be a query term
-  --> tests/fail/query_tag_as_term.grem:11:16
+  --> tests/fail/query_tag_as_term.12am:11:16
    |
 11 | each Position, Frozen do |pos, frozen|
    |                ^^^^^^ a tag has no data to bind; filter with `with: Frozen`

@@ -38,7 +38,7 @@ gpu system gravity
 end
 ```
 
-The programmer writes ordinary Gremlin. The compiler checks that the system
+The programmer writes ordinary Midnight. The compiler checks that the system
 is data-parallel, generates the shader, and works out at compile time when
 component data has to move between CPU and GPU memory. On a machine with no
 GPU the same system runs on the CPU and means the same thing.
@@ -64,10 +64,10 @@ reports those transfers so the cost is visible before the program runs.
 - Runtime support: a GPU device, a GPU copy of each column a GPU system
   uses, transfers, and dispatch.
 - A CPU implementation of every GPU system, used when there is no device.
-- `gremlin plan FILE`: prints the transfers one tick performs.
+- `midnight plan FILE`: prints the transfers one tick performs.
 - Flake: `wgpu-native` from the pinned nixpkgs, linked only into programs
   that declare a GPU system.
-- `examples/nbody.grem`, two benchmarks, and the reference updated.
+- `examples/nbody.12am`, two benchmarks, and the reference updated.
 
 ## Non-goals
 
@@ -155,7 +155,7 @@ when the `each` finishes.
 the compiler knows which components every query and every `e[C]` reads and
 writes (0001 records this). From that it derives, for one tick in steady
 state, each point where a column must be copied to the GPU or back.
-`gremlin plan FILE` prints them, one line per transfer, naming the component
+`midnight plan FILE` prints them, one line per transfer, naming the component
 and the two systems it travels between. A program whose plan is empty keeps
 its GPU data on the GPU.
 
@@ -182,19 +182,19 @@ link it and stay dependent on libc alone.
 On Linux the executable gets a runpath to the Vulkan loader from nixpkgs; the
 GPU driver itself comes from the host. `LD_LIBRARY_PATH` is never set.
 
-**No device.** If no GPU is found, or `GREMLIN_GPU=off` is set, every GPU
-system runs its C implementation. `GREMLIN_GPU=info` prints one line to
+**No device.** If no GPU is found, or `MIDNIGHT_GPU=off` is set, every GPU
+system runs its C implementation. `MIDNIGHT_GPU=info` prints one line to
 standard error naming the device in use, or saying that there is none.
 
 ### Tests
 
 - Every kernel rule has a `tests/fail` case.
-- `tests/run` programs with GPU systems run with `GREMLIN_GPU=off` inside
+- `tests/run` programs with GPU systems run with `MIDNIGHT_GPU=off` inside
   `nix flake check`, in both build modes.
 - The same programs run on a real device through `apps.gpu-test`, which
   compares GPU output with CPU output within a tolerance each test states.
 - In debug mode the runtime counts uploads and downloads per tick, and a test
-  checks the counts against `gremlin plan`.
+  checks the counts against `midnight plan`.
 
 ### Open questions for planning
 
@@ -220,10 +220,10 @@ All run on x86_64-linux. Criteria 2, 5, 6 and 7 need a GPU.
 
 1. `nix flake check` passes, including every GPU-system test on the CPU
    implementation.
-2. `GREMLIN_GPU=info gremlin run examples/nbody.grem` names a GPU device, and
-   its output agrees with the `GREMLIN_GPU=off` run to within one part in a
+2. `MIDNIGHT_GPU=info midnight run examples/nbody.12am` names a GPU device, and
+   its output agrees with the `MIDNIGHT_GPU=off` run to within one part in a
    thousand on every printed position after 100 ticks.
-3. `GREMLIN_GPU=off gremlin run examples/nbody.grem` prints the same output
+3. `MIDNIGHT_GPU=off midnight run examples/nbody.12am` prints the same output
    on two runs, and in debug mode.
 4. Each rule under "The language" has a `tests/fail` case: output, a
    structural change, `emit`, a string field, a 64-bit field, a write to a
@@ -236,9 +236,9 @@ All run on x86_64-linux. Criteria 2, 5, 6 and 7 need a GPU.
    and prints time per tick for each, with no threshold: on the CPU; on the
    GPU with the data left there; and on the GPU with a CPU system reading
    the result every tick.
-7. For the third case in criterion 6, `gremlin plan` lists exactly one
+7. For the third case in criterion 6, `midnight plan` lists exactly one
    download per tick, and the debug-mode transfer counts match it. For the
    second case the plan is empty and the counts are zero.
-8. `ldd` on the release build of `examples/hello.grem` lists libc and libm
+8. `ldd` on the release build of `examples/hello.12am` lists libc and libm
    and no GPU library.
 9. Every command in the README works as written.

@@ -1,5 +1,5 @@
 error: `Int16` can't be the type of a parameter
- --> tests/fail/compact_parameter.grem:4:13
+ --> tests/fail/compact_parameter.12am:4:13
   |
 4 | def half(n: Int16) -> Int
   |             ^^^^^ variables, parameters and return values are `Int` or `Float`; use `Int`

@@ -1,4 +1,4 @@
-# Loaded by require_order.grem; requires a sibling file relative to itself
+# Loaded by require_order.12am; requires a sibling file relative to itself
 # and uses the root file's `note`.
 note("outer start")
 require "inner"

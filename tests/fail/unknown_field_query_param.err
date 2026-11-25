@@ -1,5 +1,5 @@
 error: unknown field or method `depth` for `Position`
-  --> tests/fail/unknown_field_query_param.grem:11:12
+  --> tests/fail/unknown_field_query_param.12am:11:12
    |
 11 |   puts pos.depth
    |            ^^^^^

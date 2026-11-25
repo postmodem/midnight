@@ -1,5 +1,5 @@
 error: a resource can't have methods
- --> tests/fail/syntax_resource_method.grem:7:3
+ --> tests/fail/syntax_resource_method.12am:7:3
   |
 7 |   def doubled -> Int
   |   ^^^ only structs and components have methods

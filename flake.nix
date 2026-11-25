@@ -1,5 +1,5 @@
 {
-  description = "Gremlin: a compiled, Ruby-flavored language built around entities, components and systems";
+  description = "Midnight: a compiled, Ruby-flavored language built around entities, components and systems";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
@@ -34,46 +34,46 @@
         ];
       };
 
-      gremlinFor =
+      midnightFor =
         pkgs:
         pkgs.rustPlatform.buildRustPackage {
-          pname = "gremlin";
+          pname = "midnight";
           inherit version src;
           cargoLock.lockFile = ./Cargo.lock;
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
           nativeCheckInputs = [ pkgs.clang ];
           # The nixpkgs compiler wrapper adds hardening flags of its own;
-          # generated programs are built with the flags gremlin passes and
+          # generated programs are built with the flags midnight passes and
           # no others.
           preCheck = ''
-            export GREMLIN_CC=${lib.getExe' pkgs.clang "clang"}
+            export MIDNIGHT_CC=${lib.getExe' pkgs.clang "clang"}
             export NIX_HARDENING_ENABLE=
           '';
 
           postInstall = ''
-            wrapProgram $out/bin/gremlin \
-              --set-default GREMLIN_CC ${lib.getExe' pkgs.clang "clang"} \
+            wrapProgram $out/bin/midnight \
+              --set-default MIDNIGHT_CC ${lib.getExe' pkgs.clang "clang"} \
               --set NIX_HARDENING_ENABLE ""
           '';
 
           meta = {
-            description = "Compiler for the Gremlin language";
+            description = "Compiler for the Midnight language";
             license = lib.licenses.mit;
-            mainProgram = "gremlin";
+            mainProgram = "midnight";
           };
         };
     in
     {
       packages = forAllSystems (pkgs: {
-        default = gremlinFor pkgs;
+        default = midnightFor pkgs;
       });
 
       apps = forAllSystems (pkgs: {
         default = {
           type = "app";
-          program = lib.getExe (gremlinFor pkgs);
-          meta.description = "The Gremlin compiler";
+          program = lib.getExe (midnightFor pkgs);
+          meta.description = "The Midnight compiler";
         };
       });
 
@@ -88,7 +88,7 @@
             pkgs.clang
             pkgs.nixfmt
           ];
-          GREMLIN_CC = lib.getExe' pkgs.clang "clang";
+          MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
           hardeningDisable = [ "all" ];
         };
       });
@@ -96,13 +96,13 @@
       checks = forAllSystems (
         pkgs:
         let
-          gremlin = gremlinFor pkgs;
+          midnight = midnightFor pkgs;
         in
         {
-          package = gremlin;
+          package = midnight;
 
-          clippy = gremlin.overrideAttrs (old: {
-            pname = "gremlin-clippy";
+          clippy = midnight.overrideAttrs (old: {
+            pname = "midnight-clippy";
             nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.clippy ];
             buildPhase = ''
               cargo clippy --offline --all-targets -- -D warnings

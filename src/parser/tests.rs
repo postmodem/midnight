@@ -1194,7 +1194,7 @@ fn every_program_in_the_reference_parses() {
 #[test]
 fn the_hello_example() {
     assert_eq!(
-        dump(include_str!("../../examples/hello.grem")),
+        dump(include_str!("../../examples/hello.12am")),
         "puts \"Hello, world!\""
     );
 }

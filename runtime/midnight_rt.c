@@ -1,10 +1,10 @@
 /*
- * The Gremlin runtime. See gremlin_rt.h for what each function promises.
+ * The Midnight runtime. See midnight_rt.h for what each function promises.
  */
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "gremlin_rt.h"
+#include "midnight_rt.h"
 
 #include <errno.h>
 #include <math.h>
@@ -13,21 +13,21 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define GR_NONE UINT32_MAX
+#define MN_NONE UINT32_MAX
 
-GrWorld gr_world;
-GrTime gr_time = {0, 1.0 / 60, 0.0};
+MnWorld mn_world;
+MnTime mn_time = {0, 1.0 / 60, 0.0};
 
 /* ---- Leaving the program ----------------------------------------------- */
 
 /* Flushes both standard streams and ends the process at once. */
-static _Noreturn void gr_leave(int status) {
+static _Noreturn void mn_leave(int status) {
     fflush(stdout);
     fflush(stderr);
     _Exit(status);
 }
 
-_Noreturn void gr_panic(GrLoc loc, const char *format, ...) {
+_Noreturn void mn_panic(MnLoc loc, const char *format, ...) {
     fflush(stdout);
     fprintf(stderr, "%s:%d: runtime error: ", loc.file, (int)loc.line);
     va_list args;
@@ -35,85 +35,85 @@ _Noreturn void gr_panic(GrLoc loc, const char *format, ...) {
     vfprintf(stderr, format, args);
     va_end(args);
     fputc('\n', stderr);
-    gr_leave(1);
+    mn_leave(1);
 }
 
-_Noreturn void gr_exit(int64_t status) { gr_leave((int)(status & 0xff)); }
+_Noreturn void mn_exit(int64_t status) { mn_leave((int)(status & 0xff)); }
 
 /* ---- Memory -------------------------------------------------------------- */
 
-static _Noreturn void gr_out_of_memory(void) {
+static _Noreturn void mn_out_of_memory(void) {
     fflush(stdout);
-    fputs("gremlin: out of memory\n", stderr);
+    fputs("midnight: out of memory\n", stderr);
     abort();
 }
 
-static void *gr_malloc(size_t size) {
+static void *mn_malloc(size_t size) {
     void *memory = malloc(size ? size : 1);
-    if (!memory) gr_out_of_memory();
+    if (!memory) mn_out_of_memory();
     return memory;
 }
 
-static void *gr_calloc(size_t count, size_t size) {
+static void *mn_calloc(size_t count, size_t size) {
     void *memory = calloc(count ? count : 1, size ? size : 1);
-    if (!memory) gr_out_of_memory();
+    if (!memory) mn_out_of_memory();
     return memory;
 }
 
-static void *gr_realloc(void *memory, size_t size) {
+static void *mn_realloc(void *memory, size_t size) {
     memory = realloc(memory, size ? size : 1);
-    if (!memory) gr_out_of_memory();
+    if (!memory) mn_out_of_memory();
     return memory;
 }
 
 /* a * b, or an out-of-memory exit if the product does not fit. */
-static size_t gr_mul(size_t a, size_t b) {
-    if (b != 0 && a > SIZE_MAX / b) gr_out_of_memory();
+static size_t mn_mul(size_t a, size_t b) {
+    if (b != 0 && a > SIZE_MAX / b) mn_out_of_memory();
     return a * b;
 }
 
 /* The number of live string and list buffers. */
-#ifdef GR_DEBUG
-static int64_t gr_live_buffers;
-#define GR_BUFFER_BORN() ((void)gr_live_buffers++)
-#define GR_BUFFER_GONE() ((void)gr_live_buffers--)
+#ifdef MN_DEBUG
+static int64_t mn_live_buffers;
+#define MN_BUFFER_BORN() ((void)mn_live_buffers++)
+#define MN_BUFFER_GONE() ((void)mn_live_buffers--)
 #else
-#define GR_BUFFER_BORN() ((void)0)
-#define GR_BUFFER_GONE() ((void)0)
+#define MN_BUFFER_BORN() ((void)0)
+#define MN_BUFFER_GONE() ((void)0)
 #endif
 
 /* ---- Entity slots -------------------------------------------------------- */
 
 /* Takes a slot off the free list, or a new one, and returns its handle.
  * The entity is alive and in no table. */
-static GrEntity slot_take(void) {
-    GrWorld *w = &gr_world;
+static MnEntity slot_take(void) {
+    MnWorld *w = &mn_world;
     uint32_t index = w->free_head;
-    if (index != GR_NONE) {
+    if (index != MN_NONE) {
         w->free_head = w->slots[index].row;
     } else {
         if (w->slot_count == w->slot_capacity) {
-            if (w->slot_capacity > UINT32_MAX / 2) gr_out_of_memory();
+            if (w->slot_capacity > UINT32_MAX / 2) mn_out_of_memory();
             uint32_t capacity = w->slot_capacity ? w->slot_capacity * 2 : 64;
-            w->slots = gr_realloc(w->slots, (size_t)capacity * sizeof(GrSlot));
+            w->slots = mn_realloc(w->slots, (size_t)capacity * sizeof(MnSlot));
             w->slot_capacity = capacity;
         }
         index = w->slot_count++;
         w->slots[index].generation = 1;
     }
-    GrSlot *slot = &w->slots[index];
-    slot->table = GR_NO_TABLE;
+    MnSlot *slot = &w->slots[index];
+    slot->table = MN_NO_TABLE;
     slot->row = 0;
-    return (GrEntity){index, slot->generation};
+    return (MnEntity){index, slot->generation};
 }
 
 /* Ends the life of every handle to this slot and puts it on the free
  * list. */
 static void slot_free(uint32_t index) {
-    GrWorld *w = &gr_world;
-    GrSlot *slot = &w->slots[index];
+    MnWorld *w = &mn_world;
+    MnSlot *slot = &w->slots[index];
     if (++slot->generation == 0) slot->generation = 1;
-    slot->table = GR_NO_TABLE;
+    slot->table = MN_NO_TABLE;
     slot->row = w->free_head;
     w->free_head = index;
 }
@@ -122,7 +122,7 @@ static void slot_free(uint32_t index) {
 
 /* What `columns` holds for a tag, and for a component while the table has
  * no capacity. Never read or written. */
-static _Alignas(16) char gr_no_storage[16];
+static _Alignas(16) char mn_no_storage[16];
 
 static uint64_t set_hash(const uint32_t *set, uint32_t count) {
     uint64_t hash = 0xcbf29ce484222325u;
@@ -137,7 +137,7 @@ static uint64_t set_hash(const uint32_t *set, uint32_t count) {
 }
 
 static void table_map_insert(uint32_t id, uint64_t hash) {
-    GrWorld *w = &gr_world;
+    MnWorld *w = &mn_world;
     uint32_t mask = w->table_map_capacity - 1;
     uint32_t at = (uint32_t)hash & mask;
     while (w->table_map[at] != 0) at = (at + 1) & mask;
@@ -148,17 +148,17 @@ static void table_map_insert(uint32_t id, uint64_t hash) {
  * it. */
 static uint32_t table_create(const uint32_t *set, uint32_t set_count,
                              uint64_t hash) {
-    GrWorld *w = &gr_world;
-    const GrComponentInfo *info = w->program->components;
+    MnWorld *w = &mn_world;
+    const MnComponentInfo *info = w->program->components;
     size_t component_count = w->program->component_count;
 
     /* One block: the table, its columns, then its six id arrays. */
     size_t ints = (size_t)set_count * 4 + component_count * 2;
-    char *block = gr_malloc(sizeof(GrTable) +
+    char *block = mn_malloc(sizeof(MnTable) +
                             component_count * sizeof(void *) +
                             ints * sizeof(uint32_t));
-    GrTable *table = (GrTable *)(void *)block;
-    table->columns = (void **)(void *)(block + sizeof(GrTable));
+    MnTable *table = (MnTable *)(void *)block;
+    table->columns = (void **)(void *)(block + sizeof(MnTable));
     uint32_t *next = (uint32_t *)(void *)(table->columns + component_count);
     table->set = next;
     next += set_count;
@@ -182,15 +182,15 @@ static uint32_t table_create(const uint32_t *set, uint32_t set_count,
     table->hash = hash;
     for (size_t c = 0; c < component_count; c++) {
         table->columns[c] = NULL;
-        table->add_edges[c] = GR_NONE;
+        table->add_edges[c] = MN_NONE;
         table->remove_edges[c] = table->id;
     }
     for (uint32_t i = 0; i < set_count; i++) {
         uint32_t c = set[i];
         table->set[i] = c;
-        table->columns[c] = gr_no_storage;
+        table->columns[c] = mn_no_storage;
         table->add_edges[c] = table->id;
-        table->remove_edges[c] = GR_NONE;
+        table->remove_edges[c] = MN_NONE;
         if (info[c].size != 0) {
             table->data[table->data_count] = c;
             table->data_sizes[table->data_count] = info[c].size;
@@ -200,9 +200,9 @@ static uint32_t table_create(const uint32_t *set, uint32_t set_count,
     }
 
     if (w->table_count == w->table_capacity) {
-        if (w->table_capacity > UINT32_MAX / 4) gr_out_of_memory();
+        if (w->table_capacity > UINT32_MAX / 4) mn_out_of_memory();
         uint32_t capacity = w->table_capacity ? w->table_capacity * 2 : 16;
-        w->tables = gr_realloc(w->tables, (size_t)capacity * sizeof(GrTable *));
+        w->tables = mn_realloc(w->tables, (size_t)capacity * sizeof(MnTable *));
         w->table_capacity = capacity;
     }
     w->tables[w->table_count++] = table;
@@ -210,7 +210,7 @@ static uint32_t table_create(const uint32_t *set, uint32_t set_count,
     if (w->table_count > w->table_map_capacity / 2) {
         free(w->table_map);
         w->table_map_capacity *= 2;
-        w->table_map = gr_calloc(w->table_map_capacity, sizeof(uint32_t));
+        w->table_map = mn_calloc(w->table_map_capacity, sizeof(uint32_t));
         for (uint32_t i = 0; i < w->table_count; i++) {
             table_map_insert(i, w->tables[i]->hash);
         }
@@ -222,13 +222,13 @@ static uint32_t table_create(const uint32_t *set, uint32_t set_count,
 
 /* The table for a component set (ascending ids), created if new. */
 static uint32_t table_for_set(const uint32_t *set, uint32_t set_count) {
-    GrWorld *w = &gr_world;
+    MnWorld *w = &mn_world;
     uint64_t hash = set_hash(set, set_count);
     uint32_t mask = w->table_map_capacity - 1;
     for (uint32_t at = (uint32_t)hash & mask;; at = (at + 1) & mask) {
         uint32_t entry = w->table_map[at];
         if (entry == 0) break;
-        const GrTable *table = w->tables[entry - 1];
+        const MnTable *table = w->tables[entry - 1];
         if (table->hash != hash || table->set_count != set_count) continue;
         uint32_t i = 0;
         while (i < set_count && table->set[i] == set[i]) i++;
@@ -238,10 +238,10 @@ static uint32_t table_for_set(const uint32_t *set, uint32_t set_count) {
 }
 
 /* The table reached from `table` by adding one component. */
-static uint32_t table_with_one(GrTable *table, uint32_t component) {
-    GrWorld *w = &gr_world;
+static uint32_t table_with_one(MnTable *table, uint32_t component) {
+    MnWorld *w = &mn_world;
     uint32_t to = table->add_edges[component];
-    if (to != GR_NONE) return to;
+    if (to != MN_NONE) return to;
     uint32_t *set = w->scratch_set;
     uint32_t count = 0;
     uint32_t i = 0;
@@ -257,10 +257,10 @@ static uint32_t table_with_one(GrTable *table, uint32_t component) {
 }
 
 /* The table reached from `table` by adding every listed component. */
-static uint32_t table_with(GrTable *table, const uint32_t *components,
+static uint32_t table_with(MnTable *table, const uint32_t *components,
                            uint32_t count) {
     if (count == 1) return table_with_one(table, components[0]);
-    uint32_t *set = gr_world.scratch_set;
+    uint32_t *set = mn_world.scratch_set;
     uint32_t set_count = table->set_count;
     if (set_count != 0) memcpy(set, table->set, set_count * sizeof(uint32_t));
     for (uint32_t i = 0; i < count; i++) {
@@ -278,12 +278,12 @@ static uint32_t table_with(GrTable *table, const uint32_t *components,
 }
 
 /* The table reached from `table` by removing every listed component. */
-static uint32_t table_without(GrTable *table, const uint32_t *components,
+static uint32_t table_without(MnTable *table, const uint32_t *components,
                               uint32_t count) {
-    GrWorld *w = &gr_world;
+    MnWorld *w = &mn_world;
     if (count == 1) {
         uint32_t to = table->remove_edges[components[0]];
-        if (to != GR_NONE) return to;
+        if (to != MN_NONE) return to;
     }
     uint32_t *set = w->scratch_set;
     uint32_t set_count = 0;
@@ -303,7 +303,7 @@ static uint32_t table_without(GrTable *table, const uint32_t *components,
 }
 
 /* The table a bundle leads to from `from`, remembered in the bundle. */
-static uint32_t bundle_table(GrTable *from, GrBundle *bundle) {
+static uint32_t bundle_table(MnTable *from, MnBundle *bundle) {
     if (bundle->cached && bundle->cached_from == from->id) {
         return bundle->cached_to;
     }
@@ -314,23 +314,23 @@ static uint32_t bundle_table(GrTable *from, GrBundle *bundle) {
     return to;
 }
 
-static void table_grow(GrTable *table) {
-    if (table->capacity > UINT32_MAX / 2) gr_out_of_memory();
+static void table_grow(MnTable *table) {
+    if (table->capacity > UINT32_MAX / 2) mn_out_of_memory();
     uint32_t capacity = table->capacity ? table->capacity * 2 : 8;
     table->entities =
-        gr_realloc(table->entities, (size_t)capacity * sizeof(GrEntity));
+        mn_realloc(table->entities, (size_t)capacity * sizeof(MnEntity));
     for (uint32_t i = 0; i < table->data_count; i++) {
         uint32_t c = table->data[i];
         void *old = table->capacity ? table->columns[c] : NULL;
         table->columns[c] =
-            gr_realloc(old, gr_mul(capacity, table->data_sizes[i]));
+            mn_realloc(old, mn_mul(capacity, table->data_sizes[i]));
     }
     table->capacity = capacity;
 }
 
 /* Adds a row for `e` and returns its index. The row's values are not
  * initialised. */
-static inline uint32_t table_append(GrTable *table, GrEntity e) {
+static inline uint32_t table_append(MnTable *table, MnEntity e) {
     if (table->count == table->capacity) table_grow(table);
     uint32_t row = table->count++;
     table->entities[row] = e;
@@ -339,7 +339,7 @@ static inline uint32_t table_append(GrTable *table, GrEntity e) {
 
 /* Takes a row out by moving the last row into its place. The values of
  * the row are not dropped. */
-static void table_remove(GrTable *table, uint32_t row) {
+static void table_remove(MnTable *table, uint32_t row) {
     uint32_t last = --table->count;
     if (row == last) return;
     for (uint32_t i = 0; i < table->data_count; i++) {
@@ -347,14 +347,14 @@ static void table_remove(GrTable *table, uint32_t row) {
         char *column = table->columns[table->data[i]];
         memcpy(column + row * size, column + last * size, size);
     }
-    GrEntity moved = table->entities[last];
+    MnEntity moved = table->entities[last];
     table->entities[row] = moved;
-    gr_world.slots[moved.index].row = row;
+    mn_world.slots[moved.index].row = row;
 }
 
 /* Drops everything the components of one row own. */
-static void table_drop_row(GrTable *table, uint32_t row) {
-    const GrComponentInfo *info = gr_world.program->components;
+static void table_drop_row(MnTable *table, uint32_t row) {
+    const MnComponentInfo *info = mn_world.program->components;
     for (uint32_t i = 0; i < table->drop_count; i++) {
         uint32_t c = table->drops[i];
         info[c].drop((char *)table->columns[c] + (size_t)row * info[c].size);
@@ -364,23 +364,23 @@ static void table_drop_row(GrTable *table, uint32_t row) {
 /* ---- Structural changes, applied at once -------------------------------- */
 
 /* Drops the values of a bundle that will not be stored. */
-static void bundle_drop(const GrBundle *bundle, void *const *values) {
-    const GrComponentInfo *info = gr_world.program->components;
+static void bundle_drop(const MnBundle *bundle, void *const *values) {
+    const MnComponentInfo *info = mn_world.program->components;
     if (!values) return;
     for (uint32_t i = 0; i < bundle->count; i++) {
-        const GrComponentInfo *c = &info[bundle->components[i]];
+        const MnComponentInfo *c = &info[bundle->components[i]];
         if (c->size != 0 && c->drop && values[i]) c->drop(values[i]);
     }
 }
 
 /* Puts an entity that is in no table into the bundle's table. */
-static void spawn_now(GrEntity e, GrBundle *bundle, void *const *values) {
-    GrWorld *w = &gr_world;
-    const GrComponentInfo *info = w->program->components;
+static void spawn_now(MnEntity e, MnBundle *bundle, void *const *values) {
+    MnWorld *w = &mn_world;
+    const MnComponentInfo *info = w->program->components;
     uint32_t id = bundle_table(w->tables[0], bundle);
-    GrTable *table = w->tables[id];
+    MnTable *table = w->tables[id];
     uint32_t row = table_append(table, e);
-    GrSlot *slot = &w->slots[e.index];
+    MnSlot *slot = &w->slots[e.index];
     slot->table = id;
     slot->row = row;
     for (uint32_t i = 0; i < bundle->count; i++) {
@@ -398,18 +398,18 @@ static void spawn_now(GrEntity e, GrBundle *bundle, void *const *values) {
     w->live_entities++;
 }
 
-static void add_now(GrEntity e, GrBundle *bundle, void *const *values) {
-    GrWorld *w = &gr_world;
-    const GrComponentInfo *info = w->program->components;
-    if (!gr_alive(e) || w->slots[e.index].table == GR_NO_TABLE) {
+static void add_now(MnEntity e, MnBundle *bundle, void *const *values) {
+    MnWorld *w = &mn_world;
+    const MnComponentInfo *info = w->program->components;
+    if (!mn_alive(e) || w->slots[e.index].table == MN_NO_TABLE) {
         bundle_drop(bundle, values);
         return;
     }
-    GrSlot *slot = &w->slots[e.index];
-    GrTable *from = w->tables[slot->table];
+    MnSlot *slot = &w->slots[e.index];
+    MnTable *from = w->tables[slot->table];
     uint32_t from_row = slot->row;
     uint32_t id = bundle_table(from, bundle);
-    GrTable *to = w->tables[id];
+    MnTable *to = w->tables[id];
     uint32_t to_row = from_row;
     if (to != from) {
         to_row = table_append(to, e);
@@ -440,17 +440,17 @@ static void add_now(GrEntity e, GrBundle *bundle, void *const *values) {
     }
 }
 
-static void remove_now(GrEntity e, const uint32_t *components,
+static void remove_now(MnEntity e, const uint32_t *components,
                        uint32_t count) {
-    GrWorld *w = &gr_world;
-    const GrComponentInfo *info = w->program->components;
-    if (!gr_alive(e) || w->slots[e.index].table == GR_NO_TABLE) return;
-    GrSlot *slot = &w->slots[e.index];
-    GrTable *from = w->tables[slot->table];
+    MnWorld *w = &mn_world;
+    const MnComponentInfo *info = w->program->components;
+    if (!mn_alive(e) || w->slots[e.index].table == MN_NO_TABLE) return;
+    MnSlot *slot = &w->slots[e.index];
+    MnTable *from = w->tables[slot->table];
     uint32_t from_row = slot->row;
     uint32_t id = table_without(from, components, count);
     if (id == from->id) return;
-    GrTable *to = w->tables[id];
+    MnTable *to = w->tables[id];
     uint32_t to_row = table_append(to, e);
     for (uint32_t i = 0; i < to->data_count; i++) {
         uint32_t c = to->data[i];
@@ -469,12 +469,12 @@ static void remove_now(GrEntity e, const uint32_t *components,
     slot->row = to_row;
 }
 
-static void despawn_now(GrEntity e) {
-    GrWorld *w = &gr_world;
-    if (!gr_alive(e)) return;
-    GrSlot *slot = &w->slots[e.index];
-    if (slot->table != GR_NO_TABLE) {
-        GrTable *table = w->tables[slot->table];
+static void despawn_now(MnEntity e) {
+    MnWorld *w = &mn_world;
+    if (!mn_alive(e)) return;
+    MnSlot *slot = &w->slots[e.index];
+    if (slot->table != MN_NO_TABLE) {
+        MnTable *table = w->tables[slot->table];
         if (table->drop_count != 0) table_drop_row(table, slot->row);
         table_remove(table, slot->row);
         w->live_entities--;
@@ -484,40 +484,40 @@ static void despawn_now(GrEntity e) {
 
 /* ---- Structural changes, queued ----------------------------------------- */
 
-enum { GR_CMD_SPAWN, GR_CMD_ADD, GR_CMD_REMOVE, GR_CMD_DESPAWN };
+enum { MN_CMD_SPAWN, MN_CMD_ADD, MN_CMD_REMOVE, MN_CMD_DESPAWN };
 
 /* The start of every queued record. A spawn or add record continues with
  * the bundle's address and then each of its values with storage, in bundle
  * order; a remove record continues with `count` component ids. Every part
  * starts at an 8-byte boundary. */
-typedef struct GrCommand {
+typedef struct MnCommand {
     uint32_t kind;
     uint32_t count;
-    GrEntity entity;
-} GrCommand;
+    MnEntity entity;
+} MnCommand;
 
 /* A queue larger than this is released once it has been applied. */
-#define GR_COMMANDS_KEPT ((size_t)1 << 20)
+#define MN_COMMANDS_KEPT ((size_t)1 << 20)
 
 static size_t round8(size_t size) { return (size + 7) & ~(size_t)7; }
 
 /* Appends a record with `payload` bytes after its start and returns the
  * address of the payload. */
-static unsigned char *command_push(uint32_t kind, uint32_t count, GrEntity e,
+static unsigned char *command_push(uint32_t kind, uint32_t count, MnEntity e,
                                    size_t payload) {
-    GrWorld *w = &gr_world;
-    size_t need = sizeof(GrCommand) + payload;
+    MnWorld *w = &mn_world;
+    size_t need = sizeof(MnCommand) + payload;
     if (w->command_capacity - w->command_len < need) {
         size_t capacity = w->command_capacity ? w->command_capacity : 1024;
         while (capacity - w->command_len < need) {
-            if (capacity > SIZE_MAX / 2) gr_out_of_memory();
+            if (capacity > SIZE_MAX / 2) mn_out_of_memory();
             capacity *= 2;
         }
-        w->commands = gr_realloc(w->commands, capacity);
+        w->commands = mn_realloc(w->commands, capacity);
         w->command_capacity = capacity;
     }
     unsigned char *at = w->commands + w->command_len;
-    GrCommand command = {kind, count, e};
+    MnCommand command = {kind, count, e};
     memcpy(at, &command, sizeof command);
     w->command_len += need;
     w->deferred_count++;
@@ -525,9 +525,9 @@ static unsigned char *command_push(uint32_t kind, uint32_t count, GrEntity e,
 }
 
 /* Queues a spawn or an add, copying the values in. */
-static void command_push_bundle(uint32_t kind, GrEntity e, GrBundle *bundle,
+static void command_push_bundle(uint32_t kind, MnEntity e, MnBundle *bundle,
                                 void *const *values) {
-    const GrComponentInfo *info = gr_world.program->components;
+    const MnComponentInfo *info = mn_world.program->components;
     size_t payload = round8(sizeof bundle);
     for (uint32_t i = 0; i < bundle->count; i++) {
         payload += round8(info[bundle->components[i]].size);
@@ -551,19 +551,19 @@ static void command_push_bundle(uint32_t kind, GrEntity e, GrBundle *bundle,
 /* Goes through the queue in order and empties it. With `apply`, each
  * change is made; without, the queued values are only dropped. */
 static void commands_run(bool apply) {
-    GrWorld *w = &gr_world;
-    const GrComponentInfo *info = w->program->components;
+    MnWorld *w = &mn_world;
+    const MnComponentInfo *info = w->program->components;
     unsigned char *at = w->commands;
     unsigned char *end = at + w->command_len;
     while (at < end) {
-        GrCommand command;
+        MnCommand command;
         memcpy(&command, at, sizeof command);
         at += sizeof command;
-        GrEntity e = command.entity;
+        MnEntity e = command.entity;
         switch (command.kind) {
-        case GR_CMD_SPAWN:
-        case GR_CMD_ADD: {
-            GrBundle *bundle;
+        case MN_CMD_SPAWN:
+        case MN_CMD_ADD: {
+            MnBundle *bundle;
             memcpy(&bundle, at, sizeof bundle);
             at += round8(sizeof bundle);
             void **values = w->scratch_values;
@@ -574,17 +574,17 @@ static void commands_run(bool apply) {
             }
             if (!apply) {
                 bundle_drop(bundle, values);
-            } else if (command.kind == GR_CMD_ADD) {
+            } else if (command.kind == MN_CMD_ADD) {
                 add_now(e, bundle, values);
-            } else if (gr_alive(e) &&
-                       w->slots[e.index].table == GR_NO_TABLE) {
+            } else if (mn_alive(e) &&
+                       w->slots[e.index].table == MN_NO_TABLE) {
                 spawn_now(e, bundle, values);
             } else {
                 bundle_drop(bundle, values);
             }
             break;
         }
-        case GR_CMD_REMOVE:
+        case MN_CMD_REMOVE:
             if (apply) {
                 remove_now(e, (const uint32_t *)(void *)at, command.count);
             }
@@ -597,60 +597,60 @@ static void commands_run(bool apply) {
     }
     w->command_len = 0;
     w->deferred_count = 0;
-    if (w->command_capacity > GR_COMMANDS_KEPT) {
+    if (w->command_capacity > MN_COMMANDS_KEPT) {
         free(w->commands);
         w->commands = NULL;
         w->command_capacity = 0;
     }
 }
 
-void gr_flush(void) { commands_run(true); }
+void mn_flush(void) { commands_run(true); }
 
-GrEntity gr_spawn(GrBundle *bundle, void *const *values) {
-    GrEntity e = slot_take();
-    if (gr_world.defer_depth != 0) {
-        command_push_bundle(GR_CMD_SPAWN, e, bundle, values);
+MnEntity mn_spawn(MnBundle *bundle, void *const *values) {
+    MnEntity e = slot_take();
+    if (mn_world.defer_depth != 0) {
+        command_push_bundle(MN_CMD_SPAWN, e, bundle, values);
     } else {
         spawn_now(e, bundle, values);
     }
     return e;
 }
 
-void gr_add(GrEntity e, GrBundle *bundle, void *const *values) {
-    if (gr_world.defer_depth == 0) {
+void mn_add(MnEntity e, MnBundle *bundle, void *const *values) {
+    if (mn_world.defer_depth == 0) {
         add_now(e, bundle, values);
-    } else if (gr_alive(e)) {
-        command_push_bundle(GR_CMD_ADD, e, bundle, values);
+    } else if (mn_alive(e)) {
+        command_push_bundle(MN_CMD_ADD, e, bundle, values);
     } else {
         bundle_drop(bundle, values);
     }
 }
 
-void gr_remove(GrEntity e, const uint32_t *components, uint32_t count) {
-    if (gr_world.defer_depth == 0) {
+void mn_remove(MnEntity e, const uint32_t *components, uint32_t count) {
+    if (mn_world.defer_depth == 0) {
         remove_now(e, components, count);
-    } else if (gr_alive(e) && count != 0) {
+    } else if (mn_alive(e) && count != 0) {
         size_t bytes = (size_t)count * sizeof(uint32_t);
         unsigned char *at =
-            command_push(GR_CMD_REMOVE, count, e, round8(bytes));
+            command_push(MN_CMD_REMOVE, count, e, round8(bytes));
         memcpy(at, components, bytes);
     }
 }
 
-void gr_despawn(GrEntity e) {
-    if (gr_world.defer_depth == 0) {
+void mn_despawn(MnEntity e) {
+    if (mn_world.defer_depth == 0) {
         despawn_now(e);
-    } else if (gr_alive(e)) {
-        command_push(GR_CMD_DESPAWN, 0, e, 0);
+    } else if (mn_alive(e)) {
+        command_push(MN_CMD_DESPAWN, 0, e, 0);
     }
 }
 
 /* ---- Queries ------------------------------------------------------------- */
 
-void gr_query_refresh(GrQuery *query) {
-    GrWorld *w = &gr_world;
+void mn_query_refresh(MnQuery *query) {
+    MnWorld *w = &mn_world;
     for (uint32_t t = query->tables_seen; t < w->table_count; t++) {
-        GrTable *table = w->tables[t];
+        MnTable *table = w->tables[t];
         bool matches = true;
         for (uint32_t i = 0; matches && i < query->with_count; i++) {
             matches = table->columns[query->with[i]] != NULL;
@@ -660,11 +660,11 @@ void gr_query_refresh(GrQuery *query) {
         }
         if (!matches) continue;
         if (query->table_count == query->table_capacity) {
-            if (query->table_capacity > UINT32_MAX / 2) gr_out_of_memory();
+            if (query->table_capacity > UINT32_MAX / 2) mn_out_of_memory();
             uint32_t capacity =
                 query->table_capacity ? query->table_capacity * 2 : 4;
-            query->tables = gr_realloc(query->tables,
-                                       (size_t)capacity * sizeof(GrTable *));
+            query->tables = mn_realloc(query->tables,
+                                       (size_t)capacity * sizeof(MnTable *));
             query->table_capacity = capacity;
         }
         query->tables[query->table_count++] = table;
@@ -672,8 +672,8 @@ void gr_query_refresh(GrQuery *query) {
     query->tables_seen = w->table_count;
 }
 
-int64_t gr_query_count(GrQuery *query) {
-    gr_query_update(query);
+int64_t mn_query_count(MnQuery *query) {
+    mn_query_update(query);
     int64_t count = 0;
     for (uint32_t i = 0; i < query->table_count; i++) {
         count += query->tables[i]->count;
@@ -681,29 +681,29 @@ int64_t gr_query_count(GrQuery *query) {
     return count;
 }
 
-int64_t gr_entity_count(void) { return gr_world.live_entities; }
+int64_t mn_entity_count(void) { return mn_world.live_entities; }
 
 /* ---- Events -------------------------------------------------------------- */
 
 /* The events of one type that have not been discarded: those numbered
  * [base, end), stored from the start of `data`. */
-typedef struct GrEventBuf {
+typedef struct MnEventBuf {
     char *data;
     uint64_t base;
     uint64_t end;
     /* `end` as it was when the previous tick finished. */
     uint64_t mark;
     uint64_t capacity; /* in events */
-} GrEventBuf;
+} MnEventBuf;
 
-void *gr_emit(uint32_t event) {
-    GrEventBuf *buf = &gr_world.events[event];
-    size_t size = gr_world.program->events[event].size;
+void *mn_emit(uint32_t event) {
+    MnEventBuf *buf = &mn_world.events[event];
+    size_t size = mn_world.program->events[event].size;
     uint64_t count = buf->end - buf->base;
     if (count == buf->capacity) {
-        if (buf->capacity > SIZE_MAX / 2) gr_out_of_memory();
+        if (buf->capacity > SIZE_MAX / 2) mn_out_of_memory();
         uint64_t capacity = buf->capacity ? buf->capacity * 2 : 16;
-        buf->data = gr_realloc(buf->data, gr_mul((size_t)capacity, size));
+        buf->data = mn_realloc(buf->data, mn_mul((size_t)capacity, size));
         buf->capacity = capacity;
     }
     void *slot = buf->data + count * size;
@@ -712,18 +712,18 @@ void *gr_emit(uint32_t event) {
     return slot;
 }
 
-uint64_t gr_event_end(uint32_t event) { return gr_world.events[event].end; }
+uint64_t mn_event_end(uint32_t event) { return mn_world.events[event].end; }
 
-void *gr_event_at(uint32_t event, uint64_t seq) {
-    const GrEventBuf *buf = &gr_world.events[event];
+void *mn_event_at(uint32_t event, uint64_t seq) {
+    const MnEventBuf *buf = &mn_world.events[event];
     if (seq < buf->base || seq >= buf->end) return NULL;
-    return buf->data + (seq - buf->base) * gr_world.program->events[event].size;
+    return buf->data + (seq - buf->base) * mn_world.program->events[event].size;
 }
 
 /* Drops and removes the events of one type numbered below `until`. */
 static void events_discard(uint32_t event, uint64_t until) {
-    GrEventBuf *buf = &gr_world.events[event];
-    const GrEventInfo *info = &gr_world.program->events[event];
+    MnEventBuf *buf = &mn_world.events[event];
+    const MnEventInfo *info = &mn_world.program->events[event];
     size_t size = info->size;
     size_t gone = (size_t)(until - buf->base);
     if (gone == 0) return;
@@ -738,43 +738,43 @@ static void events_discard(uint32_t event, uint64_t until) {
 /* ---- Systems and ticks --------------------------------------------------- */
 
 static void tick(void) {
-    GrWorld *w = &gr_world;
-    const GrProgram *program = w->program;
+    MnWorld *w = &mn_world;
+    const MnProgram *program = w->program;
     w->in_tick = true;
     for (uint32_t i = 0; i < program->system_count; i++) program->systems[i]();
     w->in_tick = false;
-    gr_time.tick++;
-    gr_time.elapsed += gr_time.dt;
+    mn_time.tick++;
+    mn_time.elapsed += mn_time.dt;
     for (uint32_t i = 0; i < program->event_count; i++) {
         events_discard(i, w->events[i].mark);
         w->events[i].mark = w->events[i].end;
     }
 }
 
-void gr_tick(GrLoc loc) {
-    if (gr_world.in_tick) {
-        gr_panic(loc, "World.tick called while a tick is in progress");
+void mn_tick(MnLoc loc) {
+    if (mn_world.in_tick) {
+        mn_panic(loc, "World.tick called while a tick is in progress");
     }
     tick();
 }
 
-void gr_run(GrLoc loc) {
-    if (gr_world.in_tick) {
-        gr_panic(loc, "World.run called while a tick is in progress");
+void mn_run(MnLoc loc) {
+    if (mn_world.in_tick) {
+        mn_panic(loc, "World.run called while a tick is in progress");
     }
-    gr_world.stop_requested = false;
+    mn_world.stop_requested = false;
     do {
         tick();
-    } while (!gr_world.stop_requested);
+    } while (!mn_world.stop_requested);
 }
 
-void gr_stop(void) { gr_world.stop_requested = true; }
+void mn_stop(void) { mn_world.stop_requested = true; }
 
 /* ---- Text forms ---------------------------------------------------------- */
 
 /* Each writes at `out` and returns the number of bytes written. */
 
-enum { GR_INT_TEXT = 20, GR_FLOAT_TEXT = 32, GR_ENTITY_TEXT = 32 };
+enum { MN_INT_TEXT = 20, MN_FLOAT_TEXT = 32, MN_ENTITY_TEXT = 32 };
 
 static int format_int(int64_t value, char *out) {
     char digits[20];
@@ -865,7 +865,7 @@ static int format_float(double value, char *out) {
     return len + format_int(exponent, out + len);
 }
 
-static int format_entity(GrEntity e, char *out) {
+static int format_entity(MnEntity e, char *out) {
     if (e.index == 0 && e.generation == 0) {
         memcpy(out, "Entity(none)", 12);
         return 12;
@@ -881,96 +881,96 @@ static int format_entity(GrEntity e, char *out) {
 
 /* ---- Failures reported from the header's inline functions --------------- */
 
-_Noreturn void gr_get_failed(GrEntity e, uint32_t component, GrLoc loc) {
-    char entity[GR_ENTITY_TEXT];
+_Noreturn void mn_get_failed(MnEntity e, uint32_t component, MnLoc loc) {
+    char entity[MN_ENTITY_TEXT];
     int len = format_entity(e, entity);
-    if (gr_alive(e)) {
-        gr_panic(loc, "%.*s has no %s", len, entity,
-                 gr_world.program->components[component].name);
+    if (mn_alive(e)) {
+        mn_panic(loc, "%.*s has no %s", len, entity,
+                 mn_world.program->components[component].name);
     }
-    gr_panic(loc, "%.*s is not alive", len, entity);
+    mn_panic(loc, "%.*s is not alive", len, entity);
 }
 
-_Noreturn void gr_index_failed(int64_t index, int64_t len, GrLoc loc) {
-    gr_panic(loc, "index %lld out of range for a list of length %lld",
+_Noreturn void mn_index_failed(int64_t index, int64_t len, MnLoc loc) {
+    mn_panic(loc, "index %lld out of range for a list of length %lld",
              (long long)index, (long long)len);
 }
 
-_Noreturn void gr_div_failed(const char *what, GrLoc loc) {
-    gr_panic(loc, "%s by zero", what);
+_Noreturn void mn_div_failed(const char *what, MnLoc loc) {
+    mn_panic(loc, "%s by zero", what);
 }
 
-_Noreturn void gr_range_failed(int64_t value, const char *type, GrLoc loc) {
-    gr_panic(loc, "%lld does not fit in %s", (long long)value, type);
+_Noreturn void mn_range_failed(int64_t value, const char *type, MnLoc loc) {
+    mn_panic(loc, "%lld does not fit in %s", (long long)value, type);
 }
 
 /* ---- Strings ------------------------------------------------------------- */
 
 /* A new buffer for `len` bytes (above zero), which the caller fills in.
  * A NUL follows the bytes. */
-static GrString str_alloc(int64_t len) {
-    if ((uint64_t)len > SIZE_MAX - sizeof(GrStr) - 1) gr_out_of_memory();
-    GrStr *s = gr_malloc(sizeof(GrStr) + (size_t)len + 1);
+static MnString str_alloc(int64_t len) {
+    if ((uint64_t)len > SIZE_MAX - sizeof(MnStr) - 1) mn_out_of_memory();
+    MnStr *s = mn_malloc(sizeof(MnStr) + (size_t)len + 1);
     s->refs = 1;
     s->len = len;
     s->bytes[len] = '\0';
-    GR_BUFFER_BORN();
+    MN_BUFFER_BORN();
     return s;
 }
 
-void gr_str_free(GrString s) {
+void mn_str_free(MnString s) {
     if (!s || s->refs < 0) return;
     free(s);
-    GR_BUFFER_GONE();
+    MN_BUFFER_GONE();
 }
 
-GrString gr_str_new(const char *bytes, int64_t len) {
+MnString mn_str_new(const char *bytes, int64_t len) {
     if (len <= 0) return NULL;
-    GrString s = str_alloc(len);
+    MnString s = str_alloc(len);
     memcpy(s->bytes, bytes, (size_t)len);
     return s;
 }
 
-GrString gr_str_concat(GrString a, GrString b) {
+MnString mn_str_concat(MnString a, MnString b) {
     if (!a) {
-        gr_str_retain(b);
+        mn_str_retain(b);
         return b;
     }
     if (!b) {
-        gr_str_retain(a);
+        mn_str_retain(a);
         return a;
     }
-    if (a->len > INT64_MAX - b->len) gr_out_of_memory();
-    GrString s = str_alloc(a->len + b->len);
+    if (a->len > INT64_MAX - b->len) mn_out_of_memory();
+    MnString s = str_alloc(a->len + b->len);
     memcpy(s->bytes, a->bytes, (size_t)a->len);
     memcpy(s->bytes + a->len, b->bytes, (size_t)b->len);
     return s;
 }
 
-GrString gr_str_repeat(GrString s, int64_t n) {
+MnString mn_str_repeat(MnString s, int64_t n) {
     if (!s || n <= 0) return NULL;
     if (n == 1) {
-        gr_str_retain(s);
+        mn_str_retain(s);
         return s;
     }
-    if (s->len > INT64_MAX / n) gr_out_of_memory();
-    GrString result = str_alloc(s->len * n);
+    if (s->len > INT64_MAX / n) mn_out_of_memory();
+    MnString result = str_alloc(s->len * n);
     for (int64_t i = 0; i < n; i++) {
         memcpy(result->bytes + i * s->len, s->bytes, (size_t)s->len);
     }
     return result;
 }
 
-bool gr_str_eq(GrString a, GrString b) {
+bool mn_str_eq(MnString a, MnString b) {
     if (a == b) return true;
-    int64_t len = gr_str_bytesize(a);
-    if (len != gr_str_bytesize(b)) return false;
+    int64_t len = mn_str_bytesize(a);
+    if (len != mn_str_bytesize(b)) return false;
     return len == 0 || memcmp(a->bytes, b->bytes, (size_t)len) == 0;
 }
 
-int gr_str_cmp(GrString a, GrString b) {
-    int64_t a_len = gr_str_bytesize(a);
-    int64_t b_len = gr_str_bytesize(b);
+int mn_str_cmp(MnString a, MnString b) {
+    int64_t a_len = mn_str_bytesize(a);
+    int64_t b_len = mn_str_bytesize(b);
     int64_t shared = a_len < b_len ? a_len : b_len;
     if (shared != 0) {
         int order = memcmp(a->bytes, b->bytes, (size_t)shared);
@@ -979,7 +979,7 @@ int gr_str_cmp(GrString a, GrString b) {
     return (a_len > b_len) - (a_len < b_len);
 }
 
-int64_t gr_str_length(GrString s) {
+int64_t mn_str_length(MnString s) {
     if (!s) return 0;
     int64_t count = 0;
     for (int64_t i = 0; i < s->len; i++) {
@@ -990,17 +990,17 @@ int64_t gr_str_length(GrString s) {
 
 /* Copies `s` with the ASCII letters in [first, first + 26) moved by
  * `shift`. Returns `s` itself when it has none. */
-static GrString str_shift_case(GrString s, char first, int shift) {
+static MnString str_shift_case(MnString s, char first, int shift) {
     if (!s) return NULL;
     int64_t i = 0;
     while (i < s->len && !(s->bytes[i] >= first && s->bytes[i] < first + 26)) {
         i++;
     }
     if (i == s->len) {
-        gr_str_retain(s);
+        mn_str_retain(s);
         return s;
     }
-    GrString result = str_alloc(s->len);
+    MnString result = str_alloc(s->len);
     for (i = 0; i < s->len; i++) {
         char byte = s->bytes[i];
         if (byte >= first && byte < first + 26) byte = (char)(byte + shift);
@@ -1009,13 +1009,13 @@ static GrString str_shift_case(GrString s, char first, int shift) {
     return result;
 }
 
-GrString gr_str_upcase(GrString s) { return str_shift_case(s, 'a', 'A' - 'a'); }
+MnString mn_str_upcase(MnString s) { return str_shift_case(s, 'a', 'A' - 'a'); }
 
-GrString gr_str_downcase(GrString s) {
+MnString mn_str_downcase(MnString s) {
     return str_shift_case(s, 'A', 'a' - 'A');
 }
 
-bool gr_str_include(GrString s, GrString part) {
+bool mn_str_include(MnString s, MnString part) {
     if (!part) return true;
     if (!s || part->len > s->len) return false;
     size_t len = (size_t)part->len;
@@ -1030,13 +1030,13 @@ bool gr_str_include(GrString s, GrString part) {
     return false;
 }
 
-bool gr_str_start_with(GrString s, GrString prefix) {
+bool mn_str_start_with(MnString s, MnString prefix) {
     if (!prefix) return true;
     if (!s || prefix->len > s->len) return false;
     return memcmp(s->bytes, prefix->bytes, (size_t)prefix->len) == 0;
 }
 
-bool gr_str_end_with(GrString s, GrString suffix) {
+bool mn_str_end_with(MnString s, MnString suffix) {
     if (!suffix) return true;
     if (!s || suffix->len > s->len) return false;
     return memcmp(s->bytes + (s->len - suffix->len), suffix->bytes,
@@ -1045,16 +1045,16 @@ bool gr_str_end_with(GrString s, GrString suffix) {
 
 /* `s` with spaces after it (`after`) or before it, up to `width` code
  * points. */
-static GrString str_pad(GrString s, int64_t width, bool after) {
-    int64_t length = gr_str_length(s);
+static MnString str_pad(MnString s, int64_t width, bool after) {
+    int64_t length = mn_str_length(s);
     if (width <= length) {
-        gr_str_retain(s);
+        mn_str_retain(s);
         return s;
     }
     int64_t pad = width - length;
-    int64_t len = gr_str_bytesize(s);
-    if (pad > INT64_MAX - len) gr_out_of_memory();
-    GrString result = str_alloc(len + pad);
+    int64_t len = mn_str_bytesize(s);
+    if (pad > INT64_MAX - len) mn_out_of_memory();
+    MnString result = str_alloc(len + pad);
     char *text = result->bytes + (after ? 0 : pad);
     char *spaces = result->bytes + (after ? len : 0);
     if (len != 0) memcpy(text, s->bytes, (size_t)len);
@@ -1062,11 +1062,11 @@ static GrString str_pad(GrString s, int64_t width, bool after) {
     return result;
 }
 
-GrString gr_str_ljust(GrString s, int64_t width) {
+MnString mn_str_ljust(MnString s, int64_t width) {
     return str_pad(s, width, true);
 }
 
-GrString gr_str_rjust(GrString s, int64_t width) {
+MnString mn_str_rjust(MnString s, int64_t width) {
     return str_pad(s, width, false);
 }
 
@@ -1076,7 +1076,7 @@ static bool is_space(char c) {
 
 static bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
-int64_t gr_str_to_i(GrString s) {
+int64_t mn_str_to_i(MnString s) {
     if (!s) return 0;
     /* The NUL after the bytes ends every scan. */
     const char *at = s->bytes;
@@ -1092,7 +1092,7 @@ int64_t gr_str_to_i(GrString s) {
     return (int64_t)(negative ? 0 - value : value);
 }
 
-double gr_str_to_f(GrString s) {
+double mn_str_to_f(MnString s) {
     if (!s) return 0.0;
     const char *at = s->bytes;
     while (is_space(*at)) at++;
@@ -1106,59 +1106,59 @@ double gr_str_to_f(GrString s) {
     return strtod(start, NULL);
 }
 
-GrString gr_int_to_s(int64_t value) {
-    char text[GR_INT_TEXT];
-    return gr_str_new(text, format_int(value, text));
+MnString mn_int_to_s(int64_t value) {
+    char text[MN_INT_TEXT];
+    return mn_str_new(text, format_int(value, text));
 }
 
-GrString gr_float_to_s(double value) {
-    char text[GR_FLOAT_TEXT];
-    return gr_str_new(text, format_float(value, text));
+MnString mn_float_to_s(double value) {
+    char text[MN_FLOAT_TEXT];
+    return mn_str_new(text, format_float(value, text));
 }
 
-GR_STR_LIT(gr_text_true, 4, "true");
-GR_STR_LIT(gr_text_false, 5, "false");
+MN_STR_LIT(mn_text_true, 4, "true");
+MN_STR_LIT(mn_text_false, 5, "false");
 
-GrString gr_bool_to_s(bool value) {
-    return value ? (GrString)(void *)&gr_text_true
-                 : (GrString)(void *)&gr_text_false;
+MnString mn_bool_to_s(bool value) {
+    return value ? (MnString)(void *)&mn_text_true
+                 : (MnString)(void *)&mn_text_false;
 }
 
-GrString gr_entity_to_s(GrEntity e) {
-    char text[GR_ENTITY_TEXT];
-    return gr_str_new(text, format_entity(e, text));
+MnString mn_entity_to_s(MnEntity e) {
+    char text[MN_ENTITY_TEXT];
+    return mn_str_new(text, format_entity(e, text));
 }
 
 /* ---- String builder ------------------------------------------------------ */
 
 /* Makes room for `extra` more bytes and returns where they go. */
-static char *sb_reserve(GrBuilder *sb, int64_t extra) {
+static char *sb_reserve(MnBuilder *sb, int64_t extra) {
     if (sb->capacity - sb->len < extra) {
         int64_t capacity = sb->capacity ? sb->capacity : 64;
         while (capacity - sb->len < extra) {
-            if (capacity > INT64_MAX / 2) gr_out_of_memory();
+            if (capacity > INT64_MAX / 2) mn_out_of_memory();
             capacity *= 2;
         }
-        sb->bytes = gr_realloc(sb->bytes, (size_t)capacity);
+        sb->bytes = mn_realloc(sb->bytes, (size_t)capacity);
         sb->capacity = capacity;
     }
     return sb->bytes + sb->len;
 }
 
-void gr_sb_bytes(GrBuilder *sb, const char *bytes, int64_t len) {
+void mn_sb_bytes(MnBuilder *sb, const char *bytes, int64_t len) {
     if (len <= 0) return;
     memcpy(sb_reserve(sb, len), bytes, (size_t)len);
     sb->len += len;
 }
 
-void gr_sb_str(GrBuilder *sb, GrString s) {
-    if (s) gr_sb_bytes(sb, s->bytes, s->len);
+void mn_sb_str(MnBuilder *sb, MnString s) {
+    if (s) mn_sb_bytes(sb, s->bytes, s->len);
 }
 
-void gr_sb_quoted(GrBuilder *sb, GrString s) {
+void mn_sb_quoted(MnBuilder *sb, MnString s) {
     static const char hex[] = "0123456789ABCDEF";
-    int64_t len = gr_str_bytesize(s);
-    gr_sb_bytes(sb, "\"", 1);
+    int64_t len = mn_str_bytesize(s);
+    mn_sb_bytes(sb, "\"", 1);
     int64_t plain = 0; /* start of the bytes not yet appended */
     for (int64_t i = 0; i < len; i++) {
         unsigned char byte = (unsigned char)s->bytes[i];
@@ -1184,114 +1184,114 @@ void gr_sb_quoted(GrBuilder *sb, GrString s) {
             escape_len = 4;
             break;
         }
-        gr_sb_bytes(sb, s->bytes + plain, i - plain);
-        gr_sb_bytes(sb, escape, escape_len);
+        mn_sb_bytes(sb, s->bytes + plain, i - plain);
+        mn_sb_bytes(sb, escape, escape_len);
         plain = i + 1;
     }
-    if (len != 0) gr_sb_bytes(sb, s->bytes + plain, len - plain);
-    gr_sb_bytes(sb, "\"", 1);
+    if (len != 0) mn_sb_bytes(sb, s->bytes + plain, len - plain);
+    mn_sb_bytes(sb, "\"", 1);
 }
 
-void gr_sb_int(GrBuilder *sb, int64_t value) {
-    sb->len += format_int(value, sb_reserve(sb, GR_INT_TEXT));
+void mn_sb_int(MnBuilder *sb, int64_t value) {
+    sb->len += format_int(value, sb_reserve(sb, MN_INT_TEXT));
 }
 
-void gr_sb_float(GrBuilder *sb, double value) {
-    sb->len += format_float(value, sb_reserve(sb, GR_FLOAT_TEXT));
+void mn_sb_float(MnBuilder *sb, double value) {
+    sb->len += format_float(value, sb_reserve(sb, MN_FLOAT_TEXT));
 }
 
-void gr_sb_bool(GrBuilder *sb, bool value) {
+void mn_sb_bool(MnBuilder *sb, bool value) {
     if (value) {
-        gr_sb_bytes(sb, "true", 4);
+        mn_sb_bytes(sb, "true", 4);
     } else {
-        gr_sb_bytes(sb, "false", 5);
+        mn_sb_bytes(sb, "false", 5);
     }
 }
 
-void gr_sb_entity(GrBuilder *sb, GrEntity e) {
-    sb->len += format_entity(e, sb_reserve(sb, GR_ENTITY_TEXT));
+void mn_sb_entity(MnBuilder *sb, MnEntity e) {
+    sb->len += format_entity(e, sb_reserve(sb, MN_ENTITY_TEXT));
 }
 
-static void sb_reset(GrBuilder *sb) {
+static void sb_reset(MnBuilder *sb) {
     free(sb->bytes);
     sb->bytes = NULL;
     sb->len = 0;
     sb->capacity = 0;
 }
 
-GrString gr_sb_finish(GrBuilder *sb) {
-    GrString s = gr_str_new(sb->bytes, sb->len);
+MnString mn_sb_finish(MnBuilder *sb) {
+    MnString s = mn_str_new(sb->bytes, sb->len);
     sb_reset(sb);
     return s;
 }
 
-void gr_sb_write(GrBuilder *sb) {
-    gr_out_bytes(sb->bytes, sb->len);
+void mn_sb_write(MnBuilder *sb) {
+    mn_out_bytes(sb->bytes, sb->len);
     sb_reset(sb);
 }
 
 /* ---- Output -------------------------------------------------------------- */
 
-void gr_out_bytes(const char *bytes, int64_t len) {
+void mn_out_bytes(const char *bytes, int64_t len) {
     if (len > 0) fwrite(bytes, 1, (size_t)len, stdout);
 }
 
-void gr_out_str(GrString s) {
-    if (s) gr_out_bytes(s->bytes, s->len);
+void mn_out_str(MnString s) {
+    if (s) mn_out_bytes(s->bytes, s->len);
 }
 
-void gr_out_int(int64_t value) {
-    char text[GR_INT_TEXT];
-    gr_out_bytes(text, format_int(value, text));
+void mn_out_int(int64_t value) {
+    char text[MN_INT_TEXT];
+    mn_out_bytes(text, format_int(value, text));
 }
 
-void gr_out_float(double value) {
-    char text[GR_FLOAT_TEXT];
-    gr_out_bytes(text, format_float(value, text));
+void mn_out_float(double value) {
+    char text[MN_FLOAT_TEXT];
+    mn_out_bytes(text, format_float(value, text));
 }
 
-void gr_out_bool(bool value) {
+void mn_out_bool(bool value) {
     if (value) {
-        gr_out_bytes("true", 4);
+        mn_out_bytes("true", 4);
     } else {
-        gr_out_bytes("false", 5);
+        mn_out_bytes("false", 5);
     }
 }
 
-void gr_out_entity(GrEntity e) {
-    char text[GR_ENTITY_TEXT];
-    gr_out_bytes(text, format_entity(e, text));
+void mn_out_entity(MnEntity e) {
+    char text[MN_ENTITY_TEXT];
+    mn_out_bytes(text, format_entity(e, text));
 }
 
-void gr_out_newline(void) { putc('\n', stdout); }
+void mn_out_newline(void) { putc('\n', stdout); }
 
 /* ---- Lists --------------------------------------------------------------- */
 
-static char *list_at(GrList list, const GrElem *elem, int64_t index) {
-    return (char *)gr_list_data(list) + (size_t)index * elem->size;
+static char *list_at(MnList list, const MnElem *elem, int64_t index) {
+    return (char *)mn_list_data(list) + (size_t)index * elem->size;
 }
 
-static size_t list_bytes(const GrElem *elem, int64_t capacity) {
-    if ((uint64_t)capacity > SIZE_MAX) gr_out_of_memory();
-    size_t bytes = gr_mul((size_t)capacity, elem->size);
-    if (bytes > SIZE_MAX - sizeof(GrListBuf)) gr_out_of_memory();
-    return sizeof(GrListBuf) + bytes;
+static size_t list_bytes(const MnElem *elem, int64_t capacity) {
+    if ((uint64_t)capacity > SIZE_MAX) mn_out_of_memory();
+    size_t bytes = mn_mul((size_t)capacity, elem->size);
+    if (bytes > SIZE_MAX - sizeof(MnListBuf)) mn_out_of_memory();
+    return sizeof(MnListBuf) + bytes;
 }
 
 /* A new buffer with room for `capacity` elements (above zero) and none in
  * use. */
-static GrList list_new(const GrElem *elem, int64_t capacity) {
-    GrList list = gr_malloc(list_bytes(elem, capacity));
+static MnList list_new(const MnElem *elem, int64_t capacity) {
+    MnList list = mn_malloc(list_bytes(elem, capacity));
     list->refs = 1;
     list->len = 0;
     list->cap = capacity;
-    GR_BUFFER_BORN();
+    MN_BUFFER_BORN();
     return list;
 }
 
 /* Appends copies of `count` elements, retaining what they own. The buffer
  * must have room. */
-static void list_append_copies(GrList list, const GrElem *elem,
+static void list_append_copies(MnList list, const MnElem *elem,
                                const char *from, int64_t count) {
     char *to = list_at(list, elem, list->len);
     memcpy(to, from, (size_t)count * elem->size);
@@ -1304,11 +1304,11 @@ static void list_append_copies(GrList list, const GrElem *elem,
 }
 
 static int64_t list_grown(int64_t capacity) {
-    if (capacity > INT64_MAX / 2) gr_out_of_memory();
+    if (capacity > INT64_MAX / 2) mn_out_of_memory();
     return capacity < 2 ? 4 : capacity * 2;
 }
 
-void gr_list_free(GrList list, const GrElem *elem) {
+void mn_list_free(MnList list, const MnElem *elem) {
     if (!list) return;
     if (elem->drop) {
         for (int64_t i = 0; i < list->len; i++) {
@@ -1316,47 +1316,47 @@ void gr_list_free(GrList list, const GrElem *elem) {
         }
     }
     free(list);
-    GR_BUFFER_GONE();
+    MN_BUFFER_GONE();
 }
 
-GrList gr_list_alloc(const GrElem *elem, int64_t len) {
+MnList mn_list_alloc(const MnElem *elem, int64_t len) {
     if (len <= 0) return NULL;
-    GrList list = list_new(elem, len);
-    memset(gr_list_data(list), 0, (size_t)len * elem->size);
+    MnList list = list_new(elem, len);
+    memset(mn_list_data(list), 0, (size_t)len * elem->size);
     list->len = len;
     return list;
 }
 
-void gr_list_unique(GrList *list, const GrElem *elem) {
-    GrList shared = *list;
+void mn_list_unique(MnList *list, const MnElem *elem) {
+    MnList shared = *list;
     if (!shared || shared->refs == 1) return;
-    GrList own = NULL;
+    MnList own = NULL;
     if (shared->len != 0) {
         own = list_new(elem, shared->len);
-        list_append_copies(own, elem, gr_list_data(shared), shared->len);
+        list_append_copies(own, elem, mn_list_data(shared), shared->len);
     }
     shared->refs--;
     *list = own;
 }
 
-int64_t gr_list_need(GrList list, const char *what, GrLoc loc) {
-    int64_t len = gr_list_len(list);
-    if (len == 0) gr_panic(loc, "%s on an empty list", what);
+int64_t mn_list_need(MnList list, const char *what, MnLoc loc) {
+    int64_t len = mn_list_len(list);
+    if (len == 0) mn_panic(loc, "%s on an empty list", what);
     return len;
 }
 
-void *gr_list_push(GrList *list, const GrElem *elem) {
-    GrList buf = *list;
+void *mn_list_push(MnList *list, const MnElem *elem) {
+    MnList buf = *list;
     if (!buf) {
         buf = list_new(elem, 4);
     } else if (buf->refs > 1) {
-        GrList own = list_new(elem, list_grown(buf->len));
-        list_append_copies(own, elem, gr_list_data(buf), buf->len);
+        MnList own = list_new(elem, list_grown(buf->len));
+        list_append_copies(own, elem, mn_list_data(buf), buf->len);
         buf->refs--;
         buf = own;
     } else if (buf->len == buf->cap) {
         int64_t capacity = list_grown(buf->cap);
-        buf = gr_realloc(buf, list_bytes(elem, capacity));
+        buf = mn_realloc(buf, list_bytes(elem, capacity));
         buf->cap = capacity;
     }
     *list = buf;
@@ -1366,69 +1366,69 @@ void *gr_list_push(GrList *list, const GrElem *elem) {
     return slot;
 }
 
-void gr_list_pop(GrList *list, const GrElem *elem, void *out, GrLoc loc) {
-    int64_t len = gr_list_need(*list, "pop", loc);
-    gr_list_unique(list, elem);
-    GrList buf = *list;
+void mn_list_pop(MnList *list, const MnElem *elem, void *out, MnLoc loc) {
+    int64_t len = mn_list_need(*list, "pop", loc);
+    mn_list_unique(list, elem);
+    MnList buf = *list;
     memcpy(out, list_at(buf, elem, len - 1), elem->size);
     buf->len = len - 1;
 }
 
-void gr_list_delete_at(GrList *list, const GrElem *elem, int64_t index,
-                       void *out, GrLoc loc) {
-    int64_t at = gr_list_index(*list, index, loc);
-    gr_list_unique(list, elem);
-    GrList buf = *list;
+void mn_list_delete_at(MnList *list, const MnElem *elem, int64_t index,
+                       void *out, MnLoc loc) {
+    int64_t at = mn_list_index(*list, index, loc);
+    mn_list_unique(list, elem);
+    MnList buf = *list;
     char *slot = list_at(buf, elem, at);
     memcpy(out, slot, elem->size);
     buf->len--;
     memmove(slot, slot + elem->size, (size_t)(buf->len - at) * elem->size);
 }
 
-void gr_list_clear(GrList *list, const GrElem *elem) {
-    gr_list_release(*list, elem);
+void mn_list_clear(MnList *list, const MnElem *elem) {
+    mn_list_release(*list, elem);
     *list = NULL;
 }
 
-GrList gr_list_concat(GrList a, GrList b, const GrElem *elem) {
-    int64_t a_len = gr_list_len(a);
-    int64_t b_len = gr_list_len(b);
+MnList mn_list_concat(MnList a, MnList b, const MnElem *elem) {
+    int64_t a_len = mn_list_len(a);
+    int64_t b_len = mn_list_len(b);
     if (a_len == 0 && b_len == 0) return NULL;
     if (b_len == 0) {
-        gr_list_retain(a);
+        mn_list_retain(a);
         return a;
     }
     if (a_len == 0) {
-        gr_list_retain(b);
+        mn_list_retain(b);
         return b;
     }
-    if (a_len > INT64_MAX - b_len) gr_out_of_memory();
-    GrList list = list_new(elem, a_len + b_len);
-    list_append_copies(list, elem, gr_list_data(a), a_len);
-    list_append_copies(list, elem, gr_list_data(b), b_len);
+    if (a_len > INT64_MAX - b_len) mn_out_of_memory();
+    MnList list = list_new(elem, a_len + b_len);
+    list_append_copies(list, elem, mn_list_data(a), a_len);
+    list_append_copies(list, elem, mn_list_data(b), b_len);
     return list;
 }
 
-GrList gr_list_repeat(GrList list, int64_t n, const GrElem *elem) {
-    int64_t len = gr_list_len(list);
+MnList mn_list_repeat(MnList list, int64_t n, const MnElem *elem) {
+    int64_t len = mn_list_len(list);
     if (len == 0 || n <= 0) return NULL;
     if (n == 1) {
-        gr_list_retain(list);
+        mn_list_retain(list);
         return list;
     }
-    if (len > INT64_MAX / n) gr_out_of_memory();
-    GrList result = list_new(elem, len * n);
+    if (len > INT64_MAX / n) mn_out_of_memory();
+    MnList result = list_new(elem, len * n);
     for (int64_t i = 0; i < n; i++) {
-        list_append_copies(result, elem, gr_list_data(list), len);
+        list_append_copies(result, elem, mn_list_data(list), len);
     }
     return result;
 }
 
 /* ---- Numbers ------------------------------------------------------------- */
 
-int64_t gr_int_pow(int64_t base, int64_t exponent, GrLoc loc) {
+int64_t mn_int_pow(int64_t base, int64_t exponent, MnLoc loc) {
     if (exponent < 0) {
-        gr_panic(loc, "negative exponent %lld", (long long)exponent);
+        mn_panic(loc, "negative exponent %lld", (long long)exponent);
     }
     uint64_t result = 1;
     uint64_t factor = (uint64_t)base;
@@ -1439,7 +1439,7 @@ int64_t gr_int_pow(int64_t base, int64_t exponent, GrLoc loc) {
     return (int64_t)result;
 }
 
-double gr_float_mod(double a, double b) {
+double mn_float_mod(double a, double b) {
     if (b == 0.0) return NAN;
     double r = fmod(a, b);
     if (r != 0.0 && (r < 0.0) != (b < 0.0)) r += b;
@@ -1454,12 +1454,12 @@ static int64_t whole_to_int(double value) {
     return (int64_t)value;
 }
 
-int64_t gr_float_to_i(double value) { return whole_to_int(trunc(value)); }
-int64_t gr_float_floor(double value) { return whole_to_int(floor(value)); }
-int64_t gr_float_ceil(double value) { return whole_to_int(ceil(value)); }
-int64_t gr_float_round(double value) { return whole_to_int(round(value)); }
+int64_t mn_float_to_i(double value) { return whole_to_int(trunc(value)); }
+int64_t mn_float_floor(double value) { return whole_to_int(floor(value)); }
+int64_t mn_float_ceil(double value) { return whole_to_int(ceil(value)); }
+int64_t mn_float_round(double value) { return whole_to_int(round(value)); }
 
-double gr_float_round_digits(double value, int64_t digits) {
+double mn_float_round_digits(double value, int64_t digits) {
     if (value - value != 0.0 || value == 0.0) return value;
     if (digits >= 0) {
         if (digits > 308) return value;
@@ -1478,9 +1478,9 @@ double gr_float_round_digits(double value, int64_t digits) {
 
 /* ---- Random numbers ------------------------------------------------------ */
 
-#define GR_DEFAULT_SEED 0x6772656d6c696eLL
+#define MN_DEFAULT_SEED 0x6772656d6c696eLL
 
-static uint64_t gr_random[4];
+static uint64_t mn_random[4];
 
 static uint64_t rotate_left(uint64_t value, int by) {
     return (value << by) | (value >> (64 - by));
@@ -1488,7 +1488,7 @@ static uint64_t rotate_left(uint64_t value, int by) {
 
 /* xoshiro256** */
 static uint64_t random_next(void) {
-    uint64_t *s = gr_random;
+    uint64_t *s = mn_random;
     uint64_t result = rotate_left(s[1] * 5, 7) * 9;
     uint64_t t = s[1] << 17;
     s[2] ^= s[0];
@@ -1500,31 +1500,31 @@ static uint64_t random_next(void) {
     return result;
 }
 
-void gr_srand(int64_t seed) {
+void mn_srand(int64_t seed) {
     /* splitmix64 */
     uint64_t state = (uint64_t)seed;
     for (int i = 0; i < 4; i++) {
         uint64_t z = (state += 0x9e3779b97f4a7c15u);
         z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9u;
         z = (z ^ (z >> 27)) * 0x94d049bb133111ebu;
-        gr_random[i] = z ^ (z >> 31);
+        mn_random[i] = z ^ (z >> 31);
     }
 }
 
-void gr_srand_clock(void) {
+void mn_srand_clock(void) {
     struct timespec now = {0, 0};
     clock_gettime(CLOCK_REALTIME, &now);
-    gr_srand((int64_t)((uint64_t)now.tv_sec * 1000000000u +
+    mn_srand((int64_t)((uint64_t)now.tv_sec * 1000000000u +
                        (uint64_t)now.tv_nsec));
 }
 
-double gr_rand(void) {
+double mn_rand(void) {
     return (double)(random_next() >> 11) * (1.0 / 9007199254740992.0);
 }
 
-int64_t gr_rand_int(int64_t n, GrLoc loc) {
+int64_t mn_rand_int(int64_t n, MnLoc loc) {
     if (n <= 0) {
-        gr_panic(loc, "rand(%lld): the argument must be positive",
+        mn_panic(loc, "rand(%lld): the argument must be positive",
                  (long long)n);
     }
     /* Numbers below 2^64 mod n are passed over, which leaves a whole
@@ -1539,16 +1539,16 @@ int64_t gr_rand_int(int64_t n, GrLoc loc) {
 
 /* ---- Time ---------------------------------------------------------------- */
 
-static struct timespec gr_started;
+static struct timespec mn_started;
 
-double gr_clock(void) {
-    struct timespec now = gr_started;
+double mn_clock(void) {
+    struct timespec now = mn_started;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    return (double)(now.tv_sec - gr_started.tv_sec) +
-           (double)(now.tv_nsec - gr_started.tv_nsec) * 1e-9;
+    return (double)(now.tv_sec - mn_started.tv_sec) +
+           (double)(now.tv_nsec - mn_started.tv_nsec) * 1e-9;
 }
 
-void gr_sleep(double seconds) {
+void mn_sleep(double seconds) {
     if (!(seconds > 0.0)) return;
     fflush(stdout);
     struct timespec left;
@@ -1567,30 +1567,30 @@ void gr_sleep(double seconds) {
 
 /* ---- Start and finish ---------------------------------------------------- */
 
-void gr_start(const GrProgram *program) {
-    GrWorld *w = &gr_world;
+void mn_start(const MnProgram *program) {
+    MnWorld *w = &mn_world;
     memset(w, 0, sizeof *w);
     w->program = program;
-    w->free_head = GR_NONE;
+    w->free_head = MN_NONE;
     size_t component_count = program->component_count;
-    w->scratch_set = gr_malloc((component_count + 1) * sizeof(uint32_t));
-    w->scratch_values = gr_malloc((component_count + 1) * sizeof(void *));
-    w->events = gr_calloc(program->event_count, sizeof(GrEventBuf));
+    w->scratch_set = mn_malloc((component_count + 1) * sizeof(uint32_t));
+    w->scratch_values = mn_malloc((component_count + 1) * sizeof(void *));
+    w->events = mn_calloc(program->event_count, sizeof(MnEventBuf));
     w->table_map_capacity = 64;
-    w->table_map = gr_calloc(w->table_map_capacity, sizeof(uint32_t));
+    w->table_map = mn_calloc(w->table_map_capacity, sizeof(uint32_t));
     table_for_set(w->scratch_set, 0);
-    gr_srand(GR_DEFAULT_SEED);
-    clock_gettime(CLOCK_MONOTONIC, &gr_started);
+    mn_srand(MN_DEFAULT_SEED);
+    clock_gettime(CLOCK_MONOTONIC, &mn_started);
 }
 
-#ifdef GR_DEBUG
+#ifdef MN_DEBUG
 /* Drops every value the world holds and frees the world's memory. */
 static void world_destroy(void) {
-    GrWorld *w = &gr_world;
-    const GrProgram *program = w->program;
+    MnWorld *w = &mn_world;
+    const MnProgram *program = w->program;
 
     for (uint32_t t = 0; t < w->table_count; t++) {
-        GrTable *table = w->tables[t];
+        MnTable *table = w->tables[t];
         if (table->drop_count != 0) {
             for (uint32_t row = 0; row < table->count; row++) {
                 table_drop_row(table, row);
@@ -1604,7 +1604,7 @@ static void world_destroy(void) {
     if (program->drop_globals) program->drop_globals();
 
     for (uint32_t t = 0; t < w->table_count; t++) {
-        GrTable *table = w->tables[t];
+        MnTable *table = w->tables[t];
         if (table->capacity != 0) {
             for (uint32_t i = 0; i < table->data_count; i++) {
                 free(table->columns[table->data[i]]);
@@ -1625,18 +1625,18 @@ static void world_destroy(void) {
     free(w->scratch_values);
     memset(w, 0, sizeof *w);
     w->program = program;
-    w->free_head = GR_NONE;
+    w->free_head = MN_NONE;
 }
 #endif
 
-void gr_finish(void) {
+void mn_finish(void) {
     fflush(stdout);
-#ifdef GR_DEBUG
+#ifdef MN_DEBUG
     world_destroy();
-    if (gr_live_buffers != 0) {
-        fprintf(stderr, "gremlin: %lld buffer%s still alive at exit\n",
-                (long long)gr_live_buffers, gr_live_buffers == 1 ? "" : "s");
-        gr_leave(70);
+    if (mn_live_buffers != 0) {
+        fprintf(stderr, "midnight: %lld buffer%s still alive at exit\n",
+                (long long)mn_live_buffers, mn_live_buffers == 1 ? "" : "s");
+        mn_leave(70);
     }
 #endif
 }

@@ -1,5 +1,5 @@
 error: condition must be `Bool`, found `[Int]`
- --> tests/fail/cond_until_not_bool.grem:5:7
+ --> tests/fail/cond_until_not_bool.12am:5:7
   |
 5 | until xs
   |       ^^ there is no truthiness: test it, like `!x.empty?`

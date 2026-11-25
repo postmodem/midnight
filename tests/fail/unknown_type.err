@@ -1,5 +1,5 @@
 error: unknown type `Polygon`
- --> tests/fail/unknown_type.grem:5:10
+ --> tests/fail/unknown_type.12am:5:10
   |
 5 |   shape: Polygon
   |          ^^^^^^^

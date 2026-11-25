@@ -35,7 +35,7 @@ pub(super) enum Part<'a> {
     Val(&'a Expr),
 }
 
-/// Where text goes: standard output, or the named `GrBuilder`.
+/// Where text goes: standard output, or the named `MnBuilder`.
 pub(super) enum Sink {
     Out,
     Builder(String),
@@ -304,7 +304,7 @@ impl<'a> FnCx<'a, '_> {
             ExprKind::Bool(value) => Val::atom(if *value { "true" } else { "false" }),
             ExprKind::Str(text) => Val::atom(self.cx.str_lit(text)),
             ExprKind::EnumVariant(index) => Val::atom(index.to_string()),
-            ExprKind::EntityNone => Val::atom("(GrEntity){0, 0}"),
+            ExprKind::EntityNone => Val::atom("(MnEntity){0, 0}"),
             ExprKind::Read(place) => self.read_place(place),
             ExprKind::Field { base, field } => {
                 let Type::Record(record) = &base.ty else {
@@ -342,7 +342,7 @@ impl<'a> FnCx<'a, '_> {
                 let loc = self.cx.loc(expr.span);
                 let position = self.tmp();
                 self.line(&format!(
-                    "int64_t {position} = gr_list_index({}, {}, {loc});",
+                    "int64_t {position} = mn_list_index({}, {}, {loc});",
                     list.c, index.c
                 ));
                 self.load_elem(&list, &position, elem)
@@ -427,7 +427,7 @@ impl<'a> FnCx<'a, '_> {
                     .collect();
                 let values = self.operands(&exprs, Want::Own);
                 let (bundle, array) = self.bundle_values(inits, values);
-                Val::pending(format!("gr_spawn(&{bundle}, {array})"), Own::Free)
+                Val::pending(format!("mn_spawn(&{bundle}, {array})"), Own::Free)
             }
             ExprKind::Add { entity, components } => {
                 let mut exprs: Vec<&'a Expr> = vec![&**entity];
@@ -436,7 +436,7 @@ impl<'a> FnCx<'a, '_> {
                 let entity = values.remove(0);
                 let (bundle, array) = self.bundle_values(components, values);
                 Val::pending(
-                    format!("gr_add({}, &{bundle}, {array})", entity.c),
+                    format!("mn_add({}, &{bundle}, {array})", entity.c),
                     Own::Free,
                 )
             }
@@ -444,25 +444,25 @@ impl<'a> FnCx<'a, '_> {
                 let entity = self.expr(entity, Mode::Peek);
                 let (ids, count) = self.cx.remove_list(components);
                 Val::pending(
-                    format!("gr_remove({}, {ids}, {count})", entity.c),
+                    format!("mn_remove({}, {ids}, {count})", entity.c),
                     Own::Free,
                 )
             }
             ExprKind::Despawn(entity) => {
                 let entity = self.expr(entity, Mode::Peek);
-                Val::pending(format!("gr_despawn({})", entity.c), Own::Free)
+                Val::pending(format!("mn_despawn({})", entity.c), Own::Free)
             }
             ExprKind::Has { entity, component } => {
                 let entity = self.expr(entity, Mode::Peek);
                 Val::lazy(
-                    format!("gr_has({}, {})", entity.c, component.0),
+                    format!("mn_has({}, {})", entity.c, component.0),
                     ATOM,
                     Dep::World,
                 )
             }
             ExprKind::Alive(entity) => {
                 let entity = self.expr(entity, Mode::Peek);
-                Val::lazy(format!("gr_alive({})", entity.c), ATOM, Dep::World)
+                Val::lazy(format!("mn_alive({})", entity.c), ATOM, Dep::World)
             }
             ExprKind::ListPush { list, value } => {
                 let Type::List(elem) = &list.ty else {
@@ -485,7 +485,7 @@ impl<'a> FnCx<'a, '_> {
                 let elem_name = self.cx.elem(elem);
                 let cty = self.cx.cty(elem);
                 self.line(&format!(
-                    "*({cty} *)gr_list_push({}, &{elem_name}) = {c};",
+                    "*({cty} *)mn_list_push({}, &{elem_name}) = {c};",
                     lv.addr()
                 ));
                 Val::void()
@@ -500,7 +500,7 @@ impl<'a> FnCx<'a, '_> {
                 let elem_name = self.cx.elem(elem);
                 let loc = self.cx.loc(expr.span);
                 self.line(&format!(
-                    "gr_list_pop({}, &{elem_name}, &{out}, {loc});",
+                    "mn_list_pop({}, &{elem_name}, &{out}, {loc});",
                     lv.addr()
                 ));
                 self.removed_value(out, elem, &expr.ty)
@@ -521,7 +521,7 @@ impl<'a> FnCx<'a, '_> {
                 let elem_name = self.cx.elem(elem);
                 let loc = self.cx.loc(expr.span);
                 self.line(&format!(
-                    "gr_list_delete_at({}, &{elem_name}, {}, &{out}, {loc});",
+                    "mn_list_delete_at({}, &{elem_name}, {}, &{out}, {loc});",
                     lv.addr(),
                     index.c
                 ));
@@ -534,24 +534,24 @@ impl<'a> FnCx<'a, '_> {
                 let prepared = self.prepare(list, true, true, true);
                 let lv = self.addr(&prepared, true);
                 let elem_name = self.cx.elem(elem);
-                self.line(&format!("gr_list_clear({}, &{elem_name});", lv.addr()));
+                self.line(&format!("mn_list_clear({}, &{elem_name});", lv.addr()));
                 Val::void()
             }
             ExprKind::WorldTick => {
                 let loc = self.cx.loc(expr.span);
-                Val::pending(format!("gr_tick({loc})"), Own::Free)
+                Val::pending(format!("mn_tick({loc})"), Own::Free)
             }
             ExprKind::WorldRun => {
                 let loc = self.cx.loc(expr.span);
-                Val::pending(format!("gr_run({loc})"), Own::Free)
+                Val::pending(format!("mn_run({loc})"), Own::Free)
             }
-            ExprKind::WorldStop => Val::pending("gr_stop()".to_string(), Own::Free),
+            ExprKind::WorldStop => Val::pending("mn_stop()".to_string(), Own::Free),
             ExprKind::WorldCount(Some(query)) => {
                 let query = self.cx.query(query);
-                Val::lazy(format!("gr_query_count(&{query})"), ATOM, Dep::World)
+                Val::lazy(format!("mn_query_count(&{query})"), ATOM, Dep::World)
             }
             ExprKind::WorldCount(None) => {
-                Val::lazy("gr_entity_count()".to_string(), ATOM, Dep::World)
+                Val::lazy("mn_entity_count()".to_string(), ATOM, Dep::World)
             }
         }
     }
@@ -569,9 +569,9 @@ impl<'a> FnCx<'a, '_> {
             _ => {
                 let values = self.eval_parts(&parts);
                 let builder = self.fresh("sb");
-                self.line(&format!("GrBuilder {builder} = {{0}};"));
+                self.line(&format!("MnBuilder {builder} = {{0}};"));
                 self.write_parts(&parts, values, &Sink::Builder(builder.clone()));
-                Val::pending(format!("gr_sb_finish(&{builder})"), Own::Owned)
+                Val::pending(format!("mn_sb_finish(&{builder})"), Own::Owned)
             }
         }
     }
@@ -629,7 +629,7 @@ impl<'a> FnCx<'a, '_> {
     /// emitted at once.
     fn load_elem(&mut self, list: &Val, position: &str, elem: &Type) -> Val {
         let cty = self.cx.cty(elem);
-        let slot = format!("((const {cty} *)gr_list_data({}))[{position}]", list.c);
+        let slot = format!("((const {cty} *)mn_list_data({}))[{position}]", list.c);
         let (c, prec) = load(&slot, ATOM, elem);
         let (own, dep) = match list.own {
             _ if !self.cx.managed(&elem.value_type()) => (Own::Free, Dep::Fixed),
@@ -664,11 +664,11 @@ impl<'a> FnCx<'a, '_> {
         let cty = self.cx.cty(elem);
         let list = self.tmp();
         self.line(&format!(
-            "GrList {list} = gr_list_alloc(&{elem_name}, {});",
+            "MnList {list} = mn_list_alloc(&{elem_name}, {});",
             items.len()
         ));
         let data = self.fresh("p");
-        self.line(&format!("{cty} *{data} = gr_list_data({list});"));
+        self.line(&format!("{cty} *{data} = mn_list_data({list});"));
         for (index, c) in stored.iter().enumerate() {
             self.line(&format!("{data}[{index}] = {c};"));
         }
@@ -754,7 +754,7 @@ impl<'a> FnCx<'a, '_> {
                     _ => ">=",
                 };
                 let c = if *ty == Type::String {
-                    format!("gr_str_cmp({}, {}) {symbol} 0", left.c, right.c)
+                    format!("mn_str_cmp({}, {}) {symbol} 0", left.c, right.c)
                 } else {
                     format!("{} {symbol} {}", left.p(ADD), right.p(ADD))
                 };
@@ -781,9 +781,9 @@ impl<'a> FnCx<'a, '_> {
                         BinOp::Mul => {
                             Val::lazy(format!("{} * {}", left.p(MUL), right.p(UNARY)), MUL, dep)
                         }
-                        BinOp::Div => checked("gr_int_div", self),
-                        BinOp::Mod => checked("gr_int_mod", self),
-                        _ => checked("gr_int_pow", self),
+                        BinOp::Div => checked("mn_int_div", self),
+                        BinOp::Mod => checked("mn_int_mod", self),
+                        _ => checked("mn_int_pow", self),
                     }
                 }
                 Type::Float => match op {
@@ -800,23 +800,23 @@ impl<'a> FnCx<'a, '_> {
                         Val::lazy(format!("{} / {}", left.p(MUL), right.p(UNARY)), MUL, dep)
                     }
                     BinOp::Mod => {
-                        Val::lazy(format!("gr_float_mod({}, {})", left.c, right.c), ATOM, dep)
+                        Val::lazy(format!("mn_float_mod({}, {})", left.c, right.c), ATOM, dep)
                     }
                     _ => Val::lazy(format!("pow({}, {})", left.c, right.c), ATOM, dep),
                 },
                 Type::String => {
                     let name = if op == BinOp::Add {
-                        "gr_str_concat"
+                        "mn_str_concat"
                     } else {
-                        "gr_str_repeat"
+                        "mn_str_repeat"
                     };
                     Val::pending(format!("{name}({}, {})", left.c, right.c), Own::Owned)
                 }
                 Type::List(elem) => {
                     let name = if op == BinOp::Add {
-                        "gr_list_concat"
+                        "mn_list_concat"
                     } else {
-                        "gr_list_repeat"
+                        "mn_list_repeat"
                     };
                     let elem = self.cx.elem(elem);
                     Val::pending(
@@ -1099,10 +1099,10 @@ impl<'a> FnCx<'a, '_> {
                 Part::Lit(text) => {
                     let literal = names::c_string(text.as_bytes());
                     let line = match sink {
-                        Sink::Out if text == "\n" => "gr_out_newline();".to_string(),
-                        Sink::Out => format!("gr_out_bytes({literal}, {});", text.len()),
+                        Sink::Out if text == "\n" => "mn_out_newline();".to_string(),
+                        Sink::Out => format!("mn_out_bytes({literal}, {});", text.len()),
                         Sink::Builder(builder) => {
-                            format!("gr_sb_bytes(&{builder}, {literal}, {});", text.len())
+                            format!("mn_sb_bytes(&{builder}, {literal}, {});", text.len())
                         }
                     };
                     self.line(&line);
@@ -1131,19 +1131,19 @@ impl<'a> FnCx<'a, '_> {
             }
             Sink::Out => {
                 let line = match ty {
-                    Type::Int => format!("gr_out_int({});", value.c),
-                    Type::Float => format!("gr_out_float({});", value.c),
-                    Type::Bool => format!("gr_out_bool({});", value.c),
-                    Type::String => format!("gr_out_str({});", value.c),
-                    Type::Entity => format!("gr_out_entity({});", value.c),
+                    Type::Int => format!("mn_out_int({});", value.c),
+                    Type::Float => format!("mn_out_float({});", value.c),
+                    Type::Bool => format!("mn_out_bool({});", value.c),
+                    Type::String => format!("mn_out_str({});", value.c),
+                    Type::Entity => format!("mn_out_entity({});", value.c),
                     Type::Enum(id) => {
-                        format!("gr_out_str({}[{}]);", self.cx.enum_names(*id), value.c)
+                        format!("mn_out_str({}[{}]);", self.cx.enum_names(*id), value.c)
                     }
                     Type::Record(_) | Type::List(_) => {
                         let builder = self.fresh("sb");
-                        self.line(&format!("GrBuilder {builder} = {{0}};"));
+                        self.line(&format!("MnBuilder {builder} = {{0}};"));
                         self.write_value(&Sink::Builder(builder.clone()), value, ty);
-                        format!("gr_sb_write(&{builder});")
+                        format!("mn_sb_write(&{builder});")
                     }
                     Type::Void | Type::Compact(_) => unreachable!("not a value type"),
                 };
@@ -1156,10 +1156,10 @@ impl<'a> FnCx<'a, '_> {
     fn text_of(&mut self, arg: &'a Expr) -> Val {
         let function = match &arg.ty {
             Type::String => return self.rvalue(arg),
-            Type::Int => "gr_int_to_s",
-            Type::Float => "gr_float_to_s",
-            Type::Bool => "gr_bool_to_s",
-            Type::Entity => "gr_entity_to_s",
+            Type::Int => "mn_int_to_s",
+            Type::Float => "mn_float_to_s",
+            Type::Bool => "mn_bool_to_s",
+            Type::Entity => "mn_entity_to_s",
             Type::Enum(id) => {
                 let value = self.expr(arg, Mode::Peek);
                 let table = self.cx.enum_names(*id);
@@ -1168,9 +1168,9 @@ impl<'a> FnCx<'a, '_> {
             Type::Record(_) | Type::List(_) => {
                 let value = self.expr(arg, Mode::Peek);
                 let builder = self.fresh("sb");
-                self.line(&format!("GrBuilder {builder} = {{0}};"));
+                self.line(&format!("MnBuilder {builder} = {{0}};"));
                 self.write_value(&Sink::Builder(builder.clone()), value, &arg.ty);
-                return Val::pending(format!("gr_sb_finish(&{builder})"), Own::Owned);
+                return Val::pending(format!("mn_sb_finish(&{builder})"), Own::Owned);
             }
             Type::Void | Type::Compact(_) => unreachable!("not a value type"),
         };
@@ -1246,11 +1246,11 @@ impl<'a> FnCx<'a, '_> {
                 )
             }
             Builtin::FloatAbs => pure("fabs"),
-            Builtin::FloatToI => pure("gr_float_to_i"),
-            Builtin::FloatFloor => pure("gr_float_floor"),
-            Builtin::FloatCeil => pure("gr_float_ceil"),
-            Builtin::FloatRound => pure("gr_float_round"),
-            Builtin::FloatRoundDigits => pure("gr_float_round_digits"),
+            Builtin::FloatToI => pure("mn_float_to_i"),
+            Builtin::FloatFloor => pure("mn_float_floor"),
+            Builtin::FloatCeil => pure("mn_float_ceil"),
+            Builtin::FloatRound => pure("mn_float_round"),
+            Builtin::FloatRoundDigits => pure("mn_float_round_digits"),
             Builtin::FloatNan => {
                 let value = self.once(values[0].clone(), &Type::Float);
                 Val::lazy(format!("{0} != {0}", value.p(ADD)), EQ, dep)
@@ -1262,20 +1262,20 @@ impl<'a> FnCx<'a, '_> {
             Builtin::Atan2 => pure("atan2"),
             Builtin::Exp => pure("exp"),
             Builtin::Log => pure("log"),
-            Builtin::StrLength => pure("gr_str_length"),
-            Builtin::StrBytesize => pure("gr_str_bytesize"),
-            Builtin::StrEmpty => Val::lazy(format!("{} == 0", call("gr_str_bytesize")), EQ, dep),
-            Builtin::StrUpcase => effect("gr_str_upcase", Own::Owned),
-            Builtin::StrDowncase => effect("gr_str_downcase", Own::Owned),
-            Builtin::StrInclude => pure("gr_str_include"),
-            Builtin::StrStartWith => pure("gr_str_start_with"),
-            Builtin::StrEndWith => pure("gr_str_end_with"),
-            Builtin::StrLjust => effect("gr_str_ljust", Own::Owned),
-            Builtin::StrRjust => effect("gr_str_rjust", Own::Owned),
-            Builtin::StrToI => pure("gr_str_to_i"),
-            Builtin::StrToF => pure("gr_str_to_f"),
-            Builtin::ListLength => pure("gr_list_len"),
-            Builtin::ListEmpty => Val::lazy(format!("{} == 0", call("gr_list_len")), EQ, dep),
+            Builtin::StrLength => pure("mn_str_length"),
+            Builtin::StrBytesize => pure("mn_str_bytesize"),
+            Builtin::StrEmpty => Val::lazy(format!("{} == 0", call("mn_str_bytesize")), EQ, dep),
+            Builtin::StrUpcase => effect("mn_str_upcase", Own::Owned),
+            Builtin::StrDowncase => effect("mn_str_downcase", Own::Owned),
+            Builtin::StrInclude => pure("mn_str_include"),
+            Builtin::StrStartWith => pure("mn_str_start_with"),
+            Builtin::StrEndWith => pure("mn_str_end_with"),
+            Builtin::StrLjust => effect("mn_str_ljust", Own::Owned),
+            Builtin::StrRjust => effect("mn_str_rjust", Own::Owned),
+            Builtin::StrToI => pure("mn_str_to_i"),
+            Builtin::StrToF => pure("mn_str_to_f"),
+            Builtin::ListLength => pure("mn_list_len"),
+            Builtin::ListEmpty => Val::lazy(format!("{} == 0", call("mn_list_len")), EQ, dep),
             Builtin::ListFirst | Builtin::ListLast => {
                 let Type::List(elem) = &args[0].ty else {
                     unreachable!("first and last are list methods");
@@ -1283,12 +1283,12 @@ impl<'a> FnCx<'a, '_> {
                 let list = self.once(values[0].clone(), &args[0].ty);
                 let loc = self.cx.loc(expr.span);
                 if op == Builtin::ListFirst {
-                    self.line(&format!("gr_list_need({}, \"first\", {loc});", list.c));
+                    self.line(&format!("mn_list_need({}, \"first\", {loc});", list.c));
                     self.load_elem(&list, "0", elem)
                 } else {
                     let length = self.tmp();
                     self.line(&format!(
-                        "int64_t {length} = gr_list_need({}, \"last\", {loc});",
+                        "int64_t {length} = mn_list_need({}, \"last\", {loc});",
                         list.c
                     ));
                     self.load_elem(&list, &format!("{length} - 1"), elem)
@@ -1298,16 +1298,16 @@ impl<'a> FnCx<'a, '_> {
                 let function = self.cx.include_fn(&args[0].ty);
                 pure(&function)
             }
-            Builtin::Rand => effect("gr_rand", Own::Free),
+            Builtin::Rand => effect("mn_rand", Own::Free),
             Builtin::RandInt => {
                 let loc = self.cx.loc(expr.span);
-                Val::pending(format!("gr_rand_int({}, {loc})", values[0].c), Own::Free)
+                Val::pending(format!("mn_rand_int({}, {loc})", values[0].c), Own::Free)
             }
-            Builtin::Srand => effect("gr_srand", Own::Free),
-            Builtin::SrandClock => effect("gr_srand_clock", Own::Free),
-            Builtin::Clock => effect("gr_clock", Own::Free),
-            Builtin::Sleep => effect("gr_sleep", Own::Free),
-            Builtin::Exit => effect("gr_exit", Own::Free),
+            Builtin::Srand => effect("mn_srand", Own::Free),
+            Builtin::SrandClock => effect("mn_srand_clock", Own::Free),
+            Builtin::Clock => effect("mn_clock", Own::Free),
+            Builtin::Sleep => effect("mn_sleep", Own::Free),
+            Builtin::Exit => effect("mn_exit", Own::Free),
         }
     }
 }

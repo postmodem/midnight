@@ -1,5 +1,5 @@
 error: 256 does not fit in `UInt8`
- --> tests/fail/compact_list_element_assign_too_big.grem:5:12
+ --> tests/fail/compact_list_element_assign_too_big.12am:5:12
   |
 5 | bytes[0] = 256
   |            ^^^ `UInt8` holds 0 to 255

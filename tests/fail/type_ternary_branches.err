@@ -1,5 +1,5 @@
 error: expected `Int`, found `String`
- --> tests/fail/type_ternary_branches.grem:5:14
+ --> tests/fail/type_ternary_branches.12am:5:14
   |
 5 | x = ok ? 1 : "no"
   |              ^^^^ every branch of a conditional has the same type

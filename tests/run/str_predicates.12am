@@ -2,20 +2,20 @@
 puts "".empty?
 puts "a".empty?
 puts " ".empty?
-s = "gremlin"
-puts s.include?("eml")
+s = "midnight"
+puts s.include?("dni")
 puts s.include?("xyz")
-puts s.include?("G")
+puts s.include?("M")
 puts s.include?(s)
-puts s.start_with?("gre")
-puts s.start_with?("rem")
+puts s.start_with?("mid")
+puts s.start_with?("idn")
 puts s.start_with?(s)
-puts s.start_with?("gremlins")
-puts s.end_with?("lin")
-puts s.end_with?("gre")
+puts s.start_with?("midnights")
+puts s.end_with?("ght")
+puts s.end_with?("mid")
 puts s.end_with?(s)
-puts s.end_with?("a gremlin")
-t = "lin"
+puts s.end_with?("a midnight")
+t = "ght"
 puts s.end_with?(t) && !s.start_with?(t)
 blank = "x" * 0
 puts blank.empty?

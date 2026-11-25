@@ -1,5 +1,5 @@
 error: -1 does not fit in `UInt8`
- --> tests/fail/compact_default_negative_unsigned.grem:5:15
+ --> tests/fail/compact_default_negative_unsigned.12am:5:15
   |
 5 |   hp: UInt8 = -1
   |               ^^ `UInt8` holds 0 to 255

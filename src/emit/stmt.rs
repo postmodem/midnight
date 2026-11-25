@@ -363,7 +363,7 @@ impl<'a> FnCx<'a, '_> {
         let snapshot = self.expr(list, Mode::Own);
         let snapshot = self.once(snapshot, &list.ty);
         let length = self.fresh("n");
-        self.line(&format!("int64_t {length} = gr_list_len({});", snapshot.c));
+        self.line(&format!("int64_t {length} = mn_list_len({});", snapshot.c));
         let position = self.loop_var(index, "k");
         self.line(&format!(
             "for (int64_t {position} = 0; {position} < {length}; {position}++) {{"
@@ -376,7 +376,7 @@ impl<'a> FnCx<'a, '_> {
             self.fixed[id.0] = true;
             let value_type = elem_type.value_type();
             let slot = format!(
-                "((const {} *)gr_list_data({}))[{position}]",
+                "((const {} *)mn_list_data({}))[{position}]",
                 self.cx.cty(elem_type),
                 snapshot.c
             );
@@ -400,8 +400,8 @@ impl<'a> FnCx<'a, '_> {
         let sfx = names::depth_suffix(self.each_depth);
         self.line("{");
         self.indent += 1;
-        self.line(&format!("gr_query_update(&{q});"));
-        self.line("gr_defer_enter();");
+        self.line(&format!("mn_query_update(&{q});"));
+        self.line("mn_defer_enter();");
 
         let mut hoists = HashMap::new();
         if vector {
@@ -410,9 +410,9 @@ impl<'a> FnCx<'a, '_> {
                     (name.to_string(), cty.to_string(), source.to_string())
                 };
                 let (name, cty, source) = match key {
-                    HoistKey::Time(0) => fixed("time_tick", "int64_t", "gr_time.tick"),
-                    HoistKey::Time(1) => fixed("time_dt", "double", "gr_time.dt"),
-                    HoistKey::Time(_) => fixed("time_elapsed", "double", "gr_time.elapsed"),
+                    HoistKey::Time(0) => fixed("time_tick", "int64_t", "mn_time.tick"),
+                    HoistKey::Time(1) => fixed("time_dt", "double", "mn_time.dt"),
+                    HoistKey::Time(_) => fixed("time_elapsed", "double", "mn_time.elapsed"),
                     HoistKey::Resource(resource, field) => {
                         let item = &prog.resources[resource];
                         let member = names::field(&item.fields[field].name);
@@ -433,7 +433,7 @@ impl<'a> FnCx<'a, '_> {
             "for (uint32_t t{sfx} = 0; t{sfx} < {q}.table_count; t{sfx}++) {{"
         ));
         self.indent += 1;
-        self.line(&format!("GrTable *table{sfx} = {q}.tables[t{sfx}];"));
+        self.line(&format!("MnTable *table{sfx} = {q}.tables[t{sfx}];"));
         self.line(&format!("uint32_t n{sfx} = table{sfx}->count;"));
         self.line(&format!("if (n{sfx} == 0) continue;"));
         let restrict = if vector { "restrict " } else { "" };
@@ -455,7 +455,7 @@ impl<'a> FnCx<'a, '_> {
                     let cty = self.cx.cty(&Type::Record(record));
                     let konst = if *write { "" } else { "const " };
                     self.line(&format!(
-                        "{konst}{cty} *{restrict}c{sfx}{index} = gr_column(table{sfx}, {});",
+                        "{konst}{cty} *{restrict}c{sfx}{index} = mn_column(table{sfx}, {});",
                         component.0
                     ));
                     self.views.insert(param.0, format!("c{sfx}{index}[i{sfx}]"));
@@ -464,7 +464,7 @@ impl<'a> FnCx<'a, '_> {
         }
         if !entities.is_empty() {
             self.line(&format!(
-                "const GrEntity *ents{sfx} = table{sfx}->entities;"
+                "const MnEntity *ents{sfx} = table{sfx}->entities;"
             ));
         }
         self.line(&format!(
@@ -479,7 +479,7 @@ impl<'a> FnCx<'a, '_> {
         self.each_depth += 1;
         for id in entities {
             let name = self.names[id.0].clone();
-            self.line(&format!("GrEntity {name} = ents{sfx}[i{sfx}];"));
+            self.line(&format!("MnEntity {name} = ents{sfx}[i{sfx}];"));
         }
         self.block_in_scope(body, None);
         let jumped = matches!(
@@ -496,7 +496,7 @@ impl<'a> FnCx<'a, '_> {
         if jumped {
             self.out.push_str(&format!("{label}:\n"));
         }
-        self.line("gr_defer_leave();");
+        self.line("mn_defer_leave();");
         self.indent -= 1;
         self.line("}");
     }
@@ -506,7 +506,7 @@ impl<'a> FnCx<'a, '_> {
         let number = self.fresh("");
         let end = format!("end{number}");
         let seq = format!("seq{number}");
-        self.line(&format!("uint64_t {end} = gr_event_end({});", event.0));
+        self.line(&format!("uint64_t {end} = mn_event_end({});", event.0));
         self.line(&format!("uint64_t {seq} = {cursor};"));
         self.line(&format!("{cursor} = {end};"));
         self.line(&format!("for (; {seq} < {end}; {seq}++) {{"));
@@ -520,7 +520,7 @@ impl<'a> FnCx<'a, '_> {
                 let name = self.names[id.0].clone();
                 self.fixed[id.0] = true;
                 self.line(&format!(
-                    "const {cty} *ev{number} = gr_event_at({}, {seq});",
+                    "const {cty} *ev{number} = mn_event_at({}, {seq});",
                     event.0
                 ));
                 self.line(&format!("if (!ev{number}) continue;"));
@@ -531,7 +531,7 @@ impl<'a> FnCx<'a, '_> {
                     self.register(&name, ty, false);
                 }
             }
-            _ => self.line(&format!("if (!gr_event_at({}, {seq})) continue;", event.0)),
+            _ => self.line(&format!("if (!mn_event_at({}, {seq})) continue;", event.0)),
         }
         self.loop_body(body);
     }
@@ -560,6 +560,6 @@ impl<'a> FnCx<'a, '_> {
         let c = self.take(evaluated, ty);
         let name = if owned { c } else { self.declare(ty, &c) };
         let cty = self.cx.cty(ty);
-        self.line(&format!("*({cty} *)gr_emit({}) = {name};", event.0));
+        self.line(&format!("*({cty} *)mn_emit({}) = {name};", event.0));
     }
 }

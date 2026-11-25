@@ -1,5 +1,5 @@
 error: this `def` is never closed
- --> tests/fail/syntax_unclosed_def.grem:4:1
+ --> tests/fail/syntax_unclosed_def.12am:4:1
   |
 4 | def double(n: Int) -> Int
   | ^^^ expected a matching `end`

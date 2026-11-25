@@ -1,1 +1,1 @@
-tests/panic/compact_uint8_compound.grem:10: runtime error: 260 does not fit in UInt8
+tests/panic/compact_uint8_compound.12am:10: runtime error: 260 does not fit in UInt8

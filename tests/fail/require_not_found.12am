@@ -1,4 +1,4 @@
-# expect: can't find the required file `no_such_helper_file.grem` (looked for next to this file)
+# expect: can't find the required file `no_such_helper_file.12am` (looked for next to this file)
 # at: line 4, the string "no_such_helper_file"
 
 require "no_such_helper_file"

@@ -1,1 +1,1 @@
-tests/panic/compact_uint32_overflow.grem:9: runtime error: 4294967296 does not fit in UInt32
+tests/panic/compact_uint32_overflow.12am:9: runtime error: 4294967296 does not fit in UInt32

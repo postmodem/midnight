@@ -1,13 +1,13 @@
-# The Gremlin language
+# The Midnight language
 
-This document describes Gremlin 0.1, the version specified by
+This document describes Midnight 0.1, the version specified by
 [`specs/0001-language-core.md`](../specs/0001-language-core.md). It is the
 reference for what a program means. Where the compiler and this document
 disagree, one of them has a bug.
 
-Gremlin is a compiled, statically typed language built around the
+Midnight is a compiled, statically typed language built around the
 entity-component-system (ECS) pattern. Its syntax borrows from Ruby. Source
-files end in `.grem`.
+files end in `.12am`.
 
 ## A first program
 
@@ -206,7 +206,7 @@ A variable is created by its first assignment and keeps that type:
 
 ```ruby
 count = 0            # Int
-name = "gremlin"     # String
+name = "midnight"     # String
 ratio: Float = 1     # annotated; the Int converts
 scores: [Int] = []   # an empty list needs a type from somewhere
 ```
@@ -795,7 +795,7 @@ declarations and statements, in any mix.
   the top level: functions and systems can't see them. State that systems
   need belongs in a resource or on an entity.
 
-`require "physics"` loads `physics.grem`, found relative to the file
+`require "physics"` loads `physics.12am`, found relative to the file
 containing the `require`. It is allowed at the top level only. A file is
 loaded at most once; its declarations join the program and its top-level
 statements run at the point of the first `require`. Systems are ordered the
@@ -803,7 +803,7 @@ same way: a required file's systems come where its `require` appears.
 
 ## What things cost
 
-Gremlin stores data so that the common case, a system visiting every entity
+Midnight stores data so that the common case, a system visiting every entity
 with certain components, is a walk over contiguous memory. Knowing the layout
 is part of using the language well.
 
@@ -853,7 +853,7 @@ can, suggests a fix:
 
 ```
 error: unknown component `Postion`
-  --> move.grem:14:8
+  --> move.12am:14:8
    |
 14 |   each Postion, Velocity do |pos, vel|
    |        ^^^^^^^ did you mean `Position`?
@@ -863,7 +863,7 @@ error: unknown component `Postion`
 and end the program with status 1:
 
 ```
-battle.grem:41: runtime error: Entity(7v1) has no Health
+battle.12am:41: runtime error: Entity(7v1) has no Health
 ```
 
 The runtime errors are:

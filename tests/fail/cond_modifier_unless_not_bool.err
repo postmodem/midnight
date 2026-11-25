@@ -1,5 +1,5 @@
 error: condition must be `Bool`, found `Entity`
- --> tests/fail/cond_modifier_unless_not_bool.grem:5:20
+ --> tests/fail/cond_modifier_unless_not_bool.12am:5:20
   |
 5 | puts "gone" unless e
   |                    ^ there is no truthiness: test it, like `e.alive?`

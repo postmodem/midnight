@@ -1,5 +1,5 @@
 error: unterminated string
- --> tests/fail/syntax_unterminated_string.grem:4:8
+ --> tests/fail/syntax_unterminated_string.12am:4:8
   |
-4 | name = "gremlin
+4 | name = "midnight
   |        ^ the closing `"` is missing

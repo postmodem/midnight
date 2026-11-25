@@ -1,5 +1,5 @@
 error: `Vec2` has no `+` operator
-  --> tests/fail/type_operands_struct_no_operator.grem:11:6
+  --> tests/fail/type_operands_struct_no_operator.12am:11:6
    |
 11 | puts a + b
    |      ^^^^^ define it in `Vec2` with `def +(other: …)`

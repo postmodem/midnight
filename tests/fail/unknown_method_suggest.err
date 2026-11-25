@@ -1,5 +1,5 @@
 error: unknown method `scale` for `Rect`
-  --> tests/fail/unknown_method_suggest.grem:14:8
+  --> tests/fail/unknown_method_suggest.12am:14:8
    |
 14 | puts r.scale(2)
    |        ^^^^^ did you mean `scaled`?

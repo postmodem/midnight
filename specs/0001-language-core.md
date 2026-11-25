@@ -1,13 +1,13 @@
-# 0001 — Language core: Gremlin 0.1, its compiler and its runtime
+# 0001 — Language core: Midnight 0.1, its compiler and its runtime
 
 - **Status:** approved
 - **Tested on:** —
 
 ## Goal
 
-`gremlin build game.grem` turns a Gremlin program into a native executable,
-and `gremlin run game.grem` builds and runs it. The language is
-[Gremlin 0.1](../docs/language.md): statically typed, Ruby-flavored, with
+`midnight build game.12am` turns a Midnight program into a native executable,
+and `midnight run game.12am` builds and runs it. The language is
+[Midnight 0.1](../docs/language.md): statically typed, Ruby-flavored, with
 entities, components, systems, queries, resources and events as language
 constructs rather than a library.
 
@@ -22,7 +22,7 @@ loop.
 ## Scope
 
 - `docs/language.md`: the language reference. This spec implements all of it.
-- The `gremlin` compiler, with the commands `build`, `run`, `check` and
+- The `midnight` compiler, with the commands `build`, `run`, `check` and
   `emit-c`.
 - The runtime library that every compiled program links: entity and component
   storage, queries, deferred changes, events, strings, lists and the
@@ -49,7 +49,7 @@ loop.
   shaped so that 0002 adds to it rather than reworks it (see "Ready for the
   GPU").
 - Graphics, audio, windowing or input.
-- Calling C from Gremlin, or Gremlin from C.
+- Calling C from Midnight, or Midnight from C.
 - A formatter, a language server, editor plugins or a REPL.
 - Incremental or separate compilation. Every build compiles the whole
   program.
@@ -63,7 +63,7 @@ loop.
 ### Compiler
 
 **Written in Rust, with no crates.** The compiler is one Cargo package,
-`gremlin`, that depends only on the standard library: the lexer, parser,
+`midnight`, that depends only on the standard library: the lexer, parser,
 diagnostics renderer and argument parsing are written by hand. `Cargo.lock`
 is committed. The Rust toolchain comes from the pinned nixpkgs, so
 `nix build`, `nix flake check` and the dev shell all use the same compiler.
@@ -85,13 +85,13 @@ written against it later without touching the front end.
 
 **The backend emits C11.** The generated C and the runtime are compiled and
 linked in a single C compiler invocation; nothing but libc and libm is linked.
-The C compiler is `$GREMLIN_CC` if set, otherwise `cc` on `PATH`. The packaged
-`gremlin` is wrapped so that `GREMLIN_CC` defaults to the clang from the
+The C compiler is `$MIDNIGHT_CC` if set, otherwise `cc` on `PATH`. The packaged
+`midnight` is wrapped so that `MIDNIGHT_CC` defaults to the clang from the
 pinned nixpkgs, which makes `nix run` work on a machine with no compiler
 installed. Generated code carries `#line` directives, so C-level tools
-(debuggers, sanitizers, profilers) report `.grem` locations.
+(debuggers, sanitizers, profilers) report `.12am` locations.
 
-If the C compiler rejects generated code, that is a compiler bug: `gremlin`
+If the C compiler rejects generated code, that is a compiler bug: `midnight`
 says so, keeps the C file, and prints its path and the C compiler's output.
 
 **Two build modes.**
@@ -109,11 +109,11 @@ fails with a message and status 70 if any buffer is still alive.
 ### Command line
 
 ```
-gremlin build FILE [-o OUT] [--debug]   compile to an executable
-gremlin run FILE [--debug]              compile to a temporary directory and run
-gremlin check FILE                      report errors without generating code
-gremlin emit-c FILE                     print the generated C
-gremlin --version | --help
+midnight build FILE [-o OUT] [--debug]   compile to an executable
+midnight run FILE [--debug]              compile to a temporary directory and run
+midnight check FILE                      report errors without generating code
+midnight emit-c FILE                     print the generated C
+midnight --version | --help
 ```
 
 `build` writes the executable to the current directory, named after the root
@@ -158,8 +158,8 @@ Each of these has a dedicated message and a test:
 ### Runtime
 
 **Written in C11, embedded in the compiler.** The runtime is two files,
-`runtime/gremlin_rt.h` and `runtime/gremlin_rt.c`, compiled into the
-`gremlin` binary with `include_str!` and written next to the generated C at
+`runtime/midnight_rt.h` and `runtime/midnight_rt.c`, compiled into the
+`midnight` binary with `include_str!` and written next to the generated C at
 build time. Everything that depends on the program's types is generated;
 everything that does not is in the runtime.
 
@@ -262,16 +262,16 @@ GPU systems (0002) can be added without changing it:
 inside `nix flake check`.
 
 - **Unit tests** for the lexer, parser and checker.
-- **`tests/run/NAME.grem` with `NAME.out`:** the program must compile and
+- **`tests/run/NAME.12am` with `NAME.out`:** the program must compile and
   produce exactly that standard output with status 0. Each one is built and
   run twice, in release and in debug mode. Debug mode must produce the same
   output with no sanitizer report and no live buffers at exit.
-- **`tests/fail/NAME.grem` with `NAME.err`:** `gremlin check` must fail with
+- **`tests/fail/NAME.12am` with `NAME.err`:** `midnight check` must fail with
   exactly those diagnostics.
-- **`tests/panic/NAME.grem` with `NAME.err`:** the program must compile, then
+- **`tests/panic/NAME.12am` with `NAME.err`:** the program must compile, then
   end with status 1 and exactly that runtime error.
-- **Examples:** every `examples/NAME.grem` has a `NAME.out` and is run like a
-  `tests/run` program. `bench.grem` and `bench/churn.grem` are compiled in
+- **Examples:** every `examples/NAME.12am` has a `NAME.out` and is run like a
+  `tests/run` program. `bench.12am` and `bench/churn.12am` are compiled in
   both modes but run only by `apps.bench`.
 
 Generated C is compiled with `-Wall -Wextra -Werror` under test, and without
@@ -286,14 +286,14 @@ reference lists has a `tests/panic` case.
 
 | File          | Shows                                                           |
 | ------------- | --------------------------------------------------------------- |
-| `hello.grem`  | Top-level statements and `puts`.                                |
-| `move.grem`   | The first program in the reference, verbatim.                   |
-| `bounce.grem` | Structs with operator methods, resources, constants, lists and strings: particles under gravity in a box, drawn as text every few ticks. |
-| `battle.grem` | Enums, tags, events, functions, `rand`, deferred `despawn`, `World.run` and `World.stop`: two teams fight until one is gone. |
-| `life.grem`   | `add` and `remove` driven by a query, a list in a resource, `require`: Conway's Life on a small torus. |
-| `bench.grem`  | One million entities with `Position` and `Velocity`, each two `Float32` fields, moved for 100 ticks; prints entity updates per second. |
+| `hello.12am`  | Top-level statements and `puts`.                                |
+| `move.12am`   | The first program in the reference, verbatim.                   |
+| `bounce.12am` | Structs with operator methods, resources, constants, lists and strings: particles under gravity in a box, drawn as text every few ticks. |
+| `battle.12am` | Enums, tags, events, functions, `rand`, deferred `despawn`, `World.run` and `World.stop`: two teams fight until one is gone. |
+| `life.12am`   | `add` and `remove` driven by a query, a list in a resource, `require`: Conway's Life on a small torus. |
+| `bench.12am`  | One million entities with `Position` and `Velocity`, each two `Float32` fields, moved for 100 ticks; prints entity updates per second. |
 
-`bench/churn.grem` is a second benchmark, not an example. It measures the
+`bench/churn.12am` is a second benchmark, not an example. It measures the
 operations that are not iteration and prints a rate for each: `spawn`,
 `despawn`, `add` and `remove` of a tag, and `e[C]` access through handles
 visited in a shuffled order.
@@ -302,16 +302,16 @@ visited in a shuffled order.
 
 - `packages.default`: the compiler, built with `rustPlatform.buildRustPackage`
   from `Cargo.lock`, with clang available to its test phase, wrapped to
-  default `GREMLIN_CC` to the pinned clang.
-- `apps.default`: `gremlin`.
-- `apps.bench`: builds `examples/bench.grem` and `bench/baseline.c` with the
+  default `MIDNIGHT_CC` to the pinned clang.
+- `apps.default`: `midnight`.
+- `apps.bench`: builds `examples/bench.12am` and `bench/baseline.c` with the
   same C flags, runs both, and prints both timings, their ratio, and the peak
   resident memory of each. The baseline is the same work written by hand: two
   arrays of two-`float` structs and one counted loop. The app then runs
-  `bench/churn.grem` and prints its rates. It is an app because timing is not
+  `bench/churn.12am` and prints its rates. It is an app because timing is not
   reproducible enough for a check.
 - `devShells.default`: `cargo`, `rustc`, `clippy`, `rustfmt`,
-  `rust-analyzer`, `clang` and `nixfmt`, with `GREMLIN_CC` set to that clang.
+  `rust-analyzer`, `clang` and `nixfmt`, with `MIDNIGHT_CC` set to that clang.
 - `checks`: the package (which runs `cargo test`), `clippy` with warnings
   denied, `cargo fmt --check`, and `nixfmt --check`.
 - `formatter`: `nixfmt-tree`.
@@ -323,11 +323,11 @@ visited in a shuffled order.
 ```
 flake.nix  flake.lock  Cargo.toml  Cargo.lock
 src/            the compiler, one module per pipeline stage
-runtime/        gremlin_rt.h, gremlin_rt.c
+runtime/        midnight_rt.h, midnight_rt.c
 docs/           language.md
-examples/       *.grem with expected output
+examples/       *.12am with expected output
 tests/          run/, fail/, panic/
-bench/          baseline.c, churn.grem
+bench/          baseline.c, churn.12am
 specs/          one spec per change
 ```
 
@@ -353,17 +353,17 @@ Each one is a command whose result can be checked. All run on x86_64-linux.
    lists `packages`, `apps` (`default`, `bench`), `devShells` and `checks`
    for all four systems.
 3. `nix build`, then
-   `env -i ./result/bin/gremlin run examples/hello.grem` prints
+   `env -i ./result/bin/midnight run examples/hello.12am` prints
    `Hello, world!`. With an empty environment there is no `PATH`, so this
    shows the packaged compiler finds its C compiler by itself.
 4. In `nix develop -i -k HOME -k TERM -c bash --norc --noprofile`,
    `command -v cargo rustc clang` resolves each to `/nix/store/…`, and
    `cargo test` passes.
-5. `gremlin run examples/move.grem` prints the positions of both entities for
+5. `midnight run examples/move.12am` prints the positions of both entities for
    three ticks, with the frozen one never moving, and the file matches the
    first program in `docs/language.md` byte for byte.
-6. `battle.grem` and `life.grem` each produce their expected output on two
-   consecutive runs, and `gremlin run --debug` gives the same output for
+6. `battle.12am` and `life.12am` each produce their expected output on two
+   consecutive runs, and `midnight run --debug` gives the same output for
    both.
 7. Every construct, operator and built-in in `docs/language.md` is exercised
    by a `tests/run` program. A checklist mapping each section of the
@@ -372,28 +372,28 @@ Each one is a command whose result can be checked. All run on x86_64-linux.
    whose expected output includes the source excerpt and marker, and the
    misspelled-name cases include a correct "did you mean" suggestion.
 9. Every runtime error listed in the reference has a `tests/panic` case that
-   reports the right `.grem` file and line and exits with status 1.
+   reports the right `.12am` file and line and exits with status 1.
 10. A `tests/run` program that copies, mutates and drops strings and lists
     through locals, struct fields, component fields, resources, events,
     deferred commands and despawned entities passes in debug mode: no
     sanitizer report, and no live buffers at exit. Removing one destructor
     call from the generated C by hand makes the same run fail with status 70.
-11. `nix run .#bench` prints entity updates per second for `bench.grem` and
-    for `bench/baseline.c`, and Gremlin's time per tick is at most 1.25 times
+11. `nix run .#bench` prints entity updates per second for `bench.12am` and
+    for `bench/baseline.c`, and Midnight's time per tick is at most 1.25 times
     the baseline's.
-12. In the same run, the peak resident memory of `bench.grem` is at most
+12. In the same run, the peak resident memory of `bench.12am` is at most
     64 MB for its one million entities: 16 bytes of components and 20 bytes
     of overhead each, with the rest as headroom for array growth and the
     process itself.
-13. In the same run, `bench/churn.grem` prints a rate for `spawn`, `despawn`,
+13. In the same run, `bench/churn.12am` prints a rate for `spawn`, `despawn`,
     `add`, `remove` and `e[C]`. The numbers are recorded in this spec's
     Outcome; no threshold applies.
-14. `gremlin emit-c examples/move.grem` shows the `move` system as a counted
+14. `midnight emit-c examples/move.12am` shows the `move` system as a counted
     loop over rows, with `restrict` column pointers, `Time.dt` loaded before
     the loop, and no function call in the loop body. Disassembling the
-    release build of `bench.grem` shows packed floating-point instructions in
+    release build of `bench.12am` shows packed floating-point instructions in
     that loop.
-15. `gremlin emit-c examples/move.grem` declares the `Velocity` column
+15. `midnight emit-c examples/move.12am` declares the `Velocity` column
     pointer `const` in `move` and the `Position` column pointer not `const`.
 16. A `tests/run` program declares a component with fields of mixed sizes
     (`Float`, `Float32`, `Int16`, `UInt8`, `Bool`, an enum) and the generated

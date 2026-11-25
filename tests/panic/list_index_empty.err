@@ -1,1 +1,1 @@
-tests/panic/list_index_empty.grem:6: runtime error: index 0 out of range for a list of length 0
+tests/panic/list_index_empty.12am:6: runtime error: index 0 out of range for a list of length 0

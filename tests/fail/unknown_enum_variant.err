@@ -1,5 +1,5 @@
 error: unknown variant `Purple` for enum `Team`
-  --> tests/fail/unknown_enum_variant.grem:10:12
+  --> tests/fail/unknown_enum_variant.12am:10:12
    |
 10 | puts Team::Purple
    |            ^^^^^^

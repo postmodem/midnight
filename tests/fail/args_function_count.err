@@ -1,5 +1,5 @@
 error: `double` takes 1 argument, but 2 were given
- --> tests/fail/args_function_count.grem:8:6
+ --> tests/fail/args_function_count.12am:8:6
   |
 8 | puts double(1, 2)
   |      ^^^^^^^^^^^^

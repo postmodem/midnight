@@ -457,7 +457,7 @@ impl<'a, 'c> FnCx<'a, 'c> {
         for step in steps {
             let line = match step {
                 Some((c, ty)) => self.cx.drop_stmt(&c, &ty),
-                None => "gr_defer_leave();".to_string(),
+                None => "mn_defer_leave();".to_string(),
             };
             self.line(&line);
         }

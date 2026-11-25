@@ -1,5 +1,5 @@
 error: this `do` is never closed
- --> tests/fail/syntax_unclosed_do.grem:4:9
+ --> tests/fail/syntax_unclosed_do.12am:4:9
   |
 4 | 3.times do |i|
   |         ^^ expected a matching `end`

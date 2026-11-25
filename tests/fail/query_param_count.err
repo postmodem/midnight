@@ -1,5 +1,5 @@
 error: this query has 2 terms, but its block takes 1 parameter
-  --> tests/fail/query_param_count.grem:14:29
+  --> tests/fail/query_param_count.12am:14:29
    |
 14 | each Position, Velocity do |pos|
    |                             ^^^ the block takes one parameter per term, in order

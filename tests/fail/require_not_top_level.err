@@ -1,10 +1,10 @@
 error: `require` is only allowed at the top level
- --> tests/fail/require_not_top_level.grem:7:3
+ --> tests/fail/require_not_top_level.12am:7:3
   |
 7 |   require "require_not_top_level"
   |   ^^^^^^^ this is inside a block
 note: the enclosing `def` starts here
- --> tests/fail/require_not_top_level.grem:6:1
+ --> tests/fail/require_not_top_level.12am:6:1
   |
 6 | def load_more
   | ---

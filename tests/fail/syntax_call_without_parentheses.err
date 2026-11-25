@@ -1,5 +1,5 @@
 error: a call with arguments needs parentheses
- --> tests/fail/syntax_call_without_parentheses.grem:8:12
+ --> tests/fail/syntax_call_without_parentheses.12am:8:12
   |
 8 | x = double 4
   |            ^ write `double(4)`

@@ -1,5 +1,5 @@
 error: `UInt8` can't be the type of a return value
- --> tests/fail/compact_return.grem:4:14
+ --> tests/fail/compact_return.12am:4:14
   |
 4 | def level -> UInt8
   |              ^^^^^ variables, parameters and return values are `Int` or `Float`; use `Int`

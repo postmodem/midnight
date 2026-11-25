@@ -1,5 +1,5 @@
 error: this expression has no value
- --> tests/fail/void_as_value.grem:8:5
+ --> tests/fail/void_as_value.12am:8:5
   |
 8 | x = greet
   |     ^^^^^ `greet` returns nothing

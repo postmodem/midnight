@@ -1,5 +1,5 @@
 error: unknown type `Flot`
- --> tests/fail/unknown_type_builtin_suggest.grem:5:9
+ --> tests/fail/unknown_type_builtin_suggest.12am:5:9
   |
 5 |   mass: Flot
   |         ^^^^ did you mean `Float`?

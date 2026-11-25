@@ -1,1 +1,1 @@
-tests/panic/compact_int8_overflow.grem:9: runtime error: 128 does not fit in Int8
+tests/panic/compact_int8_overflow.12am:9: runtime error: 128 does not fit in Int8

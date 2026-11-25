@@ -1,5 +1,5 @@
 error: this expression has no value
- --> tests/fail/void_in_expression.grem:8:6
+ --> tests/fail/void_in_expression.12am:8:6
   |
 8 | puts greet()
   |      ^^^^^^^ `greet` returns nothing

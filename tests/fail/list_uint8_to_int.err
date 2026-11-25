@@ -1,5 +1,5 @@
 error: expected `[Int]`, found `[UInt8]`
- --> tests/fail/list_uint8_to_int.grem:5:16
+ --> tests/fail/list_uint8_to_int.12am:5:16
   |
 5 | plain: [Int] = bytes
   |                ^^^^^ list types do not convert; a list literal takes its type from where it is used

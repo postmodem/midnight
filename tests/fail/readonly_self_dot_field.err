@@ -1,5 +1,5 @@
 error: can't assign to `self.count`
- --> tests/fail/readonly_self_dot_field.grem:8:5
+ --> tests/fail/readonly_self_dot_field.12am:8:5
   |
 8 |     self.count = 5
   |     ^^^^^^^^^^ `self` is read-only: a method can't modify its receiver

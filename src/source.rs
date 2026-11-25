@@ -149,7 +149,7 @@ fn load_file(
             out.push(item);
             continue;
         };
-        let file_name = format!("{}.grem", require.path);
+        let file_name = format!("{}.12am", require.path);
         let path = sibling(&sources.file(file).path, &file_name);
         let name = sibling(Path::new(&sources.file(file).name), &file_name)
             .to_string_lossy()

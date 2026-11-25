@@ -1,10 +1,10 @@
 error: `Red` is already defined
- --> tests/fail/duplicate_variant.grem:7:3
+ --> tests/fail/duplicate_variant.12am:7:3
   |
 7 |   Red
   |   ^^^
 note: first defined here
- --> tests/fail/duplicate_variant.grem:5:3
+ --> tests/fail/duplicate_variant.12am:5:3
   |
 5 |   Red
   |   ---

@@ -1,5 +1,5 @@
 error: unknown field or method `widt` for `Rect`
-  --> tests/fail/unknown_field_suggest.grem:10:8
+  --> tests/fail/unknown_field_suggest.12am:10:8
    |
 10 | puts r.widt
    |        ^^^^ did you mean `width`?

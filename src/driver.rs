@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const RUNTIME_H: &str = include_str!("../runtime/gremlin_rt.h");
-const RUNTIME_C: &str = include_str!("../runtime/gremlin_rt.c");
+const RUNTIME_H: &str = include_str!("../runtime/midnight_rt.h");
+const RUNTIME_C: &str = include_str!("../runtime/midnight_rt.c");
 
 const RELEASE_FLAGS: &[&str] = &["-O2", "-fwrapv"];
 const DEBUG_FLAGS: &[&str] = &[
@@ -34,7 +34,7 @@ pub fn run(c_source: &str, debug: bool) -> Result<u8, String> {
     compile_in(&dir, c_source, &exe, debug)?;
     let status = Command::new(&exe).status();
     let _ = std::fs::remove_dir_all(&dir);
-    let status = status.map_err(|error| format!("gremlin: can't run the program: {error}"))?;
+    let status = status.map_err(|error| format!("midnight: can't run the program: {error}"))?;
     Ok(exit_code(status))
 }
 
@@ -42,40 +42,40 @@ fn compile_in(dir: &Path, c_source: &str, out: &Path, debug: bool) -> Result<(),
     let write = |name: &str, text: &str| {
         std::fs::write(dir.join(name), text).map_err(|error| {
             format!(
-                "gremlin: can't write `{}`: {error}",
+                "midnight: can't write `{}`: {error}",
                 dir.join(name).display()
             )
         })
     };
     write("program.c", c_source)?;
-    write("gremlin_rt.h", RUNTIME_H)?;
-    write("gremlin_rt.c", RUNTIME_C)?;
+    write("midnight_rt.h", RUNTIME_H)?;
+    write("midnight_rt.c", RUNTIME_C)?;
 
-    let cc = std::env::var("GREMLIN_CC").unwrap_or_else(|_| "cc".to_string());
+    let cc = std::env::var("MIDNIGHT_CC").unwrap_or_else(|_| "cc".to_string());
     let mut command = Command::new(&cc);
     command.arg("-std=c11");
     command.args(if debug { DEBUG_FLAGS } else { RELEASE_FLAGS });
-    if let Ok(extra) = std::env::var("GREMLIN_CFLAGS") {
+    if let Ok(extra) = std::env::var("MIDNIGHT_CFLAGS") {
         command.args(extra.split_whitespace());
     }
     command
         .arg("-o")
         .arg(out)
         .arg(dir.join("program.c"))
-        .arg(dir.join("gremlin_rt.c"))
+        .arg(dir.join("midnight_rt.c"))
         .arg("-lm");
 
     let output = command.output().map_err(|error| {
         format!(
-            "gremlin: can't run the C compiler `{cc}`: {error}\n\
-             Set GREMLIN_CC to a C11 compiler."
+            "midnight: can't run the C compiler `{cc}`: {error}\n\
+             Set MIDNIGHT_CC to a C11 compiler."
         )
     })?;
     if output.status.success() {
         return Ok(());
     }
     Err(format!(
-        "gremlin: the C compiler rejected the generated code. This is a bug in gremlin.\n\
+        "midnight: the C compiler rejected the generated code. This is a bug in midnight.\n\
          The generated C was kept at {}\n\n{}",
         dir.join("program.c").display(),
         String::from_utf8_lossy(&output.stderr).trim_end()
@@ -89,7 +89,7 @@ fn make_build_dir() -> Result<PathBuf, String> {
     let base = std::env::temp_dir();
     for attempt in 0..100u32 {
         let dir = base.join(format!(
-            "gremlin-{}-{:08x}",
+            "midnight-{}-{:08x}",
             std::process::id(),
             nanos.wrapping_add(attempt)
         ));
@@ -98,14 +98,14 @@ fn make_build_dir() -> Result<PathBuf, String> {
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
                 return Err(format!(
-                    "gremlin: can't create a build directory in `{}`: {error}",
+                    "midnight: can't create a build directory in `{}`: {error}",
                     base.display()
                 ));
             }
         }
     }
     Err(format!(
-        "gremlin: can't create a build directory in `{}`",
+        "midnight: can't create a build directory in `{}`",
         base.display()
     ))
 }

@@ -1,5 +1,5 @@
 error: can't assign to `LIMIT`
- --> tests/fail/readonly_constant.grem:6:1
+ --> tests/fail/readonly_constant.12am:6:1
   |
 6 | LIMIT += 1
   | ^^^^^ `LIMIT` is a constant

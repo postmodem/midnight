@@ -1,1 +1,1 @@
-tests/panic/component_missing_in_function.grem:12: runtime error: Entity(0v1) has no Health
+tests/panic/component_missing_in_function.12am:12: runtime error: Entity(0v1) has no Health

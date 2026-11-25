@@ -1,4 +1,4 @@
-//! The `gremlin` command.
+//! The `midnight` command.
 
 #![allow(dead_code)]
 
@@ -20,15 +20,15 @@ use source::SourceMap;
 
 const USAGE: &str = "\
 Usage:
-  gremlin build FILE [-o OUT] [--debug]   compile to an executable
-  gremlin run FILE [--debug]              compile to a temporary directory and run
-  gremlin check FILE                      report errors without generating code
-  gremlin emit-c FILE                     print the generated C
-  gremlin --version | --help
+  midnight build FILE [-o OUT] [--debug]   compile to an executable
+  midnight run FILE [--debug]              compile to a temporary directory and run
+  midnight check FILE                      report errors without generating code
+  midnight emit-c FILE                     print the generated C
+  midnight --version | --help
 
 Environment:
-  GREMLIN_CC       the C compiler to use (default: cc)
-  GREMLIN_CFLAGS   extra flags for the C compiler
+  MIDNIGHT_CC       the C compiler to use (default: cc)
+  MIDNIGHT_CFLAGS   extra flags for the C compiler
 ";
 
 /// Exit status for a program with errors.
@@ -51,7 +51,7 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         Some("--version" | "-V") => {
-            println!("gremlin {}", env!("CARGO_PKG_VERSION"));
+            println!("midnight {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
         }
         _ => {}
@@ -59,7 +59,7 @@ fn main() -> ExitCode {
     let args = match parse_args(&args) {
         Ok(args) => args,
         Err(message) => {
-            eprintln!("gremlin: {message}\n\n{USAGE}");
+            eprintln!("midnight: {message}\n\n{USAGE}");
             return ExitCode::from(USAGE_ERROR);
         }
     };
@@ -138,7 +138,7 @@ fn compile(path: &Path, check_only: bool) -> Option<String> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) => {
-            eprintln!("gremlin: can't read `{}`: {error}", path.display());
+            eprintln!("midnight: can't read `{}`: {error}", path.display());
             return None;
         }
     };

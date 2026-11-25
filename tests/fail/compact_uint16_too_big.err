@@ -1,5 +1,5 @@
 error: 65536 does not fit in `UInt16`
- --> tests/fail/compact_uint16_too_big.grem:5:18
+ --> tests/fail/compact_uint16_too_big.12am:5:18
   |
 5 |   port: UInt16 = 65536
   |                  ^^^^^ `UInt16` holds 0 to 65535

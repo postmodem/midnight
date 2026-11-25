@@ -1,5 +1,5 @@
 error: can't modify `row`
- --> tests/fail/push_readonly_iteration_param.grem:6:3
+ --> tests/fail/push_readonly_iteration_param.12am:6:3
   |
 6 |   row.push(0)
   |   ^^^ `row` is a parameter of a list iteration, a read-only copy; loop over indexes to change the list

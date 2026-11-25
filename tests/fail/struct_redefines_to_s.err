@@ -1,5 +1,5 @@
 error: `to_s` is provided for every type and can't be redefined
- --> tests/fail/struct_redefines_to_s.grem:8:7
+ --> tests/fail/struct_redefines_to_s.12am:8:7
   |
 8 |   def to_s -> String
   |       ^^^^

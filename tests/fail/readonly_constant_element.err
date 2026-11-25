@@ -1,5 +1,5 @@
 error: can't assign to `PRIMES[0]`
- --> tests/fail/readonly_constant_element.grem:6:1
+ --> tests/fail/readonly_constant_element.12am:6:1
   |
 6 | PRIMES[0] = 1
   | ^^^^^^^^^ `PRIMES` is a constant

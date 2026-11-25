@@ -1,5 +1,5 @@
 error: expected `Int`, found `Float`
- --> tests/fail/type_resource_field_assign.grem:8:16
+ --> tests/fail/type_resource_field_assign.12am:8:16
   |
 8 | Score.points = 1.5
   |                ^^^ a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`

@@ -1,5 +1,5 @@
 error: condition must be `Bool`, found `Int`
- --> tests/fail/cond_while_not_bool.grem:5:7
+ --> tests/fail/cond_while_not_bool.12am:5:7
   |
 5 | while n
   |       ^ there is no truthiness: compare it, like `x != 0`

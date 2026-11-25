@@ -1,1 +1,1 @@
-tests/panic/compact_resource_field.grem:8: runtime error: 256 does not fit in UInt8
+tests/panic/compact_resource_field.12am:8: runtime error: 256 does not fit in UInt8

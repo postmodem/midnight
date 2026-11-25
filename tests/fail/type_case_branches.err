@@ -1,5 +1,5 @@
 error: expected `String`, found `Int`
- --> tests/fail/type_case_branches.grem:7:13
+ --> tests/fail/type_case_branches.12am:7:13
   |
 7 | when 2 then 2
   |             ^ every branch of a `case` has the same type

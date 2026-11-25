@@ -1,10 +1,10 @@
 error: unknown variable or function `seen`
- --> tests/fail/scope_after_while.grem:9:6
+ --> tests/fail/scope_after_while.12am:9:6
   |
 9 | puts seen
   |      ^^^^ `seen` was created inside the `while` and ends with it; create it before the `while`
 note: `seen` is created here
- --> tests/fail/scope_after_while.grem:6:3
+ --> tests/fail/scope_after_while.12am:6:3
   |
 6 |   seen = n
   |   ----

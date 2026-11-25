@@ -1,5 +1,5 @@
 error: can't assign to `Time.elapsed`
- --> tests/fail/readonly_time_elapsed.grem:4:1
+ --> tests/fail/readonly_time_elapsed.12am:4:1
   |
 4 | Time.elapsed = 1.5
   | ^^^^^^^^^^^^ `Time.elapsed` is read-only; only `Time.dt` can be assigned

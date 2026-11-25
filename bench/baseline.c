@@ -1,7 +1,7 @@
 /*
- * The work of examples/bench.grem written by hand: one million positions
+ * The work of examples/bench.12am written by hand: one million positions
  * and velocities in two arrays, moved for 100 ticks by one counted loop.
- * Prints the same lines as bench.grem.
+ * Prints the same lines as bench.12am.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -31,9 +31,9 @@ void move(Position *restrict pos, const Velocity *restrict vel, size_t count);
 
 /*
  * One tick. Each field is widened to a double, the arithmetic is done at
- * 64 bits and the result is stored as a float, which is what Gremlin does
+ * 64 bits and the result is stored as a float, which is what Midnight does
  * with Float32 fields. Not inlined, so the tick loop pays for a call per
- * tick as a Gremlin program does.
+ * tick as a Midnight program does.
  */
 __attribute__((noinline)) void move(Position *restrict pos,
                                     const Velocity *restrict vel,
@@ -51,7 +51,7 @@ static double round_to(double value, int digits) {
 }
 
 /*
- * Prints "key: value" with the value written as Gremlin writes a Float:
+ * Prints "key: value" with the value written as Midnight writes a Float:
  * the shortest text that reads back as the same number, always with a
  * fractional part.
  */
@@ -75,7 +75,7 @@ int main(void) {
         return 1;
     }
 
-    /* The same starting values as bench.grem gives entity i. */
+    /* The same starting values as bench.12am gives entity i. */
     for (long i = 0; i < ENTITIES; i++) {
         pos[i].x = (float)(i % 1000);
         pos[i].y = (float)(i / 1000);

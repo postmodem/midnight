@@ -1,1 +1,1 @@
-tests/panic/rand_empty_list_length.grem:4: runtime error: rand(0): the argument must be positive
+tests/panic/rand_empty_list_length.12am:4: runtime error: rand(0): the argument must be positive

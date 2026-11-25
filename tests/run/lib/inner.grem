@@ -1,6 +1,0 @@
-# Loaded by lib/outer.grem and required again by require_order.grem.
-note("inner")
-
-def inner_value -> Int
-  2
-end

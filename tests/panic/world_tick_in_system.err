@@ -1,1 +1,1 @@
-tests/panic/world_tick_in_system.grem:4: runtime error: World.tick called while a tick is in progress
+tests/panic/world_tick_in_system.12am:4: runtime error: World.tick called while a tick is in progress

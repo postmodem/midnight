@@ -1,5 +1,5 @@
 error: struct `Parent` contains itself through `Child`
- --> tests/fail/struct_contains_itself_mutual.grem:5:3
+ --> tests/fail/struct_contains_itself_mutual.12am:5:3
   |
 5 |   child: Child
   |   ^^^^^ a value can contain its own type only through a list, like `[Parent]`

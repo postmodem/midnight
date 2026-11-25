@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! error: unknown component `Postion`
-//!   --> move.grem:14:8
+//!   --> move.12am:14:8
 //!    |
 //! 14 |   each Postion, Velocity do |pos, vel|
 //!    |        ^^^^^^^ did you mean `Position`?
@@ -162,12 +162,12 @@ mod tests {
         let mut sources = SourceMap::new();
         let mut text = "\n".repeat(13);
         text.push_str("  each Postion, Velocity do |pos, vel|\n");
-        let file = sources.add("move.grem".into(), PathBuf::from("move.grem"), text);
+        let file = sources.add("move.12am".into(), PathBuf::from("move.12am"), text);
         let diagnostic = Diagnostic::new("unknown component `Postion`", Span::new(file, 20, 27))
             .label("did you mean `Position`?");
         let expected = "\
 error: unknown component `Postion`
-  --> move.grem:14:8
+  --> move.12am:14:8
    |
 14 |   each Postion, Velocity do |pos, vel|
    |        ^^^^^^^ did you mean `Position`?
@@ -179,20 +179,20 @@ error: unknown component `Postion`
     fn renders_a_note_with_dashes() {
         let mut sources = SourceMap::new();
         let file = sources.add(
-            "a.grem".into(),
-            PathBuf::from("a.grem"),
+            "a.12am".into(),
+            PathBuf::from("a.12am"),
             "tag A\ntag A\n".into(),
         );
         let diagnostic = Diagnostic::new("`A` is already defined", Span::new(file, 10, 11))
             .note("first defined here", Span::new(file, 4, 5));
         let expected = "\
 error: `A` is already defined
- --> a.grem:2:5
+ --> a.12am:2:5
   |
 2 | tag A
   |     ^
 note: first defined here
- --> a.grem:1:5
+ --> a.12am:1:5
   |
 1 | tag A
   |     -

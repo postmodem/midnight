@@ -1,5 +1,5 @@
 error: this `if` is never closed
- --> tests/fail/syntax_unclosed_if.grem:5:1
+ --> tests/fail/syntax_unclosed_if.12am:5:1
   |
 5 | if hp > 5
   | ^^ expected a matching `end`

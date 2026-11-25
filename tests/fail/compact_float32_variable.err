@@ -1,5 +1,5 @@
 error: `Float32` can't be the type of a variable
- --> tests/fail/compact_float32_variable.grem:4:4
+ --> tests/fail/compact_float32_variable.12am:4:4
   |
 4 | x: Float32 = 1.5
   |    ^^^^^^^ variables, parameters and return values are `Int` or `Float`; use `Float`

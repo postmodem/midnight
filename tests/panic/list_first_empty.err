@@ -1,1 +1,1 @@
-tests/panic/list_first_empty.grem:5: runtime error: first on an empty list
+tests/panic/list_first_empty.12am:5: runtime error: first on an empty list

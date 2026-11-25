@@ -1,1 +1,1 @@
-tests/panic/compact_uint32_negative.grem:9: runtime error: -5 does not fit in UInt32
+tests/panic/compact_uint32_negative.12am:9: runtime error: -5 does not fit in UInt32

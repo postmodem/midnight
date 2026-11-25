@@ -1,5 +1,5 @@
 error: expected `Int`, found `String`
- --> tests/fail/type_field_assign_component.grem:9:16
+ --> tests/fail/type_field_assign_component.12am:9:16
   |
 9 | e[Health].hp = "full"
   |                ^^^^^^

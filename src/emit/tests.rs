@@ -11,16 +11,16 @@ use crate::source::{FileId, SourceMap, Span};
 use crate::tir::*;
 use build::*;
 
-const RUNTIME_H: &str = include_str!("../../runtime/gremlin_rt.h");
-const RUNTIME_C: &str = include_str!("../../runtime/gremlin_rt.c");
+const RUNTIME_H: &str = include_str!("../../runtime/midnight_rt.h");
+const RUNTIME_C: &str = include_str!("../../runtime/midnight_rt.c");
 
 const SOURCE: &str = "first\nsecond\nthird\nfourth\n";
 
 fn sources() -> SourceMap {
     let mut sources = SourceMap::new();
     sources.add(
-        "test.grem".to_string(),
-        PathBuf::from("test.grem"),
+        "test.12am".to_string(),
+        PathBuf::from("test.12am"),
         SOURCE.to_string(),
     );
     sources
@@ -91,22 +91,22 @@ fn function_text<'c>(c: &'c str, header: &str) -> &'c str {
 }
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("gremlin-emit-{}-{name}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("midnight-emit-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create a scratch directory");
-    std::fs::write(dir.join("gremlin_rt.h"), RUNTIME_H).expect("write the runtime header");
-    std::fs::write(dir.join("gremlin_rt.c"), RUNTIME_C).expect("write the runtime");
+    std::fs::write(dir.join("midnight_rt.h"), RUNTIME_H).expect("write the runtime header");
+    std::fs::write(dir.join("midnight_rt.c"), RUNTIME_C).expect("write the runtime");
     dir
 }
 
 /// Has the C compiler check the code with warnings as errors. Does
-/// nothing when `GREMLIN_CC` is not set.
+/// nothing when `MIDNIGHT_CC` is not set.
 #[track_caller]
 fn check(name: &str, c: &str) {
-    if std::env::var_os("GREMLIN_DUMP_C").is_some() {
+    if std::env::var_os("MIDNIGHT_DUMP_C").is_some() {
         eprintln!("==== {name}\n{c}");
     }
-    let Ok(cc) = std::env::var("GREMLIN_CC") else {
+    let Ok(cc) = std::env::var("MIDNIGHT_CC") else {
         return;
     };
     let dir = scratch(name);
@@ -129,7 +129,7 @@ fn check(name: &str, c: &str) {
 
 /// Whether the runtime next to the compiler implements the whole header.
 fn runtime_is_complete() -> bool {
-    RUNTIME_C.contains("gr_query_refresh") && RUNTIME_C.contains("gr_list_push")
+    RUNTIME_C.contains("mn_query_refresh") && RUNTIME_C.contains("mn_list_push")
 }
 
 /// Builds the program with the runtime in both modes and runs it. Each
@@ -139,7 +139,7 @@ fn runtime_is_complete() -> bool {
 #[track_caller]
 fn run(name: &str, c: &str) -> Option<String> {
     check(name, c);
-    let cc = std::env::var("GREMLIN_CC").ok()?;
+    let cc = std::env::var("MIDNIGHT_CC").ok()?;
     if !runtime_is_complete() {
         return None;
     }
@@ -164,7 +164,7 @@ fn run(name: &str, c: &str) -> Option<String> {
             .args(["-Wall", "-Wextra", "-Werror", "-o"])
             .arg(&exe)
             .arg(dir.join("program.c"))
-            .arg(dir.join("gremlin_rt.c"))
+            .arg(dir.join("midnight_rt.c"))
             .arg("-lm")
             .output()
             .expect("run the C compiler");
@@ -204,7 +204,7 @@ fn tick() -> Stmt {
 
 // ---- The first program of the reference ----
 
-/// `examples/move.grem` with fields of the given storage type.
+/// `examples/move.12am` with fields of the given storage type.
 fn move_program(fty: &Type) -> Program {
     let mut p = empty_program();
     let pair = |a: &'static str, b: &'static str| [(a, fty.clone()), (b, fty.clone())];
@@ -277,44 +277,44 @@ fn move_is_a_loop_over_columns() {
     assert_seq(
         system,
         &[
-            "gr_query_update(&q0);",
-            "gr_defer_enter();",
-            "const double time_dt = gr_time.dt;",
+            "mn_query_update(&q0);",
+            "mn_defer_enter();",
+            "const double time_dt = mn_time.dt;",
             "for (uint32_t t = 0; t < q0.table_count; t++) {",
-            "GrTable *table = q0.tables[t];",
+            "MnTable *table = q0.tables[t];",
             "uint32_t n = table->count;",
             "if (n == 0) continue;",
-            "T_Position *restrict c0 = gr_column(table, 0);",
-            "const T_Velocity *restrict c1 = gr_column(table, 1);",
+            "T_Position *restrict c0 = mn_column(table, 0);",
+            "const T_Velocity *restrict c1 = mn_column(table, 1);",
             "for (uint32_t i = 0; i < n; i++) {",
             "c0[i].x = c0[i].x + c1[i].dx * time_dt;",
             "c0[i].y = c0[i].y + c1[i].dy * time_dt;",
             "}",
             "}",
-            "gr_defer_leave();",
+            "mn_defer_leave();",
         ],
     );
     assert_has(&c, "static const uint32_t q0_with[] = {0, 1};");
     assert_has(&c, "static const uint32_t q0_without[] = {2};");
     assert_has(
         &c,
-        "static GrQuery q0 = {q0_with, 2, q0_without, 1, NULL, 0, 0, 0};",
+        "static MnQuery q0 = {q0_with, 2, q0_without, 1, NULL, 0, 0, 0};",
     );
     assert_has(&c, "{\"Frozen\", 0, 1, NULL},");
     let report = function_text(&c, "static void S_report(void)");
     assert_seq(
         report,
         &[
-            "const T_Position *restrict c1 = gr_column(table, 0);",
-            "const GrEntity *ents = table->entities;",
+            "const T_Position *restrict c1 = mn_column(table, 0);",
+            "const MnEntity *ents = table->entities;",
             "for (uint32_t i = 0; i < n; i++) {",
-            "GrEntity e_0 = ents[i];",
-            "gr_out_entity(e_0);",
-            "gr_out_bytes(\" is at (\", 8);",
-            "gr_out_float(c1[i].x);",
-            "gr_out_bytes(\", \", 2);",
-            "gr_out_float(c1[i].y);",
-            "gr_out_bytes(\")\\n\", 2);",
+            "MnEntity e_0 = ents[i];",
+            "mn_out_entity(e_0);",
+            "mn_out_bytes(\" is at (\", 8);",
+            "mn_out_float(c1[i].x);",
+            "mn_out_bytes(\", \", 2);",
+            "mn_out_float(c1[i].y);",
+            "mn_out_bytes(\")\\n\", 2);",
         ],
     );
     expect_output(
@@ -456,9 +456,9 @@ fn arithmetic_and_conversions() {
         &c,
         "static double F_calc(int64_t a_0, int64_t b_1, double x_2)",
     );
-    assert_has(&c, "gr_int_div(a_0, b_1, (GrLoc){src0, 1})");
-    assert_has(&c, "gr_int_mod(a_0, b_1, (GrLoc){src0, 1})");
-    assert_has(&c, "gr_int_pow(a_0, 2, (GrLoc){src0, 1})");
+    assert_has(&c, "mn_int_div(a_0, b_1, (MnLoc){src0, 1})");
+    assert_has(&c, "mn_int_mod(a_0, b_1, (MnLoc){src0, 1})");
+    assert_has(&c, "mn_int_pow(a_0, 2, (MnLoc){src0, 1})");
     assert_has(&c, "-a_0 * 3 - (a_0 - -b_1)");
     assert_has(&c, "int64_t big_4 = -9223372026854775808;");
     assert_has(&c, "(a_0 < 0 ? (int64_t)(0 - (uint64_t)a_0) : a_0)");
@@ -467,8 +467,8 @@ fn arithmetic_and_conversions() {
         &c,
         "(a_0 < 0 ? (int64_t)0 : (a_0 > 10 ? (int64_t)10 : a_0))",
     );
-    assert_has(&c, "gr_float_to_i(x_2) + gr_float_floor(x_2)");
-    assert_has(&c, "gr_float_mod(x_2, 3.0)");
+    assert_has(&c, "mn_float_to_i(x_2) + mn_float_floor(x_2)");
+    assert_has(&c, "mn_float_mod(x_2, 3.0)");
     assert_has(&c, "pow(x_2, 2.0)");
     assert_has(&c, "(double)a_0 * 2.0");
     assert_has(&c, "(x_2 < -1.5 ? x_2 : -1.5)");
@@ -583,20 +583,20 @@ fn string_program() -> Program {
 #[test]
 fn strings_are_released_on_every_path() {
     let c = emit(&string_program());
-    let label = function_text(&c, "static GrString F_label(GrString name_0, int64_t n_1)");
+    let label = function_text(&c, "static MnString F_label(MnString name_0, int64_t n_1)");
     assert_has(
         label,
-        "GrString s_2 = gr_str_concat(name_0, ((GrString)&str0));",
+        "MnString s_2 = mn_str_concat(name_0, ((MnString)&str0));",
     );
     assert_seq(
         label,
         &[
-            "GrBuilder sb0 = {0};",
-            "gr_sb_str(&sb0, name_0);",
-            "gr_sb_bytes(&sb0, \" has \", 5);",
-            "gr_sb_int(&sb0, n_1);",
-            "gr_sb_bytes(&sb0, \" items\", 6);",
-            "GrString t_3 = gr_sb_finish(&sb0);",
+            "MnBuilder sb0 = {0};",
+            "mn_sb_str(&sb0, name_0);",
+            "mn_sb_bytes(&sb0, \" has \", 5);",
+            "mn_sb_int(&sb0, n_1);",
+            "mn_sb_bytes(&sb0, \" items\", 6);",
+            "MnString t_3 = mn_sb_finish(&sb0);",
         ],
     );
     // An early return of a local: a reference for the caller, then every
@@ -604,40 +604,40 @@ fn strings_are_released_on_every_path() {
     assert_seq(
         label,
         &[
-            "gr_str_retain(t1);",
-            "gr_str_release(u_4);",
-            "gr_str_release(t_3);",
-            "gr_str_release(s_2);",
+            "mn_str_retain(t1);",
+            "mn_str_release(u_4);",
+            "mn_str_release(t_3);",
+            "mn_str_release(s_2);",
             "return t1;",
         ],
     );
-    assert_has(label, "if (gr_str_cmp(s_2, t_3) < 0) {");
+    assert_has(label, "if (mn_str_cmp(s_2, t_3) < 0) {");
     // `break`, `next` and `return` in the loop release the body's local.
     assert_seq(
         label,
         &[
-            "if (gr_str_bytesize(v_6) == 0) {",
-            "gr_str_release(v_6);",
+            "if (mn_str_bytesize(v_6) == 0) {",
+            "mn_str_release(v_6);",
             "break;",
         ],
     );
     assert_seq(
         label,
         &[
-            "if (gr_str_include(v_6, ((GrString)&str2))) {",
-            "gr_str_release(v_6);",
+            "if (mn_str_include(v_6, ((MnString)&str2))) {",
+            "mn_str_release(v_6);",
             "continue;",
         ],
     );
     // Assignment releases the old value after the new one exists.
     assert_seq(
         label,
-        &["gr_str_release(s_2);", "s_2 = t4;", "gr_str_release(v_6);"],
+        &["mn_str_release(s_2);", "s_2 = t4;", "mn_str_release(v_6);"],
     );
     // Parameters are borrowed: never released.
-    assert_lacks(label, "gr_str_release(name_0)");
+    assert_lacks(label, "mn_str_release(name_0)");
     let main = function_text(&c, "static void run_main(void)");
-    assert_has(main, "GrString r_0 = F_label(((GrString)&str");
+    assert_has(main, "MnString r_0 = F_label(((MnString)&str");
     assert_has(
         &c,
         "\"quote \\\" backslash \\\\ question \\?\\?/ tab \\t nul \\000 bell \\007 \\303\\251\\n\"",
@@ -802,15 +802,15 @@ fn lists_copy_on_write_and_keep_counts() {
     assert_seq(
         &c,
         &[
-            "GrList t0 = gr_list_alloc(&Elem_Int, 3);",
-            "int64_t *p1 = gr_list_data(t0);",
+            "MnList t0 = mn_list_alloc(&Elem_Int, 3);",
+            "int64_t *p1 = mn_list_data(t0);",
             "p1[0] = 1;",
             "p1[1] = 2;",
             "p1[2] = 3;",
-            "GrList xs_0 = t0;",
-            "GrList ys_1 = xs_0;",
-            "gr_list_retain(ys_1);",
-            "*(int64_t *)gr_list_push(&ys_1, &Elem_Int) = 4;",
+            "MnList xs_0 = t0;",
+            "MnList ys_1 = xs_0;",
+            "mn_list_retain(ys_1);",
+            "*(int64_t *)mn_list_push(&ys_1, &Elem_Int) = 4;",
         ],
     );
     // The right-hand side is read before the list is made private and
@@ -818,34 +818,34 @@ fn lists_copy_on_write_and_keep_counts() {
     assert_seq(
         &c,
         &[
-            "int64_t t2 = gr_list_index(xs_0, 1, (GrLoc){src0, 1});",
-            "const int64_t *p3 = (const int64_t *)gr_list_data(xs_0) + t2;",
+            "int64_t t2 = mn_list_index(xs_0, 1, (MnLoc){src0, 1});",
+            "const int64_t *p3 = (const int64_t *)mn_list_data(xs_0) + t2;",
             "int64_t t4 = *p3;",
-            "gr_list_unique(&xs_0, &Elem_Int);",
-            "int64_t t5 = gr_list_index(xs_0, 0, (GrLoc){src0, 1});",
-            "int64_t *p6 = (int64_t *)gr_list_data(xs_0) + t5;",
+            "mn_list_unique(&xs_0, &Elem_Int);",
+            "int64_t t5 = mn_list_index(xs_0, 0, (MnLoc){src0, 1});",
+            "int64_t *p6 = (int64_t *)mn_list_data(xs_0) + t5;",
             "*p6 = t4 + 10;",
         ],
     );
     assert_has(
         &c,
-        "static const GrElem Elem_String = {sizeof(GrString), Retain_String, Drop_String};",
+        "static const MnElem Elem_String = {sizeof(MnString), Retain_String, Drop_String};",
     );
     assert_has(
         &c,
-        "static const GrElem Elem_L_Int = {sizeof(GrList), Retain_L_Int, Drop_L_Int};",
+        "static const MnElem Elem_L_Int = {sizeof(MnList), Retain_L_Int, Drop_L_Int};",
     );
     assert_has(
         &c,
-        "static const GrElem Elem_UInt8 = {sizeof(uint8_t), NULL, NULL};",
+        "static const MnElem Elem_UInt8 = {sizeof(uint8_t), NULL, NULL};",
     );
-    assert_has(&c, "gr_to_uint8(n_2, (GrLoc){src0, 1})");
+    assert_has(&c, "mn_to_uint8(n_2, (MnLoc){src0, 1})");
     assert_has(&c, "[1] = 255;");
     // A list loop walks a retained snapshot and gives each element a
     // reference of its own.
-    assert_has(&c, "GrString name_5 = ((const GrString *)gr_list_data(");
-    assert_seq(&c, &["gr_str_release(name_5);", "continue;"]);
-    assert_seq(&c, &["gr_str_release(name_5);", "break;"]);
+    assert_has(&c, "MnString name_5 = ((const MnString *)mn_list_data(");
+    assert_seq(&c, &["mn_str_release(name_5);", "continue;"]);
+    assert_seq(&c, &["mn_str_release(name_5);", "break;"]);
     expect_output(
         "lists",
         &c,
@@ -1107,8 +1107,8 @@ fn records_are_plain_structs_ordered_by_alignment() {
         &[
             "static void Drop_T_Named(void *p) {",
             "T_Named *v = p;",
-            "gr_str_release(v->name);",
-            "gr_list_release(v->tags, &Elem_String);",
+            "mn_str_release(v->name);",
+            "mn_list_release(v->tags, &Elem_String);",
             "}",
         ],
     );
@@ -1117,20 +1117,20 @@ fn records_are_plain_structs_ordered_by_alignment() {
         &[
             "static void Retain_T_Named(void *p) {",
             "T_Named *v = p;",
-            "gr_str_retain(v->name);",
-            "gr_list_retain(v->tags);",
+            "mn_str_retain(v->name);",
+            "mn_list_retain(v->tags);",
             "}",
         ],
     );
-    assert_has(&c, "gr_sb_bytes(sb, \"Named(name: \", 12);");
-    assert_has(&c, "gr_sb_quoted(sb, v->name);");
-    assert_has(&c, "gr_sb_bytes(sb, \"Nothing()\", 9);");
+    assert_has(&c, "mn_sb_bytes(sb, \"Named(name: \", 12);");
+    assert_has(&c, "mn_sb_quoted(sb, v->name);");
+    assert_has(&c, "mn_sb_bytes(sb, \"Nothing()\", 9);");
     assert_has(
         &c,
         "static bool Eq_T_Vec2(const T_Vec2 *a, const T_Vec2 *b)",
     );
     assert_has(&c, ".small = 200,");
-    assert_has(&c, "gr_to_int16(k_5, (GrLoc){src0, 1})");
+    assert_has(&c, "mn_to_int16(k_5, (MnLoc){src0, 1})");
     assert_lacks(&c, "Drop_T_Vec2");
     assert_lacks(&c, "Drop_T_Mixed");
     let c = format!(
@@ -1214,7 +1214,7 @@ fn a_block_that_calls_a_function_gets_no_restrict_and_no_hoisting() {
     system(&mut w.p, "grow", l.body(blk(vec![stmt])));
     let c = emit(&w.p);
     let system = function_text(&c, "static void S_grow(void)");
-    assert_has(system, "T_Health *c0 = gr_column(table, 0);");
+    assert_has(system, "T_Health *c0 = mn_column(table, 0);");
     assert_lacks(system, "restrict");
     assert_lacks(system, "time_tick");
     assert_seq(
@@ -1222,7 +1222,7 @@ fn a_block_that_calls_a_function_gets_no_restrict_and_no_hoisting() {
         &[
             "int64_t t0 = c0[i].hp;",
             "int64_t t1 = F_double(c0[i].hp);",
-            "c0[i].hp = t0 + (t1 + gr_time.tick);",
+            "c0[i].hp = t0 + (t1 + mn_time.tick);",
         ],
     );
     check("no_restrict", &c);
@@ -1301,14 +1301,14 @@ fn break_next_and_return_leave_an_each_cleanly() {
     ]));
     let c = emit(&w.p);
     let find = function_text(&c, "static int64_t F_find(int64_t limit_0)");
-    assert_seq(find, &["gr_str_release(label_3);", "continue;"]);
-    assert_seq(find, &["gr_str_release(label_3);", "goto brk0;"]);
+    assert_seq(find, &["mn_str_release(label_3);", "continue;"]);
+    assert_seq(find, &["mn_str_release(label_3);", "goto brk0;"]);
     assert_seq(
         find,
         &[
             "int64_t t1 = c1[i].hp;",
-            "gr_str_release(label_3);",
-            "gr_defer_leave();",
+            "mn_str_release(label_3);",
+            "mn_defer_leave();",
             "return t1;",
         ],
     );
@@ -1316,15 +1316,15 @@ fn break_next_and_return_leave_an_each_cleanly() {
     assert_seq(
         find,
         &[
-            "int64_t t2 = gr_str_length(label_3);",
-            "gr_defer_leave();",
-            "gr_str_release(label_3);",
-            "gr_defer_leave();",
+            "int64_t t2 = mn_str_length(label_3);",
+            "mn_defer_leave();",
+            "mn_str_release(label_3);",
+            "mn_defer_leave();",
             "return t2;",
         ],
     );
-    assert_seq(find, &["brk0:", "gr_defer_leave();", "}", "return -1;"]);
-    assert_has(find, "const T_Health *cb0 = gr_column(tableb, 0);");
+    assert_seq(find, &["brk0:", "mn_defer_leave();", "}", "return -1;"]);
+    assert_has(find, "const T_Health *cb0 = mn_column(tableb, 0);");
     assert_has(find, "if (cb0[ib].hp > c1[i].hp) {");
     expect_output("each_exits", &c, "-1\n3\n3\n3\n3\n");
 }
@@ -1436,29 +1436,29 @@ fn entities_and_their_components() {
     assert_seq(
         &c,
         &[
-            "GrString t0 = gr_str_concat(((GrString)&str0), ((GrString)&str1));",
-            "GrList t1 = gr_list_alloc(&Elem_Int, 1);",
-            "int64_t *p2 = gr_list_data(t1);",
+            "MnString t0 = mn_str_concat(((MnString)&str0), ((MnString)&str1));",
+            "MnList t1 = mn_list_alloc(&Elem_Int, 1);",
+            "int64_t *p2 = mn_list_data(t1);",
             "p2[0] = 1;",
             "T_Named t3 = {.name = t0, .log = t1};",
             "T_Health t4 = (T_Health){.hp = 10};",
             "void *const v5[] = {&t4, &t3};",
-            "GrEntity e_0 = gr_spawn(&b0, v5);",
-            "GrEntity f_1 = gr_spawn(&b1, NULL);",
+            "MnEntity e_0 = mn_spawn(&b0, v5);",
+            "MnEntity f_1 = mn_spawn(&b1, NULL);",
         ],
     );
-    assert_has(&c, "static GrBundle b0 = {b0_ids, 2, 0, 0, false};");
-    assert_has(&c, "static GrBundle b2 = {NULL, 0, 0, 0, false};");
+    assert_has(&c, "static MnBundle b0 = {b0_ids, 2, 0, 0, false};");
+    assert_has(&c, "static MnBundle b2 = {NULL, 0, 0, 0, false};");
     assert_has(
         &c,
-        "GrEntity unused_4 __attribute__((unused)) = gr_spawn(&b2, NULL);",
+        "MnEntity unused_4 __attribute__((unused)) = mn_spawn(&b2, NULL);",
     );
     assert_seq(
         &c,
         &[
-            "T_Health *p6 = gr_get(e_0, 0, sizeof(T_Health), (GrLoc){src0, 1});",
+            "T_Health *p6 = mn_get(e_0, 0, sizeof(T_Health), (MnLoc){src0, 1});",
             "p6->hp = p6->hp - 3;",
-            "const T_Health *p7 = gr_get(e_0, 0, sizeof(T_Health), (GrLoc){src0, 1});",
+            "const T_Health *p7 = mn_get(e_0, 0, sizeof(T_Health), (MnLoc){src0, 1});",
             "T_Health copy_2 = *p7;",
         ],
     );
@@ -1467,11 +1467,11 @@ fn entities_and_their_components() {
     assert_seq(
         &c,
         &[
-            "GrString s_3 = p9->name;",
-            "gr_str_retain(s_3);",
-            "GrString t10 = gr_str_concat(s_3, ((GrString)&str2));",
-            "T_Named *p11 = gr_get(e_0, 1, sizeof(T_Named), (GrLoc){src0, 1});",
-            "gr_str_release(p11->name);",
+            "MnString s_3 = p9->name;",
+            "mn_str_retain(s_3);",
+            "MnString t10 = mn_str_concat(s_3, ((MnString)&str2));",
+            "T_Named *p11 = mn_get(e_0, 1, sizeof(T_Named), (MnLoc){src0, 1});",
+            "mn_str_release(p11->name);",
             "p11->name = t10;",
         ],
     );
@@ -1483,8 +1483,8 @@ fn entities_and_their_components() {
         &c,
         "{\"Health\", sizeof(T_Health), _Alignof(T_Health), NULL},",
     );
-    assert_has(&c, "gr_remove(f_1, ids");
-    assert_has(&c, "gr_out_bool(eq_entity(e_0, f_1));");
+    assert_has(&c, "mn_remove(f_1, ids");
+    assert_has(&c, "mn_out_bool(eq_entity(e_0, f_1));");
     expect_output(
         "entities",
         &c,
@@ -1611,19 +1611,19 @@ fn events_are_copied_out_one_at_a_time() {
     let damage = function_text(&c, "static void S_damage(void)");
     assert_seq(
         damage,
-        &["uint64_t end0 = gr_event_end(0);", "uint64_t seq0 = cur"],
+        &["uint64_t end0 = mn_event_end(0);", "uint64_t seq0 = cur"],
     );
     assert_seq(
         damage,
         &[
             "for (; seq0 < end0; seq0++) {",
-            "const T_Hit *ev0 = gr_event_at(0, seq0);",
+            "const T_Hit *ev0 = mn_event_at(0, seq0);",
             "if (!ev0) continue;",
             "T_Hit hit_0 = *ev0;",
-            "if (!(gr_alive(hit_0.target) && gr_has(hit_0.target, 0))) {",
+            "if (!(mn_alive(hit_0.target) && mn_has(hit_0.target, 0))) {",
             "continue;",
             "}",
-            "T_Health *p1 = gr_get(hit_0.target, 0, sizeof(T_Health), (GrLoc){src0, 1});",
+            "T_Health *p1 = mn_get(hit_0.target, 0, sizeof(T_Health), (MnLoc){src0, 1});",
             "p1->hp = p1->hp - hit_0.damage;",
         ],
     );
@@ -1633,18 +1633,18 @@ fn events_are_copied_out_one_at_a_time() {
         &[
             "T_Note note_0 = *ev0;",
             "Retain_T_Note(&note_0);",
-            "if (gr_str_eq(note_0.text, ((GrString)&str0))) {",
+            "if (mn_str_eq(note_0.text, ((MnString)&str0))) {",
             "Drop_T_Note(&note_0);",
             "continue;",
             "}",
-            "gr_out_str(note_0.text);",
-            "gr_out_newline();",
+            "mn_out_str(note_0.text);",
+            "mn_out_newline();",
             "Drop_T_Note(&note_0);",
             "}",
         ],
     );
-    assert_has(journal, "if (!gr_event_at(2, seq");
-    assert_has(&c, "*(T_Hit *)gr_emit(0) = t");
+    assert_has(journal, "if (!mn_event_at(2, seq");
+    assert_has(&c, "*(T_Hit *)mn_emit(0) = t");
     assert_has(
         &c,
         "{\"Note\", sizeof(T_Note), _Alignof(T_Note), Drop_T_Note},",
@@ -1783,28 +1783,28 @@ fn blocks_and_conditions_as_expressions() {
     };
     p.main = Locals::default().body(blk(vec![show(1, 0), show(2, 1), show(-7, 2)]));
     let c = emit(&p);
-    let describe = function_text(&c, "static GrString F_describe(int64_t n_0, E_Team team_1)");
+    let describe = function_text(&c, "static MnString F_describe(int64_t n_0, E_Team team_1)");
     assert_seq(
         describe,
         &[
-            "GrString t0 = NULL;",
+            "MnString t0 = NULL;",
             "{",
             "int64_t h_subject_2 = n_0 * 1;",
-            "GrString t1 = NULL;",
+            "MnString t1 = NULL;",
             "if (h_subject_2 == 1) {",
-            "t1 = ((GrString)&str0);",
+            "t1 = ((MnString)&str0);",
             "} else {",
-            "GrString t2 = NULL;",
+            "MnString t2 = NULL;",
             "if (h_subject_2 == 2) {",
-            "t2 = gr_str_concat(((GrString)&str1), ((GrString)&str2));",
+            "t2 = mn_str_concat(((MnString)&str1), ((MnString)&str2));",
             "} else {",
-            "t2 = ((GrString)&str3);",
+            "t2 = ((MnString)&str3);",
             "}",
             "t1 = t2;",
             "}",
             "t0 = t1;",
             "}",
-            "GrString word_3 = t0;",
+            "MnString word_3 = t0;",
         ],
     );
     assert_has(describe, "int64_t twice_4 = (n_0 > 0 ? n_0 * 2 : -n_0);");
@@ -1813,7 +1813,7 @@ fn blocks_and_conditions_as_expressions() {
         &[
             "int64_t t3 = 0;",
             "if (n_0 > 1) {",
-            "gr_out_bytes(\"positive\\n\", 9);",
+            "mn_out_bytes(\"positive\\n\", 9);",
             "t3 = n_0;",
             "} else {",
             "t3 = 0;",
@@ -1846,8 +1846,8 @@ fn blocks_and_conditions_as_expressions() {
         describe,
         &[
             "if (team_1 == 0) {",
-            "gr_str_release(color_9);",
-            "color_9 = ((GrString)&str",
+            "mn_str_release(color_9);",
+            "color_9 = ((MnString)&str",
         ],
     );
     assert_has(describe, "} else if (team_1 == 1) {");
@@ -1876,7 +1876,7 @@ fn globals_are_set_up_once_and_released() {
     let gravity = constant(&mut p, "GRAVITY", flt(9.81));
     let size = constant(&mut p, "SIZE", bin(BinOp::Mul, int(4), int(8)));
     let half = constant(&mut p, "HALF", bin(BinOp::Div, to_f(rd(&size)), flt(64.0)));
-    let title = constant(&mut p, "TITLE", bin(BinOp::Add, text("grem"), text("lin")));
+    let title = constant(&mut p, "TITLE", bin(BinOp::Add, text("mid"), text("night")));
     let origin = constant(&mut p, "ORIGIN", make(&vec2, vec![flt(0.0), rd(&half)]));
     let primes = constant(&mut p, "PRIMES", list(&Type::Int, vec![int(2), int(3)]));
     let root = constant(
@@ -1958,7 +1958,7 @@ fn globals_are_set_up_once_and_released() {
     assert_lacks(&c, "C_GRAVITY");
     assert_lacks(&c, "C_SIZE");
     assert_lacks(&c, "C_HALF");
-    assert_has(&c, "static GrString C_TITLE;");
+    assert_has(&c, "static MnString C_TITLE;");
     assert_has(&c, "static T_Vec2 C_ORIGIN;");
     assert_seq(
         &c,
@@ -1966,8 +1966,8 @@ fn globals_are_set_up_once_and_released() {
             "static struct {",
             "int64_t points;",
             "int64_t best;",
-            "GrString title;",
-            "GrList history;",
+            "MnString title;",
+            "MnList history;",
             "float ratio;",
             "uint8_t level;",
             "} R_Score;",
@@ -1977,7 +1977,7 @@ fn globals_are_set_up_once_and_released() {
     assert_seq(
         init,
         &[
-            "C_TITLE = gr_str_concat(((GrString)&str1), ((GrString)&str2));",
+            "C_TITLE = mn_str_concat(((MnString)&str1), ((MnString)&str2));",
             "C_ORIGIN = (T_Vec2){.x = 0.0, .y = 0.5};",
         ],
     );
@@ -1987,7 +1987,7 @@ fn globals_are_set_up_once_and_released() {
             "C_ROOT = sqrt(2.0);",
             "R_Score.points = 0;",
             "R_Score.best = 32;",
-            "R_Score.title = ((GrString)&str3);",
+            "R_Score.title = ((MnString)&str3);",
             "R_Score.history = NULL;",
             "R_Score.ratio = (float)0.5;",
             "R_Score.level = 3;",
@@ -1997,10 +1997,10 @@ fn globals_are_set_up_once_and_released() {
     assert_seq(
         drop,
         &[
-            "gr_str_release(C_TITLE);",
-            "gr_list_release(C_PRIMES, &Elem_Int);",
-            "gr_str_release(R_Score.title);",
-            "gr_list_release(R_Score.history, &Elem_Int);",
+            "mn_str_release(C_TITLE);",
+            "mn_list_release(C_PRIMES, &Elem_Int);",
+            "mn_str_release(R_Score.title);",
+            "mn_list_release(R_Score.history, &Elem_Int);",
         ],
     );
     // Fields the loop only reads are loaded before it; the one it writes
@@ -2009,15 +2009,15 @@ fn globals_are_set_up_once_and_released() {
     assert_seq(
         fall,
         &[
-            "gr_defer_enter();",
-            "const double time_dt = gr_time.dt;",
+            "mn_defer_enter();",
+            "const double time_dt = mn_time.dt;",
             "const float R0_ratio = R_Score.ratio;",
-            "const GrList R0_history = R_Score.history;",
+            "const MnList R0_history = R_Score.history;",
             "const uint8_t R0_level = R_Score.level;",
             "for (uint32_t t = 0; t < q0.table_count; t++) {",
         ],
     );
-    assert_has(fall, "T_Position *restrict c0 = gr_column(table, 0);");
+    assert_has(fall, "T_Position *restrict c0 = mn_column(table, 0);");
     assert_has(
         fall,
         "9.81 * time_dt * ((double)R0_ratio * C_ROOT + (double)(",
@@ -2025,13 +2025,13 @@ fn globals_are_set_up_once_and_released() {
     assert_has(fall, "R_Score.points = R_Score.points + 1;");
     assert_has(
         &c,
-        "gr_to_uint8((int64_t)R_Score.level + R_Score.best, (GrLoc){src0, 1})",
+        "mn_to_uint8((int64_t)R_Score.level + R_Score.best, (MnLoc){src0, 1})",
     );
-    assert_has(&c, "gr_time.dt = 1.0;");
+    assert_has(&c, "mn_time.dt = 1.0;");
     expect_output(
         "globals",
         &c,
-        "1\n1.0\nVec2(x: 0.0, y: 0.5)\n[2, 3]\ngremlin!\n11\n[10]\n35\n0.25\n33\n",
+        "1\n1.0\nVec2(x: 0.0, y: 0.5)\n[2, 3]\nmidnight!\n11\n[10]\n35\n0.25\n33\n",
     );
 }
 
@@ -2182,10 +2182,10 @@ fn loops_and_world_control() {
     assert_seq(
         collatz,
         &[
-            "int64_t t0 = gr_int_mod(m_2, 2, (GrLoc){src0, 1});",
+            "int64_t t0 = mn_int_mod(m_2, 2, (MnLoc){src0, 1});",
             "int64_t t1 = 0;",
             "if (t0 == 0) {",
-            "t1 = gr_int_div(m_2, 2, (GrLoc){src0, 1});",
+            "t1 = mn_int_div(m_2, 2, (MnLoc){src0, 1});",
             "} else {",
             "t1 = m_2 * 3 + 1;",
             "}",
@@ -2212,9 +2212,9 @@ fn loops_and_world_control() {
             "}",
         ],
     );
-    assert_has(main, "gr_run((GrLoc){src0, 1});");
-    assert_has(main, "gr_exit(3);");
-    assert_has(&c, "gr_stop();");
+    assert_has(main, "mn_run((MnLoc){src0, 1});");
+    assert_has(main, "mn_exit(3);");
+    assert_has(&c, "mn_stop();");
     expect_output("loops", &c, "321\n31\ntrue\ntrue\n3\n");
 }
 
@@ -2243,13 +2243,13 @@ fn statements_carry_their_source_lines() {
     third.span = line(4);
     p.main = l.body(blk(vec![first, second, third]));
     let c = emit(&p);
-    assert_has(&c, "static const char src0[] = \"test.grem\";");
+    assert_has(&c, "static const char src0[] = \"test.12am\";");
     assert_has(
         &c,
-        "#line 2 \"test.grem\"\n    int64_t n_0 = 2;\n#line 3 \"test.grem\"\n    \
-         int64_t t0 = gr_int_div(7, n_0, (GrLoc){src0, 3});\n",
+        "#line 2 \"test.12am\"\n    int64_t n_0 = 2;\n#line 3 \"test.12am\"\n    \
+         int64_t t0 = mn_int_div(7, n_0, (MnLoc){src0, 3});\n",
     );
-    assert_has(&c, "#line 4 \"test.grem\"\n    gr_out_newline();\n");
+    assert_has(&c, "#line 4 \"test.12am\"\n    mn_out_newline();\n");
     // After the program's code, lines are numbered as in the C file.
     let position = c.find("static void init_globals").expect("init_globals");
     let directive = c[..position].lines().last().expect("a directive");

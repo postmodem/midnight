@@ -247,7 +247,7 @@ impl<'a> FnCx<'a, '_> {
             } => {
                 let name = self.fresh("p");
                 self.line(&format!(
-                    "{konst}{cty} *{name} = gr_get({}, {id}, sizeof({cty}), {loc});",
+                    "{konst}{cty} *{name} = mn_get({}, {id}, sizeof({cty}), {loc});",
                     entity.c
                 ));
                 direct = false;
@@ -277,17 +277,17 @@ impl<'a> FnCx<'a, '_> {
                         } else {
                             format!("&{list}")
                         };
-                        self.line(&format!("gr_list_unique({target}, &{elem});"));
+                        self.line(&format!("mn_list_unique({target}, &{elem});"));
                     }
                     let position = self.tmp();
                     self.line(&format!(
-                        "int64_t {position} = gr_list_index({list}, {}, {loc});",
+                        "int64_t {position} = mn_list_index({list}, {}, {loc});",
                         index.c
                     ));
                     let name = self.fresh("p");
                     let cty = self.cx.cty(elem);
                     self.line(&format!(
-                        "{konst}{cty} *{name} = ({konst}{cty} *)gr_list_data({list}) + {position};"
+                        "{konst}{cty} *{name} = ({konst}{cty} *)mn_list_data({list}) + {position};"
                     ));
                     current = name;
                     pointer = true;
@@ -399,8 +399,8 @@ pub(super) fn borrow_dep(own: Own) -> Dep {
 
 fn time_lvalue(field: TimeField) -> &'static str {
     match field {
-        TimeField::Tick => "gr_time.tick",
-        TimeField::Dt => "gr_time.dt",
-        TimeField::Elapsed => "gr_time.elapsed",
+        TimeField::Tick => "mn_time.tick",
+        TimeField::Dt => "mn_time.dt",
+        TimeField::Elapsed => "mn_time.elapsed",
     }
 }

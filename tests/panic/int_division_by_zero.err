@@ -1,1 +1,1 @@
-tests/panic/int_division_by_zero.grem:5: runtime error: division by zero
+tests/panic/int_division_by_zero.12am:5: runtime error: division by zero

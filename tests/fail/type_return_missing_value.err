@@ -1,5 +1,5 @@
 error: `answer` can end without returning a value
- --> tests/fail/type_return_missing_value.grem:4:5
+ --> tests/fail/type_return_missing_value.12am:4:5
   |
 4 | def answer -> Int
   |     ^^^^^^ it returns `Int`: end every path with a value or a `return`

@@ -1,1 +1,1 @@
-tests/panic/compact_event_field.grem:9: runtime error: 999 does not fit in UInt8
+tests/panic/compact_event_field.12am:9: runtime error: 999 does not fit in UInt8

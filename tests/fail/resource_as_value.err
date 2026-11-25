@@ -1,5 +1,5 @@
 error: resource `Score` is not a value
- --> tests/fail/resource_as_value.grem:8:9
+ --> tests/fail/resource_as_value.12am:8:9
   |
 8 | saved = Score
   |         ^^^^^ read and write its fields, like `Score.field`

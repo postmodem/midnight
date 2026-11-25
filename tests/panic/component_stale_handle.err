@@ -1,1 +1,1 @@
-tests/panic/component_stale_handle.grem:12: runtime error: Entity(0v1) is not alive
+tests/panic/component_stale_handle.12am:12: runtime error: Entity(0v1) is not alive

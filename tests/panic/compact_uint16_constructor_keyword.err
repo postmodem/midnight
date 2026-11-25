@@ -1,1 +1,1 @@
-tests/panic/compact_uint16_constructor_keyword.grem:9: runtime error: 65536 does not fit in UInt16
+tests/panic/compact_uint16_constructor_keyword.12am:9: runtime error: 65536 does not fit in UInt16

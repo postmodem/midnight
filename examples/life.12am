@@ -3,7 +3,7 @@
 # Shows `add` and `remove` driven by a query, a list in a resource, and
 # `require`.
 
-# The board size, `cell_index` and `alive_next?` come from life_rules.grem.
+# The board size, `cell_index` and `alive_next?` come from life_rules.12am.
 require "life_rules"
 
 # Every square of the board is an entity with a `Cell`. The squares that

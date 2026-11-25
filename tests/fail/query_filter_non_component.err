@@ -1,5 +1,5 @@
 error: `Team` is an enum, not a component
-  --> tests/fail/query_filter_non_component.grem:14:22
+  --> tests/fail/query_filter_non_component.12am:14:22
    |
 14 | each Position, with: Team do |pos|
    |                      ^^^^ a query names components, tags and `Entity`

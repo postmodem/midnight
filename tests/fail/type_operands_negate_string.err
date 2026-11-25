@@ -1,5 +1,5 @@
 error: `String` has no unary `-`
- --> tests/fail/type_operands_negate_string.grem:5:6
+ --> tests/fail/type_operands_negate_string.12am:5:6
   |
 5 | puts -s
   |      ^^

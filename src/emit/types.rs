@@ -1,4 +1,4 @@
-//! C types for Gremlin types, record layout, and the per-type helpers:
+//! C types for Midnight types, record layout, and the per-type helpers:
 //! retain, drop, list element descriptions, formatting and equality.
 
 use std::cmp::Reverse;
@@ -25,12 +25,12 @@ pub fn compact_cty(compact: Compact) -> &'static str {
 pub fn narrow_fn(compact: Compact) -> &'static str {
     match compact {
         Compact::Float32 => unreachable!("Float32 stores are casts"),
-        Compact::Int8 => "gr_to_int8",
-        Compact::Int16 => "gr_to_int16",
-        Compact::Int32 => "gr_to_int32",
-        Compact::UInt8 => "gr_to_uint8",
-        Compact::UInt16 => "gr_to_uint16",
-        Compact::UInt32 => "gr_to_uint32",
+        Compact::Int8 => "mn_to_int8",
+        Compact::Int16 => "mn_to_int16",
+        Compact::Int32 => "mn_to_int32",
+        Compact::UInt8 => "mn_to_uint8",
+        Compact::UInt16 => "mn_to_uint16",
+        Compact::UInt32 => "mn_to_uint32",
     }
 }
 
@@ -65,10 +65,10 @@ impl Cx<'_> {
             Type::Int => "int64_t".to_string(),
             Type::Float => "double".to_string(),
             Type::Bool => "bool".to_string(),
-            Type::String => "GrString".to_string(),
-            Type::Entity => "GrEntity".to_string(),
+            Type::String => "MnString".to_string(),
+            Type::Entity => "MnEntity".to_string(),
             Type::Compact(compact) => compact_cty(*compact).to_string(),
-            Type::List(_) => "GrList".to_string(),
+            Type::List(_) => "MnList".to_string(),
             Type::Record(id) => names::record(&self.prog.records[id.0].name),
             Type::Enum(id) => names::enum_(&self.prog.enums[id.0].name),
         }
@@ -205,8 +205,8 @@ impl Cx<'_> {
     /// A statement that releases what the value at lvalue `lv` owns.
     pub fn drop_stmt(&mut self, lv: &str, ty: &Type) -> String {
         match ty {
-            Type::String => format!("gr_str_release({lv});"),
-            Type::List(elem) => format!("gr_list_release({lv}, &{});", self.elem(elem)),
+            Type::String => format!("mn_str_release({lv});"),
+            Type::List(elem) => format!("mn_list_release({lv}, &{});", self.elem(elem)),
             Type::Record(_) => format!("{}(&{lv});", self.drop_fn(ty)),
             _ => unreachable!("only managed types are dropped"),
         }
@@ -216,8 +216,8 @@ impl Cx<'_> {
     /// lvalue `lv` owns.
     pub fn retain_stmt(&mut self, lv: &str, ty: &Type) -> String {
         match ty {
-            Type::String => format!("gr_str_retain({lv});"),
-            Type::List(_) => format!("gr_list_retain({lv});"),
+            Type::String => format!("mn_str_retain({lv});"),
+            Type::List(_) => format!("mn_list_retain({lv});"),
             Type::Record(_) => format!("{}(&{lv});", self.retain_fn(ty)),
             _ => unreachable!("only managed types are retained"),
         }
@@ -280,7 +280,7 @@ impl Cx<'_> {
         self.helper_defs.push_str("}\n\n");
     }
 
-    /// The `GrElem` that describes lists whose elements are stored as
+    /// The `MnElem` that describes lists whose elements are stored as
     /// `elem`.
     pub fn elem(&mut self, elem: &Type) -> String {
         let name = format!("Elem_{}", names::mangle(self.prog, elem));
@@ -293,7 +293,7 @@ impl Cx<'_> {
             let cty = self.cty(elem);
             let _ = writeln!(
                 self.elem_defs,
-                "static const GrElem {name} = {{sizeof({cty}), {retain}, {drop}}};"
+                "static const MnElem {name} = {{sizeof({cty}), {retain}, {drop}}};"
             );
         }
         name
@@ -312,7 +312,7 @@ impl Cx<'_> {
                 .collect();
             let _ = writeln!(
                 self.enum_tables,
-                "static const GrString {name}[] = {{{}}};",
+                "static const MnString {name}[] = {{{}}};",
                 literals.join(", ")
             );
         }
@@ -323,14 +323,14 @@ impl Cx<'_> {
     /// to the builder `sb` points at. `quoted` shows strings as literals.
     pub fn fmt_stmt(&mut self, sb: &str, c: &str, ty: &Type, quoted: bool) -> String {
         match ty {
-            Type::Int => format!("gr_sb_int({sb}, {c});"),
-            Type::Float | Type::Compact(Compact::Float32) => format!("gr_sb_float({sb}, {c});"),
-            Type::Compact(_) => format!("gr_sb_int({sb}, {c});"),
-            Type::Bool => format!("gr_sb_bool({sb}, {c});"),
-            Type::String if quoted => format!("gr_sb_quoted({sb}, {c});"),
-            Type::String => format!("gr_sb_str({sb}, {c});"),
-            Type::Entity => format!("gr_sb_entity({sb}, {c});"),
-            Type::Enum(id) => format!("gr_sb_str({sb}, {}[{c}]);", self.enum_names(*id)),
+            Type::Int => format!("mn_sb_int({sb}, {c});"),
+            Type::Float | Type::Compact(Compact::Float32) => format!("mn_sb_float({sb}, {c});"),
+            Type::Compact(_) => format!("mn_sb_int({sb}, {c});"),
+            Type::Bool => format!("mn_sb_bool({sb}, {c});"),
+            Type::String if quoted => format!("mn_sb_quoted({sb}, {c});"),
+            Type::String => format!("mn_sb_str({sb}, {c});"),
+            Type::Entity => format!("mn_sb_entity({sb}, {c});"),
+            Type::Enum(id) => format!("mn_sb_str({sb}, {}[{c}]);", self.enum_names(*id)),
             Type::Record(_) => format!("{}({sb}, &{c});", self.fmt_fn(ty)),
             Type::List(_) => format!("{}({sb}, {c});", self.fmt_fn(ty)),
             Type::Void => unreachable!("no text for no value"),
@@ -338,7 +338,7 @@ impl Cx<'_> {
     }
 
     /// The function that appends a record's or a list's text to a builder:
-    /// `(GrBuilder *, const T_X *)` or `(GrBuilder *, GrList)`.
+    /// `(MnBuilder *, const T_X *)` or `(MnBuilder *, MnList)`.
     pub fn fmt_fn(&mut self, ty: &Type) -> String {
         let prog = self.prog;
         let name = format!("Fmt_{}", names::mangle(prog, ty));
@@ -367,22 +367,22 @@ impl Cx<'_> {
                     body.push_str("    (void)v;\n");
                 }
                 format!(
-                    "static void {name}(GrBuilder *sb, const {} *v)",
+                    "static void {name}(MnBuilder *sb, const {} *v)",
                     self.cty(ty)
                 )
             }
             Type::List(elem) => {
                 let cty = self.cty(elem);
                 let line = self.fmt_stmt("sb", "d[i]", elem, true);
-                let _ = writeln!(body, "    int64_t n = gr_list_len(v);");
+                let _ = writeln!(body, "    int64_t n = mn_list_len(v);");
                 let _ = writeln!(body, "    {}", sb_bytes("sb", "["));
                 let _ = writeln!(body, "    for (int64_t i = 0; i < n; i++) {{");
-                let _ = writeln!(body, "        const {cty} *d = gr_list_data(v);");
+                let _ = writeln!(body, "        const {cty} *d = mn_list_data(v);");
                 let _ = writeln!(body, "        if (i > 0) {}", sb_bytes("sb", ", "));
                 let _ = writeln!(body, "        {line}");
                 let _ = writeln!(body, "    }}");
                 let _ = writeln!(body, "    {}", sb_bytes("sb", "]"));
-                format!("static void {name}(GrBuilder *sb, GrList v)")
+                format!("static void {name}(MnBuilder *sb, MnList v)")
             }
             _ => unreachable!("only records and lists have formatting functions"),
         };
@@ -396,13 +396,13 @@ impl Cx<'_> {
     /// lvalues.
     pub fn eq_c(&mut self, a: &str, b: &str, ty: &Type) -> String {
         match ty {
-            Type::String => format!("gr_str_eq({a}, {b})"),
+            Type::String => format!("mn_str_eq({a}, {b})"),
             Type::Entity => {
                 if self.claim("eq_entity") {
                     self.helper_protos
-                        .push_str("static inline bool eq_entity(GrEntity a, GrEntity b);\n");
+                        .push_str("static inline bool eq_entity(MnEntity a, MnEntity b);\n");
                     self.helper_defs.push_str(
-                        "static inline bool eq_entity(GrEntity a, GrEntity b) {\n    \
+                        "static inline bool eq_entity(MnEntity a, MnEntity b) {\n    \
                          return a.index == b.index && a.generation == b.generation;\n}\n\n",
                     );
                 }
@@ -424,7 +424,7 @@ impl Cx<'_> {
     }
 
     /// The function that compares two records or two lists:
-    /// `(const T_X *, const T_X *)` or `(GrList, GrList)`.
+    /// `(const T_X *, const T_X *)` or `(MnList, MnList)`.
     pub fn eq_fn(&mut self, ty: &Type) -> String {
         let prog = self.prog;
         let name = format!("Eq_{}", names::mangle(prog, ty));
@@ -455,15 +455,15 @@ impl Cx<'_> {
             Type::List(elem) => {
                 let cty = self.cty(elem);
                 let equal = self.eq_c("x[i]", "y[i]", elem);
-                let _ = writeln!(body, "    int64_t n = gr_list_len(a);");
-                let _ = writeln!(body, "    if (n != gr_list_len(b)) return false;");
+                let _ = writeln!(body, "    int64_t n = mn_list_len(a);");
+                let _ = writeln!(body, "    if (n != mn_list_len(b)) return false;");
                 let _ = writeln!(body, "    for (int64_t i = 0; i < n; i++) {{");
-                let _ = writeln!(body, "        const {cty} *x = gr_list_data(a);");
-                let _ = writeln!(body, "        const {cty} *y = gr_list_data(b);");
+                let _ = writeln!(body, "        const {cty} *x = mn_list_data(a);");
+                let _ = writeln!(body, "        const {cty} *y = mn_list_data(b);");
                 let _ = writeln!(body, "        if (!({equal})) return false;");
                 let _ = writeln!(body, "    }}");
                 let _ = writeln!(body, "    return true;");
-                format!("static bool {name}(GrList a, GrList b)")
+                format!("static bool {name}(MnList a, MnList b)")
             }
             _ => unreachable!("only records and lists have equality functions"),
         };
@@ -473,7 +473,7 @@ impl Cx<'_> {
     }
 
     /// The function behind `include?` for a list type:
-    /// `(GrList, value) -> bool`.
+    /// `(MnList, value) -> bool`.
     pub fn include_fn(&mut self, list: &Type) -> String {
         let Type::List(elem) = list else {
             unreachable!("include? is a list method");
@@ -488,14 +488,14 @@ impl Cx<'_> {
             Type::Compact(_) => format!("({})d[i] == v", self.cty(&value)),
             _ => self.eq_c("d[i]", "v", elem),
         };
-        let signature = format!("static bool {name}(GrList list, {} v)", self.cty(&value));
+        let signature = format!("static bool {name}(MnList list, {} v)", self.cty(&value));
         let _ = writeln!(self.helper_protos, "{signature};");
         let _ = writeln!(
             self.helper_defs,
             "{signature} {{\n    \
-             int64_t n = gr_list_len(list);\n    \
+             int64_t n = mn_list_len(list);\n    \
              for (int64_t i = 0; i < n; i++) {{\n        \
-             const {cty} *d = gr_list_data(list);\n        \
+             const {cty} *d = mn_list_data(list);\n        \
              if ({equal}) return true;\n    \
              }}\n    \
              return false;\n}}\n"
@@ -507,7 +507,7 @@ impl Cx<'_> {
 /// A statement that appends literal text to the builder `sb` points at.
 pub fn sb_bytes(sb: &str, text: &str) -> String {
     format!(
-        "gr_sb_bytes({sb}, {}, {});",
+        "mn_sb_bytes({sb}, {}, {});",
         names::c_string(text.as_bytes()),
         text.len()
     )

@@ -1,10 +1,10 @@
 error: `report` is already defined
- --> tests/fail/duplicate_system.grem:8:8
+ --> tests/fail/duplicate_system.12am:8:8
   |
 8 | system report
   |        ^^^^^^
 note: first defined here
- --> tests/fail/duplicate_system.grem:4:8
+ --> tests/fail/duplicate_system.12am:4:8
   |
 4 | system report
   |        ------

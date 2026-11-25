@@ -1,5 +1,5 @@
 error: `tag` is a keyword and can't be used as a name
- --> tests/fail/syntax_keyword_as_variable.grem:4:1
+ --> tests/fail/syntax_keyword_as_variable.12am:4:1
   |
 4 | tag = "boss"
   | ^^^ choose a different name

@@ -1,5 +1,5 @@
 error: expected `Vec2`, found `Int`
-  --> tests/fail/type_operands_operator_method_argument.grem:14:10
+  --> tests/fail/type_operands_operator_method_argument.12am:14:10
    |
 14 | puts a + 1
    |          ^

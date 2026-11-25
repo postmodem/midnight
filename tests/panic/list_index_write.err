@@ -1,1 +1,1 @@
-tests/panic/list_index_write.grem:5: runtime error: index 5 out of range for a list of length 3
+tests/panic/list_index_write.12am:5: runtime error: index 5 out of range for a list of length 3

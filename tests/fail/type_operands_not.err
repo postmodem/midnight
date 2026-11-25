@@ -1,5 +1,5 @@
 error: expected `Bool`, found `Int`
- --> tests/fail/type_operands_not.grem:5:7
+ --> tests/fail/type_operands_not.12am:5:7
   |
 5 | puts !n
   |       ^ `!` needs a `Bool`

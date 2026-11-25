@@ -1,5 +1,5 @@
 error: 256 does not fit in `UInt8`
- --> tests/fail/compact_assign_too_big.grem:9:8
+ --> tests/fail/compact_assign_too_big.12am:9:8
   |
 9 | s.hp = 256
   |        ^^^ `UInt8` holds 0 to 255

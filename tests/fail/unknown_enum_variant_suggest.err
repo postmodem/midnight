@@ -1,5 +1,5 @@
 error: unknown variant `Gren` for enum `Team`
-  --> tests/fail/unknown_enum_variant_suggest.grem:10:12
+  --> tests/fail/unknown_enum_variant_suggest.12am:10:12
    |
 10 | puts Team::Gren
    |            ^^^^ did you mean `Green`?

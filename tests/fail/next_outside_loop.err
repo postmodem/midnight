@@ -1,5 +1,5 @@
 error: `next` outside a loop
- --> tests/fail/next_outside_loop.grem:5:1
+ --> tests/fail/next_outside_loop.12am:5:1
   |
 5 | next if x > 0
   | ^^^^ it belongs in `while`, `until`, `loop`, `each`, `on` or a `do` block

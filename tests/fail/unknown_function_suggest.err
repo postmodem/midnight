@@ -1,5 +1,5 @@
 error: unknown function `doubl`
- --> tests/fail/unknown_function_suggest.grem:8:6
+ --> tests/fail/unknown_function_suggest.12am:8:6
   |
 8 | puts doubl(4)
   |      ^^^^^ did you mean `double`?

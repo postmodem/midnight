@@ -1,5 +1,5 @@
 error: this `system` is never closed
- --> tests/fail/syntax_unclosed_system.grem:4:1
+ --> tests/fail/syntax_unclosed_system.12am:4:1
   |
 4 | system report
   | ^^^^^^ expected a matching `end`

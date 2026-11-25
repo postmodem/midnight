@@ -1,5 +1,5 @@
 error: unexpected `end`
- --> tests/fail/syntax_stray_end.grem:6:1
+ --> tests/fail/syntax_stray_end.12am:6:1
   |
 6 | end
   | ^^^ there is no open block to close

@@ -1,10 +1,10 @@
 error: recursive function `is_even` needs a declared return type
-  --> tests/fail/recursion_mutual_no_type.grem:11:3
+  --> tests/fail/recursion_mutual_no_type.12am:11:3
    |
 11 |   is_even(n - 1)
    |   ^^^^^^^^^^^^^^ this call needs the type `is_even` returns, which is still being inferred
 note: add `-> Type` to the definition of `is_even`
- --> tests/fail/recursion_mutual_no_type.grem:4:5
+ --> tests/fail/recursion_mutual_no_type.12am:4:5
   |
 4 | def is_even(n: Int)
   |     -------

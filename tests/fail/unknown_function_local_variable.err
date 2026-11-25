@@ -1,5 +1,5 @@
 error: unknown function `total`
- --> tests/fail/unknown_function_local_variable.grem:5:6
+ --> tests/fail/unknown_function_local_variable.12am:5:6
   |
 5 | puts total(1)
   |      ^^^^^ `total` is a variable; `total(…)` always calls a function

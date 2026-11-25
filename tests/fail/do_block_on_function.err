@@ -1,5 +1,5 @@
 error: `repeat` does not take a `do` block
- --> tests/fail/do_block_on_function.grem:8:1
+ --> tests/fail/do_block_on_function.12am:8:1
   |
 8 | repeat(3) do
   | ^^^^^^ only `times`, `upto`, `downto`, `each` and `each_with_index` take one

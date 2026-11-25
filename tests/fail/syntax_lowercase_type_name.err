@@ -1,5 +1,5 @@
 error: unexpected `vec2`
- --> tests/fail/syntax_lowercase_type_name.grem:4:8
+ --> tests/fail/syntax_lowercase_type_name.12am:4:8
   |
 4 | struct vec2
   |        ^^^^ expected a type name, which begins with an uppercase letter

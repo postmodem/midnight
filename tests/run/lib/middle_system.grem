@@ -1,4 +1,0 @@
-# A system loaded by require_systems.grem between two of its own.
-system beta
-  puts "b #{Time.tick}"
-end

@@ -1,5 +1,5 @@
 error: expected a component, found `Vec2`
-  --> tests/fail/add_non_component.grem:10:7
+  --> tests/fail/add_non_component.12am:10:7
    |
 10 | e.add(Vec2(1, 2))
    |       ^^^^^^^^^^ an entity is made of component values and tags

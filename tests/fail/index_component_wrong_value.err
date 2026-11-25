@@ -1,5 +1,5 @@
 error: expected `Health`, found `Armor`
-  --> tests/fail/index_component_wrong_value.grem:13:13
+  --> tests/fail/index_component_wrong_value.12am:13:13
    |
 13 | e[Health] = Armor(2)
    |             ^^^^^^^^

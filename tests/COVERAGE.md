@@ -2,9 +2,9 @@
 
 This checklist maps each section and table row of
 [`docs/language.md`](../docs/language.md) to the test programs that exercise
-it. Names without a directory are `tests/run/NAME.grem` (with `NAME.out`);
-`fail/NAME` is `tests/fail/NAME.grem` (with `NAME.err`); `panic/NAME` is
-`tests/panic/NAME.grem` (with `NAME.err`).
+it. Names without a directory are `tests/run/NAME.12am` (with `NAME.out`);
+`fail/NAME` is `tests/fail/NAME.12am` (with `NAME.err`); `panic/NAME` is
+`tests/panic/NAME.12am` (with `NAME.err`).
 
 Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
@@ -636,246 +636,246 @@ the compiler rejects the program.
 
 | Diagnostic | File | Line | Reference section |
 | --- | --- | --- | --- |
-| the component `Health` can't be listed bare in `add`: its field `hp` has no default | `add_bare_no_defaults.grem` | 10 | Entities |
-| `add` takes components and tags; `Vec2` is a struct | `add_non_component.grem` | 10 | Entities |
-| wrong number of arguments: `min` takes 2, found 1 | `args_builtin_count.grem` | 4 | Functions; Structs: Construction |
-| wrong number of arguments: `Vec2` has 2 fields, found 3 values | `args_constructor_count.grem` | 9 | Functions; Structs: Construction |
-| wrong number of arguments: `double` takes 1, found 2 | `args_function_count.grem` | 8 | Functions; Structs: Construction |
-| wrong number of arguments: `greet` takes none, found 1 | `args_function_no_params.grem` | 8 | Functions; Structs: Construction |
-| wrong number of arguments: `add` takes 2, found 1 | `args_function_too_few.grem` | 8 | Functions; Structs: Construction |
-| wrong number of arguments: the method `scaled` of `Rect` takes 1, found 2 | `args_method_count.grem` | 14 | Functions; Structs: Construction |
-| missing field `y` in the constructor of `Vec2` (it has no default) | `args_missing_field.grem` | 9 | Functions; Structs: Construction |
-| missing field `y` in the constructor of `Vec2` (it has no default, so it can't be left off the end) | `args_missing_field_positional.grem` | 9 | Functions; Structs: Construction |
-| a constructor call can't mix positional and keyword arguments | `args_mixed_positional_keyword.grem` | 9 | Functions; Structs: Construction |
-| the keyword argument `x` is given twice | `args_repeated_keyword.grem` | 9 | Functions; Structs: Construction |
-| unknown keyword argument `depth`: `Rect` has no field of that name | `args_unknown_keyword.grem` | 9 | Functions; Structs: Construction |
-| type mismatch: `n` is an `Int`, but `n + 0.5` is a `Float` (a `Float` does not convert to `Int`) | `assign_compound_float_to_int.grem` | 5 | Types; Expressions |
-| type mismatch: `x` is an `Int` (from its first assignment on line 4), found a `String` | `assign_different_type.grem` | 5 | Types; Expressions |
-| type mismatch: `n` is an `Int` (from its first assignment on line 4), found a `Float` (a `Float` does not convert to `Int`) | `assign_float_to_int_variable.grem` | 5 | Types; Expressions |
-| the block parameter `item` is named twice (the second reuses a name already in scope) | `block_param_duplicate.grem` | 5 | Variables and values; Programs and files |
-| the block parameter `i` reuses the name of a variable that is already in scope (created on line 4) | `block_param_in_scope.grem` | 5 | Variables and values; Programs and files |
-| the block parameter `i` reuses the name of the enclosing block's parameter (line 4) | `block_param_nested_reuse.grem` | 5 | Variables and values; Programs and files |
-| the block parameter `pos` reuses the name of a variable that is already in scope (created on line 9) | `block_param_query_reuse.grem` | 11 | Variables and values; Programs and files |
-| the block parameter `n` reuses the name of the function parameter `n` | `block_param_reuses_function_param.grem` | 5 | Variables and values; Programs and files |
-| `break` outside a loop | `break_outside_loop.grem` | 5 | Control flow |
-| `UInt8` is a built-in name (a compact type) and can't be redefined | `builtin_compact_type_redefined.grem` | 4 | Lexical structure: built-in names |
-| `World` is a built-in name and can't be redefined (here, as a constant) | `builtin_name_redefined_constant.grem` | 4 | Lexical structure: built-in names |
-| `Entity` is a built-in name and can't be redefined | `builtin_type_redefined.grem` | 4 | Lexical structure: built-in names |
-| the `case` over the enum `Team` has no `else` and does not cover every variant; the missing one is named: `Green` | `case_enum_missing_one.grem` | 11 | Control flow: case |
-| the `case` over the enum `Team` has no `else` and does not cover every variant; the missing ones are named: `Blue` and `Green` | `case_enum_missing_variants.grem` | 11 | Control flow: case |
-| a `case` value must be an `Int`, a `String`, a `Bool` or an enum; found a `Float` | `case_value_float.grem` | 5 | Control flow: case |
-| a `case` value must be an `Int`, a `String`, a `Bool` or an enum; found a `Vec2` | `case_value_struct.grem` | 10 | Control flow: case |
-| `clear` needs a list that can be modified; `PRIMES` is a constant | `clear_readonly_constant.grem` | 6 | What can be modified; Lists |
-| the constant 40000 does not fit in `Int16` (the field `level` of `Stats`; -32768 to 32767) | `compact_assign_int16_too_big.grem` | 9 | Compact field types |
-| the constant 256 does not fit in `UInt8` (the field `hp` of `Stats`) | `compact_assign_too_big.grem` | 9 | Compact field types |
-| the constant 300 (the value of `200 + 100`) does not fit in `UInt8` | `compact_constant_expression_too_big.grem` | 5 | Compact field types |
-| the constant -129 does not fit in `Int8` (the field `offset` of `Tile`; -128 to 127) | `compact_constructor_keyword_too_small.grem` | 8 | Compact field types |
-| the constant 300 does not fit in `UInt8` (the field `hp` of `Health`) | `compact_constructor_too_big.grem` | 8 | Compact field types |
-| the constant -1 does not fit in `UInt8` (0 to 255) | `compact_default_negative_unsigned.grem` | 5 | Compact field types |
-| the constant 300 does not fit in `UInt8` (0 to 255) | `compact_default_too_big.grem` | 5 | Compact field types |
-| the compact type `Float32` can't be the type of a variable (only of fields and list elements); use `Float` | `compact_float32_variable.grem` | 4 | Compact field types |
-| the constant 2147483648 does not fit in `Int32` (the field `offset` of `Record`) | `compact_int32_too_big.grem` | 8 | Compact field types |
-| the constant 256 does not fit in `UInt8` (an element of a `[UInt8]`) | `compact_list_element_assign_too_big.grem` | 5 | Compact field types |
-| the constant 256 does not fit in `UInt8` (an element of a `[UInt8]`) | `compact_list_literal_too_big.grem` | 4 | Compact field types |
-| the constant 300 does not fit in `UInt8` (an element of a `[UInt8]`) | `compact_list_push_too_big.grem` | 5 | Compact field types |
-| the constant 300 (the value of `BIG`) does not fit in `UInt8` (the field `hp` of `Health`) | `compact_named_constant_too_big.grem` | 10 | Compact field types |
-| the compact type `Int16` can't be the type of a parameter (only of fields and list elements); use `Int` | `compact_parameter.grem` | 4 | Compact field types |
-| the compact type `UInt8` can't be a return type (only the type of fields and list elements); use `Int` | `compact_return.grem` | 4 | Compact field types |
-| the constant 65536 does not fit in `UInt16` (0 to 65535) | `compact_uint16_too_big.grem` | 5 | Compact field types |
-| the constant -1 does not fit in `UInt32` (the field `id` of `Record`) | `compact_uint32_negative.grem` | 9 | Compact field types |
-| the compact type `UInt8` can't be the type of a variable (only of fields and list elements); use `Int` | `compact_variable.grem` | 4 | Compact field types |
-| type mismatch: `<` works on numbers and strings, not on `Bool` | `compare_bools.grem` | 6 | Expressions: Comparison |
-| type mismatch: `<` works on numbers and strings, not on the enum `Team` | `compare_enums.grem` | 9 | Expressions: Comparison |
-| type mismatch: `<` works on numbers and strings, not on `Vec2` | `compare_structs.grem` | 11 | Expressions: Comparison |
-| comparison operators do not chain (`1 < x` is a `Bool`, which can't be compared with `3`); write `1 < x && x < 3` | `comparison_chain.grem` | 5 | Expressions: Comparison |
-| the component `Marker` has no fields (a component has at least one); hint: declare it with `tag Marker` | `component_no_fields.grem` | 4 | Components and tags |
-| the condition of `elsif` must be a `Bool`, found a `String` | `cond_elsif_not_bool.grem` | 8 | Types: No truthiness |
-| the condition of `if` must be a `Bool`, found an `Int` | `cond_if_not_bool.grem` | 5 | Types: No truthiness |
-| the condition of the `if` modifier must be a `Bool`, found an `Int` | `cond_modifier_not_bool.grem` | 5 | Types: No truthiness |
-| the condition of the `unless` modifier must be a `Bool`, found an `Entity` | `cond_modifier_unless_not_bool.grem` | 5 | Types: No truthiness |
-| the condition of `? :` must be a `Bool`, found an `Int` | `cond_ternary_not_bool.grem` | 5 | Types: No truthiness |
-| the condition of `unless` must be a `Bool`, found a `String` | `cond_unless_not_bool.grem` | 5 | Types: No truthiness |
-| the condition of `until` must be a `Bool`, found a `[Int]` | `cond_until_not_bool.grem` | 5 | Types: No truthiness |
-| the condition of `while` must be a `Bool`, found an `Int` | `cond_while_not_bool.grem` | 5 | Types: No truthiness |
-| the constant `LIMIT` is already defined (on line 4) and can't be changed | `const_assigned_twice.grem` | 5 | Constants; Structs: Defaults |
-| a constant can be defined only by a top-level assignment, not inside a function | `const_in_function.grem` | 5 | Constants; Structs: Defaults |
-| the value of the constant `START` is not a constant expression: `rand` can't be called in one | `const_not_constant_expression.grem` | 4 | Constants; Structs: Defaults |
-| the constant `BASE` is used before its definition on line 5 (a constant may use only constants defined above it) | `const_uses_later_constant.grem` | 4 | Constants; Structs: Defaults |
-| the value of the constant `AREA` is not a constant expression: it uses the variable `size` | `const_uses_variable.grem` | 5 | Constants; Structs: Defaults |
-| a term of `World.count` must be a component or `Entity`; `Vec2` is a struct | `count_non_component.grem` | 9 | Queries |
-| the tag `Frozen` can't be a term of `World.count`; hint: `World.count(Entity, with: Frozen)` | `count_tag_as_term.grem` | 6 | Queries |
-| the default of the field `face` is not a constant expression: `rand` can't be called in one | `default_not_constant.grem` | 5 | Constants; Structs: Defaults |
-| `delete_at` needs a list that can be modified; `batch` is the read-only parameter of `on` | `delete_at_readonly_on_param.grem` | 10 | What can be modified; Lists |
-| `push` does not take a `do` block; `do … end` is accepted only by the loop forms (`times`, `upto`, `downto`, `each`, `each_with_index`, `loop`, a query `each`, `on`) | `do_block_not_loop.grem` | 5 | Control flow: blocks are not values |
-| a function call can't take a `do` block (blocks are not values; `do … end` is accepted only by the loop forms) | `do_block_on_function.grem` | 8 | Control flow: blocks are not values |
-| duplicate definition: the field `x` of `Vec2` is already defined on line 5 | `duplicate_field.grem` | 7 | Programs and files (one namespace); Functions |
-| duplicate definition: the function `area` is already defined on line 4 (there is no overloading) | `duplicate_function.grem` | 8 | Programs and files (one namespace); Functions |
-| duplicate definition: the method `doubled` of `Vec2` is already defined on line 7 | `duplicate_method.grem` | 11 | Programs and files (one namespace); Functions |
-| duplicate definition: the parameter `a` of `add` is named twice | `duplicate_parameter.grem` | 4 | Programs and files (one namespace); Functions |
-| duplicate definition: the system `move` has the name of the function defined on line 4 (systems and functions share a namespace) | `duplicate_system_function.grem` | 8 | Programs and files (one namespace); Functions |
-| duplicate definition: the system `report` is already defined on line 4 | `duplicate_system.grem` | 8 | Programs and files (one namespace); Functions |
-| duplicate definition: the type `Vec2` is already defined on line 4 | `duplicate_type.grem` | 8 | Programs and files (one namespace); Functions |
-| duplicate definition: the type `Health` is already defined (as a component) on line 4 | `duplicate_type_kinds.grem` | 8 | Programs and files (one namespace); Functions |
-| duplicate definition: the variant `Red` of `Team` is already defined on line 5 | `duplicate_variant.grem` | 7 | Programs and files (one namespace); Functions |
-| `emit` takes an event; `Vec2` is a struct | `emit_non_event.grem` | 9 | Events |
-| 25 independent errors: the first 20 are reported in source order, then a line saying that the rest were not shown | `error_cap.grem` | 4 to 23 | Errors |
-| the element type of `[]` can't be inferred: nothing here supplies a type (annotate the variable, e.g. `xs: [Int] = []`) | `empty_list_no_type.grem` | 4 | Lists |
-| the element type of `[]` can't be inferred: nothing here supplies a type | `empty_list_no_type_method.grem` | 4 | Lists |
-| `has?` takes a component or tag; `Vec2` is a struct | `has_non_component.grem` | 10 | Entities |
-| can't assign to an element of `xs`: a function parameter is read-only | `index_assign_readonly_param.grem` | 5 | What can be modified; Lists |
-| type mismatch: `e[Health]` is a `Health`, found an `Armor` | `index_component_wrong_value.grem` | 13 | Entities |
-| an entity is indexed by a component type; `Vec2` is a struct | `index_non_component.grem` | 10 | Entities |
-| type mismatch: the argument `xs` of `total` is a `[Float]`, found a `[Float32]` (the two list types do not convert to each other) | `list_float32_argument.grem` | 17 | Compact field types |
-| type mismatch: `plain` is declared `[Float]`, found a `[Float32]` (the two list types do not convert to each other) | `list_float32_to_float.grem` | 9 | Compact field types |
-| type mismatch: the field `heights` of `Mesh` is a `[Float32]`, found a `[Float]` (the two list types do not convert to each other) | `list_float_to_float32.grem` | 10 | Compact field types |
-| type mismatch: `plain` is declared `[Int]`, found a `[UInt8]` (lists with different element storage are different types) | `list_uint8_to_int.grem` | 5 | Compact field types |
-| `next` outside a loop | `next_outside_loop.grem` | 5 | Control flow |
-| `on` takes an event type; `Position` is a component | `on_non_event.grem` | 9 | Events |
-| `pop` needs a list that can be modified; `xs` is a function parameter and is read-only | `pop_readonly_list.grem` | 5 | What can be modified; Lists |
-| `push` needs a list that is a place (a variable, a field, an element); the result of `numbers()` is not one | `push_not_a_place.grem` | 8 | What can be modified; Lists |
-| `push` needs a list that can be modified; `PRIMES` is a constant | `push_readonly_constant.grem` | 6 | What can be modified; Lists |
-| `push` needs a list that can be modified; `row` is the read-only parameter of a list iteration | `push_readonly_iteration_param.grem` | 6 | What can be modified; Lists |
-| `push` needs a list that can be modified; `xs` is a function parameter and is read-only | `push_readonly_list.grem` | 5 | What can be modified; Lists |
-| `with:` takes components and tags; `Team` is an enum | `query_filter_non_component.grem` | 14 | Queries |
-| a query term must be a component or `Entity`; `Vec2` is a struct | `query_non_component.grem` | 9 | Queries |
-| syntax error: a query needs at least one term before its filters (use `Entity` to visit every entity) | `query_no_terms.grem` | 11 | Queries |
-| the query has 2 terms but the block takes 1 parameter | `query_param_count.grem` | 14 | Queries |
-| the query has 1 term but the block takes no parameters | `query_param_count_none.grem` | 9 | Queries |
-| the query has 1 term but the block takes 2 parameters | `query_param_count_too_many.grem` | 9 | Queries |
-| the type `Position` appears twice in the query (as a term and in `with:`) | `query_repeated_in_filter.grem` | 9 | Queries |
-| the type `Position` appears twice in the query | `query_repeated_type.grem` | 9 | Queries |
-| a query term must be a component or `Entity`; `Score` is a resource | `query_resource_term.grem` | 8 | Queries |
-| the tag `Frozen` can't be a query term (a tag has no value to bind); hint: filter with `with: Frozen` | `query_tag_as_term.grem` | 11 | Queries |
-| unknown query filter `withou`; the label names the two filters there are, `with:` and `without:` | `query_unknown_filter.grem` | 11 | Queries |
-| the type `Frozen` appears twice in the query (in `with:` and in `without:`) | `query_with_and_without_same.grem` | 11 | Queries |
-| can't assign to an element of `PRIMES`: a constant can't be changed | `readonly_constant_element.grem` | 6 | What can be modified; Lists |
-| can't assign to `ORIGIN.x`: `ORIGIN` is a constant, and a part of a constant can't be changed | `readonly_constant_field.grem` | 11 | What can be modified; Lists |
-| can't assign to `LIMIT`: a constant can't be changed | `readonly_constant.grem` | 6 | What can be modified; Lists |
-| can't assign to `LIMIT`: a constant can't be changed | `readonly_constant_in_function.grem` | 7 | What can be modified; Lists |
-| can't assign to `i`: the parameter of a counting loop is read-only | `readonly_counting_param.grem` | 5 | What can be modified; Lists |
-| can't assign to `i`: the index parameter of `each_with_index` is read-only | `readonly_each_with_index_param.grem` | 6 | What can be modified; Lists |
-| can't assign to `v.y`: `v` is a function parameter, and a part of a read-only value is read-only | `readonly_function_param_field.grem` | 10 | What can be modified; Lists |
-| can't assign to `n`: a function parameter is read-only | `readonly_function_param.grem` | 5 | What can be modified; Lists |
-| can't assign to `pt.x`: `pt` is the parameter of a list iteration, and a part of a read-only value is read-only | `readonly_list_iteration_param_field.grem` | 11 | What can be modified; Lists |
-| can't assign to `x`: the parameter of a list iteration is read-only (to update elements, loop over indexes) | `readonly_list_iteration_param.grem` | 6 | What can be modified; Lists |
-| can't assign to `k`: a method parameter is read-only | `readonly_method_param.grem` | 9 | What can be modified; Lists |
-| can't assign to `hit.damage`: the parameter of `on` is a read-only copy | `readonly_on_param.grem` | 10 | What can be modified; Lists |
-| can't assign to `hit`: the parameter of `on` is read-only | `readonly_on_param_whole.grem` | 10 | What can be modified; Lists |
-| can't assign to `self.count`: `self` is read-only (methods cannot modify the receiver) | `readonly_self_dot_field.grem` | 8 | What can be modified; Lists |
-| can't assign to the field `count` inside a method: methods cannot modify the receiver | `readonly_self_field.grem` | 8 | What can be modified; Lists |
-| can't assign to `Time.elapsed`: it is read-only | `readonly_time_elapsed.grem` | 4 | What can be modified; Lists |
-| can't assign to `Time.tick`: it is read-only | `readonly_time_tick.grem` | 4 | What can be modified; Lists |
-| can't assign to `i`: the parameter of a counting loop is read-only | `readonly_upto_param.grem` | 5 | What can be modified; Lists |
-| the recursive function `fact` needs a declared return type: its call to itself needs a type that is still being inferred | `recursion_direct_no_type.grem` | 6 | Functions |
-| the recursive function `is_even` needs a declared return type: neither `is_even` nor `is_odd` declares one | `recursion_mutual_no_type.grem` | 11 | Functions |
-| `remove` takes components and tags; `Vec2` is a struct | `remove_non_component.grem` | 10 | Entities |
-| can't find the required file `no_such_helper_file.grem` (looked for next to this file) | `require_not_found.grem` | 4 | Programs and files |
-| `require` is allowed at the top level only | `require_not_top_level.grem` | 7 | Programs and files |
-| the resource `Score` is not a value type and can't be the type of a field | `resource_as_field_type.grem` | 9 | Resources |
-| the resource `Score` as a whole is not a value; read its fields (`Score.points`) | `resource_as_value.grem` | 8 | Resources |
-| the field `points` of the resource `Score` needs a default | `resource_field_no_default.grem` | 5 | Resources |
-| unknown variable `square`: it was created inside the `do` block (line 5) and does not exist after it | `scope_after_do_block.grem` | 7 | Variables and values; Programs and files |
-| unknown variable `label`: it was created inside the `if` (line 6) and does not exist after it; create it before the `if` | `scope_after_if.grem` | 8 | Variables and values; Programs and files |
-| unknown variable `seen`: it was created inside the `while` body (line 6) and does not exist after the loop | `scope_after_while.grem` | 9 | Variables and values; Programs and files |
-| unknown variable `i`: a block parameter does not exist after its block | `scope_block_param_after_block.grem` | 7 | Variables and values; Programs and files |
-| `self` can be used only inside a method of a struct or component | `self_outside_method.grem` | 5 | Structs: Methods |
-| the component `Position` can't be listed bare in `spawn`: its fields `x` and `y` have no defaults | `spawn_bare_no_defaults.grem` | 9 | Entities |
-| the component `Health` can't be listed bare in `spawn`: its field `hp` has no default | `spawn_bare_partial_defaults.grem` | 9 | Entities |
-| `spawn` takes components and tags; `Vec2` is a struct | `spawn_non_component.grem` | 9 | Entities |
-| `spawn` lists the tag `Player` twice | `spawn_tag_twice.grem` | 6 | Entities |
-| `spawn` lists the component `Position` twice | `spawn_type_twice.grem` | 9 | Entities |
-| the struct `Node` contains itself through the field `child` (allowed only through a list, `[Node]`) | `struct_contains_itself.grem` | 6 | Structs |
-| the struct `Parent` contains itself through `Parent.child` and `Child.parent`; one diagnostic for the cycle | `struct_contains_itself_mutual.grem` | 5 | Structs |
-| `==` is provided for every struct and can't be redefined (it is also not one of the operator names a method may have) | `struct_redefines_equality.grem` | 8 | Structs |
-| `to_s` is provided for every struct and can't be redefined | `struct_redefines_to_s.grem` | 8 | Structs |
-| syntax error: unexpected `=` inside an expression (assignment is a statement, not an expression) | `syntax_assignment_as_expression.grem` | 5 | Grammar; Lexical structure |
-| syntax error: unexpected `4` after `double` (a call with arguments needs parentheses) | `syntax_call_without_parentheses.grem` | 8 | Grammar; Lexical structure |
-| syntax error: `gpu` is a reserved word (it has no use in 0.1) and can't name a variable | `syntax_gpu_reserved.grem` | 4 | Grammar; Lexical structure |
-| syntax error: `tag` is a keyword and can't name a variable; a type name is expected after `tag`, found `=` | `syntax_keyword_as_variable.grem` | 4 | Grammar; Lexical structure |
-| syntax error: a type name (beginning with an uppercase letter) is expected after `struct`, found `vec2` | `syntax_lowercase_type_name.grem` | 4 | Grammar; Lexical structure |
-| syntax error: the parameter `n` needs a type (`n: Type`); found `)` where `:` is expected | `syntax_param_without_type.grem` | 4 | Grammar; Lexical structure |
-| syntax error: unexpected `def` in a resource body (a resource holds fields only) | `syntax_resource_method.grem` | 7 | Grammar; Lexical structure |
-| syntax error: unexpected `end`; no block is open | `syntax_stray_end.grem` | 6 | Grammar; Lexical structure |
-| syntax error: unexpected `(` after the system name (a system has no parameters) | `syntax_system_with_parameters.grem` | 4 | Grammar; Lexical structure |
-| the `def` block is never closed (an `end` is missing); the diagnostic points at the `def` that opened it, not at the end of the file | `syntax_unclosed_def.grem` | 4 | Grammar; Lexical structure |
-| the `do` block is never closed (an `end` is missing); the diagnostic points at the `do` that opened it, not at the end of the file | `syntax_unclosed_do.grem` | 4 | Grammar; Lexical structure |
-| the `if` block is never closed (an `end` is missing); the diagnostic points at the `if` that opened it, not at the end of the file | `syntax_unclosed_if.grem` | 5 | Grammar; Lexical structure |
-| the `struct` block is never closed (an `end` is missing); the diagnostic points at the `struct` that opened it, not at the end of the file | `syntax_unclosed_struct.grem` | 4 | Grammar; Lexical structure |
-| the `system` block is never closed (an `end` is missing); the diagnostic points at the `system` that opened it, not at the end of the file | `syntax_unclosed_system.grem` | 4 | Grammar; Lexical structure |
-| the `while` block is never closed (an `end` is missing); the diagnostic points at the `while` that opened it, not at the end of the file | `syntax_unclosed_while.grem` | 5 | Grammar; Lexical structure |
-| syntax error: unexpected `)` where an expression is expected | `syntax_unexpected_token.grem` | 5 | Grammar; Lexical structure |
-| syntax error: unexpected `elsif` (an `unless` takes only an optional `else`) | `syntax_unless_elsif.grem` | 8 | Grammar; Lexical structure |
-| unterminated string literal; the diagnostic points at the opening quote | `syntax_unterminated_string.grem` | 4 | Grammar; Lexical structure |
-| a variable name can't end in `?` (only function and method names may) | `syntax_variable_question_mark.grem` | 4 | Grammar; Lexical structure |
-| `move` is a system; systems are not called by name (they run on `World.tick`) | `system_called.grem` | 8 | Systems and ticks |
-| `move` is a system; systems are not called by name (they run on `World.tick`) | `system_called_with_parens.grem` | 8 | Systems and ticks |
-| the tag `Frozen` is not a value type and can't be the type of a field | `tag_as_field_type.grem` | 7 | Components and tags |
-| the tag `Frozen` has no value and can't be constructed; write the bare name `Frozen` | `tag_constructed.grem` | 6 | Components and tags |
-| the tag `Frozen` has no value and can't be read from an entity; use `e.has?(Frozen)` | `tag_indexed.grem` | 7 | Components and tags |
-| the tag `Frozen` has no value and can't be stored in a variable | `tag_in_variable.grem` | 6 | Components and tags |
-| three independent errors, ALL reported in one run, in source order: | `three_errors.grem` | 9, 13, 17 | Errors |
-| unknown variable `total` inside the function `show`: top-level variables are not visible in functions (state belongs in a resource or on an entity) | `toplevel_variable_in_function.grem` | 7 | Variables and values; Programs and files |
-| unknown variable `speed` inside the system `move`: top-level variables are not visible in systems (state belongs in a resource or on an entity) | `toplevel_variable_in_system.grem` | 7 | Variables and values; Programs and files |
-| type mismatch: `count` is declared `Int`, found a `Float` (a `Float` does not convert to `Int`) | `type_annotation.grem` | 4 | Types; Expressions |
-| type mismatch: the field `y` of `Vec2` is a `Float`, found a `String` | `type_argument_constructor.grem` | 9 | Types; Expressions |
-| type mismatch: the argument `n` of `double` is an `Int`, found a `Float` (a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`) | `type_argument_float_to_int.grem` | 8 | Types; Expressions |
-| type mismatch: the argument `n` of `double` is an `Int`, found a `String` | `type_argument.grem` | 8 | Types; Expressions |
-| type mismatch: a `case` used as a value needs branches of one type; found a `String` and an `Int` | `type_case_branches.grem` | 7 | Types; Expressions |
-| type mismatch: the `case` value is an `Int`, but this `when` candidate is a `String` | `type_case_when.grem` | 7 | Types; Expressions |
-| type mismatch: `==` can't compare an `Int` with a `String` | `type_equality_different_types.grem` | 5 | Types; Expressions |
-| type mismatch: the field `hp` of `Health` is an `Int`, found a `String` | `type_field_assign_component.grem` | 9 | Types; Expressions |
-| type mismatch: the field `x` of `Vec2` is a `Float`, found a `String` | `type_field_assign.grem` | 10 | Types; Expressions |
-| type mismatch: the default of the field `hp` must be an `Int`, found a `String` | `type_field_default.grem` | 5 | Types; Expressions |
-| type mismatch: an `if` used as a value needs branches of one type; found a `String` and an `Int` | `type_if_branches.grem` | 5 | Types; Expressions |
-| type mismatch: a list index must be an `Int`, found a `String` | `type_index_not_int.grem` | 5 | Types; Expressions |
-| type mismatch: an element of a `[Int]` is an `Int`, found a `String` | `type_list_element_assign.grem` | 5 | Types; Expressions |
-| type mismatch: the elements of a list literal share one type; the first is an `Int`, this one is a `String` | `type_list_elements.grem` | 4 | Types; Expressions |
-| type mismatch: `push` on a `[Int]` takes an `Int`, found a `String` | `type_list_push.grem` | 5 | Types; Expressions |
-| type mismatch: `+` can't be applied to an `Int` and a `String` | `type_operands.grem` | 4 | Types; Expressions |
-| type mismatch: `+` can't join a `[Int]` and a `[String]` | `type_operands_list_concat.grem` | 6 | Types; Expressions |
-| type mismatch: the operands of `&&` must be `Bool`, found an `Int` | `type_operands_logical.grem` | 6 | Types; Expressions |
-| type mismatch: unary `-` can't be applied to a `String` | `type_operands_negate_string.grem` | 5 | Types; Expressions |
-| type mismatch: `!` needs a `Bool`, found an `Int` | `type_operands_not.grem` | 5 | Types; Expressions |
-| type mismatch: the right operand of `+` on `Vec2` (parameter `other`) is a `Vec2`, found an `Int` | `type_operands_operator_method_argument.grem` | 14 | Types; Expressions |
-| type mismatch: `*` on a `String` needs an `Int` count, found a `String` | `type_operands_repeat_count.grem` | 4 | Types; Expressions |
-| `+` is not defined for `Vec2` (the struct has no method named `+`) | `type_operands_struct_no_operator.grem` | 11 | Types; Expressions |
-| type mismatch: `*` can't be applied to an `Int` and a `Vec2` (an operator method applies only when the struct is the left operand) | `type_operands_struct_on_right.grem` | 14 | Types; Expressions |
-| type mismatch: `Score.points` is an `Int`, found a `Float` (a `Float` does not convert to `Int`) | `type_resource_field_assign.grem` | 8 | Types; Expressions |
-| type mismatch: `name_of` returns `String`, but its last expression is an `Int` | `type_return.grem` | 5 | Types; Expressions |
-| the return type of `pick` can't be inferred: it returns a `String` on line 5 and an `Int` on line 6 | `type_return_inconsistent.grem` | 6 | Types; Expressions |
-| `answer` declares the return type `Int`, but its body can end without a value | `type_return_missing_value.grem` | 4 | Types; Expressions |
-| type mismatch: `label` returns `String`, but `return` is given an `Int` | `type_return_statement.grem` | 5 | Types; Expressions |
-| type mismatch: the branches of `? :` are an `Int` and a `String` | `type_ternary_branches.grem` | 5 | Types; Expressions |
-| unknown component `Postion`, suggesting `Position` | `unknown_component_query_suggest.grem` | 14 | Errors (suggestions); the section of the thing named |
-| unknown constant (or type) `GRAVTY`, suggesting `GRAVITY` | `unknown_constant_suggest.grem` | 6 | Errors (suggestions); the section of the thing named |
-| unknown variant `Purple` of the enum `Team`, with no suggestion | `unknown_enum_variant.grem` | 10 | Errors (suggestions); the section of the thing named |
-| unknown variant `Gren` of the enum `Team`, suggesting `Green` | `unknown_enum_variant_suggest.grem` | 10 | Errors (suggestions); the section of the thing named |
-| unknown field `heigt` on `Rect`, suggesting `height` | `unknown_field_assign_suggest.grem` | 10 | Errors (suggestions); the section of the thing named |
-| unknown field (or method) `opacity` on `Rect`, with no suggestion | `unknown_field.grem` | 10 | Errors (suggestions); the section of the thing named |
-| unknown field (or method) `depth` on `Position`, with no suggestion | `unknown_field_query_param.grem` | 11 | Errors (suggestions); the section of the thing named |
-| unknown field (or method) `widt` on `Rect`, suggesting `width` | `unknown_field_suggest.grem` | 10 | Errors (suggestions); the section of the thing named |
-| unknown function `frobnicate`, with no suggestion | `unknown_function.grem` | 8 | Errors (suggestions); the section of the thing named |
-| unknown function `total`: `total(…)` is always a function call, and `total` is only a local variable | `unknown_function_local_variable.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown function `doubl`, suggesting `double` | `unknown_function_suggest.grem` | 8 | Errors (suggestions); the section of the thing named |
-| unknown constant `Math::TAU`, with no suggestion (`Math` has `PI` and `E`) | `unknown_math_constant.grem` | 4 | Errors (suggestions); the section of the thing named |
-| unknown function `Math.sqr`, suggesting `sqrt` | `unknown_math_function_suggest.grem` | 4 | Errors (suggestions); the section of the thing named |
-| unknown method `frobnicate` on a list (`[Int]`), with no suggestion | `unknown_method_builtin.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown method `explode` on `Rect`, with no suggestion | `unknown_method.grem` | 14 | Errors (suggestions); the section of the thing named |
-| unknown method `lengh` on a list (`[Int]`), suggesting `length` | `unknown_method_list_suggest.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown method `upcas` on `String`, suggesting `upcase` | `unknown_method_string_suggest.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown method `scale` on `Rect`, suggesting `scaled` | `unknown_method_suggest.grem` | 14 | Errors (suggestions); the section of the thing named |
-| unknown method `upcase` on `Int` (it exists on `String` only) | `unknown_method_wrong_type.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown field `point` on the resource `Score`, suggesting `points` | `unknown_resource_field_suggest.grem` | 9 | Errors (suggestions); the section of the thing named |
-| unknown component or tag `Playr` in `with:`, suggesting `Player` | `unknown_tag_filter_suggest.grem` | 11 | Errors (suggestions); the section of the thing named |
-| unknown field `elapse` on `Time`, suggesting `elapsed` | `unknown_time_field_suggest.grem` | 4 | Errors (suggestions); the section of the thing named |
-| unknown type `Flot`, suggesting the built-in `Float` | `unknown_type_builtin_suggest.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown type `Vec3`, suggesting `Vec2` | `unknown_type_constructor_suggest.grem` | 9 | Errors (suggestions); the section of the thing named |
-| unknown type `Polygon`, with no suggestion | `unknown_type.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown type `Quaternion`, with no suggestion | `unknown_type_parameter.grem` | 4 | Errors (suggestions); the section of the thing named |
-| unknown type `Vec3`, suggesting `Vec2` | `unknown_type_suggest.grem` | 10 | Errors (suggestions); the section of the thing named |
-| unknown variable (or function) `zzyzx`, with no suggestion | `unknown_variable.grem` | 6 | Errors (suggestions); the section of the thing named |
-| unknown variable (or function) `totl`, suggesting `total` | `unknown_variable_suggest.grem` | 5 | Errors (suggestions); the section of the thing named |
-| unknown `World` operation `tik`, suggesting `tick` | `unknown_world_method_suggest.grem` | 8 | Errors (suggestions); the section of the thing named |
-| an `if` used as a value needs an `else` branch | `value_if_without_else.grem` | 5 | Types; Expressions |
-| `greet` returns nothing, so its call can't be used as a value | `void_as_value.grem` | 8 | Functions |
-| `greet` returns nothing, so its call can't be used as a value (here, as an argument of `puts`) | `void_in_expression.grem` | 8 | Functions |
+| the component `Health` can't be listed bare in `add`: its field `hp` has no default | `add_bare_no_defaults.12am` | 10 | Entities |
+| `add` takes components and tags; `Vec2` is a struct | `add_non_component.12am` | 10 | Entities |
+| wrong number of arguments: `min` takes 2, found 1 | `args_builtin_count.12am` | 4 | Functions; Structs: Construction |
+| wrong number of arguments: `Vec2` has 2 fields, found 3 values | `args_constructor_count.12am` | 9 | Functions; Structs: Construction |
+| wrong number of arguments: `double` takes 1, found 2 | `args_function_count.12am` | 8 | Functions; Structs: Construction |
+| wrong number of arguments: `greet` takes none, found 1 | `args_function_no_params.12am` | 8 | Functions; Structs: Construction |
+| wrong number of arguments: `add` takes 2, found 1 | `args_function_too_few.12am` | 8 | Functions; Structs: Construction |
+| wrong number of arguments: the method `scaled` of `Rect` takes 1, found 2 | `args_method_count.12am` | 14 | Functions; Structs: Construction |
+| missing field `y` in the constructor of `Vec2` (it has no default) | `args_missing_field.12am` | 9 | Functions; Structs: Construction |
+| missing field `y` in the constructor of `Vec2` (it has no default, so it can't be left off the end) | `args_missing_field_positional.12am` | 9 | Functions; Structs: Construction |
+| a constructor call can't mix positional and keyword arguments | `args_mixed_positional_keyword.12am` | 9 | Functions; Structs: Construction |
+| the keyword argument `x` is given twice | `args_repeated_keyword.12am` | 9 | Functions; Structs: Construction |
+| unknown keyword argument `depth`: `Rect` has no field of that name | `args_unknown_keyword.12am` | 9 | Functions; Structs: Construction |
+| type mismatch: `n` is an `Int`, but `n + 0.5` is a `Float` (a `Float` does not convert to `Int`) | `assign_compound_float_to_int.12am` | 5 | Types; Expressions |
+| type mismatch: `x` is an `Int` (from its first assignment on line 4), found a `String` | `assign_different_type.12am` | 5 | Types; Expressions |
+| type mismatch: `n` is an `Int` (from its first assignment on line 4), found a `Float` (a `Float` does not convert to `Int`) | `assign_float_to_int_variable.12am` | 5 | Types; Expressions |
+| the block parameter `item` is named twice (the second reuses a name already in scope) | `block_param_duplicate.12am` | 5 | Variables and values; Programs and files |
+| the block parameter `i` reuses the name of a variable that is already in scope (created on line 4) | `block_param_in_scope.12am` | 5 | Variables and values; Programs and files |
+| the block parameter `i` reuses the name of the enclosing block's parameter (line 4) | `block_param_nested_reuse.12am` | 5 | Variables and values; Programs and files |
+| the block parameter `pos` reuses the name of a variable that is already in scope (created on line 9) | `block_param_query_reuse.12am` | 11 | Variables and values; Programs and files |
+| the block parameter `n` reuses the name of the function parameter `n` | `block_param_reuses_function_param.12am` | 5 | Variables and values; Programs and files |
+| `break` outside a loop | `break_outside_loop.12am` | 5 | Control flow |
+| `UInt8` is a built-in name (a compact type) and can't be redefined | `builtin_compact_type_redefined.12am` | 4 | Lexical structure: built-in names |
+| `World` is a built-in name and can't be redefined (here, as a constant) | `builtin_name_redefined_constant.12am` | 4 | Lexical structure: built-in names |
+| `Entity` is a built-in name and can't be redefined | `builtin_type_redefined.12am` | 4 | Lexical structure: built-in names |
+| the `case` over the enum `Team` has no `else` and does not cover every variant; the missing one is named: `Green` | `case_enum_missing_one.12am` | 11 | Control flow: case |
+| the `case` over the enum `Team` has no `else` and does not cover every variant; the missing ones are named: `Blue` and `Green` | `case_enum_missing_variants.12am` | 11 | Control flow: case |
+| a `case` value must be an `Int`, a `String`, a `Bool` or an enum; found a `Float` | `case_value_float.12am` | 5 | Control flow: case |
+| a `case` value must be an `Int`, a `String`, a `Bool` or an enum; found a `Vec2` | `case_value_struct.12am` | 10 | Control flow: case |
+| `clear` needs a list that can be modified; `PRIMES` is a constant | `clear_readonly_constant.12am` | 6 | What can be modified; Lists |
+| the constant 40000 does not fit in `Int16` (the field `level` of `Stats`; -32768 to 32767) | `compact_assign_int16_too_big.12am` | 9 | Compact field types |
+| the constant 256 does not fit in `UInt8` (the field `hp` of `Stats`) | `compact_assign_too_big.12am` | 9 | Compact field types |
+| the constant 300 (the value of `200 + 100`) does not fit in `UInt8` | `compact_constant_expression_too_big.12am` | 5 | Compact field types |
+| the constant -129 does not fit in `Int8` (the field `offset` of `Tile`; -128 to 127) | `compact_constructor_keyword_too_small.12am` | 8 | Compact field types |
+| the constant 300 does not fit in `UInt8` (the field `hp` of `Health`) | `compact_constructor_too_big.12am` | 8 | Compact field types |
+| the constant -1 does not fit in `UInt8` (0 to 255) | `compact_default_negative_unsigned.12am` | 5 | Compact field types |
+| the constant 300 does not fit in `UInt8` (0 to 255) | `compact_default_too_big.12am` | 5 | Compact field types |
+| the compact type `Float32` can't be the type of a variable (only of fields and list elements); use `Float` | `compact_float32_variable.12am` | 4 | Compact field types |
+| the constant 2147483648 does not fit in `Int32` (the field `offset` of `Record`) | `compact_int32_too_big.12am` | 8 | Compact field types |
+| the constant 256 does not fit in `UInt8` (an element of a `[UInt8]`) | `compact_list_element_assign_too_big.12am` | 5 | Compact field types |
+| the constant 256 does not fit in `UInt8` (an element of a `[UInt8]`) | `compact_list_literal_too_big.12am` | 4 | Compact field types |
+| the constant 300 does not fit in `UInt8` (an element of a `[UInt8]`) | `compact_list_push_too_big.12am` | 5 | Compact field types |
+| the constant 300 (the value of `BIG`) does not fit in `UInt8` (the field `hp` of `Health`) | `compact_named_constant_too_big.12am` | 10 | Compact field types |
+| the compact type `Int16` can't be the type of a parameter (only of fields and list elements); use `Int` | `compact_parameter.12am` | 4 | Compact field types |
+| the compact type `UInt8` can't be a return type (only the type of fields and list elements); use `Int` | `compact_return.12am` | 4 | Compact field types |
+| the constant 65536 does not fit in `UInt16` (0 to 65535) | `compact_uint16_too_big.12am` | 5 | Compact field types |
+| the constant -1 does not fit in `UInt32` (the field `id` of `Record`) | `compact_uint32_negative.12am` | 9 | Compact field types |
+| the compact type `UInt8` can't be the type of a variable (only of fields and list elements); use `Int` | `compact_variable.12am` | 4 | Compact field types |
+| type mismatch: `<` works on numbers and strings, not on `Bool` | `compare_bools.12am` | 6 | Expressions: Comparison |
+| type mismatch: `<` works on numbers and strings, not on the enum `Team` | `compare_enums.12am` | 9 | Expressions: Comparison |
+| type mismatch: `<` works on numbers and strings, not on `Vec2` | `compare_structs.12am` | 11 | Expressions: Comparison |
+| comparison operators do not chain (`1 < x` is a `Bool`, which can't be compared with `3`); write `1 < x && x < 3` | `comparison_chain.12am` | 5 | Expressions: Comparison |
+| the component `Marker` has no fields (a component has at least one); hint: declare it with `tag Marker` | `component_no_fields.12am` | 4 | Components and tags |
+| the condition of `elsif` must be a `Bool`, found a `String` | `cond_elsif_not_bool.12am` | 8 | Types: No truthiness |
+| the condition of `if` must be a `Bool`, found an `Int` | `cond_if_not_bool.12am` | 5 | Types: No truthiness |
+| the condition of the `if` modifier must be a `Bool`, found an `Int` | `cond_modifier_not_bool.12am` | 5 | Types: No truthiness |
+| the condition of the `unless` modifier must be a `Bool`, found an `Entity` | `cond_modifier_unless_not_bool.12am` | 5 | Types: No truthiness |
+| the condition of `? :` must be a `Bool`, found an `Int` | `cond_ternary_not_bool.12am` | 5 | Types: No truthiness |
+| the condition of `unless` must be a `Bool`, found a `String` | `cond_unless_not_bool.12am` | 5 | Types: No truthiness |
+| the condition of `until` must be a `Bool`, found a `[Int]` | `cond_until_not_bool.12am` | 5 | Types: No truthiness |
+| the condition of `while` must be a `Bool`, found an `Int` | `cond_while_not_bool.12am` | 5 | Types: No truthiness |
+| the constant `LIMIT` is already defined (on line 4) and can't be changed | `const_assigned_twice.12am` | 5 | Constants; Structs: Defaults |
+| a constant can be defined only by a top-level assignment, not inside a function | `const_in_function.12am` | 5 | Constants; Structs: Defaults |
+| the value of the constant `START` is not a constant expression: `rand` can't be called in one | `const_not_constant_expression.12am` | 4 | Constants; Structs: Defaults |
+| the constant `BASE` is used before its definition on line 5 (a constant may use only constants defined above it) | `const_uses_later_constant.12am` | 4 | Constants; Structs: Defaults |
+| the value of the constant `AREA` is not a constant expression: it uses the variable `size` | `const_uses_variable.12am` | 5 | Constants; Structs: Defaults |
+| a term of `World.count` must be a component or `Entity`; `Vec2` is a struct | `count_non_component.12am` | 9 | Queries |
+| the tag `Frozen` can't be a term of `World.count`; hint: `World.count(Entity, with: Frozen)` | `count_tag_as_term.12am` | 6 | Queries |
+| the default of the field `face` is not a constant expression: `rand` can't be called in one | `default_not_constant.12am` | 5 | Constants; Structs: Defaults |
+| `delete_at` needs a list that can be modified; `batch` is the read-only parameter of `on` | `delete_at_readonly_on_param.12am` | 10 | What can be modified; Lists |
+| `push` does not take a `do` block; `do … end` is accepted only by the loop forms (`times`, `upto`, `downto`, `each`, `each_with_index`, `loop`, a query `each`, `on`) | `do_block_not_loop.12am` | 5 | Control flow: blocks are not values |
+| a function call can't take a `do` block (blocks are not values; `do … end` is accepted only by the loop forms) | `do_block_on_function.12am` | 8 | Control flow: blocks are not values |
+| duplicate definition: the field `x` of `Vec2` is already defined on line 5 | `duplicate_field.12am` | 7 | Programs and files (one namespace); Functions |
+| duplicate definition: the function `area` is already defined on line 4 (there is no overloading) | `duplicate_function.12am` | 8 | Programs and files (one namespace); Functions |
+| duplicate definition: the method `doubled` of `Vec2` is already defined on line 7 | `duplicate_method.12am` | 11 | Programs and files (one namespace); Functions |
+| duplicate definition: the parameter `a` of `add` is named twice | `duplicate_parameter.12am` | 4 | Programs and files (one namespace); Functions |
+| duplicate definition: the system `move` has the name of the function defined on line 4 (systems and functions share a namespace) | `duplicate_system_function.12am` | 8 | Programs and files (one namespace); Functions |
+| duplicate definition: the system `report` is already defined on line 4 | `duplicate_system.12am` | 8 | Programs and files (one namespace); Functions |
+| duplicate definition: the type `Vec2` is already defined on line 4 | `duplicate_type.12am` | 8 | Programs and files (one namespace); Functions |
+| duplicate definition: the type `Health` is already defined (as a component) on line 4 | `duplicate_type_kinds.12am` | 8 | Programs and files (one namespace); Functions |
+| duplicate definition: the variant `Red` of `Team` is already defined on line 5 | `duplicate_variant.12am` | 7 | Programs and files (one namespace); Functions |
+| `emit` takes an event; `Vec2` is a struct | `emit_non_event.12am` | 9 | Events |
+| 25 independent errors: the first 20 are reported in source order, then a line saying that the rest were not shown | `error_cap.12am` | 4 to 23 | Errors |
+| the element type of `[]` can't be inferred: nothing here supplies a type (annotate the variable, e.g. `xs: [Int] = []`) | `empty_list_no_type.12am` | 4 | Lists |
+| the element type of `[]` can't be inferred: nothing here supplies a type | `empty_list_no_type_method.12am` | 4 | Lists |
+| `has?` takes a component or tag; `Vec2` is a struct | `has_non_component.12am` | 10 | Entities |
+| can't assign to an element of `xs`: a function parameter is read-only | `index_assign_readonly_param.12am` | 5 | What can be modified; Lists |
+| type mismatch: `e[Health]` is a `Health`, found an `Armor` | `index_component_wrong_value.12am` | 13 | Entities |
+| an entity is indexed by a component type; `Vec2` is a struct | `index_non_component.12am` | 10 | Entities |
+| type mismatch: the argument `xs` of `total` is a `[Float]`, found a `[Float32]` (the two list types do not convert to each other) | `list_float32_argument.12am` | 17 | Compact field types |
+| type mismatch: `plain` is declared `[Float]`, found a `[Float32]` (the two list types do not convert to each other) | `list_float32_to_float.12am` | 9 | Compact field types |
+| type mismatch: the field `heights` of `Mesh` is a `[Float32]`, found a `[Float]` (the two list types do not convert to each other) | `list_float_to_float32.12am` | 10 | Compact field types |
+| type mismatch: `plain` is declared `[Int]`, found a `[UInt8]` (lists with different element storage are different types) | `list_uint8_to_int.12am` | 5 | Compact field types |
+| `next` outside a loop | `next_outside_loop.12am` | 5 | Control flow |
+| `on` takes an event type; `Position` is a component | `on_non_event.12am` | 9 | Events |
+| `pop` needs a list that can be modified; `xs` is a function parameter and is read-only | `pop_readonly_list.12am` | 5 | What can be modified; Lists |
+| `push` needs a list that is a place (a variable, a field, an element); the result of `numbers()` is not one | `push_not_a_place.12am` | 8 | What can be modified; Lists |
+| `push` needs a list that can be modified; `PRIMES` is a constant | `push_readonly_constant.12am` | 6 | What can be modified; Lists |
+| `push` needs a list that can be modified; `row` is the read-only parameter of a list iteration | `push_readonly_iteration_param.12am` | 6 | What can be modified; Lists |
+| `push` needs a list that can be modified; `xs` is a function parameter and is read-only | `push_readonly_list.12am` | 5 | What can be modified; Lists |
+| `with:` takes components and tags; `Team` is an enum | `query_filter_non_component.12am` | 14 | Queries |
+| a query term must be a component or `Entity`; `Vec2` is a struct | `query_non_component.12am` | 9 | Queries |
+| syntax error: a query needs at least one term before its filters (use `Entity` to visit every entity) | `query_no_terms.12am` | 11 | Queries |
+| the query has 2 terms but the block takes 1 parameter | `query_param_count.12am` | 14 | Queries |
+| the query has 1 term but the block takes no parameters | `query_param_count_none.12am` | 9 | Queries |
+| the query has 1 term but the block takes 2 parameters | `query_param_count_too_many.12am` | 9 | Queries |
+| the type `Position` appears twice in the query (as a term and in `with:`) | `query_repeated_in_filter.12am` | 9 | Queries |
+| the type `Position` appears twice in the query | `query_repeated_type.12am` | 9 | Queries |
+| a query term must be a component or `Entity`; `Score` is a resource | `query_resource_term.12am` | 8 | Queries |
+| the tag `Frozen` can't be a query term (a tag has no value to bind); hint: filter with `with: Frozen` | `query_tag_as_term.12am` | 11 | Queries |
+| unknown query filter `withou`; the label names the two filters there are, `with:` and `without:` | `query_unknown_filter.12am` | 11 | Queries |
+| the type `Frozen` appears twice in the query (in `with:` and in `without:`) | `query_with_and_without_same.12am` | 11 | Queries |
+| can't assign to an element of `PRIMES`: a constant can't be changed | `readonly_constant_element.12am` | 6 | What can be modified; Lists |
+| can't assign to `ORIGIN.x`: `ORIGIN` is a constant, and a part of a constant can't be changed | `readonly_constant_field.12am` | 11 | What can be modified; Lists |
+| can't assign to `LIMIT`: a constant can't be changed | `readonly_constant.12am` | 6 | What can be modified; Lists |
+| can't assign to `LIMIT`: a constant can't be changed | `readonly_constant_in_function.12am` | 7 | What can be modified; Lists |
+| can't assign to `i`: the parameter of a counting loop is read-only | `readonly_counting_param.12am` | 5 | What can be modified; Lists |
+| can't assign to `i`: the index parameter of `each_with_index` is read-only | `readonly_each_with_index_param.12am` | 6 | What can be modified; Lists |
+| can't assign to `v.y`: `v` is a function parameter, and a part of a read-only value is read-only | `readonly_function_param_field.12am` | 10 | What can be modified; Lists |
+| can't assign to `n`: a function parameter is read-only | `readonly_function_param.12am` | 5 | What can be modified; Lists |
+| can't assign to `pt.x`: `pt` is the parameter of a list iteration, and a part of a read-only value is read-only | `readonly_list_iteration_param_field.12am` | 11 | What can be modified; Lists |
+| can't assign to `x`: the parameter of a list iteration is read-only (to update elements, loop over indexes) | `readonly_list_iteration_param.12am` | 6 | What can be modified; Lists |
+| can't assign to `k`: a method parameter is read-only | `readonly_method_param.12am` | 9 | What can be modified; Lists |
+| can't assign to `hit.damage`: the parameter of `on` is a read-only copy | `readonly_on_param.12am` | 10 | What can be modified; Lists |
+| can't assign to `hit`: the parameter of `on` is read-only | `readonly_on_param_whole.12am` | 10 | What can be modified; Lists |
+| can't assign to `self.count`: `self` is read-only (methods cannot modify the receiver) | `readonly_self_dot_field.12am` | 8 | What can be modified; Lists |
+| can't assign to the field `count` inside a method: methods cannot modify the receiver | `readonly_self_field.12am` | 8 | What can be modified; Lists |
+| can't assign to `Time.elapsed`: it is read-only | `readonly_time_elapsed.12am` | 4 | What can be modified; Lists |
+| can't assign to `Time.tick`: it is read-only | `readonly_time_tick.12am` | 4 | What can be modified; Lists |
+| can't assign to `i`: the parameter of a counting loop is read-only | `readonly_upto_param.12am` | 5 | What can be modified; Lists |
+| the recursive function `fact` needs a declared return type: its call to itself needs a type that is still being inferred | `recursion_direct_no_type.12am` | 6 | Functions |
+| the recursive function `is_even` needs a declared return type: neither `is_even` nor `is_odd` declares one | `recursion_mutual_no_type.12am` | 11 | Functions |
+| `remove` takes components and tags; `Vec2` is a struct | `remove_non_component.12am` | 10 | Entities |
+| can't find the required file `no_such_helper_file.12am` (looked for next to this file) | `require_not_found.12am` | 4 | Programs and files |
+| `require` is allowed at the top level only | `require_not_top_level.12am` | 7 | Programs and files |
+| the resource `Score` is not a value type and can't be the type of a field | `resource_as_field_type.12am` | 9 | Resources |
+| the resource `Score` as a whole is not a value; read its fields (`Score.points`) | `resource_as_value.12am` | 8 | Resources |
+| the field `points` of the resource `Score` needs a default | `resource_field_no_default.12am` | 5 | Resources |
+| unknown variable `square`: it was created inside the `do` block (line 5) and does not exist after it | `scope_after_do_block.12am` | 7 | Variables and values; Programs and files |
+| unknown variable `label`: it was created inside the `if` (line 6) and does not exist after it; create it before the `if` | `scope_after_if.12am` | 8 | Variables and values; Programs and files |
+| unknown variable `seen`: it was created inside the `while` body (line 6) and does not exist after the loop | `scope_after_while.12am` | 9 | Variables and values; Programs and files |
+| unknown variable `i`: a block parameter does not exist after its block | `scope_block_param_after_block.12am` | 7 | Variables and values; Programs and files |
+| `self` can be used only inside a method of a struct or component | `self_outside_method.12am` | 5 | Structs: Methods |
+| the component `Position` can't be listed bare in `spawn`: its fields `x` and `y` have no defaults | `spawn_bare_no_defaults.12am` | 9 | Entities |
+| the component `Health` can't be listed bare in `spawn`: its field `hp` has no default | `spawn_bare_partial_defaults.12am` | 9 | Entities |
+| `spawn` takes components and tags; `Vec2` is a struct | `spawn_non_component.12am` | 9 | Entities |
+| `spawn` lists the tag `Player` twice | `spawn_tag_twice.12am` | 6 | Entities |
+| `spawn` lists the component `Position` twice | `spawn_type_twice.12am` | 9 | Entities |
+| the struct `Node` contains itself through the field `child` (allowed only through a list, `[Node]`) | `struct_contains_itself.12am` | 6 | Structs |
+| the struct `Parent` contains itself through `Parent.child` and `Child.parent`; one diagnostic for the cycle | `struct_contains_itself_mutual.12am` | 5 | Structs |
+| `==` is provided for every struct and can't be redefined (it is also not one of the operator names a method may have) | `struct_redefines_equality.12am` | 8 | Structs |
+| `to_s` is provided for every struct and can't be redefined | `struct_redefines_to_s.12am` | 8 | Structs |
+| syntax error: unexpected `=` inside an expression (assignment is a statement, not an expression) | `syntax_assignment_as_expression.12am` | 5 | Grammar; Lexical structure |
+| syntax error: unexpected `4` after `double` (a call with arguments needs parentheses) | `syntax_call_without_parentheses.12am` | 8 | Grammar; Lexical structure |
+| syntax error: `gpu` is a reserved word (it has no use in 0.1) and can't name a variable | `syntax_gpu_reserved.12am` | 4 | Grammar; Lexical structure |
+| syntax error: `tag` is a keyword and can't name a variable; a type name is expected after `tag`, found `=` | `syntax_keyword_as_variable.12am` | 4 | Grammar; Lexical structure |
+| syntax error: a type name (beginning with an uppercase letter) is expected after `struct`, found `vec2` | `syntax_lowercase_type_name.12am` | 4 | Grammar; Lexical structure |
+| syntax error: the parameter `n` needs a type (`n: Type`); found `)` where `:` is expected | `syntax_param_without_type.12am` | 4 | Grammar; Lexical structure |
+| syntax error: unexpected `def` in a resource body (a resource holds fields only) | `syntax_resource_method.12am` | 7 | Grammar; Lexical structure |
+| syntax error: unexpected `end`; no block is open | `syntax_stray_end.12am` | 6 | Grammar; Lexical structure |
+| syntax error: unexpected `(` after the system name (a system has no parameters) | `syntax_system_with_parameters.12am` | 4 | Grammar; Lexical structure |
+| the `def` block is never closed (an `end` is missing); the diagnostic points at the `def` that opened it, not at the end of the file | `syntax_unclosed_def.12am` | 4 | Grammar; Lexical structure |
+| the `do` block is never closed (an `end` is missing); the diagnostic points at the `do` that opened it, not at the end of the file | `syntax_unclosed_do.12am` | 4 | Grammar; Lexical structure |
+| the `if` block is never closed (an `end` is missing); the diagnostic points at the `if` that opened it, not at the end of the file | `syntax_unclosed_if.12am` | 5 | Grammar; Lexical structure |
+| the `struct` block is never closed (an `end` is missing); the diagnostic points at the `struct` that opened it, not at the end of the file | `syntax_unclosed_struct.12am` | 4 | Grammar; Lexical structure |
+| the `system` block is never closed (an `end` is missing); the diagnostic points at the `system` that opened it, not at the end of the file | `syntax_unclosed_system.12am` | 4 | Grammar; Lexical structure |
+| the `while` block is never closed (an `end` is missing); the diagnostic points at the `while` that opened it, not at the end of the file | `syntax_unclosed_while.12am` | 5 | Grammar; Lexical structure |
+| syntax error: unexpected `)` where an expression is expected | `syntax_unexpected_token.12am` | 5 | Grammar; Lexical structure |
+| syntax error: unexpected `elsif` (an `unless` takes only an optional `else`) | `syntax_unless_elsif.12am` | 8 | Grammar; Lexical structure |
+| unterminated string literal; the diagnostic points at the opening quote | `syntax_unterminated_string.12am` | 4 | Grammar; Lexical structure |
+| a variable name can't end in `?` (only function and method names may) | `syntax_variable_question_mark.12am` | 4 | Grammar; Lexical structure |
+| `move` is a system; systems are not called by name (they run on `World.tick`) | `system_called.12am` | 8 | Systems and ticks |
+| `move` is a system; systems are not called by name (they run on `World.tick`) | `system_called_with_parens.12am` | 8 | Systems and ticks |
+| the tag `Frozen` is not a value type and can't be the type of a field | `tag_as_field_type.12am` | 7 | Components and tags |
+| the tag `Frozen` has no value and can't be constructed; write the bare name `Frozen` | `tag_constructed.12am` | 6 | Components and tags |
+| the tag `Frozen` has no value and can't be read from an entity; use `e.has?(Frozen)` | `tag_indexed.12am` | 7 | Components and tags |
+| the tag `Frozen` has no value and can't be stored in a variable | `tag_in_variable.12am` | 6 | Components and tags |
+| three independent errors, ALL reported in one run, in source order: | `three_errors.12am` | 9, 13, 17 | Errors |
+| unknown variable `total` inside the function `show`: top-level variables are not visible in functions (state belongs in a resource or on an entity) | `toplevel_variable_in_function.12am` | 7 | Variables and values; Programs and files |
+| unknown variable `speed` inside the system `move`: top-level variables are not visible in systems (state belongs in a resource or on an entity) | `toplevel_variable_in_system.12am` | 7 | Variables and values; Programs and files |
+| type mismatch: `count` is declared `Int`, found a `Float` (a `Float` does not convert to `Int`) | `type_annotation.12am` | 4 | Types; Expressions |
+| type mismatch: the field `y` of `Vec2` is a `Float`, found a `String` | `type_argument_constructor.12am` | 9 | Types; Expressions |
+| type mismatch: the argument `n` of `double` is an `Int`, found a `Float` (a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`) | `type_argument_float_to_int.12am` | 8 | Types; Expressions |
+| type mismatch: the argument `n` of `double` is an `Int`, found a `String` | `type_argument.12am` | 8 | Types; Expressions |
+| type mismatch: a `case` used as a value needs branches of one type; found a `String` and an `Int` | `type_case_branches.12am` | 7 | Types; Expressions |
+| type mismatch: the `case` value is an `Int`, but this `when` candidate is a `String` | `type_case_when.12am` | 7 | Types; Expressions |
+| type mismatch: `==` can't compare an `Int` with a `String` | `type_equality_different_types.12am` | 5 | Types; Expressions |
+| type mismatch: the field `hp` of `Health` is an `Int`, found a `String` | `type_field_assign_component.12am` | 9 | Types; Expressions |
+| type mismatch: the field `x` of `Vec2` is a `Float`, found a `String` | `type_field_assign.12am` | 10 | Types; Expressions |
+| type mismatch: the default of the field `hp` must be an `Int`, found a `String` | `type_field_default.12am` | 5 | Types; Expressions |
+| type mismatch: an `if` used as a value needs branches of one type; found a `String` and an `Int` | `type_if_branches.12am` | 5 | Types; Expressions |
+| type mismatch: a list index must be an `Int`, found a `String` | `type_index_not_int.12am` | 5 | Types; Expressions |
+| type mismatch: an element of a `[Int]` is an `Int`, found a `String` | `type_list_element_assign.12am` | 5 | Types; Expressions |
+| type mismatch: the elements of a list literal share one type; the first is an `Int`, this one is a `String` | `type_list_elements.12am` | 4 | Types; Expressions |
+| type mismatch: `push` on a `[Int]` takes an `Int`, found a `String` | `type_list_push.12am` | 5 | Types; Expressions |
+| type mismatch: `+` can't be applied to an `Int` and a `String` | `type_operands.12am` | 4 | Types; Expressions |
+| type mismatch: `+` can't join a `[Int]` and a `[String]` | `type_operands_list_concat.12am` | 6 | Types; Expressions |
+| type mismatch: the operands of `&&` must be `Bool`, found an `Int` | `type_operands_logical.12am` | 6 | Types; Expressions |
+| type mismatch: unary `-` can't be applied to a `String` | `type_operands_negate_string.12am` | 5 | Types; Expressions |
+| type mismatch: `!` needs a `Bool`, found an `Int` | `type_operands_not.12am` | 5 | Types; Expressions |
+| type mismatch: the right operand of `+` on `Vec2` (parameter `other`) is a `Vec2`, found an `Int` | `type_operands_operator_method_argument.12am` | 14 | Types; Expressions |
+| type mismatch: `*` on a `String` needs an `Int` count, found a `String` | `type_operands_repeat_count.12am` | 4 | Types; Expressions |
+| `+` is not defined for `Vec2` (the struct has no method named `+`) | `type_operands_struct_no_operator.12am` | 11 | Types; Expressions |
+| type mismatch: `*` can't be applied to an `Int` and a `Vec2` (an operator method applies only when the struct is the left operand) | `type_operands_struct_on_right.12am` | 14 | Types; Expressions |
+| type mismatch: `Score.points` is an `Int`, found a `Float` (a `Float` does not convert to `Int`) | `type_resource_field_assign.12am` | 8 | Types; Expressions |
+| type mismatch: `name_of` returns `String`, but its last expression is an `Int` | `type_return.12am` | 5 | Types; Expressions |
+| the return type of `pick` can't be inferred: it returns a `String` on line 5 and an `Int` on line 6 | `type_return_inconsistent.12am` | 6 | Types; Expressions |
+| `answer` declares the return type `Int`, but its body can end without a value | `type_return_missing_value.12am` | 4 | Types; Expressions |
+| type mismatch: `label` returns `String`, but `return` is given an `Int` | `type_return_statement.12am` | 5 | Types; Expressions |
+| type mismatch: the branches of `? :` are an `Int` and a `String` | `type_ternary_branches.12am` | 5 | Types; Expressions |
+| unknown component `Postion`, suggesting `Position` | `unknown_component_query_suggest.12am` | 14 | Errors (suggestions); the section of the thing named |
+| unknown constant (or type) `GRAVTY`, suggesting `GRAVITY` | `unknown_constant_suggest.12am` | 6 | Errors (suggestions); the section of the thing named |
+| unknown variant `Purple` of the enum `Team`, with no suggestion | `unknown_enum_variant.12am` | 10 | Errors (suggestions); the section of the thing named |
+| unknown variant `Gren` of the enum `Team`, suggesting `Green` | `unknown_enum_variant_suggest.12am` | 10 | Errors (suggestions); the section of the thing named |
+| unknown field `heigt` on `Rect`, suggesting `height` | `unknown_field_assign_suggest.12am` | 10 | Errors (suggestions); the section of the thing named |
+| unknown field (or method) `opacity` on `Rect`, with no suggestion | `unknown_field.12am` | 10 | Errors (suggestions); the section of the thing named |
+| unknown field (or method) `depth` on `Position`, with no suggestion | `unknown_field_query_param.12am` | 11 | Errors (suggestions); the section of the thing named |
+| unknown field (or method) `widt` on `Rect`, suggesting `width` | `unknown_field_suggest.12am` | 10 | Errors (suggestions); the section of the thing named |
+| unknown function `frobnicate`, with no suggestion | `unknown_function.12am` | 8 | Errors (suggestions); the section of the thing named |
+| unknown function `total`: `total(…)` is always a function call, and `total` is only a local variable | `unknown_function_local_variable.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown function `doubl`, suggesting `double` | `unknown_function_suggest.12am` | 8 | Errors (suggestions); the section of the thing named |
+| unknown constant `Math::TAU`, with no suggestion (`Math` has `PI` and `E`) | `unknown_math_constant.12am` | 4 | Errors (suggestions); the section of the thing named |
+| unknown function `Math.sqr`, suggesting `sqrt` | `unknown_math_function_suggest.12am` | 4 | Errors (suggestions); the section of the thing named |
+| unknown method `frobnicate` on a list (`[Int]`), with no suggestion | `unknown_method_builtin.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown method `explode` on `Rect`, with no suggestion | `unknown_method.12am` | 14 | Errors (suggestions); the section of the thing named |
+| unknown method `lengh` on a list (`[Int]`), suggesting `length` | `unknown_method_list_suggest.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown method `upcas` on `String`, suggesting `upcase` | `unknown_method_string_suggest.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown method `scale` on `Rect`, suggesting `scaled` | `unknown_method_suggest.12am` | 14 | Errors (suggestions); the section of the thing named |
+| unknown method `upcase` on `Int` (it exists on `String` only) | `unknown_method_wrong_type.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown field `point` on the resource `Score`, suggesting `points` | `unknown_resource_field_suggest.12am` | 9 | Errors (suggestions); the section of the thing named |
+| unknown component or tag `Playr` in `with:`, suggesting `Player` | `unknown_tag_filter_suggest.12am` | 11 | Errors (suggestions); the section of the thing named |
+| unknown field `elapse` on `Time`, suggesting `elapsed` | `unknown_time_field_suggest.12am` | 4 | Errors (suggestions); the section of the thing named |
+| unknown type `Flot`, suggesting the built-in `Float` | `unknown_type_builtin_suggest.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown type `Vec3`, suggesting `Vec2` | `unknown_type_constructor_suggest.12am` | 9 | Errors (suggestions); the section of the thing named |
+| unknown type `Polygon`, with no suggestion | `unknown_type.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown type `Quaternion`, with no suggestion | `unknown_type_parameter.12am` | 4 | Errors (suggestions); the section of the thing named |
+| unknown type `Vec3`, suggesting `Vec2` | `unknown_type_suggest.12am` | 10 | Errors (suggestions); the section of the thing named |
+| unknown variable (or function) `zzyzx`, with no suggestion | `unknown_variable.12am` | 6 | Errors (suggestions); the section of the thing named |
+| unknown variable (or function) `totl`, suggesting `total` | `unknown_variable_suggest.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown `World` operation `tik`, suggesting `tick` | `unknown_world_method_suggest.12am` | 8 | Errors (suggestions); the section of the thing named |
+| an `if` used as a value needs an `else` branch | `value_if_without_else.12am` | 5 | Types; Expressions |
+| `greet` returns nothing, so its call can't be used as a value | `void_as_value.12am` | 8 | Functions |
+| `greet` returns nothing, so its call can't be used as a value (here, as an argument of `puts`) | `void_in_expression.12am` | 8 | Functions |

@@ -1,5 +1,5 @@
 error: unknown type `Vec3`
-  --> tests/fail/unknown_type_suggest.grem:10:8
+  --> tests/fail/unknown_type_suggest.12am:10:8
    |
 10 |   pos: Vec3
    |        ^^^^ did you mean `Vec2`?

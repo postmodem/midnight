@@ -43,7 +43,7 @@ pub enum Item {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Require {
-    /// The string as written, without `.grem`.
+    /// The string as written, without `.12am`.
     pub path: String,
     /// The whole `require "…"`.
     pub span: Span,

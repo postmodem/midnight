@@ -1,5 +1,5 @@
 error: missing field `y` in `Vec2(…)`
- --> tests/fail/args_missing_field.grem:9:5
+ --> tests/fail/args_missing_field.12am:9:5
   |
 9 | v = Vec2(x: 1)
   |     ^^^^^^^^^^ `y` has no default

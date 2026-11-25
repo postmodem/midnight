@@ -1,5 +1,5 @@
 error: unknown field or method `heigt` for `Rect`
-  --> tests/fail/unknown_field_assign_suggest.grem:10:3
+  --> tests/fail/unknown_field_assign_suggest.12am:10:3
    |
 10 | r.heigt = 5
    |   ^^^^^ did you mean `height`?

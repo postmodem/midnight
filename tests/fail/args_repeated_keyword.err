@@ -1,5 +1,5 @@
 error: field `x` is given twice
- --> tests/fail/args_repeated_keyword.grem:9:22
+ --> tests/fail/args_repeated_keyword.12am:9:22
   |
 9 | v = Vec2(x: 1, y: 2, x: 3)
   |                      ^

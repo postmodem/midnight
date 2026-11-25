@@ -1,5 +1,5 @@
 error: unknown function `frobnicate`
- --> tests/fail/unknown_function.grem:8:6
+ --> tests/fail/unknown_function.12am:8:6
   |
 8 | puts frobnicate(4)
   |      ^^^^^^^^^^

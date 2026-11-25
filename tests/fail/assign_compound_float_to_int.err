@@ -1,10 +1,10 @@
 error: can't assign `Float` to `n`, which is `Int`
- --> tests/fail/assign_compound_float_to_int.grem:5:1
+ --> tests/fail/assign_compound_float_to_int.12am:5:1
   |
 5 | n += 0.5
   | ^^^^^^^^ `n + 0.5` is a `Float`
 note: `n` gets its type here
- --> tests/fail/assign_compound_float_to_int.grem:4:1
+ --> tests/fail/assign_compound_float_to_int.12am:4:1
   |
 4 | n = 1
   | -

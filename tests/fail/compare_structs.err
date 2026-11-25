@@ -1,5 +1,5 @@
 error: `<` can't compare `Vec2` values
-  --> tests/fail/compare_structs.grem:11:6
+  --> tests/fail/compare_structs.12am:11:6
    |
 11 | puts a < b
    |      ^^^^^ `<`, `<=`, `>` and `>=` work on numbers and strings

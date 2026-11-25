@@ -1,10 +1,10 @@
 error: can't assign `Float` to `n`, which is `Int`
- --> tests/fail/assign_float_to_int_variable.grem:5:5
+ --> tests/fail/assign_float_to_int_variable.12am:5:5
   |
 5 | n = 2.5
   |     ^^^ a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`
 note: a variable keeps the type of its first value: `n` gets its type here
- --> tests/fail/assign_float_to_int_variable.grem:4:1
+ --> tests/fail/assign_float_to_int_variable.12am:4:1
   |
 4 | n = 1
   | -

@@ -1,5 +1,5 @@
 error: expected `String`, found `Int`
- --> tests/fail/type_return.grem:5:3
+ --> tests/fail/type_return.12am:5:3
   |
 5 |   n
   |   ^

@@ -1,5 +1,5 @@
 error: `Frozen` is a tag and can't be constructed
- --> tests/fail/tag_constructed.grem:6:7
+ --> tests/fail/tag_constructed.12am:6:7
   |
 6 | spawn Frozen()
   |       ^^^^^^ a tag has no value; name it bare, as in `spawn Frozen`

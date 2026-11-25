@@ -1,7 +1,7 @@
 # Variables are created by their first assignment, with or without a type
 # annotation, and keep that type.
 count = 0
-name = "gremlin"
+name = "midnight"
 ratio: Float = 1
 scores: [Int] = []
 flag = true

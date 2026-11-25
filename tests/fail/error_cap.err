@@ -1,119 +1,119 @@
 error: unknown variable or function `missing_01`
- --> tests/fail/error_cap.grem:4:6
+ --> tests/fail/error_cap.12am:4:6
   |
 4 | puts missing_01
   |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_02`
- --> tests/fail/error_cap.grem:5:6
+ --> tests/fail/error_cap.12am:5:6
   |
 5 | puts missing_02
   |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_03`
- --> tests/fail/error_cap.grem:6:6
+ --> tests/fail/error_cap.12am:6:6
   |
 6 | puts missing_03
   |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_04`
- --> tests/fail/error_cap.grem:7:6
+ --> tests/fail/error_cap.12am:7:6
   |
 7 | puts missing_04
   |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_05`
- --> tests/fail/error_cap.grem:8:6
+ --> tests/fail/error_cap.12am:8:6
   |
 8 | puts missing_05
   |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_06`
- --> tests/fail/error_cap.grem:9:6
+ --> tests/fail/error_cap.12am:9:6
   |
 9 | puts missing_06
   |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_07`
-  --> tests/fail/error_cap.grem:10:6
+  --> tests/fail/error_cap.12am:10:6
    |
 10 | puts missing_07
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_08`
-  --> tests/fail/error_cap.grem:11:6
+  --> tests/fail/error_cap.12am:11:6
    |
 11 | puts missing_08
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_09`
-  --> tests/fail/error_cap.grem:12:6
+  --> tests/fail/error_cap.12am:12:6
    |
 12 | puts missing_09
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_10`
-  --> tests/fail/error_cap.grem:13:6
+  --> tests/fail/error_cap.12am:13:6
    |
 13 | puts missing_10
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_11`
-  --> tests/fail/error_cap.grem:14:6
+  --> tests/fail/error_cap.12am:14:6
    |
 14 | puts missing_11
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_12`
-  --> tests/fail/error_cap.grem:15:6
+  --> tests/fail/error_cap.12am:15:6
    |
 15 | puts missing_12
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_13`
-  --> tests/fail/error_cap.grem:16:6
+  --> tests/fail/error_cap.12am:16:6
    |
 16 | puts missing_13
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_14`
-  --> tests/fail/error_cap.grem:17:6
+  --> tests/fail/error_cap.12am:17:6
    |
 17 | puts missing_14
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_15`
-  --> tests/fail/error_cap.grem:18:6
+  --> tests/fail/error_cap.12am:18:6
    |
 18 | puts missing_15
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_16`
-  --> tests/fail/error_cap.grem:19:6
+  --> tests/fail/error_cap.12am:19:6
    |
 19 | puts missing_16
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_17`
-  --> tests/fail/error_cap.grem:20:6
+  --> tests/fail/error_cap.12am:20:6
    |
 20 | puts missing_17
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_18`
-  --> tests/fail/error_cap.grem:21:6
+  --> tests/fail/error_cap.12am:21:6
    |
 21 | puts missing_18
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_19`
-  --> tests/fail/error_cap.grem:22:6
+  --> tests/fail/error_cap.12am:22:6
    |
 22 | puts missing_19
    |      ^^^^^^^^^^
 
 error: unknown variable or function `missing_20`
-  --> tests/fail/error_cap.grem:23:6
+  --> tests/fail/error_cap.12am:23:6
    |
 23 | puts missing_20
    |      ^^^^^^^^^^

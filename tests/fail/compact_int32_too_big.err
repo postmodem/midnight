@@ -1,5 +1,5 @@
 error: 2147483648 does not fit in `Int32`
- --> tests/fail/compact_int32_too_big.grem:8:12
+ --> tests/fail/compact_int32_too_big.12am:8:12
   |
 8 | r = Record(2147483648)
   |            ^^^^^^^^^^ `Int32` holds -2147483648 to 2147483647

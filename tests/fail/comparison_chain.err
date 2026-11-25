@@ -1,5 +1,5 @@
 error: comparisons can't be chained
- --> tests/fail/comparison_chain.grem:5:12
+ --> tests/fail/comparison_chain.12am:5:12
   |
 5 | puts 1 < x < 3
   |            ^ join two comparisons with `&&`

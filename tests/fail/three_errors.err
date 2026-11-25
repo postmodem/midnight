@@ -1,17 +1,17 @@
 error: unknown variable or function `totl`
- --> tests/fail/three_errors.grem:9:8
+ --> tests/fail/three_errors.12am:9:8
   |
 9 |   puts totl
   |        ^^^^ did you mean `total`?
 
 error: expected `Int` or `Float`, found `String`
-  --> tests/fail/three_errors.grem:13:12
+  --> tests/fail/three_errors.12am:13:12
    |
 13 |   puts 1 + "two"
    |            ^^^^^
 
 error: condition must be `Bool`, found `Int`
-  --> tests/fail/three_errors.grem:17:6
+  --> tests/fail/three_errors.12am:17:6
    |
 17 |   if n
    |      ^ there is no truthiness: compare it, like `x != 0`

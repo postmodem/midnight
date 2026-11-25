@@ -1,5 +1,5 @@
 error: expected `Int`, found `String`
- --> tests/fail/type_case_when.grem:7:6
+ --> tests/fail/type_case_when.12am:7:6
   |
 7 | when "two" then puts "two"
   |      ^^^^^ `when` values are compared with the `case` value, which is `Int`

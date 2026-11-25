@@ -1,5 +1,5 @@
 error: can't assign to `hit`
-  --> tests/fail/readonly_on_param_whole.grem:10:5
+  --> tests/fail/readonly_on_param_whole.12am:10:5
    |
 10 |     hit = Hit(0)
    |     ^^^ `hit` is the parameter of an `on` block, a read-only copy of the event

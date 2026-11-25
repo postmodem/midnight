@@ -14,8 +14,8 @@ mod typed;
 fn parse(text: &str) -> (SourceMap, ast::Program) {
     let mut sources = SourceMap::new();
     let file = sources.add(
-        "test.grem".to_string(),
-        PathBuf::from("test.grem"),
+        "test.12am".to_string(),
+        PathBuf::from("test.12am"),
         text.to_string(),
     );
     let items = parser::parse(file, text).unwrap_or_else(|error| {

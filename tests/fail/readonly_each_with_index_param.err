@@ -1,5 +1,5 @@
 error: can't assign to `i`
- --> tests/fail/readonly_each_with_index_param.grem:6:3
+ --> tests/fail/readonly_each_with_index_param.12am:6:3
   |
 6 |   i += 1
   |   ^ `i` is the index of a list iteration, which is read-only

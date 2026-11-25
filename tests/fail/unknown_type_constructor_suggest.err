@@ -1,5 +1,5 @@
 error: unknown type `Vec3`
- --> tests/fail/unknown_type_constructor_suggest.grem:9:6
+ --> tests/fail/unknown_type_constructor_suggest.12am:9:6
   |
 9 | puts Vec3(1, 2)
   |      ^^^^ did you mean `Vec2`?

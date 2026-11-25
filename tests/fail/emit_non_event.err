@@ -1,5 +1,5 @@
 error: `emit` needs an event, found `Vec2`
- --> tests/fail/emit_non_event.grem:9:6
+ --> tests/fail/emit_non_event.12am:9:6
   |
 9 | emit Vec2(1, 2)
   |      ^^^^^^^^^^ events are declared with `event`

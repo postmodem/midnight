@@ -1,1 +1,1 @@
-tests/panic/compact_int16_underflow.grem:9: runtime error: -32769 does not fit in Int16
+tests/panic/compact_int16_underflow.12am:9: runtime error: -32769 does not fit in Int16

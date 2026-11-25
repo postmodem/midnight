@@ -1,5 +1,5 @@
 error: `==` is provided for every type and can't be redefined
- --> tests/fail/struct_redefines_equality.grem:8:7
+ --> tests/fail/struct_redefines_equality.12am:8:7
   |
 8 |   def ==(other: Vec2) -> Bool
   |       ^^

@@ -1,5 +1,5 @@
 error: this `while` is never closed
- --> tests/fail/syntax_unclosed_while.grem:5:1
+ --> tests/fail/syntax_unclosed_while.12am:5:1
   |
 5 | while n > 0
   | ^^^^^ expected a matching `end`

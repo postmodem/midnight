@@ -1,5 +1,5 @@
 error: unknown method `tik` for `World`
- --> tests/fail/unknown_world_method_suggest.grem:8:7
+ --> tests/fail/unknown_world_method_suggest.12am:8:7
   |
 8 | World.tik
   |       ^^^ did you mean `tick`?

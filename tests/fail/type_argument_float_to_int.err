@@ -1,5 +1,5 @@
 error: expected `Int`, found `Float`
- --> tests/fail/type_argument_float_to_int.grem:8:13
+ --> tests/fail/type_argument_float_to_int.12am:8:13
   |
 8 | puts double(2.5)
   |             ^^^ a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`

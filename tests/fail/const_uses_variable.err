@@ -1,5 +1,5 @@
 error: not a constant expression
- --> tests/fail/const_uses_variable.grem:5:8
+ --> tests/fail/const_uses_variable.12am:5:8
   |
 5 | AREA = size * size
   |        ^^^^ `size` is a variable; a constant's value can use literals, constants, enum variants, operators, constructors, list literals and `Math` functions

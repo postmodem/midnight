@@ -107,7 +107,7 @@ impl<'a> Cx<'a> {
         }
     }
 
-    /// A `GrString` expression for a literal.
+    /// A `MnString` expression for a literal.
     fn str_lit(&mut self, text: &str) -> String {
         if text.is_empty() {
             return "NULL".to_string();
@@ -117,15 +117,15 @@ impl<'a> Cx<'a> {
         if index == next {
             let _ = writeln!(
                 self.string_defs,
-                "GR_STR_LIT(str{index}, {}, {});",
+                "MN_STR_LIT(str{index}, {}, {});",
                 text.len(),
                 names::c_string(text.as_bytes())
             );
         }
-        format!("((GrString)&str{index})")
+        format!("((MnString)&str{index})")
     }
 
-    /// A `GrLoc` expression for the line a span starts on.
+    /// A `MnLoc` expression for the line a span starts on.
     fn loc(&mut self, span: Span) -> String {
         let next = self.files.len();
         let index = *self.files.entry(span.file.0).or_insert(next);
@@ -137,7 +137,7 @@ impl<'a> Cx<'a> {
                 names::c_string(name.as_bytes())
             );
         }
-        format!("(GrLoc){{src{index}, {}}}", self.sources.line(span))
+        format!("(MnLoc){{src{index}, {}}}", self.sources.line(span))
     }
 
     /// A `#line` directive for the line a span starts on.
@@ -170,7 +170,7 @@ impl<'a> Cx<'a> {
         (name.to_string(), ids.len())
     }
 
-    /// Defines the static `GrQuery` of one `each` or `World.count`.
+    /// Defines the static `MnQuery` of one `each` or `World.count`.
     fn query(&mut self, query: &Query) -> String {
         let name = format!("q{}", self.next_static());
         let mut with: Vec<ComponentId> = query
@@ -186,18 +186,18 @@ impl<'a> Cx<'a> {
         let (without, without_count) = self.id_list(&format!("{name}_without"), &query.without);
         let _ = writeln!(
             self.statics,
-            "static GrQuery {name} = {{{with}, {with_count}, {without}, {without_count}, NULL, 0, 0, 0}};"
+            "static MnQuery {name} = {{{with}, {with_count}, {without}, {without_count}, NULL, 0, 0, 0}};"
         );
         name
     }
 
-    /// Defines the static `GrBundle` of one `spawn` or `add`.
+    /// Defines the static `MnBundle` of one `spawn` or `add`.
     fn bundle(&mut self, components: &[ComponentId]) -> String {
         let name = format!("b{}", self.next_static());
         let (ids, count) = self.id_list(&format!("{name}_ids"), components);
         let _ = writeln!(
             self.statics,
-            "static GrBundle {name} = {{{ids}, {count}, 0, 0, false}};"
+            "static MnBundle {name} = {{{ids}, {count}, 0, 0, false}};"
         );
         name
     }
@@ -249,7 +249,7 @@ impl<'a> Cx<'a> {
         let tables = self.tables();
 
         let mut out = String::new();
-        out.push_str("#include \"gremlin_rt.h\"\n\n#include <math.h>\n\n");
+        out.push_str("#include \"midnight_rt.h\"\n\n#include <math.h>\n\n");
         out.push_str(QUIET);
         for section in [&self.file_defs, &self.string_defs] {
             if !section.is_empty() {
@@ -283,10 +283,10 @@ impl<'a> Cx<'a> {
         out.push_str(&tables);
         out.push_str(
             "int main(void) {\n    \
-             gr_start(&program);\n    \
+             mn_start(&program);\n    \
              init_globals();\n    \
              run_main();\n    \
-             gr_finish();\n    \
+             mn_finish();\n    \
              return 0;\n}\n",
         );
         number_lines(&out)
@@ -343,7 +343,7 @@ impl<'a> Cx<'a> {
     }
 
     /// The component and event descriptions, the list of systems and the
-    /// `GrProgram`.
+    /// `MnProgram`.
     fn tables(&mut self) -> String {
         let prog = self.prog;
         let mut out = String::new();
@@ -363,7 +363,7 @@ impl<'a> Cx<'a> {
             }
         };
         if !prog.components.is_empty() {
-            out.push_str("static const GrComponentInfo component_info[] = {\n");
+            out.push_str("static const MnComponentInfo component_info[] = {\n");
             for component in &prog.components {
                 let ty = component.record.map(Type::Record);
                 out.push_str(&info(self, &component.name, ty.as_ref()));
@@ -371,7 +371,7 @@ impl<'a> Cx<'a> {
             out.push_str("};\n\n");
         }
         if !prog.events.is_empty() {
-            out.push_str("static const GrEventInfo event_info[] = {\n");
+            out.push_str("static const MnEventInfo event_info[] = {\n");
             for event in &prog.events {
                 let ty = Type::Record(event.record);
                 out.push_str(&info(self, &event.name, Some(&ty)));
@@ -394,7 +394,7 @@ impl<'a> Cx<'a> {
         };
         let _ = writeln!(
             out,
-            "static const GrProgram program = {{\n    {},\n    {},\n    {},\n    drop_globals,\n}};\n",
+            "static const MnProgram program = {{\n    {},\n    {},\n    {},\n    drop_globals,\n}};\n",
             table("component_info", prog.components.len()),
             table("event_info", prog.events.len()),
             table("systems", prog.systems.len()),

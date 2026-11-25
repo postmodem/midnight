@@ -1,10 +1,10 @@
 error: unknown variable or function `square`
- --> tests/fail/scope_after_do_block.grem:7:6
+ --> tests/fail/scope_after_do_block.12am:7:6
   |
 7 | puts square
   |      ^^^^^^ `square` was created inside the `do` block and ends with it; create it before the `do` block
 note: `square` is created here
- --> tests/fail/scope_after_do_block.grem:5:3
+ --> tests/fail/scope_after_do_block.12am:5:3
   |
 5 |   square = i * i
   |   ------

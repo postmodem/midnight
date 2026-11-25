@@ -1,5 +1,5 @@
 error: `if` used as a value needs an `else`
- --> tests/fail/value_if_without_else.grem:5:9
+ --> tests/fail/value_if_without_else.12am:5:9
   |
 5 | label = if hp > 5 then "ok" end
   |         ^^^^^^^^^^^^^^^^^^^^^^^ without one there is no value when the other branch would run

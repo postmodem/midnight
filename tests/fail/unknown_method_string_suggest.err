@@ -1,5 +1,5 @@
 error: unknown method `upcas` for `String`
- --> tests/fail/unknown_method_string_suggest.grem:5:11
+ --> tests/fail/unknown_method_string_suggest.12am:5:11
   |
 5 | puts name.upcas
   |           ^^^^^ did you mean `upcase`?

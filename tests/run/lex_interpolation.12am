@@ -13,7 +13,7 @@ def double(n: Int) -> Int
   n * 2
 end
 
-name = "gremlin"
+name = "midnight"
 count = 3
 puts "hello #{name}"
 puts "#{count} + 1 = #{count + 1}"

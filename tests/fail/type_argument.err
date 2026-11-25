@@ -1,5 +1,5 @@
 error: expected `Int`, found `String`
- --> tests/fail/type_argument.grem:8:13
+ --> tests/fail/type_argument.12am:8:13
   |
 8 | puts double("four")
   |             ^^^^^^

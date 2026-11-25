@@ -1,5 +1,5 @@
 error: unknown component `Playr`
-  --> tests/fail/unknown_tag_filter_suggest.grem:11:22
+  --> tests/fail/unknown_tag_filter_suggest.12am:11:22
    |
 11 | each Position, with: Playr do |pos|
    |                      ^^^^^ did you mean `Player`?

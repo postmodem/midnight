@@ -1,5 +1,5 @@
 error: `Vec2` is a struct, not a component
-  --> tests/fail/has_non_component.grem:10:13
+  --> tests/fail/has_non_component.12am:10:13
    |
 10 | puts e.has?(Vec2)
    |             ^^^^ only components and tags are attached to entities

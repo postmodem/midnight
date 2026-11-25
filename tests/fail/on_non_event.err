@@ -1,5 +1,5 @@
 error: `Position` is a component, not an event
- --> tests/fail/on_non_event.grem:9:4
+ --> tests/fail/on_non_event.12am:9:4
   |
 9 | on Position do |position|
   |    ^^^^^^^^ `on` receives events, which are declared with `event`

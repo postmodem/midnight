@@ -1,5 +1,5 @@
 error: can't modify `batch.items`
-  --> tests/fail/delete_at_readonly_on_param.grem:10:5
+  --> tests/fail/delete_at_readonly_on_param.12am:10:5
    |
 10 |     batch.items.delete_at(0)
    |     ^^^^^^^^^^^ `batch` is the parameter of an `on` block, a read-only copy of the event

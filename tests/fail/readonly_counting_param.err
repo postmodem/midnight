@@ -1,5 +1,5 @@
 error: can't assign to `i`
- --> tests/fail/readonly_counting_param.grem:5:3
+ --> tests/fail/readonly_counting_param.12am:5:3
   |
 5 |   i = 5
   |   ^ `i` is the counter of a counting loop, which is read-only

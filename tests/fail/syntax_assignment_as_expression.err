@@ -1,5 +1,5 @@
 error: assignment is a statement, not an expression
- --> tests/fail/syntax_assignment_as_expression.grem:5:8
+ --> tests/fail/syntax_assignment_as_expression.12am:5:8
   |
 5 | y = (x = 2)
   |        ^ assign on a line of its own, then use the variable

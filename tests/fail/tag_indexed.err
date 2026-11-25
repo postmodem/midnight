@@ -1,5 +1,5 @@
 error: `Frozen` is a tag and has no value
- --> tests/fail/tag_indexed.grem:7:8
+ --> tests/fail/tag_indexed.12am:7:8
   |
 7 | puts e[Frozen]
   |        ^^^^^^ test for it with `has?(Frozen)`

@@ -1,5 +1,5 @@
 error: a system takes no parameters
- --> tests/fail/syntax_system_with_parameters.grem:4:12
+ --> tests/fail/syntax_system_with_parameters.12am:4:12
   |
 4 | system move(speed: Float)
   |            ^ systems read what they need from resources and queries

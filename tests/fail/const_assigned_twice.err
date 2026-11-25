@@ -1,10 +1,10 @@
 error: `LIMIT` is already defined
- --> tests/fail/const_assigned_twice.grem:5:1
+ --> tests/fail/const_assigned_twice.12am:5:1
   |
 5 | LIMIT = 20
   | ^^^^^
 note: first defined here
- --> tests/fail/const_assigned_twice.grem:4:1
+ --> tests/fail/const_assigned_twice.12am:4:1
   |
 4 | LIMIT = 10
   | -----

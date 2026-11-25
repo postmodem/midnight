@@ -1,5 +1,5 @@
 error: unknown field `point` for resource `Score`
- --> tests/fail/unknown_resource_field_suggest.grem:9:7
+ --> tests/fail/unknown_resource_field_suggest.12am:9:7
   |
 9 | Score.point += 10
   |       ^^^^^ did you mean `points`?

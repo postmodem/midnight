@@ -1,5 +1,5 @@
 error: can't assign to `x`
- --> tests/fail/readonly_list_iteration_param.grem:6:3
+ --> tests/fail/readonly_list_iteration_param.12am:6:3
   |
 6 |   x += 1
   |   ^ `x` is a parameter of a list iteration, a read-only copy; loop over indexes to change the list

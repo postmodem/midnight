@@ -16,7 +16,7 @@ def seven -> Int
 end
 
 def name
-  "gremlin"
+  "midnight"
 end
 
 greet

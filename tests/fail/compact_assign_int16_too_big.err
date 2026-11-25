@@ -1,5 +1,5 @@
 error: 40000 does not fit in `Int16`
- --> tests/fail/compact_assign_int16_too_big.grem:9:11
+ --> tests/fail/compact_assign_int16_too_big.12am:9:11
   |
 9 | s.level = 40000
   |           ^^^^^ `Int16` holds -32768 to 32767

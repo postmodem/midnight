@@ -1,5 +1,5 @@
 error: can't modify `xs`
- --> tests/fail/pop_readonly_list.grem:5:3
+ --> tests/fail/pop_readonly_list.12am:5:3
   |
 5 |   xs.pop
   |   ^^ `xs` is a parameter, and parameters are read-only

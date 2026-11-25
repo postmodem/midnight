@@ -1,5 +1,5 @@
 error: condition must be `Bool`, found `String`
- --> tests/fail/cond_elsif_not_bool.grem:8:7
+ --> tests/fail/cond_elsif_not_bool.12am:8:7
   |
 8 | elsif name
   |       ^^^^ there is no truthiness: test it, like `!x.empty?`

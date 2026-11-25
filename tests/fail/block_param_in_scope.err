@@ -1,10 +1,10 @@
 error: block parameter `i` reuses a name that is already in scope
- --> tests/fail/block_param_in_scope.grem:5:13
+ --> tests/fail/block_param_in_scope.12am:5:13
   |
 5 | 3.times do |i|
   |             ^
 note: `i` is defined here
- --> tests/fail/block_param_in_scope.grem:4:1
+ --> tests/fail/block_param_in_scope.12am:4:1
   |
 4 | i = 10
   | -

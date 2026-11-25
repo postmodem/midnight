@@ -1,5 +1,5 @@
 error: expected `Float`, found `String`
-  --> tests/fail/type_field_assign.grem:10:7
+  --> tests/fail/type_field_assign.12am:10:7
    |
 10 | v.x = "wide"
    |       ^^^^^^
