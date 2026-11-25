@@ -183,13 +183,18 @@ functions in C and in WGSL. In strict mode:
   (`to_i`, `round` and `%` already build on them), `to_f` where range
   analysis cannot show that the `Int` is within ±2 ** 24, `/` and `sqrt`.
   Each follows the subnormal rules above.
-- **`/` and `sqrt` in WGSL** are exact integer code. The recommended form
-  takes the hardware result as an estimate, computes the exact residual of
-  it and its neighbours with 16-bit limbs, and falls back to bit-by-bit
-  long division (or square root) when the estimate is more than two units
-  away. The hardware estimate then affects speed only, never the result.
-  Slice 1 measures this against plain long division and keeps the faster
-  one.
+- **`/` and `sqrt` in WGSL** are integer code on the significands, after
+  the special cases (zeros, subnormals as zero, infinities, NaN) and the
+  exponent. The hardware result on the significands, as `f32`, is an
+  estimate of the 25-bit quotient or root. A first correction comes from
+  the exact 64-bit residual (16-bit limbs), converted to float; a second
+  from the residual after it, which then fits an `i32`; a last step of one
+  either way, and the remainder gives the sticky bit for rounding. No loop
+  and no fallback: in slice 1, a bit-by-bit fallback cost a quarter of the
+  time even though it almost never ran. The result is exact whenever the
+  estimate is within 2 ** -11 of the true value; WGSL bounds `/` on these
+  operands to 2.5 units in the last place, about 2 ** -22, and `sqrt` is
+  closer. A device further off is what the start-up check is for.
 - **`/` and `sqrt` in C** are the hardware instructions, run with
   flush-to-zero set (see "The runtime"). They give the same bits as the
   helpers; the tests prove it.
@@ -266,10 +271,24 @@ On Metal, `wgpu-hal` 27 compiles shaders with `MTLCompileOptions` whose
 math mode it never sets, so Metal's default applies, historically fast
 math. Not tried; the start-up check decides there.
 
-Not measured: the cost. Gravity's inner loop has eleven `+`, `-` and `*`,
-a division and a square root; strict adds two xors per operation and the
-integer `/` and `sqrt`. Expect several times the GPU time of the default
-on compute-bound blocks.
+The cost, slice 1: hand-written
+WGSL of `bench/gpu_gravity.12am`'s block in the layout Midnight emits, ms
+per tick, fastest of up to 60:
+
+| Device, bodies     | Default | Barriers only | Strict | × default |
+| ------------------ | ------- | ------------- | ------ | --------- |
+| RTX 5090, 16,384   | 1.068   | 1.320         | 6.849  | 6.4       |
+| RTX 5090, 4,096    | 0.285   | 0.351         | 1.721  | 6.0       |
+| RADV iGPU, 4,096   | 0.869   | 1.963         | 14.470 | 16.7      |
+| llvmpipe, 4,096    | 0.421   | 0.689         | 7.375  | 17.5      |
+
+Strict gravity matched the CPU with FTZ and DAZ bit for bit after two
+ticks on all three devices, and the strict `/` and `sqrt` matched `divss`
+and `sqrtss` on 2 ** 20 rows of edges and random bit patterns on all
+three, also with the estimate spoiled by a factor of 1.0005. `/` and
+`sqrt` are the cost, about half each; the barriers alone cost 1.24 × on
+the 5090. Strict gravity on the 5090 is still about 50 times the speed of
+the CPU path (355 ms per tick).
 
 ### Tests
 
@@ -307,7 +326,8 @@ on compute-bound blocks.
 1. **Probe the cost.** Hand-written WGSL of strict gravity (barriers,
    integer `/` and `sqrt`, both forms) on the 5090 and llvmpipe, timed
    beside the default. If strict gravity is more than ten times the
-   default on the 5090, stop and report before going on.
+   default on the 5090, stop and report before going on. Done: 6.4 ×,
+   under "Measured in planning".
 2. Front end: `strict`, diagnostics, `tir`, `plan`.
 3. Lowering per mode, `Opaque`, the bit helpers, no folding; C pragma and
    `mn_strict_enter`/`leave`. Strict run tests pass on the CPU path.
@@ -367,8 +387,9 @@ slice 1.
   Running strict blocks on the CPU after a failed check keeps the
   guarantee, as a GPU system without a device already does.
 - **`/` and `sqrt` as exact integer code** in the shader, not corrected
-  float code: the result then never depends on the device's division,
-  which on Metal may be worse than the 2 ULP seen here.
+  float code: the device's division then only has to be within 2 ** -11,
+  far looser than any bound WGSL allows, which matters on Metal, where it
+  may be worse than the 2 ULP seen here.
 - **`%` stays the same formula**, now exact because its steps are.
 - **Flush before rounding**, because all four targets measured do it.
 - **`Math` functions and `**` are compile errors** in a strict system
