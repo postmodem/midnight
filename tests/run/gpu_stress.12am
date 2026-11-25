@@ -1,0 +1,118 @@
+# Tables grow past their capacity, new tables appear while the program
+# runs, rows move between tables, and three GPU blocks run over all of it,
+# two with nested queries (one over a written component, one over a
+# one-byte component in several tables). Everything is Int arithmetic, so
+# a device must print the same bytes as the CPU.
+component Val
+  v: Int32
+end
+
+component Small
+  b: Int8
+end
+
+component Acc
+  a: Int32
+  n: Int32
+end
+
+tag T1
+tag T2
+tag T3
+
+resource Sums
+  val: Int = 0
+  acc: Int = 0
+end
+
+gpu system first
+  each Val do |val|
+    val.v = (val.v * 3 + 1) % 1009
+  end
+  each Val do |val|
+    sum = 0
+    each Val do |other|
+      sum += other.v
+    end
+    val.v = (val.v + sum) % 1013
+  end
+  each Entity, Acc, Val do |e, acc, val|
+    total = 0
+    count = 0
+    each Entity, Small do |other, small|
+      total += small.b
+      count += 1 if other == e
+    end
+    acc.a = (acc.a + total + val.v + rand(5)) % 100003
+    acc.n += count
+  end
+end
+
+system churn
+  each Entity, Val do |e, val|
+    roll = rand(40)
+    if roll == 0
+      e.add(T1)
+    elsif roll == 1
+      e.remove(T1)
+    elsif roll == 2
+      e.add(T2, Small(val.v % 100))
+    elsif roll == 3
+      e.remove(T2)
+    elsif roll == 4
+      e.add(Acc(0, 0))
+    elsif roll == 5
+      e.despawn
+    elsif roll == 6
+      e.add(T3)
+    elsif roll == 7
+      e.remove(Small)
+    end
+  end
+  if Time.tick % 3 == 0
+    each Small do |small|
+      small.b = (small.b + 1) % 100
+    end
+  end
+  (Time.tick % 7).times do |i|
+    spawn Val(i), Small(i), Acc(i, 0)
+    spawn Val(i + 1)
+    spawn Val(i + 2), T3, Small(3)
+  end
+end
+
+system report
+  if Time.tick % 4 == 1
+    val = 0
+    each Val do |v|
+      val += v.v
+    end
+    acc = 0
+    each Acc do |a|
+      acc += a.a + a.n
+    end
+    Sums.val = val
+    Sums.acc = acc
+    puts "#{Time.tick} #{World.count(Val)} #{val} #{acc}"
+  end
+end
+
+srand(7)
+10.times do |i|
+  spawn Val(i), Small(i), Acc(0, 0)
+end
+120.times do
+  World.tick
+end
+each Entity, Val do |e, val|
+  print val.v, " "
+end
+puts
+each Acc do |acc|
+  print acc.a, ":", acc.n, " "
+end
+puts
+each Small do |small|
+  print small.b, " "
+end
+puts

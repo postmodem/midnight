@@ -1,0 +1,41 @@
+# A failure in a tick after ticks that succeeded, in the nested `each`, in
+# the second table of the query and in a row beyond the first workgroup of
+# 64: in tick 3 the last row sets its scale to 0, and in tick 4 every run
+# divides by it. The store into the UInt8 field also fails then, but the
+# division comes first in the source.
+# Expected: division by zero
+component Gauge
+  scale: Int32
+  boost: Int32
+  reading: UInt8
+end
+
+tag Second
+
+gpu system adjust
+  each Gauge do |gauge|
+    total = 0
+    each Gauge do |other|
+      total += 1000 / other.scale
+    end
+    gauge.reading = total % 200 + gauge.boost
+    gauge.scale -= 1 if gauge.scale == 2 && Time.tick == 3
+    gauge.scale -= 1 if gauge.scale == 1 && Time.tick == 3
+  end
+end
+
+100.times do
+  spawn Gauge(1000, 0, 0)
+end
+199.times do
+  spawn Gauge(1000, 0, 0), Second
+end
+spawn Gauge(2, 0, 0), Second
+6.times do |t|
+  World.tick
+  sum = 0
+  each Gauge do |gauge|
+    sum += gauge.reading
+  end
+  puts "tick #{t}: #{sum}"
+end

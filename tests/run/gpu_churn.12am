@@ -1,0 +1,140 @@
+# Structural changes between ticks, on tables that GPU blocks use: spawns
+# that grow tables and make new ones, despawns, adds and removes of
+# components and tags. The nested queries read a 3-byte component over many
+# tables, so their snapshot is put together in CPU memory. Each tick prints
+# a checksum of every column in the order the queries visit the rows; all
+# values are whole numbers, so a device must print the same bytes as the
+# CPU.
+component Pos
+  x: Int32
+  y: Int32
+end
+
+component Vel
+  dx: Int32
+  dy: Int32
+end
+
+component Small
+  a: UInt8
+  b: Int8
+  c: UInt8
+end
+
+component Acc
+  near: Int32
+  sum: Int32
+  who: Entity
+  roll: Int32
+end
+
+tag Hot
+tag Cold
+
+gpu system move
+  each Pos, Vel do |pos, vel|
+    pos.x += vel.dx
+    pos.y += vel.dy
+  end
+end
+
+gpu system spread
+  each Vel do |vel|
+    s = 0
+    each Vel do |o|
+      s += o.dx
+    end
+    vel.dy = (vel.dy + s) % 17 - 8
+  end
+end
+
+gpu system gather
+  each Entity, Pos, Acc do |me, pos, acc|
+    count = 0
+    total = 0
+    best = Entity.none
+    best_d = 2147483647
+    each Entity, Pos, Small do |other, theirs, small|
+      d = (theirs.x - pos.x).abs + (theirs.y - pos.y).abs
+      if d < 50
+        count += 1
+      end
+      total += small.a + small.b * 3 + small.c
+      if other != me && d < best_d
+        best_d = d
+        best = other
+      end
+    end
+    acc.near = count
+    acc.sum = total
+    acc.who = best
+    acc.roll = rand(1000)
+  end
+end
+
+system steer
+  each Vel, Acc do |vel, acc|
+    vel.dx = (vel.dx + acc.near) % 5 - 2
+  end
+end
+
+system reap
+  each Entity, Acc do |e, acc|
+    e.despawn if acc.roll < 30
+  end
+end
+
+40.times do |i|
+  spawn Pos(i * 7 % 23, i * 5 % 19), Vel(i % 3 - 1, i % 5 - 2), Small(i, i % 100 - 50, 255 - i), Acc(0, 0, Entity.none, 0)
+end
+
+24.times do |t|
+  World.tick
+  pos_sum = 0
+  each Pos do |pos|
+    pos_sum = (pos_sum * 31 + pos.x * 1000 + pos.y) % 1000003
+  end
+  vel_sum = 0
+  each Vel do |vel|
+    vel_sum = (vel_sum * 31 + vel.dx * 1000 + vel.dy) % 1000003
+  end
+  acc_sum = 0
+  who = 0
+  each Entity, Acc do |e, acc|
+    acc_sum = (acc_sum * 31 + acc.near * 1000000 + acc.sum * 1000 + acc.roll) % 1000003
+    if acc.who.alive? && acc.who.has?(Pos)
+      near = acc.who[Pos]
+      who = (who * 31 + near.x * 1000 + near.y) % 1000003
+    end
+  end
+  puts "tick #{t}: #{World.count} entities, pos #{pos_sum}, vel #{vel_sum}, acc #{acc_sum}, who #{who}"
+  phase = t % 4
+  if phase == 0
+    30.times do |i|
+      k = i + t * 3
+      if i % 3 == 0
+        spawn Pos(k % 31, k % 13), Vel(1, -1), Small(k % 256, k % 100 - 50, 7), Acc(0, 0, Entity.none, 0), Hot
+      elsif i % 3 == 1
+        spawn Pos(k % 29, k % 11), Vel(-1, 1), Acc(0, 0, Entity.none, 0)
+      else
+        spawn Pos(k % 17, k % 7), Small(k % 256, 5, k % 200), Vel(0, 2)
+      end
+    end
+  elsif phase == 1
+    each Entity, Pos do |e, pos|
+      e.despawn if (pos.x + pos.y + t) % 5 == 0
+    end
+  elsif phase == 2
+    each Entity, Pos do |e, pos|
+      e.add(Hot) if pos.x % 3 == 0
+      e.add(Cold) if pos.y % 4 == 0
+      e.add(Small(9, -9, 99)) if pos.x % 7 == 3
+    end
+  else
+    each Entity, Pos do |e, pos|
+      e.remove(Hot)
+      e.remove(Small) if pos.y % 6 == 1
+      e.remove(Acc) if pos.x % 11 == 2
+    end
+  end
+end

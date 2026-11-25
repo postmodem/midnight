@@ -1,0 +1,9 @@
+Cell(v: 4194238, w: 37748145, r: 528, who: Entity(4194238v1))
+Cell(v: 4194239, w: 37748154, r: 208, who: Entity(4194239v1))
+Cell(v: 4194240, w: 37748163, r: 505, who: Entity(4194240v1))
+Cell(v: 4194241, w: 37748172, r: 547, who: Entity(4194241v1))
+Cell(v: 4194242, w: 37748181, r: 213, who: Entity(4194242v1))
+Cell(v: 4999999, w: 44999994, r: 709, who: Entity(4999999v1))
+wrong: 0 (first at -1)
+unowned: 0
+rolls: 2497450524

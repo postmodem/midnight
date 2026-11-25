@@ -11,8 +11,8 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 244 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-334 in `tests/fail`, 77 in `tests/panic`, 12 in `tests/plan`.
+Counts: 248 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+334 in `tests/fail`, 78 in `tests/panic`, 12 in `tests/plan`.
 
 ## A first program, The model
 
@@ -372,7 +372,11 @@ worked out by hand from "GPU systems" in the reference, except where
 hand arithmetic does not reach: the orbits of `gpu_gravity`, the `Math`
 results of `gpu_numbers`, and the random numbers of `gpu_rand`,
 `gpu_control_flow` and `gpu_statements` were compared with separate C
-programs written from the specification.
+programs written from the specification. The expected outputs of
+`gpu_churn`, `gpu_stress`, `gpu_empty_queries` and `gpu_big_table` are the
+CPU implementation's; what they claim is that a device prints the same
+bytes after structural changes, and in `gpu_big_table` every row is checked
+by the program itself.
 
 | Behaviour | Files |
 | --- | --- |
@@ -381,6 +385,9 @@ programs written from the specification.
 | The nested `each` sees every entity as it was when the outer `each` began | `gpu_snapshot`, `gpu_tables`, `gpu_with_cpu_systems` |
 | A run sees its own writes through the outer parameter and its old values through the nested one | `gpu_snapshot_own_row` |
 | The outer and the nested query each match several tables | `gpu_tables` |
+| Structural changes between ticks: spawns that grow tables and make new ones, despawns, adds and removes, on tables GPU blocks use | `gpu_churn`, `gpu_stress` |
+| Queries that match no table, then some, then none again, outer and nested | `gpu_empty_queries` |
+| A table beyond 4,194,240 rows, which a device runs as a dispatch in two dimensions | `gpu_big_table` |
 | `with:` and `without:`, one type or a list, on both queries; a filter may name a component with a `String` | `gpu_filters` |
 | `Entity` terms: `==`, `!=`, `Entity.none`, a handle stored in a component | `gpu_entity_term`, `gpu_index_from_cpu`, `gpu_field_types` |
 | `next` in the block ends the run and keeps its writes; a field whose assignment was not reached keeps its value | `gpu_next_keeps_writes` |
@@ -388,7 +395,7 @@ programs written from the specification.
 | `break` and `next` in a loop inside the block | `gpu_next_keeps_writes`, `gpu_control_flow` |
 | The `each` blocks of one system run in order and see earlier writes | `gpu_two_blocks`, `gpu_nested_break`, `gpu_filters` |
 | Fields read and written: `Float32`, `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `Bool`, enum, `Entity`, a struct whole and by field | `gpu_field_types`, `gpu_struct_methods` |
-| A component a block only reads can be 1, 3 or 6 bytes; every position of a field within a word | `gpu_odd_row_size` |
+| A component a block only reads can be 1, 3 or 6 bytes; every position of a field within a word; a nested query over such components in two tables, whose snapshot is put together in CPU memory | `gpu_odd_row_size`, `gpu_churn` |
 | Resource fields of every plain kind, known and unknown constants, struct constants | `gpu_uniforms`, `gpu_functions` |
 | `Time.tick`, `Time.dt`, `Time.elapsed` | `gpu_uniforms`, `gpu_gravity` |
 | Resources and `Time` are read when the `each` begins; a change between ticks is seen | `gpu_uniforms` |
@@ -691,6 +698,7 @@ the rule for where a column lives.
 | | `UInt16` negative, field of a struct in a component | `panic/gpu_store_uint16` | `value does not fit in UInt16` |
 | | in a function the block calls: the line in the function | `panic/gpu_failure_in_function` | `modulo by zero` |
 | | two operations fail in different runs: the earliest in the source is reported | `panic/gpu_earliest_failure` | `division by zero` |
+| | in a tick after ticks that succeeded, in the nested `each`, in the second table, beyond the first 64 rows | `panic/gpu_late_failure` | `division by zero` |
 | | operations fail in two files: the one in the file loaded first is reported | not covered | |
 | | a failed operation gives 0 and the run goes on; a failed `rand(n)` draws no number | not observable: the program stops | |
 | | nothing after the failing `each` runs | `panic/gpu_failure_stops_tick` | `negative exponent` |

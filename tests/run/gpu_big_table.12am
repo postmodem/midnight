@@ -1,0 +1,47 @@
+# A table of more than 65535 * 64 = 4,194,240 rows, which a device runs as
+# one dispatch in two dimensions. Every row is checked, and the rows
+# around the end of the first span are printed.
+ENTITIES = 5_000_000
+
+component Cell
+  v: Int32
+  w: Int32
+  r: Int32
+  who: Entity
+end
+
+gpu system step
+  each Entity, Cell do |me, c|
+    c.w = c.v * 3 + c.w + Time.tick
+    c.r = rand(1000)
+    c.who = me
+  end
+end
+
+ENTITIES.times do |i|
+  spawn Cell(i, 0, 0, Entity.none)
+end
+3.times do
+  World.tick
+end
+wrong = 0
+unowned = 0
+rolls = 0
+first_wrong = -1
+each Entity, Cell do |e, c|
+  if c.w != c.v * 9 + 3
+    wrong += 1
+    first_wrong = c.v if first_wrong < 0
+  end
+  unowned += 1 if c.who != e
+  rolls += c.r
+  if c.v >= 4194238 && c.v <= 4194242
+    puts c
+  end
+  if c.v == 4999999
+    puts c
+  end
+end
+puts "wrong: #{wrong} (first at #{first_wrong})"
+puts "unowned: #{unowned}"
+puts "rolls: #{rolls}"

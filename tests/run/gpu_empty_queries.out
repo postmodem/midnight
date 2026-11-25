@@ -1,0 +1,30 @@
+tick 0
+tick 1
+tick 2
+  Sink(count: 0, sum: 0, odd: 0, roll: 54)
+  Sink(count: 0, sum: 0, odd: 0, roll: 58)
+  Sink(count: 0, sum: 0, odd: 0, roll: 57)
+tick 3
+  Sink(count: 0, sum: 0, odd: 0, roll: 97)
+  Sink(count: 0, sum: 0, odd: 0, roll: 75)
+  Sink(count: 0, sum: 0, odd: 0, roll: 2)
+tick 4
+  Sink(count: 6, sum: 115, odd: 4627, roll: 80)
+  Sink(count: 6, sum: 115, odd: 4627, roll: 2)
+  Sink(count: 6, sum: 115, odd: 4627, roll: 53)
+  Sink(count: 6, sum: 115, odd: 4627, roll: 83)
+tick 5
+  Sink(count: 12, sum: 115, odd: 4627, roll: 33)
+  Sink(count: 12, sum: 115, odd: 4627, roll: 27)
+  Sink(count: 12, sum: 115, odd: 4627, roll: 60)
+  Sink(count: 12, sum: 115, odd: 4627, roll: 87)
+tick 6
+  Sink(count: 12, sum: 0, odd: 0, roll: 23)
+  Sink(count: 12, sum: 0, odd: 0, roll: 15)
+  Sink(count: 12, sum: 0, odd: 0, roll: 75)
+tick 7
+  Sink(count: 12, sum: 0, odd: 0, roll: 74)
+  Sink(count: 12, sum: 0, odd: 0, roll: 27)
+  Sink(count: 12, sum: 0, odd: 0, roll: 73)
+tick 8
+tick 9

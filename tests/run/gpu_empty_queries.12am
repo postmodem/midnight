@@ -1,0 +1,64 @@
+# Queries that match nothing at first. Ticks 0-1: no entity at all.
+# Ticks 2-3: the outer query matches and the nested one matches nothing.
+# Ticks 4-5: both match. Ticks 6-7: the nested one is empty again. Ticks
+# 8-9: the outer one is empty again.
+component Sink
+  count: Int32
+  sum: Int32
+  odd: Int32
+  roll: Int32
+end
+
+component Source
+  v: Int32
+end
+
+component Bits
+  a: UInt8
+  b: Bool
+  c: Int8
+end
+
+gpu system gather
+  each Sink do |sink|
+    count = 0
+    sum = 0
+    odd = 0
+    each Source, Bits do |source, bits|
+      count += 1
+      sum += source.v
+      odd += bits.a + bits.c
+      odd += 1000 if bits.b
+    end
+    sink.count += count
+    sink.sum = sum
+    sink.odd = odd
+    sink.roll = rand(100)
+  end
+end
+
+10.times do |t|
+  World.tick
+  puts "tick #{t}"
+  each Sink do |sink|
+    puts "  #{sink}"
+  end
+  if t == 1
+    3.times do
+      spawn Sink(0, 0, 0, 0)
+    end
+  elsif t == 3
+    5.times do |i|
+      spawn Source(i + 1), Bits(i * 50, i % 2 == 0, i - 2)
+    end
+    spawn Source(100), Bits(255, true, -128), Sink(0, 0, 0, 0)
+  elsif t == 5
+    each Entity, Source do |e, source|
+      e.despawn
+    end
+  elsif t == 7
+    each Entity, Sink do |e, sink|
+      e.despawn
+    end
+  end
+end
