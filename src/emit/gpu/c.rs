@@ -470,7 +470,7 @@ impl Printer<'_, '_> {
             Expr::Load(cell) => {
                 let place = self.cell(cell);
                 match cell.storage {
-                    Storage::I8 | Storage::I16 | Storage::U8 | Storage::U16 => {
+                    Storage::I8 | Storage::I16 | Storage::U8 | Storage::U16 | Storage::U32 => {
                         format!("(int32_t){place}")
                     }
                     Storage::Enum(_) => format!("(uint32_t){place}"),
@@ -586,6 +586,7 @@ impl Printer<'_, '_> {
                     Storage::I16 => "(int16_t)",
                     Storage::U8 | Storage::Enum(1) => "(uint8_t)",
                     Storage::U16 | Storage::Enum(2) => "(uint16_t)",
+                    Storage::U32 => "(uint32_t)",
                     Storage::F32
                     | Storage::I32
                     | Storage::Bool

@@ -751,11 +751,12 @@ nested `each` visits entities in the order an ordinary `each` would.
 
 - **Query terms.** The terms of a GPU block's `each`, and of its nested
   `each`, are `Entity` or components whose fields are `Float32`, `Int32`,
-  `Int16`, `Int8`, `UInt16`, `UInt8`, `Bool`, enums, `Entity`, or structs of
-  these. A component with a `Float`, `Int` or `UInt32` field, at any depth,
+  `Int16`, `Int8`, `UInt32`, `UInt16`, `UInt8`, `Bool`, enums, `Entity`, or
+  structs of these. A component with a `Float` or `Int` field, at any depth,
   is an error with the hint to declare the field `Float32` or `Int32`. So is
-  one with a string or a list. Types named in `with:` and `without:` are not
-  restricted.
+  one with a string or a list. A `UInt32` field may be there, but the block
+  cannot use it, as described below. Types named in `with:` and `without:`
+  are not restricted.
 - **Writes.** A GPU block assigns to its own local variables and to the
   component parameters of its `each`, and to nothing else. The parameters of
   the nested `each`, every `Entity` parameter, resources and `Time` are
@@ -779,8 +780,10 @@ nested `each` visits entities in the order an ordinary `each` would.
   field, copied, passed to a function and returned, compared with `==`, and
   put inside another struct, and its other fields can be read and assigned.
   `Config.cell.age` is fine when `Cell` also has a `UInt32` field `mask`,
-  and `Config.cell.mask` is the error. A component with a `UInt32` field,
-  at any depth, still cannot be a query term.
+  and `Config.cell.mask` is the error. The same holds for a query term: a
+  component with a `UInt32` field can be one, the block reads and assigns
+  its other fields and may copy a struct inside it whole, and the `UInt32`
+  field of an entity keeps its value while a GPU block works on the rest.
 
 ### Snapshot semantics
 

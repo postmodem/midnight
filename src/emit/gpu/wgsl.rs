@@ -318,7 +318,7 @@ impl Printer<'_, '_> {
         };
         match cell.storage {
             Storage::F32 => format!("bitcast<f32>({word})"),
-            Storage::I32 => format!("bitcast<i32>({word})"),
+            Storage::I32 | Storage::U32 => format!("bitcast<i32>({word})"),
             Storage::Enum(4) => word,
             Storage::U8 => format!("i32({low} & 0xffu)"),
             Storage::U16 => format!("i32({low} & 0xffffu)"),
@@ -341,7 +341,7 @@ impl Printer<'_, '_> {
             unreachable!("a column a block writes has rows of whole words");
         };
         let (mask, bits) = match cell.storage {
-            Storage::F32 | Storage::I32 => {
+            Storage::F32 | Storage::I32 | Storage::U32 => {
                 let value = self.top(value);
                 self.line(&format!("{word} = bitcast<u32>({value});"));
                 return;

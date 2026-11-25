@@ -81,6 +81,9 @@ pub enum Storage {
     I32,
     U8,
     U16,
+    /// A `UInt32`: a word that GPU code carries as an `I32` with the same
+    /// bits and never computes with.
+    U32,
     /// One byte, 0 or 1.
     Bool,
     /// An unsigned integer of this many bytes: 1, 2 or 4.
@@ -94,7 +97,7 @@ impl Storage {
         match self {
             Storage::I8 | Storage::U8 | Storage::Bool => 1,
             Storage::I16 | Storage::U16 => 2,
-            Storage::F32 | Storage::I32 => 4,
+            Storage::F32 | Storage::I32 | Storage::U32 => 4,
             Storage::Enum(bytes) => bytes,
             Storage::Entity => 8,
         }
@@ -104,7 +107,12 @@ impl Storage {
     pub fn ty(self) -> Ty {
         match self {
             Storage::F32 => Ty::F32,
-            Storage::I8 | Storage::I16 | Storage::I32 | Storage::U8 | Storage::U16 => Ty::I32,
+            Storage::I8
+            | Storage::I16
+            | Storage::I32
+            | Storage::U8
+            | Storage::U16
+            | Storage::U32 => Ty::I32,
             Storage::Bool => Ty::Bool,
             Storage::Enum(_) => Ty::U32,
             Storage::Entity => Ty::Entity,

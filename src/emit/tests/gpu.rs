@@ -687,3 +687,70 @@ fn a_division_by_a_known_constant_is_not_checked() {
         ],
     );
 }
+
+const STAMPED: &str = "\
+struct Stamp
+  serial: UInt32 = 0
+  weight: Int16 = 0
+end
+
+component Cell
+  id: UInt32
+  x: Float32
+  made: Stamp
+  seen: Stamp
+end
+
+gpu system step
+  each Cell do |cell|
+    cell.x += 1.0
+    cell.seen = cell.made
+  end
+end
+";
+
+#[test]
+fn a_uint32_field_of_a_term_is_carried_as_its_bits() {
+    let (program, _) = compile(STAMPED);
+    let wide = vec![true; program.records.len()];
+    let layouts = Layouts {
+        prog: &program,
+        wide: &wide,
+    };
+    let cell = program
+        .records
+        .iter()
+        .position(|record| record.name == "Cell")
+        .expect("the component's record");
+    let unsigned: Vec<String> = layouts
+        .leaves(cell)
+        .into_iter()
+        .filter(|leaf| leaf.storage == Storage::U32)
+        .map(|leaf| leaf.member)
+        .collect();
+    assert_eq!(unsigned, [".id", ".made.serial", ".seen.serial"]);
+    assert_eq!(Storage::U32.bytes(), 4);
+    assert_eq!(Storage::U32.ty(), Ty::I32);
+
+    // A struct copied whole takes the field along, one word to one word.
+    let shader = &shaders(STAMPED)[0];
+    assert_has(
+        shader,
+        "cell_0.f_made.f_serial = bitcast<i32>(c0[row * 6u + 2u]);",
+    );
+    assert_has(
+        shader,
+        "c0[row * 6u + 4u] = bitcast<u32>(cell_0.f_seen.f_serial);",
+    );
+    // The field the block does not name is neither loaded nor stored.
+    assert_lacks(shader, "f_id =");
+    assert_lacks(shader, "c0[row * 6u] =");
+
+    let c = emit_c("stamped", STAMPED);
+    assert_has(&c, "cell_0.f_made.f_serial = (int32_t)c0[row].made.serial;");
+    assert_has(
+        &c,
+        "c0[row].seen.serial = (uint32_t)cell_0.f_seen.f_serial;",
+    );
+    assert_lacks(&c, "c0[row].id");
+}

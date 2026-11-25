@@ -671,3 +671,57 @@ end
         ],
     );
 }
+
+#[test]
+fn a_component_with_a_uint32_field_is_a_term() {
+    // The outer and the nested `each` take such a component. The block
+    // uses its other fields and copies and compares the struct inside it.
+    let program = "\
+struct Stamp
+  serial: UInt32 = 0
+  weight: Int16 = 0
+end
+component Cell
+  id: UInt32
+  n: Int32
+  made: Stamp
+  seen: Stamp
+end
+gpu system mark
+  each Cell do |cell|
+    cell.seen = cell.made
+    each Cell do |other|
+      cell.n += other.n if other.made == cell.made
+      LINE
+    end
+  end
+end
+";
+    ok(&program.replace("LINE", "cell.n += other.made.weight"));
+
+    let it = format!("it is a `UInt32`, {UNSIGNED}; declare it `Int32`");
+    assert_error(
+        &program.replace("LINE", "cell.n += cell.id"),
+        "field `id` of `Cell` can't be read in a GPU system",
+        "cell.id",
+        &it,
+    );
+    assert_error(
+        &program.replace("LINE", "cell.n += other.made.serial"),
+        "field `serial` of `Stamp` can't be read in a GPU system",
+        "other.made.serial",
+        &it,
+    );
+    assert_error(
+        &program.replace("LINE", "cell.id = 1"),
+        "can't assign to `cell.id` in a GPU system",
+        "cell.id",
+        &it,
+    );
+    assert_error(
+        &program.replace("LINE", "cell.made.serial += 1"),
+        "can't assign to `cell.made.serial` in a GPU system",
+        "cell.made.serial",
+        &it,
+    );
+}

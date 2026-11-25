@@ -138,8 +138,8 @@ impl Layouts<'_> {
             Type::Compact(Compact::Int32) => Storage::I32,
             Type::Compact(Compact::UInt8) => Storage::U8,
             Type::Compact(Compact::UInt16) => Storage::U16,
-            Type::Compact(Compact::UInt32)
-            | Type::Int
+            Type::Compact(Compact::UInt32) => Storage::U32,
+            Type::Int
             | Type::Float
             | Type::String
             | Type::List(_)

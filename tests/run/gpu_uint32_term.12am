@@ -1,0 +1,68 @@
+# Components with `UInt32` fields as terms of GPU blocks. The blocks never
+# name a `UInt32` field. They write the fields beside one, copy a struct
+# that has one from field to field through a local, and compare such
+# structs, across a nested `each` and between two components. The `UInt32`
+# values are above the largest 32-bit `Int`, and two of them differ only in
+# the lowest bit. An ordinary system changes them between the runs.
+struct Stamp
+  serial: UInt32 = 0
+  weight: Int16 = 0
+end
+
+component Unit
+  id: UInt32
+  hits: UInt8
+  x: Float32
+  made: Stamp
+  seen: Stamp
+  kin: Int32
+end
+
+component Mark
+  stamp: Stamp
+end
+
+gpu system step
+  each Unit do |unit|
+    unit.x += 0.5
+    unit.hits += 1
+    kept = unit.made
+    unit.seen = kept
+    kin = 0
+    each Unit do |other|
+      kin += 1 if other.made == unit.made
+      kin += other.made.weight
+    end
+    unit.kin = kin
+  end
+  each Unit do |unit|
+    each Mark do |mark|
+      unit.kin += mark.stamp.weight
+      unit.kin += 100 if mark.stamp == unit.made
+    end
+  end
+end
+
+system renumber
+  each Unit do |unit|
+    unit.id -= 1
+    unit.made.serial -= 1 if unit.hits > 100
+  end
+  each Mark do |mark|
+    mark.stamp.serial -= 1
+  end
+end
+
+spawn Unit(4000000000, 0, 1.0, Stamp(4294967295, 3), Stamp(), 0)
+spawn Unit(4000000001, 250, 2.0, Stamp(4294967294, 3), Stamp(), 0)
+spawn Unit(3000000000, 7, 3.0, Stamp(4294967295, 3), Stamp(), 0), Mark(Stamp(4294967295, 3))
+spawn Mark(Stamp(2147483648, 5))
+2.times do
+  World.tick
+  each Unit do |unit|
+    puts unit
+  end
+  each Mark do |mark|
+    puts mark
+  end
+end

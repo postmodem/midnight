@@ -23,8 +23,9 @@
 //! - `Int` literals that fit in 32 bits.
 //!
 //! The terms of a GPU block's query and of its nested `each` are `Entity`
-//! or components made of `Float32`, `Int32`, `Int16`, `Int8`, `UInt16`,
-//! `UInt8`, `Bool`, enum and `Entity` fields and records of those.
+//! or components made of `Float32`, `Int32`, `Int16`, `Int8`, `UInt32`,
+//! `UInt16`, `UInt8`, `Bool`, enum and `Entity` fields and records of
+//! those.
 //!
 //! A function is checked once, the first time a GPU system reaches it, and
 //! a diagnostic inside it carries a note naming that system and the call.
@@ -468,7 +469,7 @@ impl<'a, 'p> Walk<'a, 'p> {
 
     /// Reports each component term that a GPU system can't read or write:
     /// one with a string or a list at any depth, or with a number field
-    /// that is not a signed or small type of at most 32 bits.
+    /// of 64 bits.
     fn terms(&mut self, query: &Query, source: &ast::Query) {
         for (term, name) in query.terms.iter().zip(&source.terms) {
             let Term::Component { component, .. } = term else {
@@ -478,14 +479,7 @@ impl<'a, 'p> Walk<'a, 'p> {
                 continue;
             };
             let unfit = self.pass.fields(record, &|ty| {
-                matches!(
-                    ty,
-                    Type::String
-                        | Type::List(_)
-                        | Type::Float
-                        | Type::Int
-                        | Type::Compact(Compact::UInt32)
-                )
+                matches!(ty, Type::String | Type::List(_) | Type::Float | Type::Int)
             });
             let Some((_, first)) = unfit.first() else {
                 continue;
@@ -506,7 +500,6 @@ impl<'a, 'p> Walk<'a, 'p> {
                 Type::Float | Type::Int => format!(
                     "{fields}, 64 bits wide; the GPU holds numbers of at most 32 bits, so declare {them} `{ty}32`"
                 ),
-                Type::Compact(_) => format!("{fields}, {UNSIGNED}; declare {them} `Int32`"),
                 _ => format!(
                     "{fields}; a GPU system queries plain components, with no string or list at any depth"
                 ),

@@ -1,0 +1,14 @@
+# expect: field `mask` of `Cell` can't be read in a GPU system, through a query parameter; `Cell` itself is fine as a term, and so is the assignment to `cell.age` on line 11
+# at: line 12, the place `cell.mask`
+
+component Cell
+  mask: UInt32
+  age: UInt16
+end
+
+gpu system age
+  each Cell do |cell|
+    cell.age += 1
+    cell.age += cell.mask
+  end
+end

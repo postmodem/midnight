@@ -1,0 +1,5 @@
+error: can't assign to `cell.stamp.serial` in a GPU system
+  --> tests/fail/gpu_uint32_assign_term_field.12am:17:5
+   |
+17 |     cell.stamp.serial = 0
+   |     ^^^^^^^^^^^^^^^^^ it is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`

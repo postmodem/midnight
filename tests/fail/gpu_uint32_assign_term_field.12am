@@ -1,0 +1,19 @@
+# expect: can't assign to `cell.stamp.serial` in a GPU system, for a `UInt32` field inside a struct field of a query parameter; the copy of the whole struct on line 16 is fine
+# at: line 17, the place `cell.stamp.serial`
+
+struct Stamp
+  serial: UInt32 = 0
+  weight: Int16 = 0
+end
+
+component Cell
+  stamp: Stamp
+  spare: Stamp
+end
+
+gpu system mark
+  each Cell do |cell|
+    cell.spare = cell.stamp
+    cell.stamp.serial = 0
+  end
+end
