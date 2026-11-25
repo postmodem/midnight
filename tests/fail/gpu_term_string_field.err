@@ -1,0 +1,5 @@
+error: `Named` can't be a term of an `each` in a GPU system
+  --> tests/fail/gpu_term_string_field.12am:10:8
+   |
+10 |   each Named do |named|
+   |        ^^^^^ its field `name` is a `String`; a GPU system queries plain components, with no string or list at any depth

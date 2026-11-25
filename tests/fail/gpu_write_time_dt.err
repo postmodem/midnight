@@ -1,0 +1,5 @@
+error: can't assign to `Time.dt` in a GPU system
+  --> tests/fail/gpu_write_time_dt.12am:10:5
+   |
+10 |     Time.dt = 0.5 if body.x > 100
+   |     ^^^^^^^ `Time` is read-only there: a GPU system writes only to the component parameters of its outer `each`

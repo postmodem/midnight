@@ -1,0 +1,21 @@
+# expect: resource field `Config.path` can't be read in a GPU system, because it is a `Path`, whose field `points` is a `[Float]`
+# at: line 19, the place `Config.path`
+
+component Body
+  x: Float32
+end
+
+struct Path
+  points: [Float] = []
+  speed: Float = 1
+end
+
+resource Config
+  path: Path = Path()
+end
+
+gpu system follow
+  each Body do |body|
+    body.x += Config.path.speed
+  end
+end

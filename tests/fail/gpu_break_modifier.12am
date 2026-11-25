@@ -1,0 +1,13 @@
+# expect: `break` can't leave the `each` of a GPU system, in the modifier form too
+# at: line 10, the keyword `break`
+
+component Body
+  x: Float32
+end
+
+gpu system settle
+  each Body do |body|
+    break if body.x < 0
+    body.x -= 1
+  end
+end

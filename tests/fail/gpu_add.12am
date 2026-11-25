@@ -1,0 +1,14 @@
+# expect: `add` is not allowed in a GPU system
+# at: line 12, the expression `e.add(Frozen)`
+
+component Body
+  x: Float32
+end
+
+tag Frozen
+
+gpu system freeze
+  each Entity, Body do |e, body|
+    e.add(Frozen) if body.x < 0
+  end
+end

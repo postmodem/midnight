@@ -1,0 +1,5 @@
+error: resource field `Config.title` can't be read in a GPU system
+  --> tests/fail/gpu_resource_string.12am:16:13
+   |
+16 |     title = Config.title
+   |             ^^^^^^^^^^^^ it is a `String`; a GPU system reads numbers, `Bool`s, enums, entities and structs of those

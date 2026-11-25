@@ -1,0 +1,10 @@
+error: can't call `name_of` in a function called from a GPU system
+  --> tests/fail/gpu_function_bad_call.12am:13:3
+   |
+13 |   name_of(x)
+   |   ^^^^^^^^^^ it returns a `String`; a function called from a GPU system takes and returns numbers, `Bool`s, enums, entities and structs of those
+note: GPU system `check` calls `checked` here
+  --> tests/fail/gpu_function_bad_call.12am:19:14
+   |
+19 |     body.x = checked(body.x)
+   |              ---------------

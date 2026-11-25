@@ -1,0 +1,5 @@
+error: can't assign to `Wind.force.x` in a GPU system
+  --> tests/fail/gpu_write_resource_field.12am:19:5
+   |
+19 |     Wind.force.x = body.x
+   |     ^^^^^^^^^^^^ resources are read-only there: a GPU system writes only to the component parameters of its outer `each`

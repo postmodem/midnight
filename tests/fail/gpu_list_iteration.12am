@@ -1,0 +1,14 @@
+# expect: `[Float]` values are not allowed in a GPU system: a list can't be iterated there
+# at: line 10, the literal `[0.5, 0.25]`
+
+component Body
+  x: Float32
+end
+
+gpu system walk
+  each Body do |body|
+    [0.5, 0.25].each do |step|
+      body.x += step
+    end
+  end
+end

@@ -1,0 +1,5 @@
+error: resource field `Config.steps` can't be read in a GPU system
+  --> tests/fail/gpu_resource_list.12am:14:15
+   |
+14 |     body.x += Config.steps[0]
+   |               ^^^^^^^^^^^^ it is a `[Float]`; a GPU system reads numbers, `Bool`s, enums, entities and structs of those

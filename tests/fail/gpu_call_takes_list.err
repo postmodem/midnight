@@ -1,0 +1,5 @@
+error: can't call `total` in a GPU system
+  --> tests/fail/gpu_call_takes_list.12am:18:14
+   |
+18 |     body.x = total([body.x, 1.0])
+   |              ^^^^^^^^^^^^^^^^^^^^ its parameter `values` is a `[Float]`; a function called from a GPU system takes and returns numbers, `Bool`s, enums, entities and structs of those

@@ -1,0 +1,5 @@
+error: `alive?` is not allowed in a GPU system
+  --> tests/fail/gpu_alive.12am:14:17
+   |
+14 |     next unless chase.target.alive?
+   |                 ^^^^^^^^^^^^^^^^^^^ a GPU system can't look an entity up; check in an ordinary system

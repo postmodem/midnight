@@ -1,0 +1,5 @@
+error: `to_s` is not allowed in a GPU system
+  --> tests/fail/gpu_to_s.12am:10:12
+   |
+10 |     text = body.x.to_s
+   |            ^^^^^^^^^^^ it makes a `String`, and the GPU has no strings

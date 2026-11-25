@@ -1,0 +1,35 @@
+# expect: nothing. The top level reads Position, but only after the loop
+# that ticks: that code runs once, like the set-up before the loop, and is
+# not part of a tick. During a tick only the GPU system uses the data.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+1000.times do |i|
+  spawn Position(i, 0.0), Velocity(1.0, 0.5)
+end
+
+Time.dt = 0.5
+100.times do
+  World.tick
+end
+
+sum = 0.0
+each Position do |pos|
+  sum += pos.x + pos.y
+end
+puts sum

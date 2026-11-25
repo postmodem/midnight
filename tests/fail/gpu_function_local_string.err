@@ -1,0 +1,10 @@
+error: `String` values are not allowed in a function called from a GPU system
+ --> tests/fail/gpu_function_local_string.12am:9:10
+  |
+9 |   name = "half"
+  |          ^^^^^^ the GPU works on numbers, `Bool`s, enums, entities and structs of those
+note: GPU system `halve` calls `half` here
+  --> tests/fail/gpu_function_local_string.12am:15:14
+   |
+15 |     body.x = half(body.x)
+   |              ------------

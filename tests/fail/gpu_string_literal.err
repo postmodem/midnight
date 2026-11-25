@@ -1,0 +1,5 @@
+error: `String` values are not allowed in a GPU system
+  --> tests/fail/gpu_string_literal.12am:10:12
+   |
+10 |     name = "body"
+   |            ^^^^^^ the GPU works on numbers, `Bool`s, enums, entities and structs of those

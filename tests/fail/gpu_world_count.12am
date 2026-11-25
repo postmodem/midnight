@@ -1,0 +1,13 @@
+# expect: `World.count` is not allowed in a GPU system, with a query and without
+# at: line 10, the expression `World.count(Body)`; line 11, the expression `World.count`
+
+component Body
+  x: Float32
+end
+
+gpu system spread
+  each Body do |body|
+    body.x /= World.count(Body)
+    body.x /= World.count
+  end
+end

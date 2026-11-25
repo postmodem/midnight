@@ -1,0 +1,12 @@
+# expect: `despawn` is not allowed in a GPU system
+# at: line 10, the expression `e.despawn`
+
+component Body
+  x: Float32
+end
+
+gpu system reap
+  each Entity, Body do |e, body|
+    e.despawn if body.x < 0
+  end
+end

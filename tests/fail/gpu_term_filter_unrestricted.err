@@ -1,0 +1,5 @@
+error: `Position` can't be a term of an `each` in a GPU system
+  --> tests/fail/gpu_term_filter_unrestricted.12am:17:16
+   |
+17 |   each Entity, Position, with: Named, without: Trail do |e, pos|
+   |                ^^^^^^^^ its field `x` is a `Float`, 64 bits wide; the GPU holds numbers of at most 32 bits, so declare it `Float32`

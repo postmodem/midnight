@@ -1,0 +1,36 @@
+# expect: top-level code that runs between ticks is the step `top level`,
+# after the last system. The loop that ticks reads Position of one entity:
+# a download. It sets that entity's Velocity before the tick: an upload, and
+# no download because no GPU block writes Velocity. The spawns and the write
+# to Position before the loop are set-up and not part of a tick.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+probe = spawn Position(0.0, 0.0), Velocity(1.0, 0.0)
+100.times do |i|
+  spawn Position(i, i), Velocity(0.0, 1.0)
+end
+probe[Position].y = 50.0
+
+frame = 0
+while frame < 10
+  probe[Velocity].dx = frame
+  World.tick
+  puts probe[Position].x
+  frame += 1
+end

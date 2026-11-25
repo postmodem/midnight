@@ -1,0 +1,13 @@
+# expect: `sleep` is not allowed in a GPU system
+# at: line 10, the call `sleep(0.1)`
+
+component Body
+  x: Float32
+end
+
+gpu system drift
+  each Body do |body|
+    sleep(0.1)
+    body.x += 1
+  end
+end

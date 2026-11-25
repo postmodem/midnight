@@ -1,0 +1,10 @@
+error: 4294967296 does not fit in 32 bits
+ --> tests/fail/gpu_function_int_literal.12am:9:7
+  |
+9 |   n % 4294967296
+  |       ^^^^^^^^^^ in a function called from a GPU system an `Int` holds -2147483648 to 2147483647
+note: GPU system `wrap_all` calls `wrap` here
+  --> tests/fail/gpu_function_int_literal.12am:14:14
+   |
+14 |     body.n = wrap(body.n)
+   |              ------------

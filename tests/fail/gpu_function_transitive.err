@@ -1,0 +1,10 @@
+error: `despawn` is not allowed in a function called from a GPU system
+  --> tests/fail/gpu_function_transitive.12am:18:3
+   |
+18 |   e.despawn if x > 1000
+   |   ^^^^^^^^^ structural changes are made on the CPU; make this one in an ordinary system
+note: GPU system `settle_all` reaches `remove_far` from here, through `settle` and `Limit.apply`
+  --> tests/fail/gpu_function_transitive.12am:27:14
+   |
+27 |     body.x = settle(e, body.x)
+   |              -----------------

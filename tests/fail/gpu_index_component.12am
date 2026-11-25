@@ -1,0 +1,16 @@
+# expect: `entity[Body]` is not allowed in a GPU system
+# at: line 14, the expression `chase.target[Body]`
+
+component Body
+  x: Float32
+end
+
+component Chase
+  target: Entity
+end
+
+gpu system chase
+  each Body, Chase do |body, chase|
+    body.x = chase.target[Body].x
+  end
+end

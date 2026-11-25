@@ -1,0 +1,5 @@
+error: `break` can't leave the `each` of a GPU system
+  --> tests/fail/gpu_break.12am:15:7
+   |
+15 |       break
+   |       ^^^^^ runs have no order, so there is nothing to stop; `next` ends the run for this entity

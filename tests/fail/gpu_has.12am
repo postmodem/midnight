@@ -1,0 +1,15 @@
+# expect: `has?` is not allowed in a GPU system
+# at: line 12, the expression `e.has?(Frozen)`
+
+component Body
+  x: Float32
+end
+
+tag Frozen
+
+gpu system move
+  each Entity, Body do |e, body|
+    next if e.has?(Frozen)
+    body.x += 1
+  end
+end

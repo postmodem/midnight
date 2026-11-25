@@ -1,0 +1,5 @@
+error: call to recursive function `Vec2.+` in a GPU system
+  --> tests/fail/gpu_recursion_operator.12am:25:5
+   |
+25 |     motion.velocity += motion.push
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Vec2.+` calls `Vec2.doubled`, which calls `Vec2.+`; a function called from a GPU system must not recurse

@@ -1,0 +1,5 @@
+error: `sleep` is not allowed in a GPU system
+  --> tests/fail/gpu_sleep.12am:10:5
+   |
+10 |     sleep(0.1)
+   |     ^^^^^^^^^^ the GPU can't pause the program

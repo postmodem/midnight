@@ -1,0 +1,5 @@
+error: `clock` is not allowed in a GPU system
+  --> tests/fail/gpu_clock.12am:10:15
+   |
+10 |     body.x += clock
+   |               ^^^^^ the GPU can't read the real clock; `Time` has the simulated one

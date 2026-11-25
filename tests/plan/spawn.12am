@@ -1,0 +1,40 @@
+# expect: a tick in which nothing is spawned has no transfer. A spawn adds
+# a row to the columns of the components it lists: `hatch` downloads
+# Position, which `move` wrote, and `move` uploads Position and Velocity in
+# the next tick. `count` spawns only a component with no GPU copy and adds
+# nothing.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+component Counter
+  value: Int
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system hatch
+  if Time.tick % 10 == 0
+    spawn Position(0.0, 0.0), Velocity(rand, rand)
+  end
+end
+
+system count
+  spawn Counter(Time.tick)
+end
+
+30.times do
+  World.tick
+end

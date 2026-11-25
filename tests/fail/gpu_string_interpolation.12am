@@ -1,0 +1,12 @@
+# expect: `String` values are not allowed in a GPU system, once for the whole interpolated string
+# at: line 10, the string `"at #{body.x}"`
+
+component Body
+  x: Float32
+end
+
+gpu system label
+  each Body do |body|
+    text = "at #{body.x}"
+  end
+end

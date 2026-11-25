@@ -1,0 +1,21 @@
+# expect: call to `spread` in a GPU system reaches recursive function `fib`: `spread` calls `fib`, which calls itself
+# at: line 19, the call `spread(body.x)`
+
+component Body
+  x: Float32
+end
+
+def fib(n: Int) -> Int
+  return n if n < 2
+  fib(n - 1) + fib(n - 2)
+end
+
+def spread(x: Float) -> Float
+  x * fib(10)
+end
+
+gpu system grow
+  each Body do |body|
+    body.x = spread(body.x)
+  end
+end

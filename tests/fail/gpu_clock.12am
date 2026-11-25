@@ -1,0 +1,12 @@
+# expect: `clock` is not allowed in a GPU system
+# at: line 10, the call `clock`
+
+component Body
+  x: Float32
+end
+
+gpu system drift
+  each Body do |body|
+    body.x += clock
+  end
+end

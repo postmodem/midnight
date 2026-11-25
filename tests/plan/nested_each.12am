@@ -1,0 +1,60 @@
+# expect: one upload. `gravity` reads Body through its nested `each` and
+# writes it through the outer one: the snapshot the nested `each` reads is
+# made in GPU memory and is no transfer. Well is named by the nested `each`
+# of `fall` only; `drift` writes it on the CPU every tick, so `fall` uploads
+# it, and nothing downloads it because no GPU block writes it.
+
+component Body
+  x: Float32
+  y: Float32
+  vx: Float32
+  vy: Float32
+  mass: Float32
+end
+
+component Well
+  x: Float32
+  y: Float32
+  pull: Float32
+end
+
+gpu system gravity
+  each Body do |a|
+    ax = 0.0
+    ay = 0.0
+    each Body do |b|
+      dx = b.x - a.x
+      dy = b.y - a.y
+      d2 = dx * dx + dy * dy + 0.01
+      pull = b.mass / (d2 * Math.sqrt(d2))
+      ax += dx * pull
+      ay += dy * pull
+    end
+    a.vx += ax * Time.dt
+    a.vy += ay * Time.dt
+    a.x += a.vx * Time.dt
+    a.y += a.vy * Time.dt
+  end
+end
+
+gpu system fall
+  each Body do |body|
+    each Well do |well|
+      body.vx += (well.x - body.x) * well.pull * Time.dt
+      body.vy += (well.y - body.y) * well.pull * Time.dt
+    end
+  end
+end
+
+system drift
+  each Well do |well|
+    well.x += 0.1
+  end
+end
+
+spawn Body(0.0, 0.0, 0.0, 0.0, 1.0)
+spawn Body(1.0, 0.0, 0.0, 0.5, 1.0)
+spawn Well(5.0, 5.0, 0.1)
+10.times do
+  World.tick
+end

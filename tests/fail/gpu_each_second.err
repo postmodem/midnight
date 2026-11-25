@@ -1,0 +1,5 @@
+error: second nested `each` in a GPU block
+  --> tests/fail/gpu_each_second.12am:18:5
+   |
+18 |     each Wall do |wall|
+   |     ^^^^^^^^^^^^^^^^^^^ a GPU block holds one nested `each`, directly inside it; give this one a GPU block of its own

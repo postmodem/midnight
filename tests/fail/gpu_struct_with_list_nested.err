@@ -1,0 +1,5 @@
+error: `Route` values are not allowed in a GPU system
+  --> tests/fail/gpu_struct_with_list_nested.12am:19:13
+   |
+19 |     route = Route()
+   |             ^^^^^^^ its field `path.points` is a `[Float]`; the GPU works on numbers, `Bool`s, enums, entities and structs of those

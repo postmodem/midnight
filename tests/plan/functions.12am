@@ -1,0 +1,56 @@
+# expect: what a system's functions do counts as the system's. `audit`
+# reaches a query of Position through two calls: a download. `pin` writes
+# Position of one entity through `e[Position]` in a function: it finds the
+# CPU copy current after `audit`, and `move` uploads what it left.
+# `World.count` and `has?` read no column.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+tag Anchor
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+def total_x -> Float
+  sum = 0.0
+  each Position do |pos|
+    sum += pos.x
+  end
+  sum
+end
+
+def mean_x -> Float
+  total_x / World.count(Position)
+end
+
+def hold(e: Entity)
+  e[Position].x = 0.0 if e.has?(Velocity)
+end
+
+system audit
+  puts mean_x
+end
+
+system pin
+  each Entity, with: Anchor do |e|
+    hold(e)
+  end
+end
+
+spawn Position(1.0, 0.0), Velocity(1.0, 0.0)
+spawn Position(2.0, 0.0), Velocity(0.0, 1.0), Anchor
+4.times do
+  World.tick
+end

@@ -1,0 +1,11 @@
+error: `srand` is not allowed in a GPU system
+  --> tests/fail/gpu_srand.12am:10:5
+   |
+10 |     srand(7)
+   |     ^^^^^^^^ seed from ordinary code; `rand` in a GPU system follows that seed
+
+error: `srand` is not allowed in a GPU system
+  --> tests/fail/gpu_srand.12am:11:5
+   |
+11 |     srand
+   |     ^^^^^ seed from ordinary code; `rand` in a GPU system follows that seed

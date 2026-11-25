@@ -1,0 +1,18 @@
+# expect: resource field `Config.title` can't be read in a GPU system, because it is a `String`; `Config.scale` is fine
+# at: line 16, the place `Config.title`
+
+component Body
+  x: Float32
+end
+
+resource Config
+  title: String = "run"
+  scale: Float = 2
+end
+
+gpu system scale
+  each Body do |body|
+    body.x *= Config.scale
+    title = Config.title
+  end
+end

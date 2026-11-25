@@ -1,0 +1,23 @@
+# expect: can't call `Label.width` in a GPU system, because its receiver is a `Label`, whose field `text` is a `String`
+# at: line 21, the call `LABEL.width`
+
+component Body
+  x: Float32
+end
+
+struct Label
+  text: String
+  size: Int
+
+  def width -> Int
+    size * 2
+  end
+end
+
+LABEL = Label("body", 3)
+
+gpu system label
+  each Body do |body|
+    body.x += LABEL.width
+  end
+end

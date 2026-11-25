@@ -1,0 +1,16 @@
+# expect: `each` nested two deep in a GPU system
+# at: line 11, the innermost `each`
+
+component Body
+  x: Float32
+end
+
+gpu system triples
+  each Body do |a|
+    each Body do |b|
+      each Body do |c|
+        a.x += b.x * c.x
+      end
+    end
+  end
+end

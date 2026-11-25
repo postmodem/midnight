@@ -1,0 +1,3 @@
+upload    Heat  thaw -> cool     on remove
+upload    Rate  thaw -> cool     on remove
+download  Heat  cool -> freeze   on add

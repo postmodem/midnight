@@ -1,0 +1,16 @@
+# expect: can't call `describe` in a GPU system, because it returns a `String`; the body of `describe` is not reported
+# at: line 14, the call `describe(body.x)`
+
+component Body
+  x: Float32
+end
+
+def describe(x: Float) -> String
+  "at #{x}"
+end
+
+gpu system label
+  each Body do |body|
+    text = describe(body.x)
+  end
+end

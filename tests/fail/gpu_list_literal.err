@@ -1,0 +1,5 @@
+error: `[Int]` values are not allowed in a GPU system
+  --> tests/fail/gpu_list_literal.12am:10:13
+   |
+10 |     steps = [1, 2, 3]
+   |             ^^^^^^^^^ the GPU works on numbers, `Bool`s, enums, entities and structs of those

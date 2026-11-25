@@ -1,0 +1,5 @@
+error: `has?` is not allowed in a GPU system
+  --> tests/fail/gpu_has.12am:12:13
+   |
+12 |     next if e.has?(Frozen)
+   |             ^^^^^^^^^^^^^^ a GPU system can't look an entity up; filter the query with `with:` or `without:`
