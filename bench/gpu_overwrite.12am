@@ -1,0 +1,41 @@
+# A GPU block assigns every field of Force for a million entities, and an
+# ordinary system then assigns every Force whole: neither reads what the
+# other wrote. Prints the time per tick.
+ENTITIES = 1_000_000
+TICKS = 500
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Force
+  fx: Float32
+  fy: Float32
+end
+
+gpu system push
+  each Position, Force do |pos, force|
+    force.fx = pos.x * 0.5
+    force.fy = pos.y * 0.5
+  end
+end
+
+system clear
+  each Force do |force|
+    force = Force(0.0, 0.0)
+  end
+end
+
+ENTITIES.times do |i|
+  spawn Position(i % 1000, i / 1000), Force(0.0, 0.0)
+end
+
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"

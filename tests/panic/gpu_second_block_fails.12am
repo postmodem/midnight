@@ -1,0 +1,33 @@
+# The second block of a GPU system fails. The program stops when that
+# `each` ends: the third block, whose result `report` would print, does not
+# run, and neither does `report`.
+# Expected: division by zero
+component Cell
+  v: Int32
+end
+
+resource Divisor
+  by: Int = 0
+end
+
+gpu system work
+  each Cell do |cell|
+    cell.v += 1
+  end
+  each Cell do |cell|
+    cell.v = cell.v / Divisor.by
+  end
+  each Cell do |cell|
+    cell.v += 100
+  end
+end
+
+system report
+  each Cell do |cell|
+    puts cell.v
+  end
+end
+
+spawn Cell(1)
+spawn Cell(2)
+World.tick

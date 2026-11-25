@@ -1,0 +1,65 @@
+# `e[C]` between ticks on a table whose columns a GPU block keeps in GPU
+# memory, the block writing Position and only reading Velocity. One kind of
+# use per tick: a read; the same row read twice; a part written; a whole
+# written; a part of Velocity written; four rows read; then all of them. The
+# table holds 200,000 rows of 8 bytes, 1,600,000 bytes a column: three rows
+# read in one tick travel alone, and a fourth brings the column. NAME.stats
+# has what moves in each tick.
+ENTITIES = 200_000
+
+component Position
+  x: Int32
+  y: Int32
+end
+
+component Velocity
+  dx: Int32
+  dy: Int32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx
+    pos.y += vel.dy
+  end
+end
+
+some: [Entity] = []
+ENTITIES.times do |i|
+  e = spawn Position(i % 1000, i / 1000), Velocity(i % 7 - 3, i % 5 - 2)
+  some.push(e) if i % 20000 == 3
+end
+a = some[0]
+b = some[1]
+c = some[2]
+d = some[3]
+
+sum = 0
+8.times do |t|
+  World.tick
+  if t == 0 || t == 6
+    sum += a[Position].x
+  end
+  if t == 1 || t == 6
+    sum += b[Position].x + b[Position].y
+  end
+  if t == 2 || t == 6
+    c[Position].x += 10
+  end
+  if t == 3 || t == 6
+    d[Position] = Position(t, -t)
+  end
+  if t == 4 || t == 6
+    a[Velocity].dy = t
+  end
+  if t == 5 || t == 6
+    sum += some[4][Position].x + some[5][Position].x + some[6][Position].x + some[7][Position].x
+  end
+  puts "tick #{t}: #{sum}"
+end
+
+check = 0
+each Position, Velocity do |pos, vel|
+  check = (check * 31 + pos.x * 1000 + pos.y + vel.dx * 7 + vel.dy) % 1000003
+end
+puts "checksum #{check}"

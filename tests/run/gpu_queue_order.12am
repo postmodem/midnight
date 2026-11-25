@@ -1,0 +1,70 @@
+# Rows moved in GPU memory and writes to the same columns, between two GPU
+# systems. `shuffle` runs after `move`: it despawns entities whose rows the
+# GPU copy alone holds, so the last rows are moved in GPU memory; spawns
+# new rows where those last rows were; writes one row of Position with
+# `e[C]`; and assigns every Charge whole, so the column is uploaded whole.
+# `settle` then uses both columns: what the writes put there must arrive
+# after the moves, never before. The table holds 200,000 rows of 8 bytes,
+# enough for a row to travel alone. NAME.stats has what moves in each tick.
+ENTITIES = 200_000
+
+component Position
+  x: Int32
+  y: Int32
+end
+
+component Charge
+  q: Int32
+  r: Int32
+end
+
+component Doom
+  victims: [Entity]
+  poked: Entity
+end
+
+gpu system move
+  each Position, Charge do |pos, charge|
+    pos.x += charge.q
+    charge.r += 1
+  end
+end
+
+system shuffle
+  each Doom do |doom|
+    doom.victims.each do |e|
+      e.despawn
+    end
+    3.times do |i|
+      spawn Position(i, Time.tick), Charge(1, i)
+    end
+    doom.poked[Position].y = Time.tick * 100
+  end
+  each Charge do |charge|
+    charge = Charge(2, 0)
+  end
+end
+
+gpu system settle
+  each Position, Charge do |pos, charge|
+    pos.y += charge.q + charge.r
+  end
+end
+
+some: [Entity] = []
+ENTITIES.times do |i|
+  e = spawn Position(i % 1000, i / 1000), Charge(i % 3, 0)
+  some.push(e) if i % 10000 == 9
+end
+doom = spawn Doom([], some[0])
+
+6.times do |t|
+  doom[Doom].victims = [some[t * 3 + 1], some[t * 3 + 2], some[t * 3 + 3]]
+  World.tick
+end
+
+sum = 0
+each Position, Charge do |pos, charge|
+  sum = (sum * 31 + pos.x * 1000 + pos.y + charge.q * 7 + charge.r) % 1000003
+end
+puts "#{World.count(Position)} entities, checksum #{sum}"

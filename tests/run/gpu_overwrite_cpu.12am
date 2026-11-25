@@ -1,0 +1,128 @@
+# Ordinary loops that assign a component a GPU block wrote, in GPU memory.
+# `clear` assigns Force whole and `project` assigns every field of Screen
+# before reading either: neither needs what the block wrote. Each of the
+# others reads it, or might: a field left out (Heading), a read before the
+# assignment (Spin), a `break` (Brake), an `e[C]` in a called function
+# (Peek), a nested `each` over the same component (Nest). NAME.stats has
+# what moves in each tick.
+component Position
+  x: Int32
+  y: Int32
+end
+
+component Force
+  fx: Int32
+  fy: Int32
+end
+
+component Screen
+  x: Int32
+  y: Int32
+end
+
+component Heading
+  a: Int32
+  b: Int32
+end
+
+component Spin
+  a: Int32
+  b: Int32
+end
+
+component Brake
+  v: Int32
+  w: Int32
+end
+
+component Peek
+  v: Int32
+  w: Int32
+end
+
+component Nest
+  v: Int32
+  w: Int32
+end
+
+resource Seen
+  total: Int = 0
+end
+
+gpu system step
+  each Position, Force, Screen, Heading do |pos, force, screen, heading|
+    force.fx += pos.x
+    force.fy += pos.y
+    screen.x += 1
+    screen.y += 1
+    heading.a += heading.b
+    heading.b += 1
+  end
+  each Spin, Brake, Peek, Nest do |spin, brake, peek, nest|
+    spin.a += spin.b
+    spin.b += 1
+    brake.v += brake.w
+    brake.w += 1
+    peek.v += peek.w
+    peek.w += 1
+    nest.v += nest.w
+    nest.w += 1
+  end
+end
+
+def look(e: Entity) -> Int
+  e[Peek].v
+end
+
+system clear
+  each Force do |force|
+    force = Force(0, 0)
+  end
+end
+
+system project
+  each Position, Screen do |pos, screen|
+    scale = 2
+    screen.x = pos.x * scale
+    screen.y = pos.y * scale
+  end
+end
+
+system near_misses
+  each Heading do |heading|
+    heading.a = 1
+  end
+  each Spin do |spin|
+    was = spin.a
+    spin = Spin(was % 7, 0)
+  end
+  each Brake do |brake|
+    brake = Brake(1, 1)
+    break if brake.v > 5
+  end
+  total = 0
+  each Entity, Peek do |e, peek|
+    peek = Peek(2, 2)
+    total += look(e)
+  end
+  each Nest do |nest|
+    nest = Nest(3, 3)
+    each Nest do |other|
+      total += other.v
+    end
+  end
+  Seen.total += total
+end
+
+5.times do |i|
+  spawn Position(i, -i), Force(0, 0), Screen(0, 0), Heading(i, 1), Spin(i, 2), Brake(i, 3), Peek(i, 4), Nest(i, 5)
+end
+
+4.times do
+  World.tick
+end
+
+each Force, Screen, Heading, Spin, Brake, Peek, Nest do |force, screen, heading, spin, brake, peek, nest|
+  puts "#{force.fx} #{force.fy} #{screen.x} #{screen.y} #{heading.a} #{heading.b} #{spin.a} #{spin.b} #{brake.v} #{brake.w} #{peek.v} #{peek.w} #{nest.v} #{nest.w}"
+end
+puts Seen.total

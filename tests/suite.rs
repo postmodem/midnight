@@ -22,7 +22,7 @@
 //!
 //! # GPU mode
 //!
-//! `gpu_programs` and `gpu_stats_match_plan` do nothing unless
+//! `gpu_programs`, `gpu_stats_match_plan` and `gpu_stats_match_expected` do nothing unless
 //! `MIDNIGHT_TEST_GPU` names where GPU systems are to run:
 //!
 //! - `software`: on Mesa's `llvmpipe`. `MIDNIGHT_TEST_SOFTWARE_ICD` is the
@@ -41,7 +41,14 @@
 //!
 //! `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
 //! `MIDNIGHT_GPU=stats` and compares the uploads and downloads of every tick
-//! after the first with what `midnight plan` lists.
+//! after the first with what `midnight plan` lists, and requires no row to
+//! move alone.
+//!
+//! `gpu_stats_match_expected` runs every program of `tests/run` that has a
+//! `NAME.stats` file with `MIDNIGHT_GPU=stats`, and its `stats` lines must
+//! be exactly that file. With `UPDATE_EXPECT=1` the release run writes the
+//! file instead: `.stats` files are the only expected files GPU mode
+//! writes.
 //!
 //! The compiler is the one cargo built, or `MIDNIGHT_BIN` when that is set.
 //! Programs are found relative to the working directory, which must be the
@@ -567,37 +574,69 @@ struct DeviceRun {
     stderr: String,
     /// The device the `info` line names.
     device: String,
-    /// The uploads and downloads of each `stats` line, tick 0 first.
-    ticks: Vec<(u64, u64)>,
+    /// What each `stats` line counts, tick 0 first.
+    ticks: Vec<Counts>,
+    /// The `stats` lines, each without `midnight: gpu: `.
+    stats: String,
 }
 
-/// Reads `N: U uploads, D downloads`, what a `stats` line says after
-/// `tick`: the tick, the uploads and the downloads.
-fn parse_stats(line: &str) -> Option<(usize, u64, u64)> {
+/// What one `stats` line counts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Counts {
+    uploads: u64,
+    downloads: u64,
+    rows_up: u64,
+    rows_down: u64,
+    submissions: u64,
+    waits: u64,
+}
+
+/// Reads what a `stats` line says after `tick`, `N: U uploads, D
+/// downloads, R rows up, S rows down, B submissions, W waits`: the tick and
+/// the counts.
+fn parse_stats(line: &str) -> Option<(usize, Counts)> {
     let (tick, counts) = line.split_once(": ")?;
-    let (uploads, downloads) = counts.split_once(", ")?;
-    let count = |text: &str, unit: &str| {
-        let (number, word) = text.split_once(' ')?;
-        (word.strip_suffix('s').unwrap_or(word) == unit)
-            .then(|| number.parse::<u64>().ok())
-            .flatten()
+    let units = [
+        ("upload", ""),
+        ("download", ""),
+        ("row", " up"),
+        ("row", " down"),
+        ("submission", ""),
+        ("wait", ""),
+    ];
+    let mut numbers = [0u64; 6];
+    let mut parts = counts.split(", ");
+    for ((noun, after), number) in units.iter().zip(numbers.iter_mut()) {
+        let (count, words) = parts.next()?.split_once(' ')?;
+        let words = words.strip_suffix(after)?;
+        if words.strip_suffix('s').unwrap_or(words) != *noun {
+            return None;
+        }
+        *number = count.parse().ok()?;
+    }
+    if parts.next().is_some() {
+        return None;
+    }
+    let [uploads, downloads, rows_up, rows_down, submissions, waits] = numbers;
+    let counts = Counts {
+        uploads,
+        downloads,
+        rows_up,
+        rows_down,
+        submissions,
+        waits,
     };
-    Some((
-        tick.parse().ok()?,
-        count(uploads, "upload")?,
-        count(downloads, "download")?,
-    ))
+    Some((tick.parse().ok()?, counts))
 }
 
 /// Runs a compiled program with its GPU systems on `device`, asking for
-/// the `info` lines and, with `stats`, the `stats` lines. Fails when the
-/// program finds no such device or runs a GPU block on the CPU.
-fn run_on_device(exe: &Path, device: Device, stats: bool) -> Result<DeviceRun, String> {
+/// the `info` lines and giving the further words of `MIDNIGHT_GPU` in
+/// `more`. Fails when the program finds no such device or runs a GPU
+/// block on the CPU.
+fn run_on_device(exe: &Path, device: Device, more: &[&str]) -> Result<DeviceRun, String> {
     let mut command = Command::new(exe);
     let mut words = vec!["info"];
-    if stats {
-        words.push("stats");
-    }
+    words.extend_from_slice(more);
     if device == Device::Software {
         words.push("software");
         command
@@ -613,6 +652,7 @@ fn run_on_device(exe: &Path, device: Device, stats: bool) -> Result<DeviceRun, S
         stderr: String::new(),
         device: String::new(),
         ticks: Vec::new(),
+        stats: String::new(),
     };
     for line in text(&output.stderr).split_inclusive('\n') {
         let Some(said) = line.strip_prefix("midnight: gpu: ") else {
@@ -622,8 +662,10 @@ fn run_on_device(exe: &Path, device: Device, stats: bool) -> Result<DeviceRun, S
         let said = said.trim_end();
         if let Some(counts) = said.strip_prefix("tick ") {
             match parse_stats(counts) {
-                Some((tick, uploads, downloads)) if tick == run.ticks.len() => {
-                    run.ticks.push((uploads, downloads));
+                Some((tick, counts)) if tick == run.ticks.len() => {
+                    run.ticks.push(counts);
+                    run.stats.push_str(said);
+                    run.stats.push('\n');
                 }
                 _ => return Err(format!("unexpected `stats` line: {said}")),
             }
@@ -666,8 +708,7 @@ fn run_gpu_program(
         std::fs::read_to_string(path)
             .map_err(|error| format!("{label}: can't read {}: {error}", path.display()))
     };
-    let run =
-        run_on_device(&exe, device, false).map_err(|message| format!("{label}: {message}"))?;
+    let run = run_on_device(&exe, device, &[]).map_err(|message| format!("{label}: {message}"))?;
     let (status, expected_stderr) = if stops {
         (1, read(&source.with_extension("err"))?)
     } else {
@@ -789,8 +830,8 @@ fn gpu_stats_match_plan() {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
         let label = format!("{STATS_PROGRAM} ({mode:?})");
-        let run =
-            run_on_device(&exe, device, true).map_err(|message| format!("{label}: {message}"))?;
+        let run = run_on_device(&exe, device, &["stats"])
+            .map_err(|message| format!("{label}: {message}"))?;
         if run.status != Some(0) || run.ticks.len() < 3 {
             return Err(format!(
                 "{label}: exited with {:?} after {} ticks\n--- stderr\n{}---",
@@ -802,11 +843,18 @@ fn gpu_stats_match_plan() {
         // The last line also counts the top-level code after the loop.
         let last = run.ticks.len() - 1;
         for (tick, counts) in run.ticks.iter().enumerate().take(last).skip(1) {
-            if *counts != planned {
+            if (counts.uploads, counts.downloads) != planned {
                 return Err(format!(
                     "{label}: tick {tick} made {} uploads and {} downloads; \
                      the plan lists {} and {}\n{plan}",
-                    counts.0, counts.1, planned.0, planned.1
+                    counts.uploads, counts.downloads, planned.0, planned.1
+                ));
+            }
+            if (counts.rows_up, counts.rows_down) != (0, 0) {
+                return Err(format!(
+                    "{label}: tick {tick} moved {} rows up and {} rows down; \
+                     the plan has no `rows` line\n{plan}",
+                    counts.rows_up, counts.rows_down
                 ));
             }
         }
@@ -820,6 +868,65 @@ fn gpu_stats_match_plan() {
         "gpu_stats_match_plan: uploads {} and downloads {} in every tick but the first and the last on {}",
         planned.0,
         planned.1,
+        devices.join(" and ")
+    ));
+}
+
+/// The programs of `tests/run` that have a `NAME.stats` file.
+fn stats_programs() -> Vec<PathBuf> {
+    programs("tests/run")
+        .into_iter()
+        .filter(|source| source.with_extension("stats").exists())
+        .collect()
+}
+
+#[test]
+fn gpu_stats_match_expected() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let sources = stats_programs();
+    assert!(
+        !sources.is_empty(),
+        "no program with a .stats file under tests/run of the working directory"
+    );
+    let dir = scratch("gpu-stats-expected");
+    let jobs: Vec<(&PathBuf, Mode)> = sources
+        .iter()
+        .flat_map(|source| MODES.map(|mode| (source, mode)))
+        .collect();
+    let devices = Mutex::new(BTreeSet::new());
+    let failures = for_each_parallel(&jobs, |(source, mode)| {
+        let exe = exe_path(&dir, source, *mode);
+        build(source, &exe, *mode)?;
+        let label = format!("{} ({mode:?})", source.display());
+        let run = run_on_device(&exe, device, &["stats"])
+            .map_err(|message| format!("{label}: {message}"))?;
+        if run.status != Some(0) || !run.stderr.is_empty() {
+            return Err(format!(
+                "{label}: exited with {:?}\n--- stderr\n{}---",
+                run.status, run.stderr
+            ));
+        }
+        devices.lock().unwrap().insert(run.device);
+        // Only the release run may write the expected file; debug must match it.
+        if update_expect() && *mode == Mode::Debug {
+            return Ok(());
+        }
+        expect(
+            &source.with_extension("stats"),
+            &run.stats,
+            "the `stats` lines",
+        )
+        .map_err(|message| format!("{label}: {message}"))
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs with stats", jobs.len(), failures);
+    let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
+    note(&format!(
+        "gpu_stats_match_expected: {} runs of {} programs on {}",
+        jobs.len(),
+        sources.len(),
         devices.join(" and ")
     ));
 }
@@ -1073,8 +1180,33 @@ fn gpu_driver_finds_its_parts() {
 
 #[test]
 fn stats_lines_are_read() {
-    assert_eq!(parse_stats("0: 3 uploads, 1 download"), Some((0, 3, 1)));
-    assert_eq!(parse_stats("12: 1 upload, 0 downloads"), Some((12, 1, 0)));
-    assert_eq!(parse_stats("0: 3 uploads"), None);
-    assert_eq!(parse_stats("0: 3 downloads, 1 upload"), None);
+    let counts = |numbers: [u64; 6]| Counts {
+        uploads: numbers[0],
+        downloads: numbers[1],
+        rows_up: numbers[2],
+        rows_down: numbers[3],
+        submissions: numbers[4],
+        waits: numbers[5],
+    };
+    assert_eq!(
+        parse_stats("0: 3 uploads, 1 download, 2 rows up, 1 row down, 2 submissions, 1 wait"),
+        Some((0, counts([3, 1, 2, 1, 2, 1])))
+    );
+    assert_eq!(
+        parse_stats("12: 1 upload, 0 downloads, 0 rows up, 0 rows down, 1 submission, 0 waits"),
+        Some((12, counts([1, 0, 0, 0, 1, 0])))
+    );
+    assert_eq!(parse_stats("0: 3 uploads, 1 download"), None);
+    assert_eq!(
+        parse_stats("0: 1 download, 3 uploads, 0 rows up, 0 rows down, 1 submission, 1 wait"),
+        None
+    );
+    assert_eq!(
+        parse_stats("0: 3 uploads, 1 download, 2 rows down, 1 row up, 2 submissions, 1 wait"),
+        None
+    );
+    assert_eq!(
+        parse_stats("0: 3 uploads, 1 download, 2 rows up, 1 row down, 2 submissions, 1 wait, 4"),
+        None
+    );
 }

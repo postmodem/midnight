@@ -1624,6 +1624,10 @@ bool mn_gpu_active = false;
 
 uint64_t mn_gpu_uploads;
 uint64_t mn_gpu_downloads;
+uint64_t mn_gpu_rows_up;
+uint64_t mn_gpu_rows_down;
+uint64_t mn_gpu_submissions;
+uint64_t mn_gpu_waits;
 
 #ifndef MN_GPU
 /* No column has a GPU copy. */
@@ -1838,13 +1842,25 @@ static void gpu_stats_line(void) {
     if (!stats_pending) return;
     stats_pending = false;
     fflush(stdout);
-    fprintf(stderr, "midnight: gpu: tick %lld: %llu upload%s, %llu download%s\n",
+    fprintf(stderr,
+            "midnight: gpu: tick %lld: %llu upload%s, %llu download%s, "
+            "%llu row%s up, %llu row%s down, %llu submission%s, %llu wait%s\n",
             (long long)(mn_time.tick - 1), (unsigned long long)mn_gpu_uploads,
             mn_gpu_uploads == 1 ? "" : "s",
             (unsigned long long)mn_gpu_downloads,
-            mn_gpu_downloads == 1 ? "" : "s");
+            mn_gpu_downloads == 1 ? "" : "s",
+            (unsigned long long)mn_gpu_rows_up, mn_gpu_rows_up == 1 ? "" : "s",
+            (unsigned long long)mn_gpu_rows_down,
+            mn_gpu_rows_down == 1 ? "" : "s",
+            (unsigned long long)mn_gpu_submissions,
+            mn_gpu_submissions == 1 ? "" : "s",
+            (unsigned long long)mn_gpu_waits, mn_gpu_waits == 1 ? "" : "s");
     mn_gpu_uploads = 0;
     mn_gpu_downloads = 0;
+    mn_gpu_rows_up = 0;
+    mn_gpu_rows_down = 0;
+    mn_gpu_submissions = 0;
+    mn_gpu_waits = 0;
 }
 
 /* Releases what mn_gpu_run kept for every block, then the device. */

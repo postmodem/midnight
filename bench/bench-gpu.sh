@@ -23,6 +23,10 @@ COSTS=(
   "gpu_read_tables:a reader of 2 components, 64 tables"
   "gpu_poke:one e[C] read and write a tick"
   "gpu_spawn:one spawn a tick into 1,000,000"
+  "gpu_despawn:one despawn a tick among 1,000,000"
+  "gpu_tag:one add of a tag a tick"
+  "gpu_rare_write:a loop that assigns under a condition"
+  "gpu_overwrite:both sides assign a component whole"
 )
 GRAVITY_TOLERANCE=0.00001
 words=${MIDNIGHT_GPU:+$MIDNIGHT_GPU,}
@@ -180,7 +184,7 @@ transfers() {
     return
   fi
   run_once "$name.stats" "$name" "${words}stats"
-  sed -n 's/^midnight: gpu: tick [0-9]*: //p' "$work/$name.stats.err" | sed '1d;$d' >"$work/$name.ticks"
+  sed -n 's/^midnight: gpu: tick [0-9]*: //p' "$work/$name.stats.err" | cut -d, -f1,2 | sed '1d;$d' >"$work/$name.ticks"
   ticks=$(wc -l <"$work/$name.ticks")
   counted=$(sort -u "$work/$name.ticks")
   if [ "$counted" = "$expected" ]; then

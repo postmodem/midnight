@@ -1,0 +1,75 @@
+# `add` and `remove` on entities whose columns a GPU block keeps in GPU
+# memory, the block writing Position and only reading Velocity, over the
+# tables with and without the tag Marked. Between ticks the top level adds
+# the tag to one entity and removes it from another, applied at once, and
+# replaces one entity's Velocity with `add`, which moves no row. `mark` adds
+# the tag to three entities from an `each` and `untag` removes it from one:
+# queued, so the rows they move come back together. The tables hold up to
+# 200,000 rows of 8 bytes, enough for a row to travel alone. NAME.stats has
+# what moves in each tick.
+ENTITIES = 200_000
+
+component Position
+  x: Int32
+  y: Int32
+end
+
+component Velocity
+  dx: Int32
+  dy: Int32
+end
+
+component Tagger
+  a: Entity
+  b: Entity
+  c: Entity
+  off: Entity
+end
+
+tag Marked
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx
+    pos.y += vel.dy
+  end
+end
+
+system mark
+  each Tagger do |tagger|
+    tagger.a.add(Marked)
+    tagger.b.add(Marked)
+    tagger.c.add(Marked)
+  end
+end
+
+system untag
+  each Tagger do |tagger|
+    tagger.off.remove(Marked)
+  end
+end
+
+tagger = spawn Tagger(Entity.none, Entity.none, Entity.none, Entity.none)
+chosen: [Entity] = []
+ENTITIES.times do |i|
+  e = spawn Position(i % 1000, i / 1000), Velocity(i % 7 - 3, i % 5 - 2)
+  chosen.push(e) if i % 2000 == 11
+end
+
+8.times do |t|
+  World.tick
+  chosen[t].add(Marked)
+  chosen[t + 10].add(Velocity(t, -t))
+  chosen[t - 1].remove(Marked) if t > 0
+  k = 20 + t * 4
+  tagger[Tagger] = Tagger(chosen[k], chosen[k + 1], chosen[k + 2], chosen[k - 4])
+end
+
+sum = 0
+each Position, Velocity, with: Marked do |pos, vel|
+  sum = (sum * 31 + pos.x * 1000 + pos.y + vel.dx * 7 + vel.dy) % 1000003
+end
+each Position, Velocity, without: Marked do |pos, vel|
+  sum = (sum * 31 + pos.x * 1000 + pos.y + vel.dx * 7 + vel.dy) % 1000003
+end
+puts "#{World.count(Position, with: Marked)} marked, checksum #{sum}"

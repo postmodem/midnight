@@ -1,0 +1,60 @@
+# A GPU system of four blocks before an ordinary system that reads what
+# they wrote: the second has a nested `each` over two tables, the third can
+# fail and does not. NAME.stats counts the submissions and waits of each
+# tick.
+component Position
+  x: Int32
+  y: Int32
+end
+
+component Velocity
+  dx: Int32
+  dy: Int32
+end
+
+component Mass
+  m: Int32
+end
+
+tag Heavy
+
+resource Scale
+  by: Int = 3
+end
+
+gpu system work
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx
+    pos.y += vel.dy
+  end
+  each Velocity, Mass do |vel, mass|
+    s = 0
+    each Mass do |other|
+      s += other.m
+    end
+    vel.dx = (vel.dx + s) % 5 - 2
+  end
+  each Mass do |mass|
+    mass.m = (mass.m * 7) / Scale.by % 11
+  end
+  each Position do |pos|
+    pos.y -= 1
+  end
+end
+
+system report
+  sum = 0
+  each Position, Mass do |pos, mass|
+    sum += pos.x * 3 + pos.y + mass.m
+  end
+  puts sum
+end
+
+6.times do |i|
+  spawn Position(i, -i), Velocity(1, 2), Mass(i + 1)
+  spawn Position(-i, i), Velocity(2, 1), Mass(i + 2), Heavy
+end
+
+5.times do
+  World.tick
+end

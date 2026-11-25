@@ -32,6 +32,14 @@ void *mn_realloc(void *memory, size_t size);
 extern uint64_t mn_gpu_uploads;
 extern uint64_t mn_gpu_downloads;
 
+/* Rows of component columns written to a GPU copy other than by whole
+ * columns, and rows brought back alone; submissions to the queue, and
+ * waits for the device, of any kind. Since the last `stats` line. */
+extern uint64_t mn_gpu_rows_up;
+extern uint64_t mn_gpu_rows_down;
+extern uint64_t mn_gpu_submissions;
+extern uint64_t mn_gpu_waits;
+
 /* ---- In midnight_gpu.c --------------------------------------------------- */
 
 /* Chooses the device: the fastest adapter of the primary backends, with

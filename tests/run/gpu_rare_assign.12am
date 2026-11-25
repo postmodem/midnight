@@ -1,0 +1,34 @@
+# An ordinary loop that can assign Position, which a GPU block writes, but
+# assigns it only in every third tick. NAME.stats has what moves in each
+# tick.
+component Position
+  x: Int32
+end
+
+component Velocity
+  dx: Int32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx
+  end
+end
+
+system fence
+  each Position do |pos|
+    pos.x = 0 if Time.tick % 3 == 2 && pos.x > 4
+  end
+end
+
+6.times do |i|
+  spawn Position(i), Velocity(i % 3)
+end
+
+9.times do
+  World.tick
+end
+
+each Position do |pos|
+  puts pos.x
+end

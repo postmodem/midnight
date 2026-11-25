@@ -258,6 +258,7 @@ static void buffer_write(const Buffer *buffer, const void *data,
 static void submit(WGPUCommandEncoder encoder) {
     WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
     wgpuQueueSubmit(gpu.queue, 1, &commands);
+    mn_gpu_submissions++;
     wgpuCommandBufferRelease(commands);
     wgpuCommandEncoderRelease(encoder);
     gpu.pending = true;
@@ -298,6 +299,7 @@ void mn_gpu_device_wait(void) {
     callback.callback = on_work_done;
     callback.userdata1 = &done;
     wgpuQueueOnSubmittedWorkDone(gpu.queue, callback);
+    mn_gpu_waits++;
     device_poll_until(&done);
     if (done < 0) gpu_fail("the device did not finish its work");
     gpu.pending = false;
@@ -320,6 +322,7 @@ static const void *buffer_read(const Buffer *buffer, uint64_t bytes) {
     callback.userdata1 = &done;
     wgpuBufferMapAsync(buffer->handle, WGPUMapMode_Read, 0, (size_t)bytes,
                        callback);
+    mn_gpu_waits++;
     device_poll_until(&done);
     gpu.pending = false;
     if (done < 0) gpu_fail("can't read a buffer back");

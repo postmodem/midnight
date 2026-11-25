@@ -1,0 +1,42 @@
+# One GPU block moves a million entities; an ordinary system reads every
+# position and assigns to one only under a condition that never holds.
+# Prints the time per tick.
+TICKS = 500
+ENTITIES = 1_000_000
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system fence
+  each Position do |pos|
+    pos.x = 0.0 if pos.x > 1.0e30
+  end
+end
+
+ENTITIES.times do |i|
+  spawn Position(i % 1000, i / 1000), Velocity((i % 7 - 3) * 0.5, (i % 5 - 2) * 0.25)
+end
+
+Time.dt = 1.0 / 64
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"
