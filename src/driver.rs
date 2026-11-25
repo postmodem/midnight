@@ -5,6 +5,8 @@ use std::process::Command;
 
 const RUNTIME_H: &str = include_str!("../runtime/midnight_rt.h");
 const RUNTIME_C: &str = include_str!("../runtime/midnight_rt.c");
+const GPU_H: &str = include_str!("../runtime/midnight_gpu.h");
+const GPU_C: &str = include_str!("../runtime/midnight_gpu.c");
 
 const RELEASE_FLAGS: &[&str] = &["-O2", "-fwrapv"];
 const DEBUG_FLAGS: &[&str] = &[
@@ -15,11 +17,12 @@ const DEBUG_FLAGS: &[&str] = &[
     "-DMN_DEBUG",
 ];
 
-/// Compiles `c_source` and the runtime into the executable `out`.
-/// The error is a message ready to print.
-pub fn build(c_source: &str, out: &Path, debug: bool) -> Result<(), String> {
+/// Compiles `c_source` and the runtime into the executable `out`. `gpu`
+/// says whether the program declares a GPU system. The error is a message
+/// ready to print.
+pub fn build(c_source: &str, out: &Path, debug: bool, gpu: bool) -> Result<(), String> {
     let dir = make_build_dir()?;
-    let result = compile_in(&dir, c_source, out, debug);
+    let result = compile_in(&dir, c_source, out, debug, gpu);
     if result.is_ok() {
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -28,17 +31,38 @@ pub fn build(c_source: &str, out: &Path, debug: bool) -> Result<(), String> {
 
 /// Compiles into a temporary directory, runs the program with this
 /// process's standard streams, and returns its exit status.
-pub fn run(c_source: &str, debug: bool) -> Result<u8, String> {
+pub fn run(c_source: &str, debug: bool, gpu: bool) -> Result<u8, String> {
     let dir = make_build_dir()?;
     let exe = dir.join("program");
-    compile_in(&dir, c_source, &exe, debug)?;
+    compile_in(&dir, c_source, &exe, debug, gpu)?;
     let status = Command::new(&exe).status();
     let _ = std::fs::remove_dir_all(&dir);
     let status = status.map_err(|error| format!("midnight: can't run the program: {error}"))?;
     Ok(exit_code(status))
 }
 
-fn compile_in(dir: &Path, c_source: &str, out: &Path, debug: bool) -> Result<(), String> {
+/// The flags that build and link `midnight_gpu.c`, when the program has a
+/// GPU system and `MIDNIGHT_GPU_FLAGS` gives them. Says so on standard
+/// error when the program has one and the variable does not.
+fn gpu_flags(gpu: bool) -> Option<String> {
+    if !gpu {
+        return None;
+    }
+    let flags = std::env::var("MIDNIGHT_GPU_FLAGS").unwrap_or_default();
+    if flags.trim().is_empty() {
+        eprintln!("midnight: MIDNIGHT_GPU_FLAGS is not set; GPU systems will run on the CPU");
+        return None;
+    }
+    Some(flags)
+}
+
+fn compile_in(
+    dir: &Path,
+    c_source: &str,
+    out: &Path,
+    debug: bool,
+    gpu: bool,
+) -> Result<(), String> {
     let write = |name: &str, text: &str| {
         std::fs::write(dir.join(name), text).map_err(|error| {
             format!(
@@ -50,6 +74,11 @@ fn compile_in(dir: &Path, c_source: &str, out: &Path, debug: bool) -> Result<(),
     write("program.c", c_source)?;
     write("midnight_rt.h", RUNTIME_H)?;
     write("midnight_rt.c", RUNTIME_C)?;
+    let gpu_flags = gpu_flags(gpu);
+    if gpu_flags.is_some() {
+        write("midnight_gpu.h", GPU_H)?;
+        write("midnight_gpu.c", GPU_C)?;
+    }
 
     let cc = std::env::var("MIDNIGHT_CC").unwrap_or_else(|_| "cc".to_string());
     let mut command = Command::new(&cc);
@@ -58,12 +87,27 @@ fn compile_in(dir: &Path, c_source: &str, out: &Path, debug: bool) -> Result<(),
     if let Ok(extra) = std::env::var("MIDNIGHT_CFLAGS") {
         command.args(extra.split_whitespace());
     }
+    // The runtime reads MIDNIGHT_GPU when the program has a GPU system, and
+    // uses a device when midnight_gpu.c is built with it.
+    if gpu {
+        command.arg("-DMN_GPU_SYSTEMS");
+    }
+    if gpu_flags.is_some() {
+        command.arg("-DMN_GPU");
+    }
     command
         .arg("-o")
         .arg(out)
         .arg(dir.join("program.c"))
-        .arg(dir.join("midnight_rt.c"))
-        .arg("-lm");
+        .arg(dir.join("midnight_rt.c"));
+    if gpu_flags.is_some() {
+        command.arg(dir.join("midnight_gpu.c"));
+    }
+    command.arg("-lm");
+    // Libraries come after the files that use them.
+    if let Some(flags) = &gpu_flags {
+        command.args(flags.split_whitespace());
+    }
 
     let output = command.output().map_err(|error| {
         format!(
