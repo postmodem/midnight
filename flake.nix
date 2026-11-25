@@ -110,6 +110,29 @@
           meta.mainProgram = "midnight-suite";
         };
 
+      # Runs the suite's GPU tests by name, and fails unless every name
+      # matches a test.
+      gpuTestsFor =
+        pkgs:
+        let
+          suite = lib.getExe (suiteFor pkgs);
+          names = [
+            "gpu_programs"
+            "gpu_stats_match_plan"
+            "gpu_driver_finds_its_parts"
+          ];
+          list = lib.concatStringsSep " " names;
+          count = toString (builtins.length names);
+        in
+        ''
+          found=$(${suite} --exact --list ${list} | grep -c ': test$' || true)
+          if [ "$found" != ${count} ]; then
+            echo "midnight-gpu-test: ${count} GPU tests named, $found found" >&2
+            exit 1
+          fi
+          ${suite} --exact ${list}
+        '';
+
       # The suite's GPU mode on the machine's hardware device.
       gpuTestFor =
         pkgs:
@@ -124,7 +147,7 @@
           };
           text = ''
             cd ${src}
-            exec ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan gpu_driver_finds_its_parts
+            ${gpuTestsFor pkgs}
           '';
         };
 
@@ -276,7 +299,7 @@
               ''
                 export HOME=$TMPDIR XDG_RUNTIME_DIR=$TMPDIR
                 cd ${src}
-                ${lib.getExe (suiteFor pkgs)} --exact gpu_programs gpu_stats_match_plan gpu_driver_finds_its_parts
+                ${gpuTestsFor pkgs}
                 touch $out
               '';
         }
