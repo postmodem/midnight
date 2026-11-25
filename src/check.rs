@@ -356,6 +356,10 @@ struct FnCtx {
     const_reported: bool,
     /// In a method: the `self` local and its record.
     self_: Option<(LocalId, RecordId)>,
+    /// The number of query `each` bodies around the point being checked.
+    query_eaches: u32,
+    /// The body is a `gpu system`.
+    gpu: bool,
     /// One entry per enclosing loop: whether a `break` targets it.
     loops: Vec<bool>,
     /// Control can't reach the point being checked.
@@ -379,6 +383,8 @@ impl FnCtx {
             ended: Vec::new(),
             const_reported: false,
             self_: None,
+            query_eaches: 0,
+            gpu: false,
             loops: Vec::new(),
             unreachable: false,
             ret: Ret::Nothing,

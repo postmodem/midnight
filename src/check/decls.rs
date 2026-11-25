@@ -747,6 +747,7 @@ impl<'a> Checker<'a> {
         for i in 0..self.systems.len() {
             let decl = self.systems[i].decl;
             self.cx = FnCtx::new(BodyKind::System);
+            self.cx.gpu = decl.gpu;
             let (block, _) = self.block(&decl.body, Mode::Stmt, None);
             let cx = std::mem::replace(&mut self.cx, FnCtx::new(BodyKind::Top));
             self.systems[i].body = Some(tir::Body {

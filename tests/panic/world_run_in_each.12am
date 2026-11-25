@@ -1,0 +1,14 @@
+# World.run reached through a function called from the body of an `each`.
+# Expected: World.run called inside an `each`
+def run_all
+  World.run
+end
+
+component Counter
+  n: Int
+end
+
+spawn Counter(n: 0)
+each Counter do |c|
+  run_all
+end

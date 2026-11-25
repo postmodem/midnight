@@ -307,6 +307,7 @@ Counts: 240 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `World.run` until a tick in which `World.stop` was called has finished | `world_run_stop`, `exit_code_zero` |
 | `World.stop` has no effect outside `World.run` | `world_run_stop` |
 | `World.tick` / `World.run` during a tick is a runtime error | `panic/world_*` |
+| `World.tick` / `World.run` in the body of an `each` is a compile error, or a runtime error through a function | `fail/world_tick_in_each`, `panic/world_tick_in_each`, `panic/world_run_in_each` |
 | `Time.tick`: ticks completed, `0` during the first tick, read-only | `time_fields`, `time_default_dt`, `fail/readonly_time_tick` |
 | `Time.dt`: starts at `1.0 / 60`, writable | `time_default_dt`, `time_fields`, `system_first_program` |
 | `Time.elapsed`: goes up by `Time.dt` at the end of each tick, read-only | `time_fields`, `time_default_dt`, `fail/readonly_time_elapsed` |
@@ -672,6 +673,8 @@ the rule for where a column lives.
 | | in a function called by a system | `panic/world_tick_in_function` | `World.tick called while a tick is in progress` |
 | `World.run` during a tick | in a system, under `World.tick` | `panic/world_run_in_system` | `World.run called while a tick is in progress` |
 | | in a system, under `World.run` | `panic/world_run_in_system_during_run` | `World.run called while a tick is in progress` |
+| `World.tick` inside an `each` | in a function called from the body | `panic/world_tick_in_each` | `World.tick called inside an `each`` |
+| `World.run` inside an `each` | in a function called from the body | `panic/world_run_in_each` | `World.run called inside an `each`` |
 | A failure in a GPU system (the message names no value) | `Int` `/` by zero | `panic/gpu_division_by_zero` | `division by zero` |
 | | `Int` `%` by zero, in the nested `each` | `panic/gpu_modulo_by_zero` | `modulo by zero` |
 | | `Int` `**` with a negative exponent | `panic/gpu_negative_exponent` | `negative exponent` |
@@ -1128,3 +1131,4 @@ against that header.
 | an `if` used as a value needs an `else` branch | `value_if_without_else.12am` | 5 | Types; Expressions |
 | `greet` returns nothing, so its call can't be used as a value | `void_as_value.12am` | 8 | Functions |
 | `greet` returns nothing, so its call can't be used as a value (here, as an argument of `puts`) | `void_in_expression.12am` | 8 | Functions |
+| `World.tick` and `World.run` are not allowed in the body of a query `each`: at the top level, nested, in a function and in a system; `World.stop` there, and a tick in a list's `each`, are fine | `world_tick_in_each.12am` | 14, 16, 23, 29 | Systems and ticks |

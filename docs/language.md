@@ -657,8 +657,10 @@ System names share a namespace with functions. A system declared with
 - `World.stop` asks `World.run` to return. It has no effect outside
   `World.run`.
 
-`World.tick` and `World.run` are called from top-level code. Calling either
-while a tick is in progress is a runtime error.
+`World.tick` and `World.run` are called from top-level code, outside any
+`each`. Calling either while a tick is in progress, or inside the body of an
+`each`, is an error: a compile error where the call stands in the body, a
+run-time error where it is reached through a function.
 
 The built-in resource `Time` describes the clock of the simulation:
 
@@ -1364,7 +1366,8 @@ The runtime errors are:
 - storing an `Int` that does not fit in a compact integer field or element,
 - an `Int` raised to a negative power,
 - `rand(n)` with `n <= 0`,
-- `World.tick` or `World.run` called while a tick is in progress,
+- `World.tick` or `World.run` called while a tick is in progress, or from
+  a function called inside the body of an `each`,
 - an `Int` that does not fit in 32 bits where a GPU system reads it from a
   resource field or a constant.
 

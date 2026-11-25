@@ -712,7 +712,9 @@ impl Checker<'_> {
                 }
             })
             .collect();
+        self.cx.query_eaches += 1;
         let (locals, body, _) = self.loop_body("the `each`", specs, body);
+        self.cx.query_eaches -= 1;
         if !count_ok {
             return None;
         }

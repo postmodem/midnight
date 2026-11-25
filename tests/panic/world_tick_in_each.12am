@@ -1,0 +1,14 @@
+# World.tick reached through a function called from the body of an `each`.
+# Expected: World.tick called inside an `each`
+def step
+  World.tick
+end
+
+component Counter
+  n: Int
+end
+
+spawn Counter(n: 0)
+each Counter do |c|
+  step
+end

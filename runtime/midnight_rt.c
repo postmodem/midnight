@@ -792,12 +792,18 @@ void mn_tick(MnLoc loc) {
     if (mn_world.in_tick) {
         mn_panic(loc, "World.tick called while a tick is in progress");
     }
+    if (mn_world.defer_depth != 0) {
+        mn_panic(loc, "World.tick called inside an `each`");
+    }
     tick();
 }
 
 void mn_run(MnLoc loc) {
     if (mn_world.in_tick) {
         mn_panic(loc, "World.run called while a tick is in progress");
+    }
+    if (mn_world.defer_depth != 0) {
+        mn_panic(loc, "World.run called inside an `each`");
     }
     mn_world.stop_requested = false;
     do {

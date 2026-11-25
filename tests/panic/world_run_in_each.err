@@ -1,0 +1,1 @@
+tests/panic/world_run_in_each.12am:4: runtime error: World.run called inside an `each`

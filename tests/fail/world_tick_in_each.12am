@@ -1,0 +1,36 @@
+# expect: `World.tick` and `World.run` are not allowed in the body of a query `each`: at the top level, nested, in a function and in a system; `World.stop` there, and a tick in a list's `each`, are fine
+# at: line 14, `World.tick`; line 16, `World.run`; line 23, `World.tick`; line 29, `World.run`
+
+component Counter
+  n: Int
+end
+
+def stop_early
+  World.stop
+end
+
+spawn Counter(n: 0)
+each Counter do |c|
+  World.tick
+  each Counter do |d|
+    World.run if d.n > 2
+  end
+  World.stop
+end
+
+def step(limit: Int)
+  each Counter do |c|
+    World.tick if c.n < limit
+  end
+end
+
+system grow
+  each Counter do |c|
+    World.run
+    stop_early
+  end
+end
+
+[1, 2].each do |i|
+  World.tick
+end

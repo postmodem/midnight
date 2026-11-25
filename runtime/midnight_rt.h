@@ -335,11 +335,13 @@ extern MnTime mn_time;
 
 /* `World.tick`: runs every system once, then adds one to mn_time.tick and
  * dt to mn_time.elapsed, then discards events emitted before the end of
- * the previous tick. A run-time error if a tick is in progress. */
+ * the previous tick. A run-time error if a tick is in progress, or inside
+ * the body of an `each` (mn_world.defer_depth above zero). */
 void mn_tick(MnLoc loc);
 
 /* `World.run`: clears the stop flag, then ticks until a tick has finished
- * during which mn_stop was called. */
+ * during which mn_stop was called. The same run-time errors as
+ * mn_tick. */
 void mn_run(MnLoc loc);
 
 /* `World.stop` */

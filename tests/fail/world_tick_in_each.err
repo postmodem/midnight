@@ -1,0 +1,23 @@
+error: `World.tick` is not allowed inside an `each`
+  --> tests/fail/world_tick_in_each.12am:14:3
+   |
+14 |   World.tick
+   |   ^^^^^^^^^^ the loop holds the world's rows; call it after the `end`
+
+error: `World.run` is not allowed inside an `each`
+  --> tests/fail/world_tick_in_each.12am:16:5
+   |
+16 |     World.run if d.n > 2
+   |     ^^^^^^^^^ the loop holds the world's rows; call it after the `end`
+
+error: `World.tick` is not allowed inside an `each`
+  --> tests/fail/world_tick_in_each.12am:23:5
+   |
+23 |     World.tick if c.n < limit
+   |     ^^^^^^^^^^ the loop holds the world's rows; call it after the `end`
+
+error: `World.run` is not allowed inside an `each`
+  --> tests/fail/world_tick_in_each.12am:29:5
+   |
+29 |     World.run
+   |     ^^^^^^^^^ the loop holds the world's rows; call it after the `end`

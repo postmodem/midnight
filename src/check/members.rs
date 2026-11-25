@@ -597,6 +597,16 @@ impl Checker<'_> {
             }
         };
         let method = format!("World.{}", name.name);
+        if matches!(kind, ExprKind::WorldTick | ExprKind::WorldRun)
+            && self.cx.query_eaches > 0
+            && !self.cx.gpu
+        {
+            self.err_label(
+                format!("`{method}` is not allowed inside an `each`"),
+                span,
+                "the loop holds the world's rows; call it after the `end`",
+            );
+        }
         self.no_keywords(&method, args);
         if !self.arity(&method, 0, args.len(), span) {
             return None;
