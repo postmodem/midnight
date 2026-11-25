@@ -35,7 +35,7 @@ Counts: 262 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | Function and method names ending in `?` and `!` | `lex_names`, `fn_question_bang_names`, `fn_mutual_recursion`, `struct_methods` |
 | `a!=b` is `a != b` | `lex_names` |
 | Conditional operator written with spaces after a `?` name | `lex_names`, `fn_question_bang_names`, `fn_mutual_recursion` |
-| Keywords are reserved, `gpu` included | `fail/syntax_keyword_as_variable`, `fail/syntax_gpu_reserved` |
+| Keywords are reserved, `gpu` and `strict` included | `fail/syntax_keyword_as_variable`, `fail/syntax_gpu_reserved`, `fail/syntax_strict_reserved` |
 | Built-in names can't be redefined | `fail/builtin_type_redefined`, `fail/builtin_compact_type_redefined`, `fail/builtin_name_redefined_constant` |
 | `Int` literals: `42`, `1_000_000`, `0xff`, `0b1010` | `lex_int_literals`, `tos_int`, `const_expressions` |
 | `Float` literals: `3.14`, `1_000.5`, `1e-3`, `2.5e6` | `lex_float_literals`, `tos_float` |
@@ -363,6 +363,20 @@ Programs that follow every rule are checked by the unit tests in
 | An `Int` constant that GPU code reads fits in 32 bits: above, below, in a called function, in a field default a constructor uses; a constant made from one that does not fit is judged by its own value | `fail/gpu_constant_too_big`, `fail/gpu_constant_too_small`, `fail/gpu_function_constant_too_big`, `fail/gpu_constant_default_too_big`, `gpu_constant_divisors`; the unit test `a_known_constant_fits_in_32_bits_where_gpu_code_reads_it` in `src/check/tests/gpu.rs` |
 | Independent errors in one block are all reported | `fail/gpu_several` |
 
+### Strict GPU systems
+
+The rules a `strict gpu system` adds. They apply inside its blocks and inside
+every function it calls, and a function that both kinds of GPU system call is
+checked for each. Strict systems that follow the rules are checked by the unit
+tests in `src/check/tests/gpu.rs`.
+
+| Rule | Files |
+| --- | --- |
+| `strict` goes only before `gpu system` | `fail/strict_system_not_gpu`; the unit test `strict_applies_to_gpu_systems_only` |
+| No `Math.sin`, `Math.cos`, `Math.tan`, `Math.atan2`, `Math.exp`, `Math.log` | `fail/strict_math_sin`, `fail/strict_math_cos`, `fail/strict_math_tan`, `fail/strict_math_atan2`, `fail/strict_math_exp`, `fail/strict_math_log` |
+| No `**` with a `Float` result, except a square written `x ** 2.0` or `x ** 2` | `fail/strict_pow`; the unit tests `a_strict_system_may_square_and_take_roots`, `every_inexact_function_is_an_error_in_a_strict_system` |
+| A function a strict system calls follows the same rules, even when a GPU system that is not strict calls it first; one that both call is reported on once for the rules of every GPU system | `fail/strict_function_math`; the unit tests `a_function_is_checked_for_each_kind_of_system_that_calls_it`, `an_error_in_a_function_both_kinds_of_system_call_is_reported_once` |
+
 ## What GPU systems compute
 
 Programs with GPU systems that follow every rule. The suite runs them on the
@@ -638,6 +652,7 @@ the rule for where a column lives.
 | A component named only by a nested `each` has a GPU copy | `plan/nested_each` |
 | What called functions do counts as the system's | `plan/functions` |
 | `e[C]`, read, written in part and replaced: `rows` lines | `plan/entity_component`, `plan/functions`, `plan/top_level` |
+| A strict GPU system is named `strict` and its name | `plan/strict` |
 | A component a GPU block or an ordinary loop overwrites: no upload, no download | `plan/overwrite_gpu`, `plan/overwrite_cpu` |
 | `World.count` and `has?` read no column | `plan/functions` |
 | `spawn` sends the new rows of the table it spawns into, and no other table: `rows on spawn` | `plan/spawn`, the unit test `spawn_sends_the_new_rows_of_the_table_it_makes_and_no_other` in `src/plan/tests.rs` |

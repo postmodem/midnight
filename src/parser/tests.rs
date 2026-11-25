@@ -299,7 +299,12 @@ fn item(item: &Item) -> String {
         Item::Tag(tag) => format!("tag {}", tag.name.name),
         Item::Def(f) => func(f),
         Item::System(system) => format!(
-            "{}system {} {}",
+            "{}{}system {} {}",
+            if system.strict.is_some() {
+                "strict "
+            } else {
+                ""
+            },
             if system.gpu { "gpu " } else { "" },
             system.name.name,
             block(&system.body)
@@ -939,6 +944,8 @@ fn functions_and_systems() {
         ),
         ("system idle\nend", "system idle {}"),
         ("gpu system idle\nend", "gpu system idle {}"),
+        ("strict gpu system idle\nend", "strict gpu system idle {}"),
+        ("strict system idle\nend", "strict system idle {}"),
     ]);
 }
 
@@ -1234,6 +1241,24 @@ fn unexpected_tokens() {
         "unexpected `gpu`",
         "gpu",
         "`gpu` goes before `system`: `gpu system name`",
+    );
+    assert_error(
+        "x = strict",
+        "unexpected `strict`",
+        "strict",
+        "`strict` goes before `gpu system`: `strict gpu system name`",
+    );
+    assert_error(
+        "strict def f\nend",
+        "unexpected `strict`",
+        "strict",
+        "`strict` goes before `gpu system`: `strict gpu system name`",
+    );
+    assert_error(
+        "strict gpu def f\nend",
+        "unexpected `def`",
+        "def",
+        "expected `system`",
     );
     assert_error(
         "x = puts 1",
@@ -1788,6 +1813,12 @@ fn keywords_as_names() {
         "`gpu` is a keyword and can't be used as a name",
         "gpu",
         "`gpu` goes before `system`: `gpu system name`",
+    );
+    assert_error(
+        "strict = 1",
+        "`strict` is a keyword and can't be used as a name",
+        "strict",
+        "`strict` goes before `gpu system`: `strict gpu system name`",
     );
     // `self` is left for the checker, which says why it is read-only.
     assert_eq!(dump("self = 1"), "self = 1");

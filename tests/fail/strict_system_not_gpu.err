@@ -1,0 +1,5 @@
+error: `strict` applies to a `gpu system`
+ --> tests/fail/strict_system_not_gpu.12am:8:1
+  |
+8 | strict system settle
+  | ^^^^^^ write `strict gpu system name`

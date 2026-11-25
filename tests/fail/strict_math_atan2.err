@@ -1,0 +1,5 @@
+error: `Math.atan2` cannot be used in a strict GPU system
+  --> tests/fail/strict_math_atan2.12am:11:14
+   |
+11 |     body.x = Math.atan2(body.y, body.x)
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^ its result differs between devices

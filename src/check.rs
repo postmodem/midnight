@@ -695,6 +695,7 @@ impl<'a> Checker<'a> {
             .map(|s| tir::System {
                 name: s.decl.name.name.clone(),
                 gpu: s.decl.gpu,
+                strict: s.decl.gpu && s.decl.strict.is_some(),
                 body: s.body.expect(CHECKED),
                 span: s.decl.span,
             })

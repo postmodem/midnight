@@ -1,0 +1,13 @@
+# expect: `**` on `Float` cannot be used in a strict GPU system; a square is allowed, a cube is not
+# at: line 11, the expression `body.x ** 3.0`
+
+component Body
+  x: Float32
+  y: Float32
+end
+
+strict gpu system grow
+  each Body do |body|
+    body.y = body.x ** 2.0 + body.x ** 3.0
+  end
+end

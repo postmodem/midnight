@@ -1,0 +1,5 @@
+error: `Math.sin` cannot be used in a strict GPU system
+  --> tests/fail/strict_math_sin.12am:10:14
+   |
+10 |     body.x = Math.sin(body.x)
+   |              ^^^^^^^^^^^^^^^^ its result differs between devices

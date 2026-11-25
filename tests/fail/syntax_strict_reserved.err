@@ -1,0 +1,5 @@
+error: `strict` is a keyword and can't be used as a name
+ --> tests/fail/syntax_strict_reserved.12am:4:1
+  |
+4 | strict = 1
+  | ^^^^^^ `strict` goes before `gpu system`: `strict gpu system name`

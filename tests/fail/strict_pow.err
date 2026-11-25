@@ -1,0 +1,5 @@
+error: `**` on `Float` cannot be used in a strict GPU system
+  --> tests/fail/strict_pow.12am:11:30
+   |
+11 |     body.y = body.x ** 2.0 + body.x ** 3.0
+   |                              ^^^^^^^^^^^^^ its result differs between devices; a square, `x ** 2.0`, is allowed

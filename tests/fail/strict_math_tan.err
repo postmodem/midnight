@@ -1,0 +1,5 @@
+error: `Math.tan` cannot be used in a strict GPU system
+  --> tests/fail/strict_math_tan.12am:10:14
+   |
+10 |     body.x = Math.tan(body.x)
+   |              ^^^^^^^^^^^^^^^^ its result differs between devices

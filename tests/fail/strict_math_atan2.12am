@@ -1,0 +1,13 @@
+# expect: `Math.atan2` cannot be used in a strict GPU system
+# at: line 11, the call `Math.atan2(body.y, body.x)`
+
+component Body
+  x: Float32
+  y: Float32
+end
+
+strict gpu system turn
+  each Body do |body|
+    body.x = Math.atan2(body.y, body.x)
+  end
+end

@@ -112,6 +112,7 @@ pub fn plan(program: &Program) -> Vec<Transfer> {
     transfers.extend(changed.into_iter().filter(|t| t.cause.is_some()));
     transfers.sort_by_key(|t| t.at);
     let name = |step: usize| match program.systems.get(step) {
+        Some(system) if system.strict => format!("strict {}", system.name),
         Some(system) => system.name.clone(),
         None => TOP_LEVEL.to_string(),
     };

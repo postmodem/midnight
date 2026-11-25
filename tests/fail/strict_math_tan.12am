@@ -1,0 +1,12 @@
+# expect: `Math.tan` cannot be used in a strict GPU system
+# at: line 10, the call `Math.tan(body.x)`
+
+component Body
+  x: Float32
+end
+
+strict gpu system wobble
+  each Body do |body|
+    body.x = Math.tan(body.x)
+  end
+end

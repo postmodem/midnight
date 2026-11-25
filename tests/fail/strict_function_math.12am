@@ -1,0 +1,22 @@
+# expect: `Math.sin` cannot be used in a function called from a strict GPU system, though a GPU system that is not strict calls the same function first
+# at: line 9, the call `Math.sin(x)`; note at line 20, the call `wobble(body.x)` in `exact`
+
+component Body
+  x: Float32
+end
+
+def wobble(x: Float) -> Float
+  Math.sin(x)
+end
+
+gpu system loose
+  each Body do |body|
+    body.x = wobble(body.x)
+  end
+end
+
+strict gpu system exact
+  each Body do |body|
+    body.x = wobble(body.x)
+  end
+end

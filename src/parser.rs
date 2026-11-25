@@ -64,6 +64,10 @@ struct Parser<'a> {
 const DO_BLOCK_TAKERS: &str =
     "only `times`, `upto`, `downto`, `each` and `each_with_index` take one";
 
+/// The label of the errors for a misplaced `gpu` and `strict`.
+const GPU_PLACE: &str = "`gpu` goes before `system`: `gpu system name`";
+const STRICT_PLACE: &str = "`strict` goes before `gpu system`: `strict gpu system name`";
+
 fn is_assign_op(kind: &T) -> bool {
     matches!(
         kind,
@@ -255,10 +259,10 @@ impl<'a> Parser<'a> {
             "`{}` is a keyword and can't be used as a name",
             self.source(token.span)
         );
-        let label = if token.kind == T::Kw(Kw::Gpu) {
-            "`gpu` goes before `system`: `gpu system name`"
-        } else {
-            "choose a different name"
+        let label = match token.kind {
+            T::Kw(Kw::Gpu) => GPU_PLACE,
+            T::Kw(Kw::Strict) => STRICT_PLACE,
+            _ => "choose a different name",
         };
         Diagnostic::new(message, token.span).label(label)
     }
@@ -626,10 +630,18 @@ impl<'a> Parser<'a> {
             (T::Kw(Kw::Enum), _) => self.enumeration().map(Item::Enum),
             (T::Kw(Kw::Tag), _) => self.tag().map(Item::Tag),
             (T::Kw(Kw::Def), _) => self.def().map(Item::Def),
-            (T::Kw(Kw::System), _) => self.system(false).map(Item::System),
+            (T::Kw(Kw::System), _) => self.system(None, false).map(Item::System),
             (T::Kw(Kw::Gpu), T::Kw(Kw::System)) => {
                 self.advance();
-                self.system(true).map(Item::System)
+                self.system(None, true).map(Item::System)
+            }
+            (T::Kw(Kw::Strict), T::Kw(Kw::Gpu | Kw::System)) => {
+                let strict = self.advance().span;
+                let gpu = self.eat(T::Kw(Kw::Gpu));
+                if !self.at(T::Kw(Kw::System)) {
+                    return Err(self.unexpected("expected `system`"));
+                }
+                self.system(Some(strict), gpu).map(Item::System)
             }
             (T::Const(name), T::Assign) => {
                 let name = Ident {
@@ -857,7 +869,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn system(&mut self, gpu: bool) -> Parse<SystemDecl> {
+    fn system(&mut self, strict: Option<Span>, gpu: bool) -> Parse<SystemDecl> {
         let keyword = self.opened("system");
         let name = self.ident("a system name")?;
         let span = keyword.to(name.span);
@@ -871,6 +883,7 @@ impl<'a> Parser<'a> {
         let body = self.block()?;
         self.end()?;
         Ok(SystemDecl {
+            strict,
             gpu,
             name,
             body,
@@ -1584,9 +1597,8 @@ impl<'a> Parser<'a> {
             T::Kw(Kw::If) => return self.if_expr("if", false),
             T::Kw(Kw::Unless) => return self.if_expr("unless", true),
             T::Kw(Kw::Case) => return self.case_expr(),
-            T::Kw(Kw::Gpu) => {
-                return Err(self.unexpected("`gpu` goes before `system`: `gpu system name`"));
-            }
+            T::Kw(Kw::Gpu) => return Err(self.unexpected(GPU_PLACE)),
+            T::Kw(Kw::Strict) => return Err(self.unexpected(STRICT_PLACE)),
             T::Kw(
                 Kw::Puts
                 | Kw::Print

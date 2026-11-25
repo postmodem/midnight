@@ -1,0 +1,12 @@
+# expect: `Math.sin` cannot be used in a strict GPU system
+# at: line 10, the call `Math.sin(body.x)`
+
+component Body
+  x: Float32
+end
+
+strict gpu system wobble
+  each Body do |body|
+    body.x = Math.sin(body.x)
+  end
+end

@@ -1,0 +1,12 @@
+# expect: `Math.cos` cannot be used in a strict GPU system
+# at: line 10, the call `Math.cos(body.x)`
+
+component Body
+  x: Float32
+end
+
+strict gpu system wobble
+  each Body do |body|
+    body.x = Math.cos(body.x)
+  end
+end

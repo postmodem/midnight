@@ -41,8 +41,8 @@ use crate::ast;
 use crate::diag::Diagnostic;
 use crate::source::Span;
 use crate::tir::{
-    Block, Builtin, Compact, CompoundOp, Expr, ExprKind, FuncId, Local, LocalId, LocalKind, Place,
-    PlaceKind, Program, Query, RecordId, Stmt, StmtKind, System, Term, TimeField, Type,
+    BinOp, Block, Builtin, Compact, CompoundOp, Expr, ExprKind, FuncId, Local, LocalId, LocalKind,
+    Place, PlaceKind, Program, Query, RecordId, Stmt, StmtKind, System, Term, TimeField, Type,
 };
 
 use super::{util, walk};
@@ -78,7 +78,7 @@ pub(super) fn check(
     let mut pass = Pass {
         program,
         known_ints,
-        reached: vec![false; program.funcs.len()],
+        reached: vec![[false; 2]; program.funcs.len()],
         calls,
         cycles: HashMap::new(),
         queue: VecDeque::new(),
@@ -146,6 +146,15 @@ fn a(type_name: &str) -> String {
     format!("{article} `{type_name}`")
 }
 
+/// Whether an exponent is written `2.0` or `2`, which makes `**` a square.
+fn is_two(exponent: &Expr) -> bool {
+    match &exponent.kind {
+        ExprKind::Float(value) => *value == 2.0,
+        ExprKind::IntToFloat(inner) => matches!(inner.kind, ExprKind::Int(2)),
+        _ => false,
+    }
+}
+
 fn inside(outer: Span, inner: Span) -> bool {
     outer.file == inner.file && outer.start <= inner.start && inner.end <= outer.end
 }
@@ -154,6 +163,8 @@ fn inside(outer: Span, inner: Span) -> bool {
 #[derive(Clone)]
 struct Reach<'p> {
     system: &'p str,
+    /// The system is a `strict gpu system`.
+    strict: bool,
     /// The call in the GPU block.
     call: Span,
     /// The functions called on the way, ending with the one reached.
@@ -183,9 +194,9 @@ struct Pass<'p> {
     program: &'p Program,
     /// By constant: its value, when it is an `Int` the checker can compute.
     known_ints: &'p [Option<i64>],
-    /// The functions some GPU system has reached. Their bodies are checked
-    /// or queued.
-    reached: Vec<bool>,
+    /// The functions some GPU system has reached, as an ordinary and as a
+    /// strict GPU system. Their bodies are checked or queued.
+    reached: Vec<[bool; 2]>,
     calls: Vec<Vec<FuncId>>,
     /// For a function that has been asked about: the chain of calls from
     /// it that ends by calling a function already in the chain.
@@ -218,13 +229,19 @@ impl<'p> Pass<'p> {
                 continue;
             };
             let source = source_each(&decl.body, stmt.span);
-            let mut walk = Walk::new(self, &system.body.locals, name, None);
+            let mut walk = Walk::new(self, &system.body.locals, name, system.strict, None);
             walk.gpu_block(query, params, body, source);
         }
         let program = self.program;
         while let Some((id, reach)) = self.queue.pop_front() {
             let func = &program.funcs[id.0];
-            let mut walk = Walk::new(self, &func.body.locals, reach.system, Some(reach));
+            let mut walk = Walk::new(
+                self,
+                &func.body.locals,
+                reach.system,
+                reach.strict,
+                Some(reach),
+            );
             walk.block(&func.body.block, Pos::Direct);
         }
     }
@@ -369,6 +386,8 @@ struct Walk<'a, 'p> {
     pass: &'a mut Pass<'p>,
     locals: &'p [Local],
     system: &'p str,
+    /// The system is a `strict gpu system`.
+    strict: bool,
     /// In a function: how the system reaches it.
     reach: Option<Reach<'p>>,
     /// The body of the GPU block in the source.
@@ -393,12 +412,14 @@ impl<'a, 'p> Walk<'a, 'p> {
         pass: &'a mut Pass<'p>,
         locals: &'p [Local],
         system: &'p str,
+        strict: bool,
         reach: Option<Reach<'p>>,
     ) -> Walk<'a, 'p> {
         Walk {
             pass,
             locals,
             system,
+            strict,
             reach,
             source: None,
             nested_params: Vec::new(),
@@ -970,6 +991,19 @@ impl<'a, 'p> Walk<'a, 'p> {
             // An `Int` literal made `Float` need not fit in 32 bits.
             ExprKind::IntToFloat(inner) if matches!(inner.kind, ExprKind::Int(_)) => {}
             ExprKind::Unary { expr: inner, .. } | ExprKind::IntToFloat(inner) => self.expr(inner),
+            ExprKind::Binary {
+                op: BinOp::Pow,
+                lhs,
+                rhs,
+            } if self.strict && e.ty == Type::Float && !is_two(rhs) => {
+                self.not_strict(
+                    "`**` on `Float`",
+                    span,
+                    "its result differs between devices; a square, `x ** 2.0`, is allowed",
+                );
+                self.expr(lhs);
+                self.expr(rhs);
+            }
             ExprKind::Binary { lhs, rhs, .. }
             | ExprKind::And { lhs, rhs }
             | ExprKind::Or { lhs, rhs } => {
@@ -1092,8 +1126,39 @@ impl<'a, 'p> Walk<'a, 'p> {
         );
     }
 
-    /// Reports a built-in function that needs the CPU.
+    /// In a strict system: `what` gives different results on different
+    /// devices.
+    fn not_strict(&mut self, what: &str, span: Span, label: &str) {
+        let here = if self.reach.is_some() {
+            "in a function called from a strict GPU system"
+        } else {
+            "in a strict GPU system"
+        };
+        self.report(format!("{what} cannot be used {here}"), span, label);
+    }
+
+    /// Reports a built-in function that needs the CPU, or, in a strict
+    /// system, one whose result differs between devices.
     fn builtin(&mut self, op: Builtin, span: Span) {
+        if self.strict {
+            let name = match op {
+                Builtin::Sin => Some("Math.sin"),
+                Builtin::Cos => Some("Math.cos"),
+                Builtin::Tan => Some("Math.tan"),
+                Builtin::Atan2 => Some("Math.atan2"),
+                Builtin::Exp => Some("Math.exp"),
+                Builtin::Log => Some("Math.log"),
+                _ => None,
+            };
+            if let Some(name) = name {
+                self.not_strict(
+                    &format!("`{name}`"),
+                    span,
+                    "its result differs between devices",
+                );
+                return;
+            }
+        }
         let (name, label) = match op {
             Builtin::Srand | Builtin::SrandClock => (
                 "srand",
@@ -1164,8 +1229,9 @@ impl<'a, 'p> Walk<'a, 'p> {
             self.report(message, span, label);
         }
 
-        if !self.pass.reached[func.0] {
-            self.pass.reached[func.0] = true;
+        let mode = usize::from(self.strict);
+        if !self.pass.reached[func.0][mode] {
+            self.pass.reached[func.0][mode] = true;
             let reach = match &self.reach {
                 Some(reach) => {
                     let mut reach = reach.clone();
@@ -1174,6 +1240,7 @@ impl<'a, 'p> Walk<'a, 'p> {
                 }
                 None => Reach {
                     system: self.system,
+                    strict: self.strict,
                     call: span,
                     path: vec![func],
                 },

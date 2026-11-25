@@ -1,0 +1,10 @@
+error: `Math.sin` cannot be used in a function called from a strict GPU system
+ --> tests/fail/strict_function_math.12am:9:3
+  |
+9 |   Math.sin(x)
+  |   ^^^^^^^^^^^ its result differs between devices
+note: GPU system `exact` calls `wobble` here
+  --> tests/fail/strict_function_math.12am:20:14
+   |
+20 |     body.x = wobble(body.x)
+   |              --------------

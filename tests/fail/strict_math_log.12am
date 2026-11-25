@@ -1,0 +1,12 @@
+# expect: `Math.log` cannot be used in a strict GPU system
+# at: line 10, the call `Math.log(body.x)`
+
+component Body
+  x: Float32
+end
+
+strict gpu system wobble
+  each Body do |body|
+    body.x = Math.log(body.x)
+  end
+end

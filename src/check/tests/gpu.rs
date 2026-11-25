@@ -1,7 +1,7 @@
 //! GPU systems: programs that follow the rules check and give the same
 //! typed tree as an ordinary system, and the rules reach exactly the code
-//! a GPU system runs. `tests/fail/gpu_*.12am` has a program for each
-//! diagnostic.
+//! a GPU system runs. `tests/fail/gpu_*.12am` and `strict_*.12am` have a
+//! program for each diagnostic.
 
 use super::*;
 
@@ -413,6 +413,189 @@ end
     assert_eq!(
         &text[note.span.start as usize..note.span.end as usize],
         "outer(body.x)"
+    );
+}
+
+// ----- strict GPU systems -----
+
+#[test]
+fn a_strict_gpu_system_is_typed_like_an_ordinary_one() {
+    let strict = GRAVITY.replace("gpu system", "strict gpu system");
+    let program = ok(&strict);
+    assert!(program.systems[0].gpu && program.systems[0].strict);
+    assert!(!ok(GRAVITY).systems[0].strict);
+    assert_eq!(system(&strict, "gravity"), system(GRAVITY, "gravity"));
+}
+
+#[test]
+fn a_strict_system_may_square_and_take_roots() {
+    ok("\
+component Body
+  x: Float32
+  n: Int32
+end
+def norm(x: Float) -> Float
+  Math.sqrt(x ** 2.0 + x ** 2)
+end
+strict gpu system settle
+  each Body do |body|
+    body.x = norm(body.x) / body.x
+    body.n = body.n ** 3
+  end
+end
+");
+}
+
+#[test]
+fn every_inexact_function_is_an_error_in_a_strict_system() {
+    let text = "\
+component Body
+  x: Float32
+end
+strict gpu system wobble
+  each Body do |body|
+    body.x = Math.sin(body.x) + Math.cos(body.x) + Math.tan(body.x)
+    body.x = Math.atan2(body.x, 1.0) + Math.exp(body.x) + Math.log(body.x)
+    body.x = body.x ** 3.0 + body.x ** 0.5 + 2.0 ** body.x
+  end
+end
+";
+    let label = "its result differs between devices";
+    let pow = "its result differs between devices; a square, `x ** 2.0`, is allowed";
+    assert_errors(
+        text,
+        &[
+            (
+                "`Math.sin` cannot be used in a strict GPU system",
+                "Math.sin(body.x)",
+                label,
+            ),
+            (
+                "`Math.cos` cannot be used in a strict GPU system",
+                "Math.cos(body.x)",
+                label,
+            ),
+            (
+                "`Math.tan` cannot be used in a strict GPU system",
+                "Math.tan(body.x)",
+                label,
+            ),
+            (
+                "`Math.atan2` cannot be used in a strict GPU system",
+                "Math.atan2(body.x, 1.0)",
+                label,
+            ),
+            (
+                "`Math.exp` cannot be used in a strict GPU system",
+                "Math.exp(body.x)",
+                label,
+            ),
+            (
+                "`Math.log` cannot be used in a strict GPU system",
+                "Math.log(body.x)",
+                label,
+            ),
+            (
+                "`**` on `Float` cannot be used in a strict GPU system",
+                "body.x ** 3.0",
+                pow,
+            ),
+            (
+                "`**` on `Float` cannot be used in a strict GPU system",
+                "body.x ** 0.5",
+                pow,
+            ),
+            (
+                "`**` on `Float` cannot be used in a strict GPU system",
+                "2.0 ** body.x",
+                pow,
+            ),
+        ],
+    );
+    // The same code is allowed in a GPU system that is not strict.
+    ok(&text.replace("strict gpu", "gpu"));
+}
+
+#[test]
+fn a_function_is_checked_for_each_kind_of_system_that_calls_it() {
+    let text = "\
+component Body
+  x: Float32
+end
+def wobble(x: Float) -> Float
+  Math.sin(x)
+end
+gpu system loose
+  each Body do |body|
+    body.x = wobble(body.x)
+  end
+end
+strict gpu system exact
+  each Body do |body|
+    body.x = wobble(body.x)
+  end
+end
+";
+    let found = diagnostics(text);
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        found[0].message,
+        "`Math.sin` cannot be used in a function called from a strict GPU system"
+    );
+    let note = &found[0].notes[0];
+    assert_eq!(note.message, "GPU system `exact` calls `wobble` here");
+    assert_eq!(
+        note.span.start as usize,
+        text.rfind("wobble(body.x)").unwrap()
+    );
+}
+
+#[test]
+fn an_error_in_a_function_both_kinds_of_system_call_is_reported_once() {
+    let found = diagnostics(
+        "\
+component Body
+  x: Float32
+end
+def show(x: Float) -> Float
+  puts x
+  x
+end
+gpu system loose
+  each Body do |body|
+    body.x = show(body.x)
+  end
+end
+strict gpu system exact
+  each Body do |body|
+    body.x = show(body.x)
+  end
+end
+",
+    );
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        found[0].notes[0].message,
+        "GPU system `loose` calls `show` here"
+    );
+}
+
+#[test]
+fn strict_applies_to_gpu_systems_only() {
+    assert_error(
+        "\
+component Body
+  x: Float
+end
+strict system settle
+  each Body do |body|
+    body.x = Math.sin(body.x)
+  end
+end
+",
+        "`strict` applies to a `gpu system`",
+        "strict",
+        "write `strict gpu system name`",
     );
 }
 

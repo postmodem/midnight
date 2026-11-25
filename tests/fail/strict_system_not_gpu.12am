@@ -1,0 +1,12 @@
+# expect: `strict` applies to a `gpu system` only
+# at: line 8, the keyword `strict`
+
+component Body
+  x: Float
+end
+
+strict system settle
+  each Body do |body|
+    body.x *= 0.5
+  end
+end

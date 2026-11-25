@@ -117,6 +117,7 @@ pub enum Kw {
     Return,
     Self_,
     Spawn,
+    Strict,
     Struct,
     System,
     Tag,
@@ -156,6 +157,7 @@ impl Kw {
             "return" => Kw::Return,
             "self" => Kw::Self_,
             "spawn" => Kw::Spawn,
+            "strict" => Kw::Strict,
             "struct" => Kw::Struct,
             "system" => Kw::System,
             "tag" => Kw::Tag,
@@ -817,11 +819,11 @@ mod tests {
     #[test]
     fn every_keyword_is_reserved() {
         let words = "break case component def do each else elsif emit end enum event false gpu \
-                     if loop next on print puts require resource return self spawn struct system \
-                     tag then true unless until when while";
+                     if loop next on print puts require resource return self spawn strict struct \
+                     system tag then true unless until when while";
         let tokens = kinds(words);
-        assert_eq!(tokens.len(), 35);
-        for token in &tokens[..34] {
+        assert_eq!(tokens.len(), 36);
+        for token in &tokens[..35] {
             assert!(matches!(token, Kw(_)), "{token:?}");
         }
     }

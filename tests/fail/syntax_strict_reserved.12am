@@ -1,0 +1,5 @@
+# expect: syntax error: `strict` is a keyword (it goes before `gpu system`) and can't name a variable
+# at: line 4, the word `strict`
+
+strict = 1
+puts 1

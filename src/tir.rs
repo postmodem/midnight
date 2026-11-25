@@ -283,6 +283,9 @@ pub struct System {
     /// Declared `gpu system`. The statements of the body are then all
     /// `Each`, and the checker has applied the rules for GPU systems.
     pub gpu: bool,
+    /// Declared `strict gpu system`: its `Float` arithmetic gives the same
+    /// bits on every device and on the CPU. Never set without `gpu`.
+    pub strict: bool,
     pub body: Body,
     pub span: Span,
 }

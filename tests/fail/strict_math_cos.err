@@ -1,0 +1,5 @@
+error: `Math.cos` cannot be used in a strict GPU system
+  --> tests/fail/strict_math_cos.12am:10:14
+   |
+10 |     body.x = Math.cos(body.x)
+   |              ^^^^^^^^^^^^^^^^ its result differs between devices

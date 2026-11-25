@@ -110,6 +110,8 @@ pub struct Param {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SystemDecl {
+    /// The `strict` keyword, when the declaration begins with one.
+    pub strict: Option<Span>,
     /// Declared `gpu system`.
     pub gpu: bool,
     pub name: Ident,

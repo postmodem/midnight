@@ -1,0 +1,42 @@
+# expect: Position goes down from `strict settle` to `report`, which changes it
+# on the CPU, and up again before `move`. Only the strict system is named with
+# `strict`.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+strict gpu system settle
+  each Position do |pos|
+    pos.x = pos.x * 0.5
+    pos.y = pos.y * 0.5
+  end
+end
+
+system report
+  each Position do |pos|
+    pos.x += 1.0
+  end
+end
+
+1000.times do |i|
+  spawn Position(i, 0.0), Velocity(1.0, 0.5)
+end
+
+Time.dt = 0.5
+100.times do
+  World.tick
+end

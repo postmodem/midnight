@@ -59,6 +59,15 @@ impl<'a> Checker<'a> {
                     }
                 }
                 ast::Item::System(decl) => {
+                    if let Some(strict) = decl.strict
+                        && !decl.gpu
+                    {
+                        self.err_label(
+                            "`strict` applies to a `gpu system`",
+                            strict,
+                            "write `strict gpu system name`",
+                        );
+                    }
                     self.plain_name("system", &decl.name.name, decl.name.span);
                     if self.claim_fn(&decl.name, FnSym::System) {
                         self.systems.push(SystemInfo { decl, body: None });
