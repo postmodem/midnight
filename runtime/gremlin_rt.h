@@ -141,10 +141,20 @@ typedef struct GrTable {
     uint32_t count;
     uint32_t capacity;
     /* Runtime-private fields follow. */
-    uint32_t id;
+    uint32_t id; /* index into gr_world.tables */
+    /* The table's component ids, ascending. */
     uint32_t set_count;
     uint32_t *set;
-    uint64_t hash;
+    /* The ids in `set` that have storage, and the size of each. */
+    uint32_t data_count;
+    uint32_t *data;
+    uint32_t *data_sizes;
+    /* The ids in `data` whose values own something. */
+    uint32_t drop_count;
+    uint32_t *drops;
+    uint64_t hash; /* of `set` */
+    /* Indexed by component id: the table reached by adding or removing
+     * that component, or UINT32_MAX when not looked up yet. */
     uint32_t *add_edges;
     uint32_t *remove_edges;
 } GrTable;
@@ -165,11 +175,25 @@ typedef struct GrWorld {
     /* Runtime-private fields follow. */
     uint32_t slot_capacity;
     uint32_t table_capacity;
+    /* The most recently freed slot, or UINT32_MAX. A free slot's `row`
+     * holds the next free index. */
     uint32_t free_head;
-    uint32_t free_count;
-    int64_t live_entities;
     bool in_tick;
     bool stop_requested;
+    /* Entities that are in a table. */
+    int64_t live_entities;
+    /* Open-addressed map from a component set's hash to table index + 1. */
+    uint32_t *table_map;
+    uint32_t table_map_capacity;
+    /* Queued structural changes: records at 8-byte boundaries. */
+    unsigned char *commands;
+    size_t command_len;
+    size_t command_capacity;
+    /* One per event type. */
+    struct GrEventBuf *events;
+    /* Working space: a component set and one value pointer per component. */
+    uint32_t *scratch_set;
+    void **scratch_values;
 } GrWorld;
 
 extern GrWorld gr_world;
@@ -273,7 +297,8 @@ static inline void gr_defer_leave(void) {
 typedef struct GrBundle {
     const uint32_t *components;
     uint32_t count;
-    /* Runtime-private. */
+    /* Runtime-private: the table this bundle last led to and the table it
+     * started from (table 0 for a spawn). */
     uint32_t cached_from;
     uint32_t cached_to;
     bool cached;
