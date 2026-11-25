@@ -1,0 +1,11 @@
+error: statement outside `each` in a GPU system
+ --> tests/fail/gpu_statement_outside_each.12am:9:3
+  |
+9 |   gravity = 9.8
+  |   ^^^^^^^^^^^^^ the body of a GPU system is `each` blocks and nothing else; move this into one, or into an ordinary system
+
+error: statement outside `each` in a GPU system
+  --> tests/fail/gpu_statement_outside_each.12am:13:3
+   |
+13 |   if Time.tick > 100
+   |   ^^^^^^^^^^^^^^^^^^ the body of a GPU system is `each` blocks and nothing else; move this into one, or into an ordinary system

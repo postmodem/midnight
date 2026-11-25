@@ -1,0 +1,16 @@
+# expect: `entity[Body]` is not allowed in a GPU system, when it is assigned through too
+# at: line 14, the place `chase.target[Body]`
+
+component Body
+  x: Float32
+end
+
+component Chase
+  target: Entity
+end
+
+gpu system push
+  each Body, Chase do |body, chase|
+    chase.target[Body].x += body.x
+  end
+end

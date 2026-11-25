@@ -1,0 +1,38 @@
+# expect: one download and no upload. `move` writes Position on the GPU and
+# `report` reads it on the CPU every tick; reading leaves the GPU copy
+# current, so `move` uploads nothing. Velocity is only read, by `move`, and
+# never moves.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system report
+  sum = 0.0
+  each Position do |pos|
+    sum += pos.x + pos.y
+  end
+  puts sum
+end
+
+1000.times do |i|
+  spawn Position(i, 0.0), Velocity(1.0, 0.5)
+end
+
+Time.dt = 0.5
+100.times do
+  World.tick
+end

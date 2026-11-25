@@ -1,0 +1,12 @@
+# expect: can't assign to `Time.dt` in a GPU system: `Time` is read-only
+# at: line 10, the place `Time.dt`
+
+component Body
+  x: Float32
+end
+
+gpu system slow
+  each Body do |body|
+    Time.dt = 0.5 if body.x > 100
+  end
+end

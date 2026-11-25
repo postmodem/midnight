@@ -1,0 +1,10 @@
+error: 4294967296 does not fit in 32 bits
+ --> tests/fail/gpu_int_literal_default.12am:9:14
+  |
+9 |   max: Int = 4294967296
+  |              ^^^^^^^^^^ in a GPU system an `Int` holds -2147483648 to 2147483647
+note: the default is used here
+  --> tests/fail/gpu_int_literal_default.12am:15:13
+   |
+15 |     range = Range()
+   |             -------

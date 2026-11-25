@@ -1,0 +1,22 @@
+# expect: `Route` values are not allowed in a GPU system, because the field `path.points` is a `[Float]`
+# at: line 19, the constructor `Route()`
+
+component Body
+  x: Float32
+end
+
+struct Path
+  points: [Float] = []
+end
+
+struct Route
+  path: Path = Path()
+  length: Int = 0
+end
+
+gpu system follow
+  each Body do |body|
+    route = Route()
+    body.x += route.length
+  end
+end

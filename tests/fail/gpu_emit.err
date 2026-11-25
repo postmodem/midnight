@@ -1,0 +1,5 @@
+error: `emit` is not allowed in a GPU system
+  --> tests/fail/gpu_emit.12am:14:5
+   |
+14 |     emit Escaped(e) if body.x > 100
+   |     ^^^^^^^^^^^^^^^ events are sent on the CPU; emit from an ordinary system

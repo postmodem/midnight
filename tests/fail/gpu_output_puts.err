@@ -1,0 +1,5 @@
+error: `puts` is not allowed in a GPU system
+  --> tests/fail/gpu_output_puts.12am:10:5
+   |
+10 |     puts body.x
+   |     ^^^^^^^^^^^ the GPU can't write output; print from an ordinary system

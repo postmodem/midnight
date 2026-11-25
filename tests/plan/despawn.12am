@@ -1,0 +1,47 @@
+# expect: the line with no marker is the only transfer of a tick in which
+# nothing is despawned: `report` reads what `move` wrote. The marked lines
+# are what a despawn adds. It removes a row from every column, so `reap`
+# downloads Position, the only component a GPU block writes, and `move`
+# uploads Position and Velocity in the next tick. In a tick with a despawn
+# `report` finds the CPU copy current: the marked download takes the place
+# of the unmarked one. Age has no GPU copy and never appears.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+component Age
+  ticks: Int
+end
+
+gpu system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system reap
+  each Entity, Age do |e, age|
+    age.ticks += 1
+    e.despawn if age.ticks > 3
+  end
+end
+
+system report
+  each Position do |pos|
+    puts pos.x
+  end
+end
+
+spawn Position(0.0, 0.0), Velocity(1.0, 1.0), Age(0)
+spawn Position(5.0, 0.0), Velocity(0.0, 1.0), Age(2)
+5.times do
+  World.tick
+end

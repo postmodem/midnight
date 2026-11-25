@@ -1,0 +1,5 @@
+error: -2147483649 does not fit in 32 bits
+  --> tests/fail/gpu_int_literal_too_small.12am:11:13
+   |
+11 |     floor = -2147483649
+   |             ^^^^^^^^^^^ in a GPU system an `Int` holds -2147483648 to 2147483647

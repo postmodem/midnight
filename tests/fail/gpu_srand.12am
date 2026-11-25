@@ -1,0 +1,14 @@
+# expect: `srand` is not allowed in a GPU system, with a seed and without
+# at: line 10, the call `srand(7)`; line 11, the call `srand`
+
+component Body
+  x: Float32
+end
+
+gpu system scatter
+  each Body do |body|
+    srand(7)
+    srand
+    body.x = rand
+  end
+end

@@ -1,0 +1,17 @@
+# expect: `String` values are not allowed in a function called from a GPU system
+# at: line 9, the literal `"half"`; note at line 15, the call `half(body.x)`
+
+component Body
+  x: Float32
+end
+
+def half(x: Float) -> Float
+  name = "half"
+  x / 2
+end
+
+gpu system halve
+  each Body do |body|
+    body.x = half(body.x)
+  end
+end

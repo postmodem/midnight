@@ -1,0 +1,5 @@
+error: can't call `describe` in a GPU system
+  --> tests/fail/gpu_call_returns_string.12am:14:12
+   |
+14 |     text = describe(body.x)
+   |            ^^^^^^^^^^^^^^^^ it returns a `String`; a function called from a GPU system takes and returns numbers, `Bool`s, enums, entities and structs of those

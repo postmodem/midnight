@@ -1,0 +1,16 @@
+# expect: nested `each` inside a branch in a GPU system
+# at: line 11, the `each` inside the `if`
+
+component Body
+  x: Float32
+end
+
+gpu system relax
+  each Body do |a|
+    if a.x > 0
+      each Body do |b|
+        a.x += b.x
+      end
+    end
+  end
+end

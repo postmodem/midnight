@@ -1,0 +1,13 @@
+# expect: `Named` can't be a term of an `each` in a GPU system, because its field `name` is a `String`
+# at: line 10, the term `Named`
+
+component Named
+  name: String
+  x: Float32
+end
+
+gpu system move
+  each Named do |named|
+    named.x += 1
+  end
+end

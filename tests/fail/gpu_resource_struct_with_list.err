@@ -1,0 +1,5 @@
+error: resource field `Config.path` can't be read in a GPU system
+  --> tests/fail/gpu_resource_struct_with_list.12am:19:15
+   |
+19 |     body.x += Config.path.speed
+   |               ^^^^^^^^^^^ it is a `Path`, whose field `points` is a `[Float]`; a GPU system reads numbers, `Bool`s, enums, entities and structs of those

@@ -1,0 +1,24 @@
+# expect: `puts` is not allowed in a function called from a GPU system, once, though two systems and three calls reach it
+# at: line 9, the statement `puts x`; note at line 15, the first call `checked(body.x)`
+
+component Body
+  x: Float32
+end
+
+def checked(x: Float) -> Float
+  puts x
+  x
+end
+
+gpu system first
+  each Body do |body|
+    body.x = checked(body.x)
+    body.x = checked(body.x + 1)
+  end
+end
+
+gpu system second
+  each Body do |body|
+    body.x = checked(body.x)
+  end
+end

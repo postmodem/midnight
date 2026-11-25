@@ -1,0 +1,12 @@
+# expect: `puts` is not allowed in a GPU system
+# at: line 10, the statement `puts body.x`
+
+component Body
+  x: Float32
+end
+
+gpu system report
+  each Body do |body|
+    puts body.x
+  end
+end

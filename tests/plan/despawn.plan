@@ -1,0 +1,4 @@
+upload    Position  reap -> move     on despawn
+upload    Velocity  reap -> move     on despawn
+download  Position  move -> reap     on despawn
+download  Position  move -> report

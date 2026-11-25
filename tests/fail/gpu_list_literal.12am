@@ -1,0 +1,14 @@
+# expect: `[Int]` values are not allowed in a GPU system; the later uses of `steps` are quiet
+# at: line 10, the literal `[1, 2, 3]`
+
+component Body
+  x: Float32
+end
+
+gpu system walk
+  each Body do |body|
+    steps = [1, 2, 3]
+    steps.push(4)
+    body.x += steps[0]
+  end
+end

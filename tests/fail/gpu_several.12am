@@ -1,0 +1,23 @@
+# expect: four independent errors in one GPU block, in source order: `entity[Health]`, `puts`, the assignment to `Stats.total`, and `return`
+# at: line 18 `chase.target[Health]`; line 19 `puts hp`; line 20 `Stats.total`; line 21 `return`
+
+component Health
+  hp: Int32
+end
+
+component Chase
+  target: Entity
+end
+
+resource Stats
+  total: Int = 0
+end
+
+gpu system hunt
+  each Health, Chase do |health, chase|
+    hp = chase.target[Health].hp
+    puts hp
+    Stats.total += hp
+    return if hp == 0
+  end
+end

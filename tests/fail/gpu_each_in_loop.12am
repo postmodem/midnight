@@ -1,0 +1,16 @@
+# expect: nested `each` inside a loop in a GPU system
+# at: line 11, the `each` inside `3.times`
+
+component Body
+  x: Float32
+end
+
+gpu system relax
+  each Body do |a|
+    3.times do
+      each Body do |b|
+        a.x += b.x
+      end
+    end
+  end
+end

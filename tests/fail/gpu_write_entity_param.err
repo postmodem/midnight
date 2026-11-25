@@ -1,0 +1,11 @@
+error: can't assign to `e` in a GPU system
+  --> tests/fail/gpu_write_entity_param.12am:10:5
+   |
+10 |     e = Entity.none
+   |     ^ `e` is an `Entity` parameter, which is read-only in a GPU system
+
+error: can't assign to `other` in a GPU system
+  --> tests/fail/gpu_write_entity_param.12am:12:7
+   |
+12 |       other = e
+   |       ^^^^^ `other` is an `Entity` parameter, which is read-only in a GPU system

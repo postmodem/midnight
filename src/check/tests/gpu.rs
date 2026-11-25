@@ -1,0 +1,417 @@
+//! GPU systems: programs that follow the rules check and give the same
+//! typed tree as an ordinary system, and the rules reach exactly the code
+//! a GPU system runs. `tests/fail/gpu_*.12am` has a program for each
+//! diagnostic.
+
+use super::*;
+
+const GRAVITY: &str = "\
+component Body
+  x: Float32
+  y: Float32
+  vx: Float32
+  vy: Float32
+  mass: Float32
+end
+
+SOFTENING = 0.01
+
+gpu system gravity
+  each Body do |a|
+    ax = 0.0
+    ay = 0.0
+    each Body do |b|
+      dx = b.x - a.x
+      dy = b.y - a.y
+      d2 = dx * dx + dy * dy + SOFTENING
+      pull = b.mass / (d2 * Math.sqrt(d2))
+      ax += dx * pull
+      ay += dy * pull
+    end
+    a.vx += ax * Time.dt
+    a.vy += ay * Time.dt
+    a.x += a.vx * Time.dt
+    a.y += a.vy * Time.dt
+  end
+end
+";
+
+/// A program that uses everything a GPU block may contain.
+const ALLOWED: &str = "\
+enum Team
+  Red
+  Blue
+end
+
+struct Vec2
+  x: Float32 = 0
+  y: Float32 = 0
+
+  def +(other: Vec2) -> Vec2
+    Vec2(x + other.x, y + other.y)
+  end
+
+  def -@ -> Vec2
+    Vec2(-x, -y)
+  end
+
+  def scale(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+
+  def length -> Float
+    Math.sqrt(x * x + y * y)
+  end
+end
+
+struct Wide
+  total: Float = 0
+  count: Int = 0
+end
+
+component Mover
+  pos: Vec2
+  vel: Vec2
+  team: Team
+  target: Entity
+  alive: Bool = true
+  energy: Int32 = 0
+  heat: Int16 = 0
+  step: Int8 = 0
+  kind: UInt16 = 0
+  level: UInt8 = 0
+end
+
+component Wide64
+  value: Float
+  name: String
+  tags: [Int]
+end
+
+tag Frozen
+
+resource Field
+  wind: Vec2 = Vec2(1, 0)
+  strength: Float = 2
+  rounds: Int = 3
+  team: Team = Team::Red
+  leader: Entity = Entity.none
+  active: Bool = true
+end
+
+LIMIT = 100
+ORIGIN = Vec2(0, 0)
+
+def clamp_speed(v: Vec2, top: Float) -> Vec2
+  speed = v.length
+  return v if speed <= top
+  v.scale(top / speed)
+end
+
+def bump(n: Int) -> Int
+  step = 0
+  n.times do |i|
+    step += i % 2
+  end
+  step + Field.rounds
+end
+
+gpu system simulate
+  each Entity, Mover, with: Wide64, without: Frozen do |e, m|
+    next unless m.alive && Field.active
+    next if e == Field.leader || m.target == Entity.none
+
+    wide = Wide(m.pos.x, bump(2))
+    push = Field.wind.scale(Field.strength) + ORIGIN
+    push = -push if m.team != Field.team
+    m.vel += push
+    m.vel = clamp_speed(m.vel, LIMIT)
+    m.pos = m.pos + m.vel.scale(Time.dt)
+    m.pos.x += rand - 0.5
+
+    jitter = rand(6)
+    case jitter
+    when 0 then m.step = 1
+    when 1, 2
+      m.step = 2
+    else
+      m.step = 0
+    end
+    spin = case m.team
+           when Team::Red then 1.0
+           when Team::Blue then -1.0
+           end
+    drag = if m.vel.length > 10 then 0.5 else 1.0 end
+    sign = m.pos.x < 0 ? -1 : 1
+
+    while wide.total > 1
+      wide.total /= 2
+      break if wide.total.nan?
+    end
+    until wide.count >= 3
+      wide.count += 1
+      next if wide.count == 2
+    end
+    loop do
+      wide.count -= 1
+      break if wide.count <= 0
+    end
+    1.upto(3) do |i|
+      m.energy += i
+    end
+    3.downto(1) do |i|
+      m.energy -= i
+    end
+
+    near = 0
+    each Entity, Mover do |other, o|
+      next if other == e
+      gap = (o.pos + -m.pos).length
+      break if gap.nan?
+      near += 1 if gap < 1
+      m.heat = min(m.heat + 1, 100)
+    end
+
+    m.energy = max(m.energy, 0).clamp(0, 1000)
+    m.level = (m.pos.x.abs.floor % 4 + m.pos.y.ceil.abs % 2).clamp(0, 5)
+    m.kind = (spin * drag * sign).round.abs + near.to_f.to_i + (Time.tick % 2)
+    angle = Math.atan2(m.vel.y, m.vel.x) + Math::PI * Time.elapsed
+    m.vel.x = Math.cos(angle) * Math.exp(-drag) + Math.sin(angle) + Math.tan(0.1)
+    m.vel.y = Math.log(m.vel.x.round(2) ** 2 + Math::E)
+    m.alive = !(m.energy == 0) && m.vel != Vec2()
+  end
+
+  each Mover do |m|
+    m.step = 0
+  end
+end
+";
+
+#[test]
+fn the_gravity_system_checks() {
+    let program = ok(GRAVITY);
+    assert!(program.systems[0].gpu);
+}
+
+#[test]
+fn everything_a_gpu_block_may_contain_checks() {
+    let program = ok(ALLOWED);
+    assert!(program.systems[0].gpu);
+}
+
+#[test]
+fn a_gpu_system_is_typed_like_an_ordinary_one() {
+    for (text, name) in [(GRAVITY, "gravity"), (ALLOWED, "simulate")] {
+        let ordinary = text.replace("gpu system", "system");
+        assert!(!ok(&ordinary).systems[0].gpu);
+        assert_eq!(system(text, name), system(&ordinary, name));
+    }
+}
+
+#[test]
+fn the_rules_apply_to_gpu_code_only() {
+    // Everything a GPU system may not do, in an ordinary system, in a
+    // function only ordinary code calls, and at the top level.
+    ok("\
+component Body
+  x: Float32
+end
+component Wide
+  x: Float
+  name: String
+end
+resource Stats
+  total: Float = 0
+end
+def depth(n: Int) -> Int
+  return 0 if n <= 0
+  depth(n - 1) + 1
+end
+def report(x: Float) -> String
+  puts x
+  Stats.total += x
+  \"#{x}\"
+end
+def double(x: Float) -> Float
+  x * 2
+end
+gpu system grow
+  each Body do |body|
+    body.x = double(body.x)
+  end
+end
+system audit
+  big = 4294967296
+  each Entity, Wide do |e, wide|
+    wide.name = report(double(wide.x)) + depth(3).to_s
+    e.despawn if wide.x > big
+    return if World.count(Wide) == 0
+  end
+end
+puts depth(2), 4294967296
+");
+}
+
+#[test]
+fn a_function_may_be_called_from_both_kinds_of_system() {
+    ok("\
+component Body
+  x: Float32
+end
+component Wide
+  x: Float
+end
+def half(x: Float) -> Float
+  x / 2
+end
+gpu system narrow
+  each Body do |body|
+    body.x = half(body.x)
+  end
+end
+system wide
+  each Wide do |wide|
+    wide.x = half(wide.x)
+  end
+end
+");
+}
+
+#[test]
+fn ordinary_errors_come_first() {
+    // The GPU rules are checked on a program that is otherwise correct.
+    assert_error(
+        "\
+component Body
+  x: Float32
+end
+gpu system grow
+  each Body do |body|
+    puts speed
+  end
+end
+",
+        "unknown variable or function `speed`",
+        "speed",
+        "",
+    );
+}
+
+#[test]
+fn a_list_method_on_a_resource_is_one_error() {
+    assert_error(
+        "\
+component Body
+  x: Float32
+end
+resource Log
+  seen: [Float] = []
+end
+gpu system record
+  each Body do |body|
+    Log.seen.push(body.x)
+  end
+end
+",
+        "resource field `Log.seen` can't be read in a GPU system",
+        "Log.seen",
+        "it is a `[Float]`; a GPU system reads numbers, `Bool`s, enums, entities and structs of those",
+    );
+}
+
+#[test]
+fn a_default_that_does_not_fit_is_reported_once() {
+    assert_error(
+        "\
+component Body
+  n: Int32
+end
+struct Range
+  top: Int = 4294967296
+end
+gpu system clamp
+  each Body do |body|
+    a = Range()
+    b = Range()
+    body.n = min(body.n, a.top + b.top)
+  end
+end
+",
+        "4294967296 does not fit in 32 bits",
+        "4294967296",
+        "in a GPU system an `Int` holds -2147483648 to 2147483647",
+    );
+}
+
+#[test]
+fn a_recursive_call_is_reported_at_each_call_in_the_block() {
+    let text = "\
+component Body
+  n: Int32
+end
+def down(n: Int) -> Int
+  return 0 if n <= 0
+  down(n - 1)
+end
+def start(n: Int) -> Int
+  down(n)
+end
+gpu system count
+  each Body do |body|
+    body.n = down(body.n)
+    body.n = start(body.n)
+  end
+end
+";
+    assert_errors(
+        text,
+        &[
+            (
+                "call to recursive function `down` in a GPU system",
+                "down(body.n)",
+                "`down` calls itself; a function called from a GPU system must not recurse",
+            ),
+            (
+                "call to `start` in a GPU system reaches recursive function `down`",
+                "start(body.n)",
+                "`start` calls `down`, which calls itself; a function called from a GPU system must not recurse",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn a_note_says_which_system_reaches_a_function() {
+    let text = "\
+component Body
+  x: Float32
+end
+def inner(x: Float) -> Float
+  puts x
+  x
+end
+def outer(x: Float) -> Float
+  inner(x)
+end
+gpu system grow
+  each Body do |body|
+    body.x = outer(body.x)
+  end
+end
+";
+    let found = diagnostics(text);
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        found[0].message,
+        "`puts` is not allowed in a function called from a GPU system"
+    );
+    let note = &found[0].notes[0];
+    assert_eq!(
+        note.message,
+        "GPU system `grow` reaches `inner` from here, through `outer`"
+    );
+    assert_eq!(
+        &text[note.span.start as usize..note.span.end as usize],
+        "outer(body.x)"
+    );
+}

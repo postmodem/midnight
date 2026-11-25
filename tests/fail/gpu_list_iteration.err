@@ -1,0 +1,5 @@
+error: `[Float]` values are not allowed in a GPU system
+  --> tests/fail/gpu_list_iteration.12am:10:5
+   |
+10 |     [0.5, 0.25].each do |step|
+   |     ^^^^^^^^^^^ the GPU works on numbers, `Bool`s, enums, entities and structs of those

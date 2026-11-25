@@ -1,0 +1,17 @@
+# expect: call to recursive function `factorial` in a GPU system: `factorial` calls itself
+# at: line 15, the call `factorial(5)`
+
+component Body
+  x: Float32
+end
+
+def factorial(n: Int) -> Int
+  return 1 if n <= 1
+  n * factorial(n - 1)
+end
+
+gpu system grow
+  each Body do |body|
+    body.x += factorial(5)
+  end
+end

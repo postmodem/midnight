@@ -1,0 +1,17 @@
+error: `World.stop` is not allowed in a GPU system
+  --> tests/fail/gpu_world_control.12am:10:5
+   |
+10 |     World.stop if body.x > 100
+   |     ^^^^^^^^^^ the world is driven from the CPU; call it from ordinary code
+
+error: `World.tick` is not allowed in a GPU system
+  --> tests/fail/gpu_world_control.12am:11:5
+   |
+11 |     World.tick if body.x > 200
+   |     ^^^^^^^^^^ the world is driven from the CPU; call it from ordinary code
+
+error: `World.run` is not allowed in a GPU system
+  --> tests/fail/gpu_world_control.12am:12:5
+   |
+12 |     World.run if body.x > 300
+   |     ^^^^^^^^^ the world is driven from the CPU; call it from ordinary code

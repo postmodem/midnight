@@ -1,0 +1,5 @@
+error: call to recursive function `factorial` in a GPU system
+  --> tests/fail/gpu_recursion_direct.12am:15:15
+   |
+15 |     body.x += factorial(5)
+   |               ^^^^^^^^^^^^ `factorial` calls itself; a function called from a GPU system must not recurse

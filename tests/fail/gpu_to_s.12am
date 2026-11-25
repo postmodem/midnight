@@ -1,0 +1,12 @@
+# expect: `to_s` is not allowed in a GPU system
+# at: line 10, the expression `body.x.to_s`
+
+component Body
+  x: Float32
+end
+
+gpu system label
+  each Body do |body|
+    text = body.x.to_s
+  end
+end

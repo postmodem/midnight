@@ -1,0 +1,13 @@
+# expect: `Health` can't be a term of an `each` in a GPU system, because its field `hp` is a 64-bit `Int`; hint to declare it `Int32`
+# at: line 10, the term `Health`
+
+component Health
+  hp: Int
+  max: Int32 = 100
+end
+
+gpu system heal
+  each Health do |health|
+    health.hp = min(health.hp + 1, health.max)
+  end
+end

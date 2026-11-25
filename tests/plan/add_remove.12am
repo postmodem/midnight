@@ -1,0 +1,39 @@
+# expect: `add` and `remove` move a whole row to another table, so each
+# touches every column with a GPU copy. `freeze` adds a tag: it downloads
+# Heat, the only component a GPU block writes. `thaw` removes the tag right
+# after: the CPU copies are current by then, so it downloads nothing, and
+# the uploads of Heat and Rate in the next tick are named after it, the last
+# to change the columns. A tick with neither has no transfer.
+
+component Heat
+  value: Float32
+end
+
+component Rate
+  loss: Float32
+end
+
+tag Frozen
+
+gpu system cool
+  each Heat, Rate do |heat, rate|
+    heat.value -= rate.loss * Time.dt
+  end
+end
+
+system freeze
+  each Entity, with: Heat, without: Frozen do |e|
+    e.add(Frozen)
+  end
+end
+
+system thaw
+  each Entity, with: Frozen do |e|
+    e.remove(Frozen)
+  end
+end
+
+spawn Heat(100.0), Rate(0.5)
+3.times do
+  World.tick
+end

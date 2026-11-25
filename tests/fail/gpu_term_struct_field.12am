@@ -1,0 +1,18 @@
+# expect: `Motion` can't be a term of an `each` in a GPU system, because its fields `velocity.x` and `velocity.y`, inside a struct, are 64-bit `Float`s
+# at: line 15, the term `Motion`
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+component Motion
+  velocity: Vec2
+  drag: Float32
+end
+
+gpu system slow
+  each Motion do |motion|
+    motion.drag += 0
+  end
+end

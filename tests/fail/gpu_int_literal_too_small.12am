@@ -1,0 +1,13 @@
+# expect: -2147483649 does not fit in 32 bits; -2147483648 is fine
+# at: line 11, the literal `-2147483649`
+
+component Body
+  n: Int32
+end
+
+gpu system clamp
+  each Body do |body|
+    body.n = max(body.n, -2147483648)
+    floor = -2147483649
+  end
+end

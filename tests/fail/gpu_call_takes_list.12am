@@ -1,0 +1,20 @@
+# expect: can't call `total` in a GPU system, because its parameter `values` is a `[Float]`; the list argument is part of the same report
+# at: line 18, the call `total([body.x, 1.0])`
+
+component Body
+  x: Float32
+end
+
+def total(values: [Float]) -> Float
+  sum = 0.0
+  values.each do |value|
+    sum += value
+  end
+  sum
+end
+
+gpu system sum
+  each Body do |body|
+    body.x = total([body.x, 1.0])
+  end
+end

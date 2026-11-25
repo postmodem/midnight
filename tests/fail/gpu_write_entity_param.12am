@@ -1,0 +1,15 @@
+# expect: can't assign to `e` and to `other` in a GPU system: `Entity` parameters are read-only there
+# at: line 10, the place `e`; line 12, the place `other`
+
+component Body
+  x: Float32
+end
+
+gpu system forget
+  each Entity, Body do |e, a|
+    e = Entity.none
+    each Entity, Body do |other, b|
+      other = e
+    end
+  end
+end

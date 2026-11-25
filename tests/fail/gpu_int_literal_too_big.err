@@ -1,0 +1,5 @@
+error: 2147483648 does not fit in 32 bits
+  --> tests/fail/gpu_int_literal_too_big.12am:13:13
+   |
+13 |     limit = 2147483648
+   |             ^^^^^^^^^^ in a GPU system an `Int` holds -2147483648 to 2147483647

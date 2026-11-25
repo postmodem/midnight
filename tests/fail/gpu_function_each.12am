@@ -1,0 +1,21 @@
+# expect: `each` is not allowed in a function called from a GPU system, with a note naming the system and the call; the write through its parameter is not a second error
+# at: line 10, the `each` in `heaviest`; note at line 19, the call `heaviest`
+
+component Body
+  x: Float32
+end
+
+def heaviest -> Float
+  best = 0.0
+  each Body do |body|
+    best = max(best, body.x)
+    body.x = 0
+  end
+  best
+end
+
+gpu system normalize
+  each Body do |body|
+    body.x /= heaviest
+  end
+end

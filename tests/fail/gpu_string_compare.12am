@@ -1,0 +1,12 @@
+# expect: `String` values are not allowed in a GPU system, once for each operand of `==` that makes one
+# at: line 10, the literal `"a"`; line 10, the literal `"b"`
+
+component Body
+  x: Float32
+end
+
+gpu system label
+  each Body do |body|
+    body.x = 0 if "a" == "b"
+  end
+end

@@ -4,14 +4,15 @@ This checklist maps each section and table row of
 [`docs/language.md`](../docs/language.md) to the test programs that exercise
 it. Names without a directory are `tests/run/NAME.12am` (with `NAME.out`);
 `fail/NAME` is `tests/fail/NAME.12am` (with `NAME.err`); `panic/NAME` is
-`tests/panic/NAME.12am` (with `NAME.err`).
+`tests/panic/NAME.12am` (with `NAME.err`); `plan/NAME` is
+`tests/plan/NAME.12am` (with `NAME.plan`).
 
 Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
 Counts: 207 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-243 in `tests/fail`, 60 in `tests/panic`.
+317 in `tests/fail`, 60 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
 
@@ -310,6 +311,51 @@ Counts: 207 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `Time.dt`: starts at `1.0 / 60`, writable | `time_default_dt`, `time_fields`, `system_first_program` |
 | `Time.elapsed`: goes up by `Time.dt` at the end of each tick, read-only | `time_fields`, `time_default_dt`, `fail/readonly_time_elapsed` |
 
+## GPU systems
+
+The rules a `gpu system` must follow are in "The language" of
+[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md). Each row is a
+rule and the programs that break it. A rule applies inside a GPU block and
+inside every function one calls; the `gpu_function_*` programs break rules
+there, and their diagnostics carry a note that names the system and the call.
+Programs that follow every rule are checked by the unit tests in
+`src/check/tests/gpu.rs`.
+
+| Rule | Files |
+| --- | --- |
+| The body is one or more `each` blocks | `fail/gpu_no_each` |
+| The body is `each` blocks and nothing else | `fail/gpu_statement_outside_each` |
+| No output | `fail/gpu_output_puts`, `fail/gpu_output_print`, `fail/gpu_function_puts` |
+| No structural change: `spawn`, `despawn`, `add`, `remove` | `fail/gpu_spawn`, `fail/gpu_despawn`, `fail/gpu_add`, `fail/gpu_remove`, `fail/gpu_function_transitive` |
+| No `emit`, no `on` | `fail/gpu_emit`, `fail/gpu_on` |
+| No strings: literals, interpolation, `to_s`, operands of a comparison | `fail/gpu_string_literal`, `fail/gpu_string_interpolation`, `fail/gpu_to_s`, `fail/gpu_string_compare`, `fail/gpu_function_local_string` |
+| No lists: literals, iteration | `fail/gpu_list_literal`, `fail/gpu_list_iteration` |
+| Locals are numbers, `Bool`s, enums, entities and plain records: no record with a string or a list at any depth | `fail/gpu_struct_with_string`, `fail/gpu_struct_with_list_nested` |
+| No `e[C]`, read or written | `fail/gpu_index_component`, `fail/gpu_index_component_write` |
+| No `has?`, no `alive?` | `fail/gpu_has`, `fail/gpu_alive` |
+| No `World.count`, with a query or without | `fail/gpu_world_count`, `fail/gpu_function_world_count` |
+| No `World.tick`, `World.run`, `World.stop` | `fail/gpu_world_control` |
+| No `srand`, `clock`, `sleep`, `exit` | `fail/gpu_srand`, `fail/gpu_clock`, `fail/gpu_sleep`, `fail/gpu_exit` |
+| No `break` directly in a GPU block; `break` in a loop inside it is fine | `fail/gpu_break`, `fail/gpu_break_modifier` |
+| No `return` anywhere in a GPU block | `fail/gpu_return`, `fail/gpu_return_in_nested` |
+| Resources and `Time` are read-only | `fail/gpu_write_resource`, `fail/gpu_write_resource_field`, `fail/gpu_write_time_dt`, `fail/gpu_function_write_resource` |
+| The parameters of the nested `each` are read-only | `fail/gpu_write_nested_param`, `fail/gpu_write_nested_param_whole` |
+| `Entity` parameters are read-only | `fail/gpu_write_entity_param` |
+| One nested `each`: not a second level, not a second one in the block | `fail/gpu_each_two_deep`, `fail/gpu_each_second` |
+| The nested `each` is directly inside the block: not in a loop, not in a branch | `fail/gpu_each_in_loop`, `fail/gpu_each_in_branch` |
+| A query term is plain: no string or list field | `fail/gpu_term_string_field`, `fail/gpu_term_list_field` |
+| A query term has no `Float`, `Int` or `UInt32` field, at any depth; the hint names the fields and the type to declare | `fail/gpu_term_float_field`, `fail/gpu_term_int_field`, `fail/gpu_term_uint32_field`, `fail/gpu_term_struct_field` |
+| The terms of the nested `each` follow the same rules, also when only read | `fail/gpu_term_nested_each` |
+| Types named in `with:` and `without:` are not restricted | `fail/gpu_term_filter_unrestricted` |
+| Resource fields that are read are numbers, `Bool`s, enums, entities or plain structs | `fail/gpu_resource_string`, `fail/gpu_resource_list`, `fail/gpu_resource_struct_with_list` |
+| Constants that are read are numbers, `Bool`s, enums, entities or plain structs | `fail/gpu_constant_string`, `fail/gpu_constant_list` |
+| A called function takes and returns numbers, `Bool`s, enums, entities and plain records | `fail/gpu_call_returns_string`, `fail/gpu_call_takes_list`, `fail/gpu_call_method_receiver`, `fail/gpu_function_bad_call` |
+| A called function does not recurse: directly, through another function, through an operator, or further down the calls | `fail/gpu_recursion_direct`, `fail/gpu_recursion_mutual`, `fail/gpu_recursion_operator`, `fail/gpu_recursion_reached` |
+| A called function contains no query | `fail/gpu_function_each`, `fail/gpu_function_world_count` |
+| A function is reported on once, however many calls and systems reach it | `fail/gpu_function_puts` |
+| An `Int` literal fits in 32 bits, in a block, in a called function and in a field default a constructor uses; constants are not checked | `fail/gpu_int_literal_too_big`, `fail/gpu_int_literal_too_small`, `fail/gpu_function_int_literal`, `fail/gpu_int_literal_default` |
+| Independent errors in one block are all reported | `fail/gpu_several` |
+
 ## Events
 
 | Rule | Files |
@@ -453,6 +499,35 @@ Syntax errors are in `fail/syntax_*`: `syntax_unexpected_token`,
 | --- | --- |
 | `refcount` | Strings and lists copied, modified and dropped through locals, struct fields, component fields, resource fields, events (read and discarded unread), queued commands (spawn and add inside `each`, also for entities despawned in the same batch), despawned entities, lists of strings, of lists and of structs with strings, arguments and return values, early `return` / `break` / `next` with live locals, replaced components (`add` of a present one, `e[C] = …`), removed components, reassigned variables, `pop` / `delete_at` / `clear` |
 | `layout` | A component with a `Float`, a `Float32`, an `Int16`, a `UInt8`, a `Bool` and an enum field (`Body`, with the enum `Kind`), spawned, queried, modified and printed |
+
+## Transfer plans
+
+What `midnight plan` prints. Each expected plan was worked out by hand from
+the rule for where a column lives.
+
+| Case | Files |
+| --- | --- |
+| Data that only GPU systems use stays on the GPU: an empty plan | `plan/stays_on_gpu` |
+| Top-level code before the loop that ticks is not part of a tick | `plan/stays_on_gpu`, `plan/top_level` |
+| Top-level code after the loop that ticks is not part of a tick | `plan/after_ticks` |
+| A CPU system that reads what a GPU system writes: one download, no upload | `plan/reader` |
+| A component a GPU system only reads is never downloaded | `plan/reader`, `plan/writer`, `plan/nested_each` |
+| A CPU system that writes what a GPU system reads: an upload | `plan/writer`, `plan/nested_each` |
+| A CPU system that writes what a GPU system writes: an upload and a download | `plan/writer`, `plan/functions` |
+| A download comes from the last GPU system to write; consecutive GPU systems transfer nothing | `plan/writer`, `plan/nested_each` |
+| A nested `each` over a component its block writes is no transfer | `plan/nested_each` |
+| A component named only by a nested `each` has a GPU copy | `plan/nested_each` |
+| What called functions do counts as the system's | `plan/functions` |
+| `e[C]`, read and written | `plan/functions`, `plan/top_level` |
+| `World.count` and `has?` read no column | `plan/functions` |
+| `spawn` changes the components it lists: `on spawn` | `plan/spawn` |
+| `despawn` changes every component with a GPU copy: `on despawn` | `plan/despawn` |
+| `add` and `remove` change every component with a GPU copy: `on add`, `on remove` | `plan/add_remove` |
+| A marked download before an unmarked one of the same component: both are listed | `plan/despawn` |
+| A structural change that finds the CPU copy current downloads nothing | `plan/add_remove` |
+| Components with no GPU copy never appear | `plan/despawn`, `plan/spawn` |
+| Top-level code in the loop that ticks is the step `top level` | `plan/top_level` |
+| Columns are lined up within a plan | `plan/despawn`, `plan/add_remove`, `plan/writer` |
 
 ## Runtime errors
 
@@ -709,6 +784,80 @@ against that header.
 | 25 independent errors: the first 20 are reported in source order, then a line saying that the rest were not shown | `error_cap.12am` | 4 to 23 | Errors |
 | the element type of `[]` can't be inferred: nothing here supplies a type (annotate the variable, e.g. `xs: [Int] = []`) | `empty_list_no_type.12am` | 4 | Lists |
 | the element type of `[]` can't be inferred: nothing here supplies a type | `empty_list_no_type_method.12am` | 4 | Lists |
+| `add` is not allowed in a GPU system | `gpu_add.12am` | 12 | GPU systems |
+| `alive?` is not allowed in a GPU system | `gpu_alive.12am` | 14 | GPU systems |
+| `break` can't leave the `each` of a GPU system; the `break` inside the `while` is fine | `gpu_break.12am` | 15 | GPU systems |
+| `break` can't leave the `each` of a GPU system, in the modifier form too | `gpu_break_modifier.12am` | 10 | GPU systems |
+| can't call `Label.width` in a GPU system, because its receiver is a `Label`, whose field `text` is a `String` | `gpu_call_method_receiver.12am` | 21 | GPU systems |
+| can't call `describe` in a GPU system, because it returns a `String`; the body of `describe` is not reported | `gpu_call_returns_string.12am` | 14 | GPU systems |
+| can't call `total` in a GPU system, because its parameter `values` is a `[Float]`; the list argument is part of the same report | `gpu_call_takes_list.12am` | 18 | GPU systems |
+| `clock` is not allowed in a GPU system | `gpu_clock.12am` | 10 | GPU systems |
+| constant `STEPS` can't be read in a GPU system, because it is a `[Float]`: a list constant can't be iterated there | `gpu_constant_list.12am` | 12 | GPU systems |
+| constant `TITLE` can't be read in a GPU system, because it is a `String` | `gpu_constant_string.12am` | 12 | GPU systems |
+| `despawn` is not allowed in a GPU system | `gpu_despawn.12am` | 10 | GPU systems |
+| nested `each` inside a branch in a GPU system | `gpu_each_in_branch.12am` | 11 | GPU systems |
+| nested `each` inside a loop in a GPU system | `gpu_each_in_loop.12am` | 11 | GPU systems |
+| second nested `each` in a GPU block | `gpu_each_second.12am` | 18 | GPU systems |
+| `each` nested two deep in a GPU system | `gpu_each_two_deep.12am` | 11 | GPU systems |
+| `emit` is not allowed in a GPU system | `gpu_emit.12am` | 14 | GPU systems |
+| `exit` is not allowed in a GPU system | `gpu_exit.12am` | 10 | GPU systems |
+| can't call `name_of` in a function called from a GPU system, because it returns a `String` | `gpu_function_bad_call.12am` | 13 | GPU systems |
+| `each` is not allowed in a function called from a GPU system, with a note naming the system and the call; the write through its parameter is not a second error | `gpu_function_each.12am` | 10 | GPU systems |
+| 4294967296 does not fit in 32 bits, in a function called from a GPU system | `gpu_function_int_literal.12am` | 9 | GPU systems |
+| `String` values are not allowed in a function called from a GPU system | `gpu_function_local_string.12am` | 9 | GPU systems |
+| `puts` is not allowed in a function called from a GPU system, once, though two systems and three calls reach it | `gpu_function_puts.12am` | 9 | GPU systems |
+| `despawn` is not allowed in a function called from a GPU system, reached through another function and a method | `gpu_function_transitive.12am` | 18 | GPU systems |
+| `World.count` is not allowed in a function called from a GPU system | `gpu_function_world_count.12am` | 9 | GPU systems |
+| can't assign to `Stats.calls` in a function called from a GPU system | `gpu_function_write_resource.12am` | 13 | GPU systems |
+| `has?` is not allowed in a GPU system | `gpu_has.12am` | 12 | GPU systems |
+| `entity[Body]` is not allowed in a GPU system | `gpu_index_component.12am` | 14 | GPU systems |
+| `entity[Body]` is not allowed in a GPU system, when it is assigned through too | `gpu_index_component_write.12am` | 14 | GPU systems |
+| 4294967296 does not fit in 32 bits, for a field default that a constructor in a GPU system uses | `gpu_int_literal_default.12am` | 9 | GPU systems |
+| 2147483648 does not fit in 32 bits; 2147483647 and the constant `BIG` are fine | `gpu_int_literal_too_big.12am` | 13 | GPU systems |
+| -2147483649 does not fit in 32 bits; -2147483648 is fine | `gpu_int_literal_too_small.12am` | 11 | GPU systems |
+| `[Float]` values are not allowed in a GPU system: a list can't be iterated there | `gpu_list_iteration.12am` | 10 | GPU systems |
+| `[Int]` values are not allowed in a GPU system; the later uses of `steps` are quiet | `gpu_list_literal.12am` | 10 | GPU systems |
+| GPU system `idle` has no `each` | `gpu_no_each.12am` | 4 | GPU systems |
+| `on` is not allowed in a GPU system | `gpu_on.12am` | 14 | GPU systems |
+| `print` is not allowed in a GPU system; the interpolated string is part of the same report | `gpu_output_print.12am` | 10 | GPU systems |
+| `puts` is not allowed in a GPU system | `gpu_output_puts.12am` | 10 | GPU systems |
+| call to recursive function `factorial` in a GPU system: `factorial` calls itself | `gpu_recursion_direct.12am` | 15 | GPU systems |
+| call to recursive function `even?` in a GPU system: `even?` calls `odd?`, which calls `even?` | `gpu_recursion_mutual.12am` | 21 | GPU systems |
+| call to recursive function `Vec2.+` in a GPU system, when `+=` calls the operator: `Vec2.+` calls `Vec2.doubled`, which calls `Vec2.+` | `gpu_recursion_operator.12am` | 25 | GPU systems |
+| call to `spread` in a GPU system reaches recursive function `fib`: `spread` calls `fib`, which calls itself | `gpu_recursion_reached.12am` | 19 | GPU systems |
+| `remove` is not allowed in a GPU system | `gpu_remove.12am` | 12 | GPU systems |
+| resource field `Config.steps` can't be read in a GPU system, because it is a `[Float]`, also when only an element is read | `gpu_resource_list.12am` | 14 | GPU systems |
+| resource field `Config.title` can't be read in a GPU system, because it is a `String`; `Config.scale` is fine | `gpu_resource_string.12am` | 16 | GPU systems |
+| resource field `Config.path` can't be read in a GPU system, because it is a `Path`, whose field `points` is a `[Float]` | `gpu_resource_struct_with_list.12am` | 19 | GPU systems |
+| `return` is not allowed in a GPU system | `gpu_return.12am` | 10 | GPU systems |
+| `return` is not allowed in a GPU system, inside the nested `each` and inside a loop too | `gpu_return_in_nested.12am` | 11, 14 | GPU systems |
+| four independent errors in one GPU block, in source order: `entity[Health]`, `puts`, the assignment to `Stats.total`, and `return` | `gpu_several.12am` | 18, 19, 20, 21 | GPU systems |
+| `sleep` is not allowed in a GPU system | `gpu_sleep.12am` | 10 | GPU systems |
+| `spawn` is not allowed in a GPU system | `gpu_spawn.12am` | 11 | GPU systems |
+| `srand` is not allowed in a GPU system, with a seed and without | `gpu_srand.12am` | 10, 11 | GPU systems |
+| statement outside `each` in a GPU system, once for each statement | `gpu_statement_outside_each.12am` | 9, 13 | GPU systems |
+| `String` values are not allowed in a GPU system, once for each operand of `==` that makes one | `gpu_string_compare.12am` | 10 | GPU systems |
+| `String` values are not allowed in a GPU system, once for the whole interpolated string | `gpu_string_interpolation.12am` | 10 | GPU systems |
+| `String` values are not allowed in a GPU system; the later use of `name` is quiet | `gpu_string_literal.12am` | 10 | GPU systems |
+| `Route` values are not allowed in a GPU system, because the field `path.points` is a `[Float]` | `gpu_struct_with_list_nested.12am` | 19 | GPU systems |
+| `Label` values are not allowed in a GPU system, because the field `text` is a `String` | `gpu_struct_with_string.12am` | 15 | GPU systems |
+| only the term `Position` is reported; `Named` and `Trail`, which hold a string and a list, are fine in `with:` and `without:` | `gpu_term_filter_unrestricted.12am` | 17 | GPU systems |
+| `Position` can't be a term of an `each` in a GPU system, because its fields `x` and `y` are 64-bit `Float`s; hint to declare them `Float32` | `gpu_term_float_field.12am` | 11 | GPU systems |
+| `Health` can't be a term of an `each` in a GPU system, because its field `hp` is a 64-bit `Int`; hint to declare it `Int32` | `gpu_term_int_field.12am` | 10 | GPU systems |
+| `Trail` can't be a term of an `each` in a GPU system, because its field `points` is a `[Float32]` | `gpu_term_list_field.12am` | 10 | GPU systems |
+| `Mass` can't be a term of an `each` in a GPU system, as a term of the nested `each` and when it is only read | `gpu_term_nested_each.12am` | 14 | GPU systems |
+| `Named` can't be a term of an `each` in a GPU system, because its field `name` is a `String` | `gpu_term_string_field.12am` | 10 | GPU systems |
+| `Motion` can't be a term of an `each` in a GPU system, because its fields `velocity.x` and `velocity.y`, inside a struct, are 64-bit `Float`s | `gpu_term_struct_field.12am` | 15 | GPU systems |
+| `Cell` can't be a term of an `each` in a GPU system, because its field `mask` is a `UInt32`; hint to declare it `Int32` | `gpu_term_uint32_field.12am` | 10 | GPU systems |
+| `to_s` is not allowed in a GPU system | `gpu_to_s.12am` | 10 | GPU systems |
+| `World.stop`, `World.tick` and `World.run` are not allowed in a GPU system | `gpu_world_control.12am` | 10, 11, 12 | GPU systems |
+| `World.count` is not allowed in a GPU system, with a query and without | `gpu_world_count.12am` | 10, 11 | GPU systems |
+| can't assign to `e` and to `other` in a GPU system: `Entity` parameters are read-only there | `gpu_write_entity_param.12am` | 10, 12 | GPU systems |
+| can't assign to `b.x` in a GPU system: `b` is a parameter of the nested `each` | `gpu_write_nested_param.12am` | 11 | GPU systems |
+| can't assign to `b` in a GPU system: `b` is a parameter of the nested `each` | `gpu_write_nested_param_whole.12am` | 11 | GPU systems |
+| can't assign to `Stats.total` in a GPU system: resources are read-only | `gpu_write_resource.12am` | 14 | GPU systems |
+| can't assign to `Wind.force.x` in a GPU system: resources are read-only, their parts too | `gpu_write_resource_field.12am` | 19 | GPU systems |
+| can't assign to `Time.dt` in a GPU system: `Time` is read-only | `gpu_write_time_dt.12am` | 10 | GPU systems |
 | `has?` takes a component or tag; `Vec2` is a struct | `has_non_component.12am` | 10 | Entities |
 | can't assign to an element of `xs`: a function parameter is read-only | `index_assign_readonly_param.12am` | 5 | What can be modified; Lists |
 | type mismatch: `e[Health]` is a `Health`, found an `Armor` | `index_component_wrong_value.12am` | 13 | Entities |

@@ -1,0 +1,14 @@
+# expect: `spawn` is not allowed in a GPU system
+# at: line 11, the expression `spawn Body(0)`
+
+component Body
+  x: Float32
+end
+
+gpu system split
+  each Body do |body|
+    if body.x > 100
+      spawn Body(0)
+    end
+  end
+end

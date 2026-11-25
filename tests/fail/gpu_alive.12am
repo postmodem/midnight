@@ -1,0 +1,17 @@
+# expect: `alive?` is not allowed in a GPU system
+# at: line 14, the expression `chase.target.alive?`
+
+component Body
+  x: Float32
+end
+
+component Chase
+  target: Entity
+end
+
+gpu system chase
+  each Body, Chase do |body, chase|
+    next unless chase.target.alive?
+    body.x += 1
+  end
+end

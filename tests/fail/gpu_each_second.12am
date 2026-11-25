@@ -1,0 +1,22 @@
+# expect: second nested `each` in a GPU block
+# at: line 18, the second nested `each`
+
+component Body
+  x: Float32
+end
+
+component Wall
+  x: Float32
+end
+
+gpu system collide
+  each Body do |a|
+    each Body do |b|
+      a.x += b.x
+    end
+    a.x /= 2
+    each Wall do |wall|
+      a.x = min(a.x, wall.x)
+    end
+  end
+end

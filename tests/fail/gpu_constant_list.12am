@@ -1,0 +1,16 @@
+# expect: constant `STEPS` can't be read in a GPU system, because it is a `[Float]`: a list constant can't be iterated there
+# at: line 12, the name `STEPS`
+
+component Body
+  x: Float32
+end
+
+STEPS = [0.5, 0.25]
+
+gpu system step
+  each Body do |body|
+    STEPS.each do |step|
+      body.x += step
+    end
+  end
+end

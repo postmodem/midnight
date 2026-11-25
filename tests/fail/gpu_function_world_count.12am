@@ -1,0 +1,16 @@
+# expect: `World.count` is not allowed in a function called from a GPU system
+# at: line 9, the expression `World.count(Body)`; note at line 14, the call `share(body.x)`
+
+component Body
+  x: Float32
+end
+
+def share(x: Float) -> Float
+  x / World.count(Body)
+end
+
+gpu system spread
+  each Body do |body|
+    body.x = share(body.x)
+  end
+end

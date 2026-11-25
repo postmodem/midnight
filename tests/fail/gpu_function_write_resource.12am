@@ -1,0 +1,21 @@
+# expect: can't assign to `Stats.calls` in a function called from a GPU system
+# at: line 13, the place `Stats.calls`; note at line 19, the call `counted(body.x)`
+
+component Body
+  x: Float32
+end
+
+resource Stats
+  calls: Int = 0
+end
+
+def counted(x: Float) -> Float
+  Stats.calls += 1
+  x
+end
+
+gpu system count
+  each Body do |body|
+    body.x = counted(body.x)
+  end
+end

@@ -1,0 +1,5 @@
+# expect: GPU system `idle` has no `each`
+# at: line 4, the name `idle`
+
+gpu system idle
+end

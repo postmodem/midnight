@@ -1,0 +1,5 @@
+error: `on` is not allowed in a GPU system
+  --> tests/fail/gpu_on.12am:14:5
+   |
+14 |     on Push do |push|
+   |     ^^^^^^^^^^^^^^^^^ events are received on the CPU; handle them in an ordinary system

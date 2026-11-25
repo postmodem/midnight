@@ -1,0 +1,23 @@
+# expect: call to recursive function `even?` in a GPU system: `even?` calls `odd?`, which calls `even?`
+# at: line 21, the call `even?(body.n)`
+
+component Body
+  x: Float32
+  n: Int32
+end
+
+def even?(n: Int) -> Bool
+  return true if n == 0
+  odd?(n - 1)
+end
+
+def odd?(n: Int) -> Bool
+  return false if n == 0
+  even?(n - 1)
+end
+
+gpu system flip
+  each Body do |body|
+    body.x = -body.x if even?(body.n)
+  end
+end

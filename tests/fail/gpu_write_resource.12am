@@ -1,0 +1,16 @@
+# expect: can't assign to `Stats.total` in a GPU system: resources are read-only
+# at: line 14, the place `Stats.total`
+
+component Body
+  x: Float32
+end
+
+resource Stats
+  total: Float = 0
+end
+
+gpu system sum
+  each Body do |body|
+    Stats.total += body.x
+  end
+end

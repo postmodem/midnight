@@ -1,0 +1,14 @@
+# expect: `Position` can't be a term of an `each` in a GPU system, because its fields `x` and `y` are 64-bit `Float`s; hint to declare them `Float32`
+# at: line 11, the term `Position`
+
+component Position
+  x: Float
+  y: Float
+  layer: Int8
+end
+
+gpu system move
+  each Position do |pos|
+    pos.x += 1
+  end
+end

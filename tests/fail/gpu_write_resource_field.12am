@@ -1,0 +1,21 @@
+# expect: can't assign to `Wind.force.x` in a GPU system: resources are read-only, their parts too
+# at: line 19, the place `Wind.force.x`
+
+component Body
+  x: Float32
+end
+
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+end
+
+resource Wind
+  force: Vec2 = Vec2()
+end
+
+gpu system gust
+  each Body do |body|
+    Wind.force.x = body.x
+  end
+end

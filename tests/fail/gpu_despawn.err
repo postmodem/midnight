@@ -1,0 +1,5 @@
+error: `despawn` is not allowed in a GPU system
+  --> tests/fail/gpu_despawn.12am:10:5
+   |
+10 |     e.despawn if body.x < 0
+   |     ^^^^^^^^^ structural changes are made on the CPU; make this one in an ordinary system

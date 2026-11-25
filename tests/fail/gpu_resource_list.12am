@@ -1,0 +1,16 @@
+# expect: resource field `Config.steps` can't be read in a GPU system, because it is a `[Float]`, also when only an element is read
+# at: line 14, the place `Config.steps`
+
+component Body
+  x: Float32
+end
+
+resource Config
+  steps: [Float] = [0.5, 0.25]
+end
+
+gpu system step
+  each Body do |body|
+    body.x += Config.steps[0]
+  end
+end

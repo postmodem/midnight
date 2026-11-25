@@ -1,0 +1,10 @@
+error: can't assign to `Stats.calls` in a function called from a GPU system
+  --> tests/fail/gpu_function_write_resource.12am:13:3
+   |
+13 |   Stats.calls += 1
+   |   ^^^^^^^^^^^ resources are read-only there: a GPU system writes only to the component parameters of its outer `each`
+note: GPU system `count` calls `counted` here
+  --> tests/fail/gpu_function_write_resource.12am:19:14
+   |
+19 |     body.x = counted(body.x)
+   |              ---------------
