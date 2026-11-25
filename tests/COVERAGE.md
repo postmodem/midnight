@@ -11,8 +11,8 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 207 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-317 in `tests/fail`, 60 in `tests/panic`, 10 in `tests/plan`.
+Counts: 233 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+317 in `tests/fail`, 71 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
 
@@ -356,6 +356,60 @@ Programs that follow every rule are checked by the unit tests in
 | An `Int` literal fits in 32 bits, in a block, in a called function and in a field default a constructor uses; constants are not checked | `fail/gpu_int_literal_too_big`, `fail/gpu_int_literal_too_small`, `fail/gpu_function_int_literal`, `fail/gpu_int_literal_default` |
 | Independent errors in one block are all reported | `fail/gpu_several` |
 
+## What GPU systems compute
+
+Programs with GPU systems that follow every rule. They run on the C
+implementation of each block here; the same programs are meant to run on a
+device, so those that print a `Float` a device may round differently state a
+tolerance in their first line and print it rounded. Each expected output was
+worked out by hand from "The language" of
+[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), except where
+hand arithmetic does not reach: the orbits of `gpu_gravity`, the `Math`
+results of `gpu_numbers`, and the random numbers of `gpu_rand`,
+`gpu_control_flow` and `gpu_statements` were compared with separate C
+programs written from the specification.
+
+| Behaviour | Files |
+| --- | --- |
+| A block with no nested `each` updates its entities in place | `gpu_block_plain` |
+| The gravity system of the specification | `gpu_gravity` |
+| The nested `each` sees every entity as it was when the outer `each` began | `gpu_snapshot`, `gpu_tables`, `gpu_with_cpu_systems` |
+| A run sees its own writes through the outer parameter and its old values through the nested one | `gpu_snapshot_own_row` |
+| The outer and the nested query each match several tables | `gpu_tables` |
+| `with:` and `without:`, one type or a list, on both queries; a filter may name a component with a `String` | `gpu_filters` |
+| `Entity` terms: `==`, `!=`, `Entity.none`, a handle stored in a component | `gpu_entity_term`, `gpu_index_from_cpu`, `gpu_field_types` |
+| `next` in the block ends the run and keeps its writes; a field whose assignment was not reached keeps its value | `gpu_next_keeps_writes` |
+| `break` and `next` in the nested `each`, which visits entities in the order an ordinary `each` does | `gpu_nested_break`, `gpu_entity_term` |
+| `break` and `next` in a loop inside the block | `gpu_next_keeps_writes`, `gpu_control_flow` |
+| The `each` blocks of one system run in order and see earlier writes | `gpu_two_blocks`, `gpu_nested_break`, `gpu_filters` |
+| Fields read and written: `Float32`, `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `Bool`, enum, `Entity`, a struct whole and by field | `gpu_field_types`, `gpu_struct_methods` |
+| A component a block only reads can be 1, 3 or 6 bytes; every position of a field within a word | `gpu_odd_row_size` |
+| Resource fields of every plain kind, known and unknown constants, struct constants | `gpu_uniforms`, `gpu_functions` |
+| `Time.tick`, `Time.dt`, `Time.elapsed` | `gpu_uniforms`, `gpu_gravity` |
+| Resources and `Time` are read when the `each` begins; a change between ticks is seen | `gpu_uniforms` |
+| An `Int` resource field or constant wider than 32 bits wraps; a `Float` one is rounded | `gpu_uniforms` |
+| `Int` is 32 bits and wraps: `+`, `-`, `*`, unary minus, `abs`, `**` | `gpu_int_wrap`, `gpu_field_types` |
+| `Float` is 32 bits: literals out of range, products that overflow or vanish, 16777217 | `gpu_float_literals`, `gpu_functions` |
+| `to_i`, `floor`, `ceil`, `round`: saturation, 0 for NaN, halves away from zero; `nan?` | `gpu_float_to_int` |
+| `Int` `/` floors and `%` takes the divisor's sign, by a variable and by a constant; the smallest `Int` by -1 | `gpu_div_mod` |
+| `Float` `%` takes the divisor's sign | `gpu_div_mod` |
+| `abs`, `clamp`, `min`, `max`, `to_f`, `round(digits)`, the `Math` functions, `**` on `Float` with either sign of base | `gpu_numbers`, `gpu_float_literals` |
+| A function computes at 32 bits when a GPU block calls it and at 64 bits otherwise | `gpu_functions`, `gpu_float_literals`, `gpu_int_wrap` |
+| Functions that call functions, return early, loop, return nothing, return a struct | `gpu_functions`, `gpu_statements` |
+| Struct construction, methods, operator methods, unary minus, `+=` through an operator, `==`, a struct with `Float` and `Int` fields | `gpu_struct_methods` |
+| `if`, `elsif`, `unless`, modifiers, `case` on `Int`, `Bool` and enum, the conditional operator, as statements and as values | `gpu_control_flow`, `gpu_statements`, `gpu_field_types` |
+| `while`, `until`, `loop`, `times`, `upto`, `downto` | `gpu_control_flow`, `gpu_next_keeps_writes`, `gpu_functions` |
+| `&&` and `||` evaluate their right side only when it decides the result | `gpu_control_flow` |
+| Operands are evaluated left to right, also when a later one assigns to a variable an earlier one read | `gpu_statements` |
+| `rand` and `rand(n)`: the same in every run; different per entity, tick, draw and block; draws in called functions count | `gpu_rand`, `gpu_control_flow` |
+| `srand` changes the numbers; drawing in a GPU system does not move the ordinary generator | `gpu_rand` |
+| A call whose value is unused still draws | `gpu_statements` |
+| A GPU system between ordinary systems that read and write the same components, and top-level code between ticks | `gpu_with_cpu_systems`, `gpu_index_from_cpu` |
+| `e[C]` in ordinary code on a component a GPU block names, read, written and replaced | `gpu_index_from_cpu`, `gpu_entity_term` |
+| A block that uses none of its parameters | `gpu_statements` |
+| Names that WGSL or C reserve, as fields, locals, parameters, functions and types | `gpu_names` |
+| Run-time errors in a GPU system | `panic/gpu_*` (see [Runtime errors](#runtime-errors)) |
+
 ## Events
 
 | Rule | Files |
@@ -593,6 +647,17 @@ the rule for where a column lives.
 | | in a function called by a system | `panic/world_tick_in_function` | `World.tick called while a tick is in progress` |
 | `World.run` during a tick | in a system, under `World.tick` | `panic/world_run_in_system` | `World.run called while a tick is in progress` |
 | | in a system, under `World.run` | `panic/world_run_in_system_during_run` | `World.run called while a tick is in progress` |
+| A failure in a GPU system (the message names no value) | `Int` `/` by zero | `panic/gpu_division_by_zero` | `division by zero` |
+| | `Int` `%` by zero, in the nested `each` | `panic/gpu_modulo_by_zero` | `modulo by zero` |
+| | `Int` `**` with a negative exponent | `panic/gpu_negative_exponent` | `negative exponent` |
+| | `rand(n)` with `n <= 0` | `panic/gpu_rand_not_positive` | `rand: the argument must be positive` |
+| | `UInt8` above, compound assignment | `panic/gpu_store_uint8` | `value does not fit in UInt8` |
+| | `Int8` below | `panic/gpu_store_int8` | `value does not fit in Int8` |
+| | `Int16` above, constructor argument | `panic/gpu_store_int16` | `value does not fit in Int16` |
+| | `UInt16` negative, field of a struct in a component | `panic/gpu_store_uint16` | `value does not fit in UInt16` |
+| | in a function the block calls: the line in the function | `panic/gpu_failure_in_function` | `modulo by zero` |
+| | two operations fail in different runs: the earliest in the source is reported | `panic/gpu_earliest_failure` | `division by zero` |
+| | nothing after the failing `each` runs | `panic/gpu_failure_stops_tick` | `negative exponent` |
 
 ## Assumptions
 
