@@ -416,10 +416,10 @@ and Mesa's `llvmpipe` for software Vulkan.
 
 | #  | Result |
 | -- | ------ |
-| 1  | `nix flake check` passes. The package's check phase runs `cargo test`: 300 unit tests and the suite, with every GPU system on its CPU implementation, in both build modes. `checks.gpu` ran 88 runs of 44 programs on `llvmpipe` inside the sandbox (31 of `tests/run`, 12 of `tests/panic` and `examples/nbody.12am`, each in release and debug). `nix flake check --no-build --all-systems` passes. |
+| 1  | `nix flake check` passes. The package's check phase runs `cargo test`: 302 unit tests and the suite, with every GPU system on its CPU implementation, in both build modes. `checks.gpu` ran 90 runs of 45 programs on `llvmpipe` inside the sandbox (32 of `tests/run`, 12 of `tests/panic` and `examples/nbody.12am`, each in release and debug). `nix flake check --no-build --all-systems` passes. |
 | 2  | `MIDNIGHT_GPU=info midnight run examples/nbody.12am` prints `midnight: gpu: NVIDIA GeForce RTX 5090 (Vulkan)`. Against the `MIDNIGHT_GPU=off` run, 2 of the 32 printed numbers differ, by 0.00001, which is 6.0e-6 × max(1, \|position\|). Over all 256 bodies, unrounded, the largest difference is 9.5e-6 (7.8e-6 on `llvmpipe`). |
 | 3  | Two `MIDNIGHT_GPU=off` runs and one with `--debug` print the same bytes, those of `examples/nbody.out`. |
-| 4  | 82 `tests/fail/gpu_*` cases. For the rules the criterion lists: `gpu_output_puts`, `gpu_spawn` (and `gpu_despawn`, `gpu_add`, `gpu_remove`), `gpu_emit`, `gpu_index_component`, `gpu_term_string_field`, `gpu_term_float_field` and `gpu_term_int_field`, `gpu_term_uint32_field`, `gpu_write_resource`, `gpu_write_nested_param`, `gpu_each_two_deep`, `gpu_break`, `gpu_return`, `gpu_recursion_direct` and `gpu_recursion_mutual`, `gpu_function_each`, `gpu_int_literal_too_big`, `gpu_statement_outside_each`. |
+| 4  | 85 `tests/fail/gpu_*` cases. For the rules the criterion lists: `gpu_output_puts`, `gpu_spawn` (and `gpu_despawn`, `gpu_add`, `gpu_remove`), `gpu_emit`, `gpu_index_component`, `gpu_term_string_field`, `gpu_term_float_field` and `gpu_term_int_field`, `gpu_term_uint32_field`, `gpu_write_resource`, `gpu_write_nested_param`, `gpu_each_two_deep`, `gpu_break`, `gpu_return`, `gpu_recursion_direct` and `gpu_recursion_mutual`, `gpu_function_each`, `gpu_int_literal_too_big`, `gpu_statement_outside_each`. |
 | 5  | 12 `tests/panic/gpu_*` cases: `/` and `%` by zero, a negative exponent, `rand(n)` with `n` not positive, a store that does not fit each of the four compact types, the earliest of several failures, a failure in a called function, a failure that stops the tick, and a constant divisor that wraps to zero. Each stops with its message and status 1 with `MIDNIGHT_GPU=off` in both build modes, and in `checks.gpu`. |
 | 6  | `nix run .#bench-gpu`, gravity on 16,384 bodies: 1.33 ms per tick on the GPU, 356 ms on the CPU, ratio 267. |
 | 7  | Same run, one million entities moved, ms per tick: 0.13 on the CPU; 0.04 on the GPU with the data left there; 0.78 on the GPU with a CPU system reading every tick. The app adds a fourth row, the reading program on the CPU: 0.53. Every run prints the same checksum. |
@@ -427,7 +427,7 @@ and Mesa's `llvmpipe` for software Vulkan.
 | 9  | `ldd` on the release build of `examples/hello.12am` lists `libm.so.6`, `libc.so.6` and the loader. The build of `examples/nbody.12am` adds `libwgpu_native.so`, `libvulkan.so.1`, `libgcc_s.so.1` and `libdl.so.2`. |
 | 10 | Every command in the README was run as written. |
 
-`MIDNIGHT_TEST_GPU=hardware cargo test` and `nix run .#gpu-test` ran the 44
+`MIDNIGHT_TEST_GPU=hardware cargo test` and `nix run .#gpu-test` ran the 45
 programs on the RTX 5090 in release mode. Every output is exact except
 `examples/nbody.12am`, which is within its tolerance on both devices.
 
@@ -479,11 +479,14 @@ The reference's "What a GPU system costs" carries these figures.
 
 ### Differences from the design
 
-- **`UInt32` is kept out of GPU code altogether,** not only out of query
-  terms: a resource field or constant of that type, or of a struct that
-  holds one, cannot be read in a GPU block, and a function a block calls
-  cannot take, return or declare one. A shader's 32-bit `Int` is signed, so
-  the value would have changed meaning on the way in.
+- **A `UInt32` field cannot be used in GPU code,** not only in a query
+  term: reading one, assigning to one, and constructing a struct that has
+  one among its own fields are errors, in a GPU block and in a function it
+  calls. A shader's 32-bit `Int` is signed, so the value would have changed
+  meaning on the way in. A struct that has such a field is still a value
+  there: it can be read from a constant or a resource field, copied, passed,
+  returned and compared, and its other fields used. The first version, 0.2.0,
+  rejected every such struct whole; 0.2.1 narrowed the rule after review.
 - **Constants are worked out by the compiler.** An `Int` constant made from
   literals and other such constants with `+`, `-`, `*`, `/`, `%` and `**`
   is a known number. It takes no uniform word, and `x / H` is not an

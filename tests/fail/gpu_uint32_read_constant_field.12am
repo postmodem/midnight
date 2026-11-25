@@ -1,0 +1,25 @@
+# expect: field `mask` of `Cell` can't be read in a GPU system, inside a struct constant; the reads of `START.width` and `START.cell.age` on line 22 are fine
+# at: line 23, the place `START.cell.mask`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32
+  age: Int32
+end
+
+struct Grid
+  width: Int
+  cell: Cell
+end
+
+START = Grid(8, Cell(1, 2))
+
+gpu system grow
+  each Body do |body|
+    body.n += START.width + START.cell.age
+    body.n += START.cell.mask
+  end
+end

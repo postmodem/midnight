@@ -1,5 +1,0 @@
-error: can't call `fresh` in a GPU system
-  --> tests/fail/gpu_call_returns_uint32.12am:19:14
-   |
-19 |     body.n = fresh(body.n).age
-   |              ^^^^^^^^^^^^^ it returns a `Cell`, whose field `mask` is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare that field `Int32`

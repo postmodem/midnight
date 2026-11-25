@@ -1,4 +1,4 @@
-# expect: `Cell` values are not allowed in a GPU system, because the field `mask` is a `UInt32`; hint to declare it `Int32`
+# expect: `Cell` can't be built in a GPU system, because its field `mask` is a `UInt32`; hint to declare it `Int32`
 # at: line 15, the constructor `Cell(body.n, 1)`
 
 component Body

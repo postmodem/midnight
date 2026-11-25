@@ -1,0 +1,28 @@
+# expect: can't assign to `grid.cell.mask` in a GPU system, once, for `+=` on a `UInt32` field inside a struct
+# at: line 25, the place `grid.cell.mask`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+end
+
+struct Grid
+  width: Int = 0
+  cell: Cell = Cell()
+end
+
+resource Config
+  grid: Grid = Grid()
+end
+
+gpu system mark
+  each Body do |body|
+    grid = Config.grid
+    grid.cell.mask += 1
+    body.n = grid.width
+  end
+end

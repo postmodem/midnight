@@ -1,0 +1,10 @@
+error: `Cell` can't be built in a GPU system
+  --> tests/fail/gpu_uint32_construct_default.12am:15:16
+   |
+15 |   cell: Cell = Cell()
+   |                ^^^^^^ its field `mask` is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`
+note: the default is used here
+  --> tests/fail/gpu_uint32_construct_default.12am:25:27
+   |
+25 |     body.n = grid.width + Grid(body.n).width
+   |                           ------------

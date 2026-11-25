@@ -416,7 +416,8 @@ end
     );
 }
 
-/// Why GPU code has no `UInt32`, as every label about one says it.
+/// Why GPU code does not use a `UInt32` field, as every label about one says
+/// it.
 const UNSIGNED: &str = "which the signed 32-bit `Int` of a GPU system can't hold";
 
 #[test]
@@ -461,26 +462,15 @@ end
 }
 
 #[test]
-fn a_uint32_field_does_not_reach_gpu_code() {
-    // A resource field, a struct inside a resource field, a constant, a
-    // constructor, a parameter, a return value and a receiver. The
-    // argument of a call that can't be made is not reported again.
-    let whose = |ty: &str, path: &str| {
-        format!(
-            "a `{ty}`, whose field `{path}` is a `UInt32`, {UNSIGNED}; declare that field `Int32`"
-        )
-    };
-    let direct = format!("it is a `UInt32`, {UNSIGNED}; declare it `Int32`");
-    let in_resource = format!("it is {}", whose("Grid", "cell.mask"));
-    let in_constant = format!("it is {}", whose("Cell", "mask"));
-    let built = format!("its field `cell.mask` is a `UInt32`, {UNSIGNED}; declare it `Int32`");
-    let taken = format!("its parameter `cell` is {}", whose("Cell", "mask"));
-    let returned = format!("it returns {}", whose("Cell", "mask"));
-    let receiver = format!("its receiver is {}", whose("Cell", "mask"));
-    assert_errors(
-        "\
+fn a_struct_with_a_uint32_field_is_a_gpu_value() {
+    // GPU code reads the other fields of such a struct in a resource field,
+    // in a constant and in a local, copies it, assigns its other field,
+    // passes it, takes it back, compares it, calls its method and puts it
+    // inside another struct.
+    ok("\
 component Body
   n: Int32
+  same: Bool
 end
 struct Cell
   mask: UInt32 = 0
@@ -496,68 +486,157 @@ struct Grid
 end
 resource Board
   grid: Grid = Grid()
-  mask: UInt32 = 0
-  width: Int = 8
+  cell: Cell = Cell()
 end
-HOME = Cell(1, 2)
-def age_of(cell: Cell) -> Int
-  cell.age
-end
-def fresh(age: Int) -> Cell
-  Cell(0, age)
+HOME = Cell(4000000000, 2)
+def newer(a: Cell, b: Cell) -> Cell
+  a.age < b.age ? a : b
 end
 gpu system mark
   each Body do |body|
-    body.n = Board.width
-    body.n += Board.mask
-    body.n += Board.grid.width
-    body.n += HOME.age
-    body.n += Grid().width
-    body.n += age_of(HOME)
-    body.n += fresh(1).age
-    body.n += HOME.older
+    cell = Board.cell
+    cell.age = body.n
+    grid = Grid(body.n, cell)
+    grid.cell = newer(HOME, Board.grid.cell)
+    body.n += Board.grid.width + Board.grid.cell.age + HOME.age
+    body.n += grid.cell.older + newer(cell, HOME).age
+    body.same = cell == HOME
+  end
+end
+");
+}
+
+#[test]
+fn a_uint32_field_is_not_used_in_gpu_code() {
+    // Read as a resource field, inside a resource field, inside a constant
+    // and on the result of a call; assigned, with `=` and with `+=`; and
+    // built, by a constructor and by a default that a constructor uses.
+    let it = format!("it is a `UInt32`, {UNSIGNED}; declare it `Int32`");
+    let its = format!("its field `mask` is a `UInt32`, {UNSIGNED}; declare it `Int32`");
+    let both =
+        format!("its fields `low` and `high` are `UInt32`s, {UNSIGNED}; declare them `Int32`");
+    assert_errors(
+        "\
+component Body
+  n: Int32
+end
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+end
+struct Grid
+  width: Int = 0
+  cell: Cell = Cell()
+end
+struct Span
+  low: UInt32 = 0
+  high: UInt32 = 0
+  step: Int = 1
+end
+resource Board
+  grid: Grid = Grid()
+  mask: UInt32 = 0
+  span: Span = Span()
+end
+HOME = Cell(1, 2)
+def same(cell: Cell) -> Cell
+  cell
+end
+gpu system mark
+  each Body do |body|
+    body.n = Board.mask
+    body.n += Board.grid.cell.mask
+    body.n += HOME.mask
+    body.n += same(HOME).mask
+    cell = HOME
+    cell.mask = 3
+    cell.mask += 1
+    body.n += Cell(1, 2).age
+    body.n += Grid(4).width
+    body.n += Span(1, 2).step + Board.span.step
   end
 end
 ",
         &[
+            ("`Cell` can't be built in a GPU system", "Cell()", &its),
             (
                 "resource field `Board.mask` can't be read in a GPU system",
                 "Board.mask",
-                &direct,
+                &it,
             ),
             (
-                "resource field `Board.grid` can't be read in a GPU system",
-                "Board.grid",
-                &in_resource,
+                "field `mask` of `Cell` can't be read in a GPU system",
+                "Board.grid.cell.mask",
+                &it,
             ),
             (
-                "constant `HOME` can't be read in a GPU system",
-                "HOME",
-                &in_constant,
+                "field `mask` of `Cell` can't be read in a GPU system",
+                "HOME.mask",
+                &it,
             ),
             (
-                "`Grid` values are not allowed in a GPU system",
-                "Grid()",
-                &built,
+                "field `mask` of `Cell` can't be read in a GPU system",
+                "same(HOME).mask",
+                &it,
             ),
             (
-                "can't call `age_of` in a GPU system",
-                "age_of(HOME)",
-                &taken,
+                "can't assign to `cell.mask` in a GPU system",
+                "cell.mask",
+                &it,
             ),
-            ("can't call `fresh` in a GPU system", "fresh(1)", &returned),
             (
-                "can't call `Cell.older` in a GPU system",
-                "HOME.older",
-                &receiver,
+                "can't assign to `cell.mask` in a GPU system",
+                "cell.mask",
+                &it,
             ),
+            ("`Cell` can't be built in a GPU system", "Cell(1, 2)", &its),
+            ("`Span` can't be built in a GPU system", "Span(1, 2)", &both),
         ],
     );
 }
 
 #[test]
-fn the_first_field_that_cannot_exist_is_named() {
-    let unsigned = format!("its field `id` is a `UInt32`, {UNSIGNED}; declare it `Int32`");
+fn a_uint32_field_in_a_function_is_reported_with_the_call() {
+    let found = diagnostics(
+        "\
+component Body
+  n: Int32
+end
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+
+  def masked -> Int
+    age % (mask + 1)
+  end
+end
+resource Board
+  cell: Cell = Cell()
+end
+gpu system mark
+  each Body do |body|
+    body.n = Board.cell.masked
+  end
+end
+puts Board.cell.masked
+",
+    );
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        found[0].message,
+        "field `mask` of `Cell` can't be read in a function called from a GPU system"
+    );
+    assert_eq!(
+        found[0].notes[0].message,
+        "GPU system `mark` calls `Cell.masked` here"
+    );
+}
+
+#[test]
+fn a_string_field_is_what_keeps_a_struct_out_of_gpu_code() {
+    // A struct with a string and a `UInt32` is reported once, for the
+    // string, whichever field comes first.
+    let string = "its field `name` is a `String`; the GPU works on numbers, `Bool`s, enums, entities and structs of those";
     assert_errors(
         "\
 component Body
@@ -582,12 +661,12 @@ end
             (
                 "`Tagged` values are not allowed in a GPU system",
                 "Tagged()",
-                &unsigned,
+                string,
             ),
             (
                 "`Named` values are not allowed in a GPU system",
                 "Named()",
-                "its field `name` is a `String`; the GPU works on numbers, `Bool`s, enums, entities and structs of those",
+                string,
             ),
         ],
     );

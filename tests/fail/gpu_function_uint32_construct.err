@@ -1,0 +1,10 @@
+error: `Cell` can't be built in a function called from a GPU system
+  --> tests/fail/gpu_function_uint32_construct.12am:14:10
+   |
+14 |   cell = Cell(n, 1)
+   |          ^^^^^^^^^^ its field `mask` is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`
+note: GPU system `mark` calls `aged` here
+  --> tests/fail/gpu_function_uint32_construct.12am:20:14
+   |
+20 |     body.n = aged(body.n)
+   |              ------------

@@ -1,0 +1,32 @@
+# expect: field `mask` of `Cell` can't be read in a function called from a GPU system, for a method that reads its receiver's `UInt32` field by name; the method `older` on line 27 is fine, and so is the ordinary call on line 32
+# at: line 13, the name `mask`; note at line 28, the call `Config.cell.masked`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+
+  def masked -> Int
+    age % (mask + 1)
+  end
+
+  def older -> Int
+    age + 1
+  end
+end
+
+resource Config
+  cell: Cell = Cell(3, 9)
+end
+
+gpu system mark
+  each Body do |body|
+    body.n = Config.cell.older
+    body.n += Config.cell.masked
+  end
+end
+
+puts Config.cell.masked

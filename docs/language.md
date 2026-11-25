@@ -768,14 +768,19 @@ nested `each` visits entities in the order an ordinary `each` would.
   The methods and operators of a struct are functions in this sense. A
   diagnostic inside such a function carries a note that names the GPU system
   and the call that reaches it.
-- **`UInt32`.** A `UInt32` field cannot be read, written or built in GPU
-  code. In a GPU system, and in a function called from one, it is an error
-  to use a value of a struct type that has a `UInt32` field at any depth, to
-  read a constant of such a type, or to read a resource field that is a
-  `UInt32` or is of such a type. Any part of such a constant or resource
-  field counts: `Config.cell.age` is an error when `Cell` has a `UInt32`
-  field. The other fields of the resource can be read. The hint is to
-  declare the field `Int32`.
+- **`UInt32`.** A `UInt32` field itself cannot be used in GPU code: the
+  32-bit `Int` there is signed and cannot hold every value of one. In a GPU
+  system, and in a function called from one, it is an error to read a
+  `UInt32` field, to assign to one, and to construct a struct that has one
+  among its own fields, also when the constructor is the default of another
+  struct's field. The hint is to declare the field `Int32`. A struct that
+  has a `UInt32` field is otherwise a value like any other, and the field
+  keeps its value: such a struct can be read from a constant or a resource
+  field, copied, passed to a function and returned, compared with `==`, and
+  put inside another struct, and its other fields can be read and assigned.
+  `Config.cell.age` is fine when `Cell` also has a `UInt32` field `mask`,
+  and `Config.cell.mask` is the error. A component with a `UInt32` field,
+  at any depth, still cannot be a query term.
 
 ### Snapshot semantics
 

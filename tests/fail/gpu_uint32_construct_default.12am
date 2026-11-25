@@ -1,0 +1,27 @@
+# expect: `Cell` can't be built in a GPU system, for a field default that a constructor there uses; `Grid` itself has no `UInt32` field, and `Grid(body.n, Config.cell)` on line 24 is fine
+# at: line 15, the default `Cell()`; note at line 25, the constructor `Grid(body.n)`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+end
+
+struct Grid
+  width: Int = 0
+  cell: Cell = Cell()
+end
+
+resource Config
+  cell: Cell = Cell()
+end
+
+gpu system mark
+  each Body do |body|
+    grid = Grid(body.n, Config.cell)
+    body.n = grid.width + Grid(body.n).width
+  end
+end

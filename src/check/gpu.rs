@@ -6,15 +6,18 @@
 //!
 //! - values that are numbers, `Bool`s, enums, entities and records of
 //!   those: no expression, local, parameter or return value is a string or
-//!   a list, or a record with one inside, or a record with a `UInt32`
-//!   field at any depth;
+//!   a list, or a record with one inside;
+//! - no use of a `UInt32` field itself: no read of a place or of a field
+//!   whose type is `UInt32`, no assignment to such a place, and no
+//!   `Construct` of a record that has such a field of its own. A record
+//!   with one inside is otherwise a value like any other;
 //! - the statements `Expr`, `Let`, `Assign`, `CompoundAssign`, `While`,
 //!   `Count`, `Next`, and `Break` out of a loop inside the block; in a
 //!   function also `Return`; in a GPU block also at most one `Each`, among
 //!   the statements of the block itself;
-//! - places that start at a local, a constant, `Time` or a resource field
-//!   that is not a `UInt32`, written only when they start at a local that
-//!   is neither a parameter of the nested `each` nor an `Entity` parameter;
+//! - places that start at a local, a constant, `Time` or a resource field,
+//!   written only when they start at a local that is neither a parameter
+//!   of the nested `each` nor an `Entity` parameter;
 //! - calls of functions that do not recurse, and of the built-ins for
 //!   numbers, `Math`, `min`, `max`, `rand` and `rand(n)`;
 //! - `Int` literals that fit in 32 bits.
@@ -45,8 +48,12 @@ use super::{util, walk};
 /// The types of the values a GPU system works on.
 const GPU_VALUES: &str = "numbers, `Bool`s, enums, entities and structs of those";
 
-/// Why GPU code has no `UInt32`.
+/// Why GPU code does not use a `UInt32` field.
 const UNSIGNED: &str = "which the signed 32-bit `Int` of a GPU system can't hold";
+
+fn is_unsigned(ty: &Type) -> bool {
+    matches!(ty, Type::Compact(Compact::UInt32))
+}
 
 /// Why `break` and `return` have no meaning in a GPU block.
 const NO_ORDER: &str = "runs have no order, so there is nothing to stop";
@@ -144,27 +151,12 @@ struct Reach<'p> {
     path: Vec<FuncId>,
 }
 
-/// Why values of a type can't exist on the GPU: it is a string, a list or
-/// a `UInt32`, or a record with one in it.
+/// Why values of a type can't exist on the GPU: it is a string or a list,
+/// or a record with one in it.
 struct Unfit {
     /// For a record: the path of the first such field and the name of
     /// its type.
     field: Option<(String, String)>,
-    /// What can't exist is a `UInt32`.
-    unsigned: bool,
-}
-
-impl Unfit {
-    /// How a label that has named the value goes on: for a string or a
-    /// list with `rule`, for a `UInt32` with the reason and the hint,
-    /// where `it` stands for the field to declare.
-    fn because(&self, it: &str, rule: &str) -> String {
-        if self.unsigned {
-            format!(", {UNSIGNED}; declare {it} `Int32`")
-        } else {
-            format!("; {rule}")
-        }
-    }
 }
 
 /// Where a statement sits in a GPU block.
@@ -276,23 +268,16 @@ impl<'p> Pass<'p> {
         out
     }
 
-    /// Why values of a type can't exist on the GPU. `None` for the other
-    /// numbers, `Bool`s, enums, entities and records of those.
+    /// Why values of a type can't exist on the GPU. `None` for numbers,
+    /// `Bool`s, enums, entities and records of those.
     fn unfit(&self, ty: &Type) -> Option<Unfit> {
-        let unsigned = |ty: &Type| matches!(ty, Type::Compact(Compact::UInt32));
         match ty {
-            Type::String | Type::List(_) | Type::Compact(Compact::UInt32) => Some(Unfit {
-                field: None,
-                unsigned: unsigned(ty),
-            }),
+            Type::String | Type::List(_) => Some(Unfit { field: None }),
             Type::Record(id) => {
-                let fields = self.fields(*id, &|ty| {
-                    matches!(ty, Type::String | Type::List(_)) || unsigned(ty)
-                });
+                let fields = self.fields(*id, &|ty| matches!(ty, Type::String | Type::List(_)));
                 let (path, field) = fields.into_iter().next()?;
                 Some(Unfit {
                     field: Some((path, self.type_name(field))),
-                    unsigned: unsigned(field),
                 })
             }
             _ => None,
@@ -301,19 +286,15 @@ impl<'p> Pass<'p> {
 
     /// For a type whose values can't exist on the GPU, what a value of it
     /// is and why it can't: "a `String`; " and `rule`, "a `Label`, whose
-    /// field `text` is a `String`; " and `rule`, "a `Cell`, whose field
-    /// `mask` is a `UInt32`, " and the reason and the hint.
+    /// field `text` is a `String`; " and `rule`.
     fn not_a_gpu_value(&self, ty: &Type, rule: &str) -> Option<String> {
         let name = self.type_name(ty);
         let unfit = self.unfit(ty)?;
         Some(match &unfit.field {
-            None => format!("{}{}", a(&name), unfit.because("it", rule)),
-            Some((path, field)) => format!(
-                "{}, whose field `{path}` is {}{}",
-                a(&name),
-                a(field),
-                unfit.because("that field", rule)
-            ),
+            None => format!("{}; {rule}", a(&name)),
+            Some((path, field)) => {
+                format!("{}, whose field `{path}` is {}; {rule}", a(&name), a(field))
+            }
         })
     }
 
@@ -629,12 +610,14 @@ impl<'a, 'p> Walk<'a, 'p> {
             StmtKind::Expr(e) | StmtKind::Let { init: e, .. } => self.expr(e),
             StmtKind::Assign { place, value } => {
                 if !self.write(place) {
+                    self.write_unsigned(place);
                     self.place(place);
                 }
                 self.expr(value);
             }
             StmtKind::CompoundAssign { place, op, value } => {
                 if !self.write(place) {
+                    self.write_unsigned(place);
                     self.place(place);
                 }
                 match op {
@@ -741,6 +724,42 @@ impl<'a, 'p> Walk<'a, 'p> {
         true
     }
 
+    /// Reports an assignment to a `UInt32` field.
+    fn write_unsigned(&mut self, place: &Place) {
+        if !is_unsigned(&place.ty) {
+            return;
+        }
+        let target = self.describe(place);
+        self.report(
+            format!("can't assign to `{target}` {}", self.here()),
+            place.span,
+            format!("it is a `UInt32`, {UNSIGNED}; declare it `Int32`"),
+        );
+    }
+
+    /// Reports a read of field `field` of a `record` value when the field
+    /// is a `UInt32`.
+    fn read_unsigned(&mut self, record: &Type, field: usize, span: Span) {
+        let Type::Record(id) = record else {
+            return;
+        };
+        let item = &self.pass.program.records[id.0];
+        let field = &item.fields[field];
+        if !is_unsigned(&field.ty) {
+            return;
+        }
+        self.report(
+            format!(
+                "field `{}` of `{}` can't be read {}",
+                field.name,
+                item.name,
+                self.here()
+            ),
+            span,
+            format!("it is a `UInt32`, {UNSIGNED}; declare it `Int32`"),
+        );
+    }
+
     /// A place as it is written in source: `b.x`, `Score.points`.
     fn describe(&self, place: &Place) -> String {
         let program = self.pass.program;
@@ -800,7 +819,12 @@ impl<'a, 'p> Walk<'a, 'p> {
             PlaceKind::ResourceField(id, field) => {
                 let resource = &program.resources[id.0];
                 let field = &resource.fields[*field];
-                if let Some(what) = self.pass.not_a_gpu_value(&field.ty, &reads) {
+                let what = if is_unsigned(&field.ty) {
+                    Some(format!("a `UInt32`, {UNSIGNED}; declare it `Int32`"))
+                } else {
+                    self.pass.not_a_gpu_value(&field.ty, &reads)
+                };
+                if let Some(what) = what {
                     self.report(
                         format!(
                             "resource field `{}.{}` can't be read {}",
@@ -862,11 +886,9 @@ impl<'a, 'p> Walk<'a, 'p> {
                     let works = format!("the GPU works on {GPU_VALUES}");
                     let label = match &unfit.field {
                         None => works,
-                        Some((path, field)) => format!(
-                            "its field `{path}` is {}{}",
-                            a(field),
-                            unfit.because("it", &works)
-                        ),
+                        Some((path, field)) => {
+                            format!("its field `{path}` is {}; {works}", a(field))
+                        }
                     };
                     self.report(
                         format!("`{ty}` values are not allowed {}", self.here()),
@@ -897,14 +919,23 @@ impl<'a, 'p> Walk<'a, 'p> {
             | ExprKind::Str(_)
             | ExprKind::EnumVariant(_)
             | ExprKind::EntityNone => {}
-            ExprKind::Read(place) => self.place(place),
-            ExprKind::Field { base, .. } => self.expr(base),
+            ExprKind::Read(place) => {
+                if let PlaceKind::Field { base, field } = &place.kind {
+                    self.read_unsigned(&base.ty, *field, place.span);
+                }
+                self.place(place);
+            }
+            ExprKind::Field { base, field } => {
+                self.read_unsigned(&base.ty, *field, span);
+                self.expr(base);
+            }
             ExprKind::Index { base, index } => {
                 self.expr(base);
                 self.expr(index);
             }
             ExprKind::ListLit(items) | ExprKind::Concat(items) => self.exprs(items),
             ExprKind::Construct(fields) => {
+                self.construct_unsigned(&e.ty, span);
                 for field in fields {
                     // A field that was left out is its default, which sits
                     // in the declaration of the record.
@@ -993,6 +1024,34 @@ impl<'a, 'p> Walk<'a, 'p> {
                 "the only queries of a GPU system are its `each` blocks; count in an ordinary system and keep the result in a resource",
             ),
         }
+    }
+
+    /// Reports the construction of a record that has a `UInt32` field of
+    /// its own.
+    fn construct_unsigned(&mut self, record: &Type, span: Span) {
+        let Type::Record(id) = record else {
+            return;
+        };
+        let item = &self.pass.program.records[id.0];
+        let names: Vec<String> = item
+            .fields
+            .iter()
+            .filter(|field| is_unsigned(&field.ty))
+            .map(|field| field.name.clone())
+            .collect();
+        let (fields, them) = match names.as_slice() {
+            [] => return,
+            [name] => (format!("its field `{name}` is a `UInt32`"), "it"),
+            _ => (
+                format!("its fields {} are `UInt32`s", util::name_list(&names)),
+                "them",
+            ),
+        };
+        self.report(
+            format!("`{}` can't be built {}", item.name, self.here()),
+            span,
+            format!("{fields}, {UNSIGNED}; declare {them} `Int32`"),
+        );
     }
 
     fn structural(&mut self, name: &str, span: Span) {

@@ -1,0 +1,11 @@
+Body(n: 13, same: true, other: false)
+Body(n: 15, same: true, other: false)
+Body(n: 23, same: true, other: false)
+Cell(mask: 3999999997, age: 5)
+Grid(width: 8, cell: Cell(mask: 7, age: 5))
+Body(n: 46, same: true, other: false)
+Body(n: 50, same: true, other: false)
+Body(n: 66, same: true, other: false)
+Cell(mask: 3999999994, age: 5)
+Grid(width: 8, cell: Cell(mask: 7, age: 8))
+4294967295

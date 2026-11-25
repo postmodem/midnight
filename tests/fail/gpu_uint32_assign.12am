@@ -1,0 +1,24 @@
+# expect: can't assign to `cell.mask` in a GPU system, because it is a `UInt32`; the copy on line 19 and the assignment to `cell.age` on line 20 are fine
+# at: line 21, the place `cell.mask`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+end
+
+resource Config
+  cell: Cell = Cell()
+end
+
+gpu system mark
+  each Body do |body|
+    cell = Config.cell
+    cell.age = body.n
+    cell.mask = body.n
+    body.n = cell.age
+  end
+end

@@ -1,0 +1,74 @@
+# A struct with a `UInt32` field as a value in a GPU block. The block reads
+# the other fields of such a struct in a resource and in a constant, copies
+# it to a local, passes it to a function and takes one back, calls its
+# method, puts it inside another struct and compares two of them. The
+# `UInt32` fields hold values above the largest 32-bit `Int`; only ordinary
+# code reads them.
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+
+  def older -> Int
+    age + 1
+  end
+end
+
+struct Grid
+  width: Int = 0
+  cell: Cell = Cell()
+end
+
+resource Board
+  cell: Cell = Cell(4000000000, 5)
+  grid: Grid = Grid(8, Cell(7, 2))
+end
+
+HOME = Grid(3, Cell(4294967295, 11))
+TWIN = Cell(4294967294, 11)
+
+component Body
+  n: Int32
+  same: Bool
+  other: Bool
+end
+
+def pick(grid: Grid, first: Bool) -> Cell
+  if first
+    grid.cell
+  else
+    Board.cell
+  end
+end
+
+gpu system carry
+  each Body do |body|
+    cell = Board.cell
+    grid = Grid(body.n, cell)
+    chosen = pick(grid, body.n % 2 == 0)
+    if body.n > 2
+      chosen = HOME.cell
+    end
+    body.same = pick(HOME, true) == HOME.cell && grid.cell == Board.cell
+    body.other = HOME.cell == TWIN
+    body.n += Board.grid.cell.age + HOME.width + chosen.older + grid.width
+  end
+end
+
+system mask
+  each Body do |body|
+    Board.cell.mask -= 1
+    Board.grid.cell.age += 1
+  end
+end
+
+spawn Body(1, false, false)
+spawn Body(2, false, false)
+spawn Body(3, false, false)
+2.times do
+  World.tick
+  each Body do |body|
+    puts body
+  end
+  puts Board.cell, Board.grid
+end
+puts pick(HOME, true).mask

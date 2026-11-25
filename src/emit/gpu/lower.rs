@@ -1007,7 +1007,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             Compact::UInt16 => helpers::TO_UINT16,
             // Every 32-bit `Int` fits in 32 bits.
             Compact::Float32 | Compact::Int32 => return value.e,
-            Compact::UInt32 => unreachable!("the checker keeps `UInt32` fields out of GPU code"),
+            Compact::UInt32 => unreachable!("the checker rejects a store into a `UInt32` field"),
         };
         let (low, high) = compact.int_range().expect("an integer type");
         let fits = match (&value.e, source) {

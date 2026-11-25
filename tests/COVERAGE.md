@@ -11,8 +11,8 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 238 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-325 in `tests/fail`, 72 in `tests/panic`, 10 in `tests/plan`.
+Counts: 239 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+328 in `tests/fail`, 72 in `tests/panic`, 10 in `tests/plan`.
 
 ## A first program, The model
 
@@ -349,8 +349,8 @@ Programs that follow every rule are checked by the unit tests in
 | Types named in `with:` and `without:` are not restricted | `fail/gpu_term_filter_unrestricted` |
 | Resource fields that are read are numbers, `Bool`s, enums, entities or plain structs | `fail/gpu_resource_string`, `fail/gpu_resource_list`, `fail/gpu_resource_struct_with_list` |
 | Constants that are read are numbers, `Bool`s, enums, entities or plain structs | `fail/gpu_constant_string`, `fail/gpu_constant_list` |
-| No `UInt32` field reaches GPU code: a resource field that is one, a resource field or a constant of a struct that has one at any depth, a constructor of such a struct, a parameter, a return value, and in a called function a local and a resource field; the hint is to declare the field `Int32` | `fail/gpu_resource_uint32`, `fail/gpu_resource_struct_with_uint32`, `fail/gpu_constant_struct_with_uint32`, `fail/gpu_struct_with_uint32`, `fail/gpu_call_takes_uint32`, `fail/gpu_call_returns_uint32`, `fail/gpu_function_local_uint32`, `fail/gpu_function_resource_uint32` |
-| The other fields of a resource that has a `UInt32` field are read; a function that uses one stays legal for ordinary callers | `gpu_uint32_beside`, `fail/gpu_resource_uint32`, `fail/gpu_call_takes_uint32`, `fail/gpu_function_local_uint32` |
+| A `UInt32` field itself is not used in GPU code: no read of one (a resource field, a field of a struct in a resource field or in a constant, the result of a call, a receiver's field in a method), no assignment to one with `=` or `+=`, no constructor of a struct that has one among its own fields (also as a field default, also in a called function); the hint is to declare the field `Int32` | `fail/gpu_resource_uint32`, `fail/gpu_function_resource_uint32`, `fail/gpu_uint32_read_field`, `fail/gpu_uint32_read_constant_field`, `fail/gpu_uint32_read_call_result`, `fail/gpu_function_uint32_read_field`, `fail/gpu_uint32_assign`, `fail/gpu_uint32_compound_assign`, `fail/gpu_uint32_construct`, `fail/gpu_uint32_construct_default`, `fail/gpu_function_uint32_construct` |
+| A struct that has a `UInt32` field is a value in GPU code: read from a constant and a resource field, copied, passed, returned, compared, put inside another struct, its other fields read and assigned, its method called; the other fields of a resource that has a `UInt32` field are read; a function that uses one stays legal for ordinary callers | `gpu_uint32_carried`, `gpu_uint32_beside`, `fail/gpu_uint32_read_field`, `fail/gpu_uint32_assign`, `fail/gpu_uint32_construct_default`, `fail/gpu_function_uint32_construct`, `fail/gpu_function_uint32_read_field`; the unit test `a_struct_with_a_uint32_field_is_a_gpu_value` in `src/check/tests/gpu.rs` |
 | A called function takes and returns numbers, `Bool`s, enums, entities and plain records | `fail/gpu_call_returns_string`, `fail/gpu_call_takes_list`, `fail/gpu_call_method_receiver`, `fail/gpu_function_bad_call` |
 | A called function does not recurse: directly, through another function, through an operator, or further down the calls | `fail/gpu_recursion_direct`, `fail/gpu_recursion_mutual`, `fail/gpu_recursion_operator`, `fail/gpu_recursion_reached` |
 | A called function contains no query | `fail/gpu_function_each`, `fail/gpu_function_world_count` |
@@ -390,6 +390,7 @@ programs written from the specification.
 | Resources and `Time` are read when the `each` begins; a change between ticks is seen | `gpu_uniforms` |
 | An `Int` resource field or constant wider than 32 bits wraps; a `Float` one is rounded | `gpu_uniforms` |
 | A `UInt32` field beside a GPU block: the block reads the other fields of its resource and filters by a component that has one, and ordinary code reads and writes it between runs | `gpu_uint32_beside` |
+| A struct with a `UInt32` field carried through a GPU block: values above the largest 32-bit `Int` come back unchanged and decide `==`, on the CPU and on a device | `gpu_uint32_carried` |
 | `Int` is 32 bits and wraps: `+`, `-`, `*`, unary minus, `abs`, `**` | `gpu_int_wrap`, `gpu_field_types` |
 | `Float` is 32 bits: literals out of range, products that overflow or vanish, 16777217 | `gpu_float_literals`, `gpu_functions` |
 | `to_i`, `floor`, `ceil`, `round`: saturation, 0 for NaN, halves away from zero; `nan?` | `gpu_float_to_int` |
@@ -878,13 +879,10 @@ against that header.
 | `break` can't leave the `each` of a GPU system, in the modifier form too | `gpu_break_modifier.12am` | 10 | GPU systems |
 | can't call `Label.width` in a GPU system, because its receiver is a `Label`, whose field `text` is a `String` | `gpu_call_method_receiver.12am` | 21 | GPU systems |
 | can't call `describe` in a GPU system, because it returns a `String`; the body of `describe` is not reported | `gpu_call_returns_string.12am` | 14 | GPU systems |
-| can't call `fresh` in a GPU system, because it returns a `Cell`, whose field `mask` is a `UInt32`; the body of `fresh` is not reported, and the ordinary call on line 23 is fine | `gpu_call_returns_uint32.12am` | 19 | GPU systems |
 | can't call `total` in a GPU system, because its parameter `values` is a `[Float]`; the list argument is part of the same report | `gpu_call_takes_list.12am` | 18 | GPU systems |
-| can't call `age_of` in a GPU system, because its parameter `cell` is a `Cell`, whose field `mask` is a `UInt32`; the constructor in the argument is part of the same report, and the ordinary call on line 23 is fine | `gpu_call_takes_uint32.12am` | 19 | GPU systems |
 | `clock` is not allowed in a GPU system | `gpu_clock.12am` | 10 | GPU systems |
 | constant `STEPS` can't be read in a GPU system, because it is a `[Float]`: a list constant can't be iterated there | `gpu_constant_list.12am` | 12 | GPU systems |
 | constant `TITLE` can't be read in a GPU system, because it is a `String` | `gpu_constant_string.12am` | 12 | GPU systems |
-| constant `START` can't be read in a GPU system, because it is a `Grid`, whose field `cell.mask`, inside a struct, is a `UInt32`; reading its other field `width` is no different | `gpu_constant_struct_with_uint32.12am` | 22 | GPU systems |
 | `despawn` is not allowed in a GPU system | `gpu_despawn.12am` | 10 | GPU systems |
 | nested `each` inside a branch in a GPU system | `gpu_each_in_branch.12am` | 11 | GPU systems |
 | nested `each` inside a loop in a GPU system | `gpu_each_in_loop.12am` | 11 | GPU systems |
@@ -896,10 +894,11 @@ against that header.
 | `each` is not allowed in a function called from a GPU system, with a note naming the system and the call; the write through its parameter is not a second error | `gpu_function_each.12am` | 10 | GPU systems |
 | 4294967296 does not fit in 32 bits, in a function called from a GPU system | `gpu_function_int_literal.12am` | 9 | GPU systems |
 | `String` values are not allowed in a function called from a GPU system | `gpu_function_local_string.12am` | 9 | GPU systems |
-| `Cell` values are not allowed in a function called from a GPU system, because the field `mask` is a `UInt32`; the ordinary call on line 24 is fine | `gpu_function_local_uint32.12am` | 14 | GPU systems |
 | `puts` is not allowed in a function called from a GPU system, once, though two systems and three calls reach it | `gpu_function_puts.12am` | 9 | GPU systems |
 | resource field `Config.mask` can't be read in a function called from a GPU system, because it is a `UInt32`; the ordinary call on line 22 is fine | `gpu_function_resource_uint32.12am` | 13 | GPU systems |
 | `despawn` is not allowed in a function called from a GPU system, reached through another function and a method | `gpu_function_transitive.12am` | 18 | GPU systems |
+| `Cell` can't be built in a function called from a GPU system, because its field `mask` is a `UInt32`; the ordinary call on line 24 is fine | `gpu_function_uint32_construct.12am` | 14 | GPU systems |
+| field `mask` of `Cell` can't be read in a function called from a GPU system, for a method that reads its receiver's `UInt32` field by name; the method `older` on line 27 is fine, and so is the ordinary call on line 32 | `gpu_function_uint32_read_field.12am` | 13 | GPU systems |
 | `World.count` is not allowed in a function called from a GPU system | `gpu_function_world_count.12am` | 9 | GPU systems |
 | can't assign to `Stats.calls` in a function called from a GPU system | `gpu_function_write_resource.12am` | 13 | GPU systems |
 | `has?` is not allowed in a GPU system | `gpu_has.12am` | 12 | GPU systems |
@@ -922,7 +921,6 @@ against that header.
 | resource field `Config.steps` can't be read in a GPU system, because it is a `[Float]`, also when only an element is read | `gpu_resource_list.12am` | 14 | GPU systems |
 | resource field `Config.title` can't be read in a GPU system, because it is a `String`; `Config.scale` is fine | `gpu_resource_string.12am` | 16 | GPU systems |
 | resource field `Config.path` can't be read in a GPU system, because it is a `Path`, whose field `points` is a `[Float]` | `gpu_resource_struct_with_list.12am` | 19 | GPU systems |
-| resource field `Config.cell` can't be read in a GPU system, because it is a `Cell`, whose field `mask` is a `UInt32`; reading its other field `age` is no different | `gpu_resource_struct_with_uint32.12am` | 19 | GPU systems |
 | resource field `Config.mask` can't be read in a GPU system, because it is a `UInt32`; hint to declare it `Int32`; `Config.scale` is fine | `gpu_resource_uint32.12am` | 17 | GPU systems |
 | `return` is not allowed in a GPU system | `gpu_return.12am` | 10 | GPU systems |
 | `return` is not allowed in a GPU system, inside the nested `each` and inside a loop too | `gpu_return_in_nested.12am` | 11, 14 | GPU systems |
@@ -936,7 +934,6 @@ against that header.
 | `String` values are not allowed in a GPU system; the later use of `name` is quiet | `gpu_string_literal.12am` | 10 | GPU systems |
 | `Route` values are not allowed in a GPU system, because the field `path.points` is a `[Float]` | `gpu_struct_with_list_nested.12am` | 19 | GPU systems |
 | `Label` values are not allowed in a GPU system, because the field `text` is a `String` | `gpu_struct_with_string.12am` | 15 | GPU systems |
-| `Cell` values are not allowed in a GPU system, because the field `mask` is a `UInt32`; hint to declare it `Int32` | `gpu_struct_with_uint32.12am` | 15 | GPU systems |
 | only the term `Position` is reported; `Named` and `Trail`, which hold a string and a list, are fine in `with:` and `without:` | `gpu_term_filter_unrestricted.12am` | 17 | GPU systems |
 | `Position` can't be a term of an `each` in a GPU system, because its fields `x` and `y` are 64-bit `Float`s; hint to declare them `Float32` | `gpu_term_float_field.12am` | 11 | GPU systems |
 | `Health` can't be a term of an `each` in a GPU system, because its field `hp` is a 64-bit `Int`; hint to declare it `Int32` | `gpu_term_int_field.12am` | 10 | GPU systems |
@@ -946,6 +943,13 @@ against that header.
 | `Motion` can't be a term of an `each` in a GPU system, because its fields `velocity.x` and `velocity.y`, inside a struct, are 64-bit `Float`s | `gpu_term_struct_field.12am` | 15 | GPU systems |
 | `Cell` can't be a term of an `each` in a GPU system, because its field `mask` is a `UInt32`; hint to declare it `Int32` | `gpu_term_uint32_field.12am` | 10 | GPU systems |
 | `to_s` is not allowed in a GPU system | `gpu_to_s.12am` | 10 | GPU systems |
+| can't assign to `cell.mask` in a GPU system, because it is a `UInt32`; the copy on line 19 and the assignment to `cell.age` on line 20 are fine | `gpu_uint32_assign.12am` | 21 | GPU systems |
+| can't assign to `grid.cell.mask` in a GPU system, once, for `+=` on a `UInt32` field inside a struct | `gpu_uint32_compound_assign.12am` | 25 | GPU systems |
+| `Cell` can't be built in a GPU system, because its field `mask` is a `UInt32`; hint to declare it `Int32` | `gpu_uint32_construct.12am` | 15 | GPU systems |
+| `Cell` can't be built in a GPU system, for a field default that a constructor there uses; `Grid` itself has no `UInt32` field, and `Grid(body.n, Config.cell)` on line 24 is fine | `gpu_uint32_construct_default.12am` | 15 | GPU systems |
+| field `mask` of `Cell` can't be read in a GPU system, on the result of a call; the call itself, which takes and returns a `Cell`, is fine, and so is `.age` on line 24 | `gpu_uint32_read_call_result.12am` | 25 | GPU systems |
+| field `mask` of `Cell` can't be read in a GPU system, inside a struct constant; the reads of `START.width` and `START.cell.age` on line 22 are fine | `gpu_uint32_read_constant_field.12am` | 23 | GPU systems |
+| field `mask` of `Cell` can't be read in a GPU system, because it is a `UInt32`; the read of the other field `age` on line 19 is fine | `gpu_uint32_read_field.12am` | 20 | GPU systems |
 | `World.stop`, `World.tick` and `World.run` are not allowed in a GPU system | `gpu_world_control.12am` | 10, 11, 12 | GPU systems |
 | `World.count` is not allowed in a GPU system, with a query and without | `gpu_world_count.12am` | 10, 11 | GPU systems |
 | can't assign to `e` and to `other` in a GPU system: `Entity` parameters are read-only there | `gpu_write_entity_param.12am` | 10, 12 | GPU systems |

@@ -1,0 +1,22 @@
+# expect: field `mask` of `Cell` can't be read in a GPU system, because it is a `UInt32`; the read of the other field `age` on line 19 is fine
+# at: line 20, the place `Config.cell.mask`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32 = 0
+  age: Int32 = 0
+end
+
+resource Config
+  cell: Cell = Cell()
+end
+
+gpu system age
+  each Body do |body|
+    body.n += Config.cell.age
+    body.n += Config.cell.mask
+  end
+end

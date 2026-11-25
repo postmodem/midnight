@@ -1,5 +1,0 @@
-error: constant `START` can't be read in a GPU system
-  --> tests/fail/gpu_constant_struct_with_uint32.12am:22:15
-   |
-22 |     body.n += START.width
-   |               ^^^^^ it is a `Grid`, whose field `cell.mask` is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare that field `Int32`

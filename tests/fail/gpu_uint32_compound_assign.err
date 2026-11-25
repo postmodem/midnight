@@ -1,0 +1,5 @@
+error: can't assign to `grid.cell.mask` in a GPU system
+  --> tests/fail/gpu_uint32_compound_assign.12am:25:5
+   |
+25 |     grid.cell.mask += 1
+   |     ^^^^^^^^^^^^^^ it is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`

@@ -1,0 +1,5 @@
+error: field `mask` of `Cell` can't be read in a GPU system
+  --> tests/fail/gpu_uint32_read_field.12am:20:15
+   |
+20 |     body.n += Config.cell.mask
+   |               ^^^^^^^^^^^^^^^^ it is a `UInt32`, which the signed 32-bit `Int` of a GPU system can't hold; declare it `Int32`

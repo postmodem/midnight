@@ -1,0 +1,24 @@
+# expect: `Cell` can't be built in a function called from a GPU system, because its field `mask` is a `UInt32`; the ordinary call on line 24 is fine
+# at: line 14, the constructor `Cell(n, 1)`; note at line 20, the call `aged(body.n)`
+
+component Body
+  n: Int32
+end
+
+struct Cell
+  mask: UInt32
+  age: Int32
+end
+
+def aged(n: Int) -> Int
+  cell = Cell(n, 1)
+  cell.age + n
+end
+
+gpu system mark
+  each Body do |body|
+    body.n = aged(body.n)
+  end
+end
+
+puts aged(7)
