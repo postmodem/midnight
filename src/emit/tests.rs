@@ -2239,7 +2239,8 @@ fn loops_and_world_control() {
         main,
         &[
             "int64_t t0 = F_collatz(6);",
-            "for (int64_t j_1 = 1; j_1 <= t0; j_1++) {",
+            "int64_t j_1 = 1;",
+            "for (uint64_t round1 = 0, rounds2 = mn_rounds(1, t0); round1 < rounds2; round1++, j_1++) {",
         ],
     );
     assert_has(main, "for (int64_t j_1 = 3; j_1 >= 1; j_1--) {");
@@ -2247,8 +2248,8 @@ fn loops_and_world_control() {
         main,
         &[
             "while (1) {",
-            "int64_t t1 = F_collatz(total_2);",
-            "if (!(t1 < 100)) break;",
+            "int64_t t3 = F_collatz(total_2);",
+            "if (!(t3 < 100)) break;",
             "total_2 = total_2 + 1;",
             "}",
         ],

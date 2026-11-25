@@ -320,19 +320,48 @@ impl<'a> FnCx<'a, '_> {
         let mut values = self.operands(&[from, to], Want::Peek);
         let to = values.pop().expect("two operands");
         let from = values.pop().expect("two operands");
-        let to = self.stabilize(to, &Type::Int);
-        let name = self.loop_var(var, "k");
-        let (compare, step) = match (down, inclusive) {
-            (false, false) => ("<", "++"),
-            (false, true) => ("<=", "++"),
-            (true, false) => (">", "--"),
-            (true, true) => (">=", "--"),
-        };
-        self.line(&format!(
-            "for (int64_t {name} = {}; {name} {compare} {}; {name}{step}) {{",
-            from.c,
-            to.p(ADD)
-        ));
+        // An inclusive bound that may be the end of `int64_t` is counted in
+        // rounds, so the counter never steps past it.
+        let end = if down { i64::MIN } else { i64::MAX };
+        let guarded = inclusive && !matches!(to.lit, Some(n) if n != end);
+        if guarded {
+            let from = self.stabilize(from, &Type::Int);
+            let to = self.stabilize(to, &Type::Int);
+            let read = matches!(var, Some(id) if self.usage.read[id.0]);
+            let name = self.loop_var(var, "k");
+            let round = self.fresh("round");
+            let rounds = self.fresh("rounds");
+            let (low, high, step) = if down {
+                (to.p(ADD), from.p(ADD), "--")
+            } else {
+                (from.p(ADD), to.p(ADD), "++")
+            };
+            // The counter steps once past the last round, wrapping
+            // (`-fwrapv`) when that round is at the end of `int64_t`.
+            let counter = if read {
+                self.line(&format!("int64_t {name} = {};", from.c));
+                format!(", {name}{step}")
+            } else {
+                String::new()
+            };
+            self.line(&format!(
+                "for (uint64_t {round} = 0, {rounds} = mn_rounds({low}, {high}); {round} < {rounds}; {round}++{counter}) {{"
+            ));
+        } else {
+            let to = self.stabilize(to, &Type::Int);
+            let name = self.loop_var(var, "k");
+            let (compare, step) = match (down, inclusive) {
+                (false, false) => ("<", "++"),
+                (false, true) => ("<=", "++"),
+                (true, false) => (">", "--"),
+                (true, true) => (">=", "--"),
+            };
+            self.line(&format!(
+                "for (int64_t {name} = {}; {name} {compare} {}; {name}{step}) {{",
+                from.c,
+                to.p(ADD)
+            ));
+        }
         self.push_scope(ScopeKind::Loop);
         self.indent += 1;
         self.loop_body(body);

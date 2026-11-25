@@ -1,0 +1,46 @@
+# Counting loops in GPU code whose bound is the largest or the smallest
+# 32-bit Int stop on it, with `next` in the body; a loop whose start is
+# past its bound runs no rounds.
+component Probe
+  top: Int32
+  bottom: Int32
+  up: Int32
+  down: Int32
+  none: Int32
+  literal: Int32
+end
+
+gpu system count
+  each Probe do |p|
+    p.up = 0
+    (p.top - 3).upto(p.top) do |i|
+      next if i == p.top - 1
+      p.up += 1
+    end
+    p.down = 0
+    (p.bottom + 2).downto(p.bottom) do |i|
+      p.down += 1
+      next
+    end
+    p.none = 0
+    p.top.upto(p.top - 1) do |i|
+      p.none += 1
+    end
+    p.bottom.downto(p.bottom + 1) do |i|
+      p.none += 1
+    end
+    p.literal = 0
+    2147483645.upto(2147483647) do |i|
+      p.literal += 1
+    end
+    -2147483646.downto(-2147483648) do |i|
+      p.literal += 10
+    end
+  end
+end
+
+spawn Probe(2147483647, -2147483648, 0, 0, 0, 0)
+World.tick
+each Probe do |p|
+  puts p
+end

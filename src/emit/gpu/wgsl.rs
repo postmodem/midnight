@@ -452,6 +452,40 @@ impl Printer<'_, '_> {
                 op,
                 to,
                 down,
+                guard: Some(last),
+                body,
+            } => {
+                let one = if *ty == Ty::U32 { "1u" } else { "1i" };
+                let step = if *down { "-" } else { "+" };
+                let to = self.expr(to);
+                self.line("{");
+                self.indent += 1;
+                let line = format!("var {var}: {} = {};", self.ty(*ty), self.top(from));
+                self.line(&line);
+                self.line(&format!("var {last}: bool = {var} {} {to};", symbol(*op)));
+                self.line("loop {");
+                self.line(&format!("    if !{last} {{"));
+                self.line("        break;");
+                self.line("    }");
+                // The step after the last round wraps; the counter is not
+                // read after it.
+                self.block(body);
+                self.line("    continuing {");
+                self.line(&format!("        {last} = {var} != {to};"));
+                self.line(&format!("        {var} = {var} {step} {one};"));
+                self.line("    }");
+                self.line("}");
+                self.indent -= 1;
+                self.line("}");
+            }
+            Stmt::For {
+                var,
+                ty,
+                from,
+                op,
+                to,
+                down,
+                guard: None,
                 body,
             } => {
                 let one = if *ty == Ty::U32 { "1u" } else { "1i" };

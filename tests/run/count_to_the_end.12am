@@ -1,0 +1,35 @@
+# Counting loops whose bound is the largest or the smallest Int stop on it,
+# with `next` in the body; a loop whose start is past its bound runs no
+# rounds.
+TOP = 9223372036854775807
+BOTTOM = -9223372036854775807 - 1
+
+def rounds_up(from: Int, to: Int) -> Int
+  n = 0
+  from.upto(to) do |i|
+    next if i == to - 1
+    n += 1
+  end
+  n
+end
+
+def rounds_down(from: Int, to: Int) -> Int
+  n = 0
+  from.downto(to) do |i|
+    n += 1
+    next
+  end
+  n
+end
+
+puts rounds_up(TOP - 3, TOP)
+puts rounds_down(BOTTOM + 2, BOTTOM)
+puts rounds_up(TOP, TOP - 1)
+puts rounds_down(BOTTOM, BOTTOM + 1)
+puts rounds_up(5, 5)
+
+last = 0
+(TOP - 2).upto(9223372036854775807) do |i|
+  last = i
+end
+puts last == TOP

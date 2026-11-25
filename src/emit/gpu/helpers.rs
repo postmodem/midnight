@@ -383,6 +383,7 @@ fn define(name: &str) -> Func {
                     op: Lt,
                     to: var("n"),
                     down: false,
+                    guard: None,
                     body: vec![assign(var("scale"), binary(Mul, var("scale"), float(10.0)))],
                 },
                 ret(var("scale")),

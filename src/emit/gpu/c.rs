@@ -700,17 +700,38 @@ impl Printer<'_, '_> {
                 op,
                 to,
                 down,
+                guard,
                 body,
             } => {
                 let step = if *down { "--" } else { "++" };
-                let line = format!(
-                    "for ({} {var} = {}; {var} {} {}; {var}{step}) {{",
-                    self.ty(*ty),
-                    self.top(from),
-                    symbol(*op),
-                    self.expr(to),
-                );
-                self.line(&line);
+                match guard {
+                    Some(wide) => {
+                        // Counts in 64 bits, which can't step past a 32-bit
+                        // bound.
+                        let line = format!(
+                            "for (int64_t {wide} = {}; {wide} {} {}; {wide}{step}) {{",
+                            self.top(from),
+                            symbol(*op),
+                            self.expr(to),
+                        );
+                        self.line(&line);
+                        let line = format!(
+                            "    {ty} {var} __attribute__((unused)) = ({ty}){wide};",
+                            ty = self.ty(*ty)
+                        );
+                        self.line(&line);
+                    }
+                    None => {
+                        let line = format!(
+                            "for ({} {var} = {}; {var} {} {}; {var}{step}) {{",
+                            self.ty(*ty),
+                            self.top(from),
+                            symbol(*op),
+                            self.expr(to),
+                        );
+                        self.line(&line);
+                    }
+                }
                 self.block(body);
                 self.line("}");
             }

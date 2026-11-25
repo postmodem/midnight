@@ -266,7 +266,11 @@ pub enum Stmt {
     /// Runs once. A `Break` directly inside ends it early.
     Once(Vec<Stmt>),
     /// Counts `var` from `from` by one, up or down, while `var op to`.
-    /// `to` is evaluated before every round and must not change.
+    /// `to` is evaluated before every round and must not change. With
+    /// `guard`, `to` may be the end of `ty`: the loop ends after the round
+    /// in which `var` equals `to`, and `var` is never stepped past it.
+    /// `op` is then `Le` or `Ge`, and `guard` is a name the printer may
+    /// declare to do that.
     For {
         var: String,
         ty: Ty,
@@ -274,6 +278,7 @@ pub enum Stmt {
         op: BinOp,
         to: Expr,
         down: bool,
+        guard: Option<String>,
         body: Vec<Stmt>,
     },
     Break,

@@ -592,6 +592,15 @@ _Noreturn void mn_div_failed(const char *what, MnLoc loc) __attribute__((cold));
 _Noreturn void mn_range_failed(int64_t value, const char *type, MnLoc loc)
     __attribute__((cold));
 
+/* The rounds of a counting loop from `low` up to `high`, both included: 0
+ * when `high` is below `low`. The whole range of `Int` gives UINT64_MAX,
+ * one round short of its size. */
+static inline uint64_t mn_rounds(int64_t low, int64_t high) {
+    if (high < low) return 0;
+    uint64_t span = (uint64_t)high - (uint64_t)low;
+    return span == UINT64_MAX ? span : span + 1;
+}
+
 /* Int `/`: rounds toward negative infinity; wraps for INT64_MIN / -1. */
 static inline int64_t mn_int_div(int64_t a, int64_t b, MnLoc loc) {
     if (b == 0) mn_div_failed("division", loc);

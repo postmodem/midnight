@@ -868,6 +868,10 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     (true, false) => BinOp::Gt,
                     (true, true) => BinOp::Ge,
                 };
+                // A bound at the end of `i32` needs the counter to stop on it.
+                let end = if *down { i32::MIN } else { i32::MAX };
+                let guard = (*inclusive && !matches!(to.e, Expr::I32(n) if n != end))
+                    .then(|| self.fresh("w"));
                 let body = self.loop_body(body);
                 self.out.push(Stmt::For {
                     var: name,
@@ -876,6 +880,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                     op,
                     to: to.e,
                     down: *down,
+                    guard,
                     body,
                 });
             }
@@ -920,6 +925,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             op: BinOp::Lt,
             to: Expr::Uniform(WORD_SNAPSHOT_ROWS, Ty::U32),
             down: false,
+            guard: None,
             body: stmts,
         });
     }

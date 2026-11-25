@@ -166,6 +166,7 @@ Counts: 240 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | Enum `case` missing variants names them | `fail/case_enum_missing_variants`, `fail/case_enum_missing_one` |
 | `case` value or candidate of a wrong type | `fail/case_value_float`, `fail/case_value_struct`, `fail/type_case_when` |
 | `times` with and without a parameter, `0.times` | `loop_times` |
+| `upto` to the largest `Int` and `downto` to the smallest stop there, with `next` in the body | `count_to_the_end` |
 | `upto`, `downto`, empty ranges | `loop_upto_downto` |
 | Receivers: variable, expression, `xs.length`, negative literal | `loop_receivers`, `ops_unary_minus` |
 | List `each` | `loop_list_each` |
@@ -413,6 +414,7 @@ programs written from the specification.
 | A whole component assigned through the parameter: from a constructor, with fields left to their defaults, from a function that takes and returns the component and reads `Time` | `gpu_replace_component` |
 | A variable set from a helper call (`/`, `%`, `**`, `to_i`, `round`, a struct `==`), named alone as a statement, then used | `gpu_bare_variable` |
 | `if`, `elsif`, `unless`, modifiers, `case` on `Int`, `Bool` and enum, the conditional operator, as statements and as values | `gpu_control_flow`, `gpu_statements`, `gpu_field_types` |
+| `upto` to the largest 32-bit `Int` and `downto` to the smallest stop there, with `next` in the body | `gpu_count_to_the_end` |
 | `while`, `until`, `loop`, `times`, `upto`, `downto` | `gpu_control_flow`, `gpu_next_keeps_writes`, `gpu_functions` |
 | `&&` and `||` evaluate their right side only when it decides the result | `gpu_control_flow` |
 | A division that the conditional operator, `&&` or `||` skips does not fail | `gpu_statements` |
