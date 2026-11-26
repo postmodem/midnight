@@ -20,6 +20,10 @@ require "time"
 require "etc"
 require "rbconfig"
 
+# Transcripts, call logs, tasks and the documentation are UTF-8 whatever
+# the locale says.
+Encoding.default_external = Encoding::UTF_8
+
 module Eval
   ROOT = File.expand_path("..", __dir__)
   TOOLS = %w[Bash Read Edit Write Glob Grep].freeze
