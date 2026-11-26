@@ -21,7 +21,7 @@ per tick, in this order:
 Each team is an entity. The program has three systems, which run once a
 tick in this order: `announce` announces the round's matches as events,
 `score` updates the teams from those events, and `table` goes over every
-team and prints the round's line and the table.
+team with an `each` and prints the round's line and the table.
 
 After each round the program prints the round's results and then the
 league table:

@@ -36,8 +36,8 @@ orders are taken in the order listed, from left to right.
 Each good is an entity. The program has four systems, which run once a
 tick in this order: `announce` announces the day's deliveries and orders
 as events, `deliver` adds each delivery to its good's stock, `sell` fills
-or refuses each order, and `report` goes over every good and prints the
-day's lines.
+or refuses each order, and `report` goes over every good with an `each`
+and prints the day's lines.
 
 At the end of each day the program prints:
 

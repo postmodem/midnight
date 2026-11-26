@@ -15,7 +15,9 @@ program's list of arrivals gives.
 The program runs 8 ticks. Each tick has five steps, in this order. Each
 step is a system of its own, named after the step, and the five systems
 run once a tick, in the order given: `arrive`, `board`, `sail`, `wait`,
-`report`. Each step finishes before the next one begins.
+`report`. `sail` goes over the passengers aboard a ferry, and `wait`
+over the passengers on the dock, each with an `each`. Each step finishes
+before the next one begins.
 
 1. **Arrive.** Every passenger whose arrival tick is this tick (counting
    from 1) arrives at the dock, as a new entity.

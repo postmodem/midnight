@@ -429,9 +429,10 @@ exactly `expected.out`:
   says what is an entity and which systems the program has, by name, in
   the order they run, and has a `systems` file, so a program that does
   the work some other way fails. A line of `systems` has `each` only where
-  `TASK.md` says the system goes over every entity of a kind: a system
-  that receives events may do its work in `on` alone, as the reference
-  teaches. Controls name no construct.
+  `TASK.md` says the system goes over every entity of a kind with an
+  `each`, in those words: a list of handles also goes over every entity,
+  and a system that receives events may do its work in `on` alone, as the
+  reference teaches. Controls name no construct.
 - Every program of a task builds and runs in under 5 seconds on the
   development machine.
 - The reference solution is written as the documentation teaches and is

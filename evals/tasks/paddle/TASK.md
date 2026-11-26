@@ -11,8 +11,8 @@ points: `x` from the left edge of the window, `y` down from its top edge.
 
 The paddle and each ball are entities. The program has three systems,
 which run once a tick in this order: `steer` moves the paddle, `move`
-goes over every ball and moves it, and `score` goes over every ball and
-finds the hits and the misses.
+goes over every ball with an `each` and moves it, and `score` goes over
+every ball with an `each` and finds the hits and the misses.
 
 **The paddle** lies along the line `y` = 220. Its left end starts at
 `x` = 136 and it is 48 points long: it covers every `x` from its left end
