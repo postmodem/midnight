@@ -68,7 +68,8 @@ nix run .#window-test                                  # the same with the packa
 
 Nothing opens a window on the desktop it is run from: a program with a
 window runs headless, or inside `tests/window/compositor.sh`, which starts
-a sway of its own that shows nothing and has no input devices.
+a sway of its own that shows nothing and has no input devices, and a
+session bus of its own.
 
 Flakes see only files known to git: `git add` a new file before a `nix`
 command that needs it.

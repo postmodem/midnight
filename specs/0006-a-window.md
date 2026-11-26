@@ -596,10 +596,9 @@ All run on x86_64-linux, on the development machine.
 ## Outcome
 
 Implemented, with the differences listed under "Differences from the
-design". Eleven of the twelve criteria pass on x86_64-linux: a Ryzen 9
-9950X3D beside an RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10,
-`wgpu-native` 27.0.4.0, sway 1.12, clang 21.1.8. Criterion 11 needs a
-person at a desktop and has not been run.
+design". All twelve criteria pass on x86_64-linux: a Ryzen 9 9950X3D
+beside an RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10,
+`wgpu-native` 27.0.4.0, sway 1.12, clang 21.1.8.
 
 ### Acceptance criteria
 
@@ -612,10 +611,10 @@ person at a desktop and has not been run.
 | 5  | `window_shown` passes in the sandbox and on the 5090, release and debug: the answers are the headless ones, `info` says `wayland, mailbox`, and every pixel of the last capture is in the picture of the compositor. |
 | 6  | `window_keeps_time` passes on the 5090: 120 ticks in 1.9834 to 1.9841 s at 60 Hz, at 144 Hz and on a workspace that is not shown, release and debug. In the sandbox 1.9835 to 1.9870 s. |
 | 7  | No sanitizer report: every debug run of a program with a window in the suite, headless, and the debug runs of the window tests in the sandbox. |
-| 8  | Every window test runs inside `tests/window/compositor.sh`, which sets `DISPLAY` and the session bus to addresses that can't be connected to and gives sway a runtime directory of its own; every other run of a window program in the suite sets `WAYLAND_DISPLAY` and `DISPLAY` to names that can't be connected to and `XDG_RUNTIME_DIR` to an empty directory. |
+| 8  | Every window test runs inside `tests/window/compositor.sh`, which sets `DISPLAY` to an address that can't be connected to and gives sway and a session bus a runtime directory of their own; every other run of a window program in the suite sets `WAYLAND_DISPLAY` and `DISPLAY` to names that can't be connected to and `XDG_RUNTIME_DIR` to an empty directory. |
 | 9  | `ldd` on the release builds of `examples/hello.12am` and of `examples/nbody.12am` lists what it lists on 0.5.0. |
 | 10 | With `LD_LIBRARY_PATH` set to a directory holding another build of ALSA, which SDL 3 links, `midnight run examples/window.12am` builds and runs headless with `examples/window.drive`. |
-| 11 | Not run: it needs the desktop the program is started from. |
+| 11 | Run by hand at the development machine's desktop, in release and debug builds. The window showed, kept time and went on ticking on another workspace, but 0.6.0 aborted at exit with a D-Bus assertion: see "Differences from the design". 0.6.1 ends with status 0 on a live session bus in the window tests; the run by hand is to be repeated on it. |
 | 12 | The reference says 0.6 and `midnight --version` prints `midnight 0.6.0`. Every command in the README was run as written, `./move` and the headless window in scratch directories, the window on the desktop inside `tests/window/compositor.sh`. `tests/COVERAGE.md` has "The window". |
 
 ### Measured
@@ -674,3 +673,11 @@ person at a desktop and has not been run.
   for, so sizes and pictures line up with the headless runs.
 - **Missing flags** are said in one line for the window; a program that
   also has a GPU system gets the line for GPU systems as well.
+- **SDL leaves D-Bus alone at the end.** With D-Bus shut down by
+  `SDL_Quit`, NVIDIA's EGL library, which the Vulkan driver loads, used
+  its own connection in an exit handler, and libdbus aborted the program
+  (status 134) after its last output, in both build modes. SDL documents
+  the shutdown as a debugging aid that other libraries in the process can
+  break. Without it no sanitizer report appears either. The compositor of
+  the window tests now runs a session bus of its own, so the tests use
+  D-Bus as a desktop does; with it they fail on 0.6.0 and pass on 0.6.1.

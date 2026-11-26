@@ -511,7 +511,6 @@ const char *mn_window_show(const char *title, int64_t width, int64_t height,
         SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland,x11");
 #endif
         SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
-        SDL_SetHint(SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1");
         if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) return "no display was found";
         win.sdl = true;
     }

@@ -538,7 +538,6 @@ static unsigned char *frame_read(const Frame *frame) {
 static int window(const char *capture_path) {
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland,x11");
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
-    SDL_SetHint(SDL_HINT_SHUTDOWN_DBUS_ON_QUIT, "1");
     if (!SDL_Init(SDL_INIT_VIDEO)) fail("SDL_Init", SDL_GetError());
     SDL_Window *sdl_window = SDL_CreateWindow(
         "midnight smoke", 320, 200, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);

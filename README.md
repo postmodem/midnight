@@ -430,8 +430,9 @@ pixels its answer gives.
 
 The tests of a window that is shown never use the desktop they are run
 from. `tests/window/compositor.sh` starts sway with no output on any screen
-and no input devices, in a runtime directory of its own, and runs a command
-with that compositor as the only display it can reach. Inside it,
+and no input devices, and a session bus, in a runtime directory of their
+own, and runs a command with that compositor as the only display it can
+reach. Inside it,
 `tests/window/test.sh` runs a hand-written SDL program, then the suite's
 window tests: the frame programs with a window and their commands from a
 pipe, against a picture of the compositor; 120 ticks timed at 60 Hz, at

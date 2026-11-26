@@ -184,6 +184,7 @@
       # shows nothing on the desktop, and a way to take its picture.
       windowToolsFor = pkgs: [
         pkgs.sway-unwrapped
+        pkgs.dbus
         pkgs.grim
         pkgs.clang
         pkgs.coreutils
@@ -342,6 +343,7 @@
             # For tests/window: a compositor of their own, and its picture.
             nativeBuildInputs = [
               pkgs.sway-unwrapped
+              pkgs.dbus
               pkgs.grim
             ];
           }

@@ -11,14 +11,16 @@
 # the command get a runtime directory of their own, so its sockets are
 # the only ones in reach. The display, compositor and session-bus
 # variables of the desktop this is run from are removed from everything
-# started here, and DISPLAY and the session bus are set to addresses that
-# cannot be connected to. The command sees WAYLAND_DISPLAY and SWAYSOCK of
-# this compositor, and its status is the script's.
+# started here, and DISPLAY is set to an address that cannot be connected
+# to. A session bus of their own runs beside the compositor, so that
+# libraries that use D-Bus do so as on a desktop. The command sees
+# WAYLAND_DISPLAY, SWAYSOCK and DBUS_SESSION_BUS_ADDRESS of these, and its
+# status is the script's.
 #
-# sway, swaymsg and the other tools come from PATH. RENDERER chooses how
-# sway draws: `pixman` draws on the CPU and needs no GPU; without it sway
-# draws with its default renderer on a GPU it chooses, or the one the
-# render node in RENDER_NODE names.
+# sway, swaymsg, dbus-daemon and the other tools come from PATH. RENDERER
+# chooses how sway draws: `pixman` draws on the CPU and needs no GPU;
+# without it sway draws with its default renderer on a GPU it chooses, or
+# the one the render node in RENDER_NODE names.
 set -uo pipefail
 
 dir=$(mktemp -d)
@@ -27,7 +29,24 @@ unset LD_LIBRARY_PATH WAYLAND_DISPLAY WAYLAND_SOCKET DISPLAY XAUTHORITY \
   XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
 export XDG_RUNTIME_DIR=$dir
 export DISPLAY=:no-display
-export DBUS_SESSION_BUS_ADDRESS=unix:path=$dir/no-bus
+
+cat > "$dir/bus.conf" << EOF
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:path=$dir/bus</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+EOF
+dbus-daemon --config-file="$dir/bus.conf" --nofork --nopidfile > "$dir/bus.log" 2>&1 &
+bus_pid=$!
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$dir/bus
 
 cat > "$dir/config" << 'EOF'
 output HEADLESS-1 mode 1280x720@60Hz position 0 0 scale 1
@@ -47,8 +66,8 @@ if [ -n "${RENDER_NODE:-}" ]; then export WLR_RENDER_DRM_DEVICE=$RENDER_NODE; fi
 sway -c "$dir/config" > "$dir/sway.log" 2>&1 &
 sway_pid=$!
 cleanup() {
-  kill "$sway_pid" 2> /dev/null
-  wait "$sway_pid" 2> /dev/null
+  kill "$sway_pid" "$bus_pid" 2> /dev/null
+  wait "$sway_pid" "$bus_pid" 2> /dev/null
   rm -r "$dir"
 }
 trap cleanup EXIT
@@ -58,10 +77,15 @@ ipc=
 for _ in $(seq 200); do
   socket=$(find "$dir" -maxdepth 1 -name 'wayland-*' ! -name '*.lock' -printf '%f\n' | head -1)
   ipc=$(find "$dir" -maxdepth 1 -name 'sway-ipc.*' | head -1)
-  if [ -n "$socket" ] && [ -n "$ipc" ]; then break; fi
-  if ! kill -0 "$sway_pid" 2> /dev/null; then break; fi
+  if [ -n "$socket" ] && [ -n "$ipc" ] && [ -S "$dir/bus" ]; then break; fi
+  if ! kill -0 "$sway_pid" 2> /dev/null || ! kill -0 "$bus_pid" 2> /dev/null; then break; fi
   sleep 0.05
 done
+if [ ! -S "$dir/bus" ]; then
+  echo "compositor.sh: dbus-daemon did not start" >&2
+  tail -20 "$dir/bus.log" >&2
+  exit 1
+fi
 if [ -z "$socket" ] || [ -z "$ipc" ]; then
   echo "compositor.sh: sway did not start" >&2
   tail -20 "$dir/sway.log" >&2
