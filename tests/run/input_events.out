@@ -1,0 +1,32 @@
+focused
+pressed A
+released A
+pressed Digit7
+released Digit7
+pressed ShiftLeft
+pressed Z
+released Z
+released ShiftLeft
+pressed ArrowLeft
+released ArrowLeft
+pressed Numpad5
+released Numpad5
+pressed NumpadEnter
+released NumpadEnter
+pressed Left at 37.25, 150.00390625
+released Left at 37.25, 150.00390625
+pressed Middle at 1.00390625, 1.5
+released Middle at 1.00390625, 1.5
+pressed Right at 318.99609375, 198.99609375
+released Right at 318.99609375, 198.99609375
+pressed Back at 200.5, 99.75
+released Back at 200.5, 99.75
+pressed Forward at 200.5, 99.75
+released Forward at 200.5, 99.75
+wheel 0.0, 1.0
+wheel -2.0, 0.0
+wheel 0.0, -0.5
+unfocused
+focused
+pressed Escape
+released Escape

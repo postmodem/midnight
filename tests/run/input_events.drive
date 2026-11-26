@@ -1,0 +1,85 @@
+# Each `tick` ends what window_input sends before it waits for the
+# program's output. The pointer begins where the compositor's cursor is.
+mouse move 100 100
+tick
+# Letters and digits.
+key down A
+tick
+key up A
+tick
+key down Digit7
+tick
+key up Digit7
+tick
+# A modifier held over a letter.
+key down ShiftLeft
+tick
+key down Z
+tick
+key up Z
+tick
+key up ShiftLeft
+tick
+# An arrow and keys of the keypad.
+key down ArrowLeft
+tick
+key up ArrowLeft
+tick
+key down Numpad5
+tick
+key up Numpad5
+tick
+key down NumpadEnter
+tick
+key up NumpadEnter
+tick
+# Each button, at positions on 1/256 of a point, a point or more inside
+# the window's edges.
+mouse move 37.25 150.00390625
+tick
+mouse down Left
+tick
+mouse up Left
+tick
+mouse move 1.00390625 1.5
+tick
+mouse down Middle
+tick
+mouse up Middle
+tick
+mouse move 318.99609375 198.99609375
+tick
+mouse down Right
+tick
+mouse up Right
+tick
+mouse move 200.5 99.75
+tick
+mouse down Back
+tick
+mouse up Back
+tick
+mouse down Forward
+tick
+mouse up Forward
+tick
+# The wheel.
+scroll 0 1
+tick
+scroll -2 0
+tick
+scroll 0 -0.5
+tick
+# A loss and a gain of focus: the pointer leaves with it, and comes back
+# where it was.
+blur
+mouse leave
+tick
+focus
+mouse move 200.5 99.75
+tick
+# Escape ends the program when it comes up.
+key down Escape
+tick
+key up Escape
+tick

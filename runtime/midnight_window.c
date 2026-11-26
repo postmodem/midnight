@@ -503,6 +503,8 @@ static void surface_size(const MnWindowSizes *sizes) {
     wgpuSurfaceConfigure(win.surface, &win.config);
 }
 
+static void key_table_make(void);
+
 const char *mn_window_show(const char *title, int64_t width, int64_t height,
                            MnWindowSizes *sizes, const char **how) {
     if (!display_named()) return "no display was found";
@@ -511,7 +513,11 @@ const char *mn_window_show(const char *title, int64_t width, int64_t height,
         SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland,x11");
 #endif
         SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+        SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+        SDL_SetHint(SDL_HINT_PEN_MOUSE_EVENTS, "0");
+        SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
         if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) return "no display was found";
+        key_table_make();
         win.sdl = true;
     }
     win.window = SDL_CreateWindow(title, (int)width, (int)height,
@@ -558,6 +564,22 @@ const char *mn_window_show(const char *title, int64_t width, int64_t height,
     return NULL;
 }
 
+/* The number of the `Key` variant of each SDL scancode below 256, plus
+ * one; 0 for a scancode without a `Key`. */
+static uint8_t key_of_scancode[256];
+
+static void key_table_make(void) {
+    uint8_t key = 0;
+#define MN_KEY_SCANCODE(name, usage) key_of_scancode[usage] = ++key;
+    MN_KEYS(MN_KEY_SCANCODE)
+#undef MN_KEY_SCANCODE
+}
+
+/* Whether a mouse event is made by SDL from touch or a pen. */
+static bool from_touch_or_pen(SDL_MouseID which) {
+    return which == SDL_TOUCH_MOUSEID || which == SDL_PEN_MOUSEID;
+}
+
 void mn_window_poll(MnWindowSizes *sizes) {
     SDL_Event event;
     bool closed = false;
@@ -566,6 +588,39 @@ void mn_window_poll(MnWindowSizes *sizes) {
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             closed = true;
+            break;
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP: {
+            SDL_Scancode code = event.key.scancode;
+            if (event.key.repeat || code < 0 || code >= 256) break;
+            if (key_of_scancode[code] == 0) break;
+            mn_window_key(key_of_scancode[code] - 1u, event.type == SDL_EVENT_KEY_DOWN);
+            break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (from_touch_or_pen(event.button.which)) break;
+            if (event.button.button < 1 || event.button.button > MN_MOUSE_BUTTON_COUNT) {
+                break;
+            }
+            mn_window_button(event.button.button - 1u,
+                             event.type == SDL_EVENT_MOUSE_BUTTON_DOWN, event.button.x,
+                             event.button.y);
+            break;
+        case SDL_EVENT_MOUSE_MOTION:
+            if (from_touch_or_pen(event.motion.which)) break;
+            mn_window_move(event.motion.x, event.motion.y);
+            break;
+        case SDL_EVENT_MOUSE_WHEEL:
+            if (from_touch_or_pen(event.wheel.which)) break;
+            mn_window_wheel(event.wheel.x, event.wheel.y);
+            break;
+        case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+            mn_window_leave();
+            break;
+        case SDL_EVENT_WINDOW_FOCUS_GAINED:
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            mn_window_focus(event.type == SDL_EVENT_WINDOW_FOCUS_GAINED);
             break;
         case SDL_EVENT_WINDOW_HIDDEN:
         case SDL_EVENT_WINDOW_MINIMIZED:

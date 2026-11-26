@@ -43,5 +43,5 @@ echo "== the suite's window tests"
 MIDNIGHT_TEST_WINDOW=1 COMPOSITOR_LOG=$out/suite-sway.log \
   bash "$here/compositor.sh" "${suite[@]}" --exact --test-threads=1 --nocapture \
   window_shown window_keeps_time window_closes window_resized \
-  input_client_refuses_a_desktop input_client_takes_its_commands
+  window_input input_client_refuses_a_desktop input_client_takes_its_commands
 echo "window tests passed"

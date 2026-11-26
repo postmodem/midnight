@@ -1,0 +1,32 @@
+# Prints each event of the keyboard, the mouse and the focus with its
+# fields, and the wheel when it turns, and nothing that depends on which
+# tick an input falls into; Escape coming up ends it. `window_input` sends
+# the input of its commands from a compositor and requires this output.
+
+system report
+  on WindowFocused do
+    puts "focused"
+  end
+  on WindowUnfocused do
+    puts "unfocused"
+  end
+  on KeyPressed do |press|
+    puts "pressed #{press.key}"
+  end
+  on KeyReleased do |release|
+    puts "released #{release.key}"
+  end
+  on MousePressed do |press|
+    puts "pressed #{press.button} at #{press.x}, #{press.y}"
+  end
+  on MouseReleased do |release|
+    puts "released #{release.button} at #{release.x}, #{release.y}"
+  end
+  if Mouse.wheel_x != 0.0 || Mouse.wheel_y != 0.0
+    puts "wheel #{Mouse.wheel_x}, #{Mouse.wheel_y}"
+  end
+  World.stop if Keyboard.released?(Key::Escape)
+end
+
+Window.open("Input", 320, 200)
+World.run

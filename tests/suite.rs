@@ -3334,7 +3334,8 @@ impl Shown {
 }
 
 /// Takes the `info` lines of a shown window out of a run's standard error:
-/// the device's and the window's. The window's must say it is shown on
+/// the device's, the window's, and the one that says a driven window takes
+/// its input from its commands. The window's must say it is shown on
 /// Wayland. Returns the window's.
 fn window_said(run: &mut TimedRun, device: Device) -> Result<String, String> {
     device_said(run, device)?;
@@ -3343,6 +3344,7 @@ fn window_said(run: &mut TimedRun, device: Device) -> Result<String, String> {
     for line in run.stderr.split_inclusive('\n') {
         match line.strip_prefix("midnight: window: ") {
             Some(window) if said.is_none() => said = Some(window.trim_end().to_string()),
+            Some("input from commands\n") => {}
             _ => rest.push_str(line),
         }
     }
@@ -4190,4 +4192,263 @@ fn input_client_takes_its_commands() {
         }
     }
     report("runs of the input client", 1 + bad.len(), failures);
+}
+
+/// The commands of a `.drive` file in groups that each end with a `tick`,
+/// with the lines the headless run of `exe` prints in the tick that ends
+/// each group.
+fn tick_groups(exe: &Path, source: &Path) -> Vec<(Vec<String>, Vec<String>)> {
+    let commands = std::fs::read_to_string(source.with_extension("drive")).expect("read commands");
+    let mut groups = Vec::new();
+    let mut group = Vec::new();
+    for line in commands.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line == "tick" {
+            groups.push(std::mem::take(&mut group));
+        } else {
+            group.push(line.to_string());
+        }
+    }
+    assert!(
+        group.is_empty(),
+        "{}: commands after the last `tick`",
+        source.display()
+    );
+    // Standard output and error in one pipe: the runtime flushes standard
+    // output before each answer, so a `tick` answer follows what its tick
+    // printed.
+    let mut command = Command::new("bash");
+    command
+        .args(["-c", "exec \"$0\" 2>&1"])
+        .arg(exe)
+        .env("MIDNIGHT_GPU", "off");
+    headless(&mut command, source, false);
+    let output = command.output().expect("run the program headless");
+    assert!(output.status.success(), "{}", text(&output.stdout));
+    let mut printed = Vec::new();
+    let mut lines = Vec::new();
+    for line in text(&output.stdout).lines() {
+        match line.strip_prefix(DRIVE_SAID) {
+            Some("tick") => printed.push(std::mem::take(&mut lines)),
+            Some(_) => {}
+            None => lines.push(line.to_string()),
+        }
+    }
+    assert_eq!(
+        printed.len(),
+        groups.len(),
+        "{}: a `tick` was not answered",
+        source.display()
+    );
+    groups.into_iter().zip(printed).collect()
+}
+
+/// A line a program printed, and where.
+enum Said {
+    Out(String),
+    Err(String),
+}
+
+/// What a running program has printed so far.
+struct Printed {
+    lines: std::sync::mpsc::Receiver<Said>,
+    stdout: Vec<String>,
+    stderr: Vec<String>,
+}
+
+impl Printed {
+    /// Takes what the program prints until `done` passes, for up to
+    /// `limit`. Returns whether it passed.
+    fn until(&mut self, limit: Duration, done: impl Fn(&Printed) -> bool) -> bool {
+        let started = Instant::now();
+        while !done(self) {
+            let left = limit.saturating_sub(started.elapsed());
+            match self.lines.recv_timeout(left) {
+                Ok(Said::Out(line)) => self.stdout.push(line),
+                Ok(Said::Err(line)) => self.stderr.push(line),
+                Err(_) => return false,
+            }
+        }
+        true
+    }
+}
+
+/// One run of `window_input`: the program with a window, undriven, with
+/// the keyboard and the pointer of `tests/window/input.c` and the
+/// compositor's cursor and workspaces. Sends each group of commands, then
+/// waits for what the headless run printed in the group's tick.
+fn input_from_compositor(
+    exe: &Path,
+    groups: &[(Vec<String>, Vec<String>)],
+    device: Device,
+) -> Result<(), String> {
+    use std::io::BufRead;
+    sway(&["seat", "-", "cursor", "set", "100", "100"]);
+    let mut client = InputClient::start(&compositor_socket())?;
+    let mut command = Command::new(exe);
+    command
+        .env("MIDNIGHT_WINDOW", "info")
+        .env_remove("MIDNIGHT_DRIVE")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    on_device(&mut command, device);
+    let mut child = command.spawn().expect("run program");
+    let (send, lines) = std::sync::mpsc::channel();
+    let out = child.stdout.take().expect("piped");
+    let err = child.stderr.take().expect("piped");
+    let send_err = send.clone();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(out).lines().map_while(Result::ok) {
+            let _ = send.send(Said::Out(line));
+        }
+    });
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(err).lines().map_while(Result::ok) {
+            let _ = send_err.send(Said::Err(line));
+        }
+    });
+    let mut printed = Printed {
+        lines,
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+    };
+    let limit = Duration::from_secs(10);
+    let mut sent = || -> Result<(), String> {
+        let ready = printed.until(limit, |p| {
+            [
+                "midnight: window: focused",
+                "midnight: window: pointer inside",
+            ]
+            .iter()
+            .all(|line| p.stderr.iter().any(|said| said == line))
+        });
+        if !ready {
+            return Err(format!(
+                "the window got no focus or no pointer: {:?}",
+                printed.stderr
+            ));
+        }
+        let mut expected: Vec<String> = Vec::new();
+        for (commands, lines) in groups {
+            for line in commands {
+                let words: Vec<&str> = line.split_whitespace().collect();
+                match words.as_slice() {
+                    ["key", way @ ("down" | "up"), name] => {
+                        let code = key_code(name).ok_or(format!("no code for `{name}`"))?;
+                        client.send(&format!("key {way} {code}"))?;
+                    }
+                    ["mouse", way @ ("down" | "up"), name] => {
+                        let code = button_code(name).ok_or(format!("no code for `{name}`"))?;
+                        client.send(&format!("button {way} {code}"))?;
+                    }
+                    ["mouse", "move", x, y] => {
+                        sway(&["seat", "-", "cursor", "set", x, y]);
+                    }
+                    ["mouse", "leave"] => {}
+                    ["scroll", dx, dy] => client.send(&format!("scroll {dx} {dy}"))?,
+                    ["blur"] => {
+                        sway(&["workspace", "2"]);
+                    }
+                    ["focus"] => {
+                        sway(&["workspace", "1"]);
+                    }
+                    _ => return Err(format!("`{line}` can't be sent from a compositor")),
+                }
+            }
+            expected.extend(lines.iter().cloned());
+            let count = expected.len();
+            printed.until(limit, |p| p.stdout.len() >= count);
+            if printed.stdout != expected {
+                return Err(format!(
+                    "after {commands:?}\n--- expected\n{}\n--- printed\n{}",
+                    expected.join("\n"),
+                    printed.stdout.join("\n")
+                ));
+            }
+        }
+        Ok(())
+    };
+    let result = sent();
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait for program") {
+            break status.code();
+        }
+        if started.elapsed() > limit {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    printed.until(Duration::from_secs(5), |_| false);
+    let client_said = client.stop();
+    result?;
+    let mut stderr = printed.stderr;
+    let device_line = stderr
+        .iter()
+        .any(|line| line.starts_with("midnight: gpu: "));
+    let wayland = stderr
+        .iter()
+        .any(|line| line.starts_with("midnight: window: ") && line.contains(", wayland, "));
+    stderr.retain(|line| {
+        !line.starts_with("midnight: window: ") && !line.starts_with("midnight: gpu: ")
+    });
+    let total: usize = groups.iter().map(|(_, lines)| lines.len()).sum();
+    if status != Some(0)
+        || !stderr.is_empty()
+        || !device_line
+        || !wayland
+        || printed.stdout.len() != total
+    {
+        return Err(format!(
+            "exited with {status:?}, device line {device_line}, on Wayland {wayland}, input client {client_said}\n--- stdout\n{}\n--- stderr\n{}",
+            printed.stdout.join("\n"),
+            stderr.join("\n")
+        ));
+    }
+    Ok(())
+}
+
+/// `tests/run/input_events.12am` with a window, undriven, at a scale of
+/// 1.5, with the keyboard and the pointer of `tests/window/input.c` and the
+/// compositor's cursor and workspaces sending the input of its `.drive`
+/// file one group at a time: it must print what the headless run prints,
+/// 20 times in each build mode.
+#[test]
+fn window_input() {
+    let Some(device) = window_device() else {
+        return;
+    };
+    let _compositor = COMPOSITOR
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let source = Path::new("tests/run/input_events.12am");
+    let dir = scratch("window-input");
+    sway(&["output", "HEADLESS-1", "scale", "1.5"]);
+    let mut failures = Vec::new();
+    const RUNS: usize = 20;
+    for mode in MODES {
+        let exe = dir.join(format!("input-{mode:?}"));
+        build(source, &exe, mode).unwrap_or_else(|message| panic!("{message}"));
+        let groups = tick_groups(&exe, source);
+        for run in 0..RUNS {
+            if let Err(message) = input_from_compositor(&exe, &groups, device) {
+                failures.push(format!(
+                    "{} ({mode:?}), run {run}: {message}",
+                    source.display()
+                ));
+            }
+        }
+    }
+    sway(&["output", "HEADLESS-1", "scale", "1"]);
+    let _ = std::fs::remove_dir_all(&dir);
+    report(
+        "runs with input from a compositor",
+        RUNS * MODES.len(),
+        failures,
+    );
 }
