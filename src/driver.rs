@@ -67,12 +67,14 @@ pub fn build(c_source: &str, out: &Path, debug: bool, parts: Parts) -> Result<()
 }
 
 /// Compiles into a temporary directory, runs the program with this
-/// process's standard streams, and returns its exit status.
+/// process's standard streams, and returns its exit status. The program
+/// runs without `LD_LIBRARY_PATH`: it finds its libraries through its
+/// runpaths.
 pub fn run(c_source: &str, debug: bool, parts: Parts) -> Result<u8, String> {
     let dir = make_build_dir()?;
     let exe = dir.join("program");
     compile_in(&dir, c_source, &exe, debug, parts)?;
-    let status = Command::new(&exe).status();
+    let status = Command::new(&exe).env_remove("LD_LIBRARY_PATH").status();
     let _ = std::fs::remove_dir_all(&dir);
     let status = status.map_err(|error| format!("midnight: can't run the program: {error}"))?;
     Ok(exit_code(status))
@@ -124,6 +126,7 @@ fn compile_in(
 
     let cc = std::env::var("MIDNIGHT_CC").unwrap_or_else(|_| "cc".to_string());
     let mut command = Command::new(&cc);
+    command.env_remove("LD_LIBRARY_PATH");
     command.arg("-std=c11");
     command.args(if debug { DEBUG_FLAGS } else { RELEASE_FLAGS });
     command.args(TARGET_FLAGS);
