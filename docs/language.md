@@ -1,13 +1,15 @@
 # The Midnight language
 
-This document describes Midnight 0.3: the language core specified by
+This document describes Midnight 0.4: the language core specified by
 [`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
 systems specified by
-[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), and what moves
+[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), what moves
 between CPU and GPU memory, specified by
-[`specs/0003-moving-less.md`](../specs/0003-moving-less.md). It is the
-reference for what a program means. Where the compiler and this document
-disagree, one of them has a bug.
+[`specs/0003-moving-less.md`](../specs/0003-moving-less.md), and strict GPU
+systems, specified by
+[`specs/0004-strict-gpu-systems.md`](../specs/0004-strict-gpu-systems.md).
+It is the reference for what a program means. Where the compiler and this
+document disagree, one of them has a bug.
 
 Midnight is a compiled, statically typed language built around the
 entity-component-system (ECS) pattern. Its syntax borrows from Ruby. Source
@@ -105,8 +107,8 @@ conditional operator with spaces: `ok ? 1 : 2`.
 
 ```
 break case component def do each else elsif emit end enum event false gpu
-if loop next on print puts require resource return self spawn struct system
-tag then true unless until when while
+if loop next on print puts require resource return self spawn strict struct
+system tag then true unless until when while
 ```
 
 `gpu` is used in one place, before `system`: see [GPU systems](#gpu-systems).
@@ -385,7 +387,7 @@ iteration. This holds for every loop form, including `each` and `on`. The
 one exception is the `each` of a [GPU system](#gpu-systems), which `break`
 cannot leave.
 
-Blocks are not values in 0.3. `do |…| … end` is accepted only by the loop
+Blocks are not values in 0.4. `do |…| … end` is accepted only by the loop
 forms in this document.
 
 ## Functions
@@ -960,6 +962,10 @@ unless `n` divides 4,294,967,296. A `rand(n)` that fails draws no number.
   and in debug builds.
 - A GPU gives the same result from run to run on the same machine and
   driver.
+- A strict GPU system gives the same results on every device and on the
+  CPU, in both build modes, to the last bit. See
+  [Strict GPU systems](#strict-gpu-systems). The rest of this list is about
+  GPU systems that are not strict.
 - Between a GPU and the CPU, or between two different GPUs, `Float` results
   agree closely but not to the last bit. `+`, `-` and `*` on their own
   are rounded as on the CPU. Beyond that, a GPU may:
@@ -983,11 +989,119 @@ unless `n` divides 4,294,967,296. A `rand(n)` that fails draws no number.
   of nearly equal values, such as `a * b - c` with `a * b` close to `c`,
   the two sides may differ by as much as the rounding of the values that
   were subtracted, which can be far larger than the result itself.
-- `Int` arithmetic, `rand` and `rand(n)` give the same results everywhere.
+- `Int` arithmetic, `rand` and `rand(n)` give the same results everywhere,
+  strict or not.
 - On a GPU, a comparison with NaN and a `Math` function outside its domain
   (`Math.sqrt` of a negative number, `Math.log` of zero or less) may give
   any result: for a NaN, `x != x` is true on the CPU and may be false on a
   GPU. `nan?` is reliable everywhere.
+
+### Strict GPU systems
+
+```ruby
+strict gpu system gravity
+  each Body do |a|
+    # the block of the gravity example above
+  end
+end
+```
+
+A GPU system declared with `strict gpu system` gives the same bits on every
+device it runs on and on the CPU. Everything a GPU system may and may not
+contain still holds. `strict system name` without `gpu` is an error with the
+hint ``write `strict gpu system name` ``.
+
+In a strict GPU system, and in a function while one calls it, `Float` is
+the 32-bit `Float` of [Arithmetic at 32 bits](#arithmetic-at-32-bits) with
+these rules:
+
+- **Subnormals count as zero.** An operand of `+`, `-`, `*`, `/`, `%`,
+  `Math.sqrt`, a comparison or a conversion whose magnitude is below
+  2 ** -126 (about 1.18e-38) is zero with its sign. A result of `+`, `-`,
+  `*`, `/` or `Math.sqrt` is rounded to 24 bits first; if it is then below
+  2 ** -126 in magnitude, it is zero with its sign. So a product whose exact
+  value lies just below 2 ** -126 and rounds to it is 2 ** -126, and
+  `1.0e-30 * 1.0e-10` is 0.0. A value that is only copied, stored, passed or
+  returned keeps its bits, and so do `-x` and `x.abs`, which change only the
+  sign.
+- **`+`, `-` and `*`** are each rounded to nearest, ties to even, on their
+  own. They are never combined into one operation with a single rounding,
+  and never rearranged: `a * b + b * c` is two products and a sum, and
+  `x - x` is NaN when `x` is an infinity.
+- **`/` and `Math.sqrt`** are correctly rounded, for every operand.
+- **`%`** is the formula of [Arithmetic at 32 bits](#arithmetic-at-32-bits),
+  every step under these rules, and so is `x.round(digits)`.
+- **Comparisons** are IEEE: with a NaN, `==`, `<`, `<=`, `>` and `>=` are
+  false and `!=` is true. `-0.0 == 0.0`, and a subnormal equals zero.
+  `min`, `max` and `clamp` follow from them.
+- **`n.to_f`** is correctly rounded, ties to even. `to_i`, `floor`, `ceil`
+  and `round` are as at 32 bits, with a subnormal operand counting as zero.
+- **`x ** 2.0`** is `x * x`. Every other `**` with a `Float` result is an
+  error, and so are `Math.sin`, `Math.cos`, `Math.tan`, `Math.atan2`,
+  `Math.exp` and `Math.log`, whose results differ between devices:
+
+  ```
+  error: `Math.sin` cannot be used in a strict GPU system
+  ```
+
+  In a function the message says `in a function called from a strict GPU
+  system` and carries the usual note naming the GPU system and the call.
+- **NaN.** Which NaN a result is cannot be seen, as everywhere.
+
+A function called from a strict GPU system and from one that is not means
+the strict thing in the first and the ordinary thing in the second, as the
+same `def` already computes at 64 bits in ordinary code and at 32 in a GPU
+block. Ordinary code, and GPU systems that are not strict, keep subnormals
+on the CPU.
+
+**When to use it.** `strict` trades speed for results that do not depend on
+the machine. Use it for a GPU system when:
+
+- the program must replay a run exactly on another machine: a simulation
+  stepped in lockstep over a network, a recorded run played back, a saved
+  world that must evolve the same way when loaded elsewhere;
+- the GPU run must match the CPU run, because the same program may run
+  without a GPU, or because a machine without one checks the results;
+- the system is chaotic, as gravity among many bodies is, so that a
+  difference in the last bit grows until the runs no longer look alike;
+- a test compares the output exactly: a program whose GPU systems are all
+  strict needs no tolerance.
+
+Leave it off when the results only need to agree closely: motion, particles
+and other effects whose small differences nobody sees, and statistics read
+with a tolerance. Leave it off when the system needs `Math.sin`, `Math.cos`,
+`Math.tan`, `Math.atan2`, `Math.exp`, `Math.log` or a `**` other than a
+square, which strict code cannot use.
+
+Things to know when writing one:
+
+- The guarantee covers what strict code computes from the same inputs. A
+  value a non-strict GPU system wrote, or one an ordinary system computed
+  with a `Math` function, can differ between machines, and a strict system
+  that reads it carries the difference on. Make every GPU system strict that
+  writes the state which must agree, and keep ordinary code that writes it
+  to `+`, `-`, `*`, `/`, `Math.sqrt` and comparisons.
+- Ordinary code computes at 64 bits and keeps subnormals; the strict
+  system's results are 32-bit values with subnormals flushed. A strict
+  system and ordinary code that compute the same formula do not give the
+  same bits.
+- Numbers below about 1.18e-38 are zero in strict code. Scale quantities so
+  that they stay well above that.
+- It costs time. On an RTX 5090, gravity among 16,384 bodies takes 7.2 ms
+  per tick as a strict GPU system and 0.83 ms as an ordinary one. Most of
+  the difference is `/` and `Math.sqrt`, which strict code computes as
+  integer arithmetic; a system that only adds and multiplies costs much
+  less extra. A smaller GPU pays a larger factor. On the CPU a strict
+  block takes about 1.6 times as long as one that is not strict, and the
+  start-up check adds a few milliseconds to starting the GPU.
+
+**The start-up check.** The rules rest on how drivers compile shaders, which
+no specification promises. So a program with a strict GPU system checks the
+device when it opens it: it runs a fixed piece of strict code, chosen to
+fail where a driver fuses, rearranges, folds or rounds differently, on the
+device and on the CPU, and compares the bits. When they differ, every
+strict block runs on the CPU, with the same results, and the other GPU
+systems still use the device. See [Without a GPU](#without-a-gpu).
 
 ### Without a GPU
 
@@ -997,7 +1111,10 @@ one thread, and means what this section says: the snapshot, the 32-bit
 arithmetic, the random numbers and the errors are the same. A single block
 also runs on the CPU when it does not fit the device, for example when one
 of its columns is larger than the largest buffer the device binds. The
-README says how the device is chosen and how to see where each block runs.
+blocks of strict GPU systems run on the CPU when the device fails the
+start-up check of [Strict GPU systems](#strict-gpu-systems), and follow the
+strict rules there, subnormals included. The README says how the device is
+chosen and how to see where each block runs.
 
 ### The transfer plan
 
@@ -1124,8 +1241,8 @@ download  Position  move -> report
 
 A line gives the direction, the component, and two systems: the one that
 left the other copy as the only current one, or left rows to send, and the
-one that needs the copy. A line stands for one transfer per table that both
-systems reach.
+one that needs the copy. A strict GPU system is named `strict name`. A line
+stands for one transfer per table that both systems reach.
 
 - **A line with no mark** copies the whole array, in every tick. Here
   `report` reads what `move` wrote.
@@ -1415,6 +1532,8 @@ Measured on an RTX 5090 beside a Ryzen 9 9950X3D:
 - Gravity among 16,384 bodies, every body against every other, takes 0.84 ms
   per tick on the GPU and 354 ms on one CPU thread; among 65,536 bodies,
   3.7 ms on the GPU.
+- The same gravity as a strict GPU system takes 7.2 ms per tick on the GPU
+  and 571 ms on one CPU thread.
 
 `nix run .#bench-gpu` measures these, and the other costs it lists, on the
 machine it runs on.
@@ -1510,7 +1629,7 @@ and its message names no value; the last error in the list is reported
 when the `each` begins. See
 [Runtime errors in a GPU system](#runtime-errors-in-a-gpu-system).
 
-There are no exceptions to catch in 0.3.
+There are no exceptions to catch in 0.4.
 
 ## Grammar
 
@@ -1533,7 +1652,7 @@ field       = IDENT ":" type [ "=" expr ]
 def         = "def" (IDENT | OPERATOR) [ "(" [ param { "," param } ] ")" ]
               [ "->" type ] NL block "end"
 param       = IDENT ":" type
-system      = [ "gpu" ] "system" IDENT NL block "end"
+system      = [ "strict" ] [ "gpu" ] "system" IDENT NL block "end"
 type        = TYPE | "[" type "]"
 
 block       = { statement NL }
@@ -1595,7 +1714,7 @@ document. The `NL` after `do |…|`, and the one after the last statement of a
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.3
+## Not in 0.4
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
@@ -1608,6 +1727,6 @@ libraries.
 GPU systems leave these out: structural changes, events, output, strings,
 lists, `e[C]`, `has?`, `alive?` and `World.count` inside one; collecting a
 result across entities, such as a sum or a minimum, into a resource; spatial
-structures, so a nested `each` visits every pair; results that are the same
-to the last bit on every GPU and on the CPU; and the use of more than one
-GPU.
+structures, so a nested `each` visits every pair; `Math` functions other
+than `Math.sqrt`, and `**` other than a square, in a strict GPU system; and
+the use of more than one GPU.

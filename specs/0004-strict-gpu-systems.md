@@ -1,7 +1,8 @@
 # 0004 — Strict GPU systems: the same `Float` bits on every device and on the CPU
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0003
+- **Tested on:** x86_64-linux, 2026-11-25
 
 ## Goal
 
@@ -391,3 +392,100 @@ and RADV on the Ryzen's iGPU (`VK_DRIVER_FILES` set to Mesa's
 - **`Math` functions and `**` are compile errors** in a strict system
   until a later spec writes them as helpers, which print to C and WGSL
   alike.
+
+## Outcome
+
+Implemented as specified, with the differences listed under "Differences
+from the design". All eleven criteria pass on x86_64-linux: an RTX 5090
+(driver 595.71.05) beside a Ryzen 9 9950X3D, RADV on its RDNA 2 iGPU and
+`llvmpipe` from Mesa 26.1.8, `wgpu-native` 27.0.4.0, clang 21.1.8.
+
+### Acceptance criteria
+
+| #  | Result |
+| -- | ------ |
+| 1  | `nix flake check` passes; `checks.gpu` runs the five GPU tests on `llvmpipe` in the sandbox, `gpu_strict_div_sqrt` at its software size. `nix run .#gpu-test` passes them on the RTX 5090. |
+| 2  | Against `cbbf36c` (0.3.1), `midnight emit-c` (release and debug) and `midnight emit-wgsl` print the same bytes for all 381 programs of `tests/run`, `tests/panic`, `tests/plan`, `examples` and `bench` that 0.3.1 has, and none of their `.out`, `.err`, `.plan` or `.stats` files differs. |
+| 3  | `gpu_programs` passes on the 5090, on RADV (`VK_DRIVER_FILES` set to `radeon_icd.x86_64.json`) and on `llvmpipe`: every strict program exact, release and debug, as it is, with `rows` and with `strict-cpu`. The suite without a device runs them with `MIDNIGHT_GPU=off`. |
+| 4  | `gpu_strict_div_sqrt`: `sqrt` of all 2^32 patterns and `/` of 2^28 pairs plus 1,600 edge pairs, 0 wrong, on the 5090 and on RADV; 2^24 of each on `llvmpipe`, 0 wrong. |
+| 5  | Every strict program reports `strict check passed` on all three devices; `gpu_programs` requires it. With `strict-cpu` each prints the same output and `info` prints `strict blocks run on the CPU: MIDNIGHT_GPU has strict-cpu`. |
+| 6  | `strict_subnormals` prints `0.0` and `-0.0` for `1.0e-30 * 1.0e-10` and its negation, in release and debug, on the CPU and on all three devices. |
+| 7  | `bench/gpu_gravity_strict.12am` prints the checksum 1074603.7585074664 on the 5090, RADV, `llvmpipe` and the CPU. Times below. |
+| 8  | No row of `nix run .#bench-gpu` is more than 10 % slower than 0.3.1 (largest: 65,536 bodies, 3.671 to 3.734 ms, 1.7 %). In `nix run .#bench`, churn's `remove` came out 10.7 % slower in the first run; over three more runs of each version its best was 57.6 million per second on 0.3.1 and 54.5 million on 0.4.0, with runs from 47.7 to 57.6 million on both. Its generated C is the same; `midnight_rt.c` differs only by code that a program without a GPU system does not compile, and a global. |
+| 9  | Each diagnostic has a `tests/fail` program: `strict_system_not_gpu`, `strict_math_*` for the six functions, `strict_pow`, `strict_function_math` and `syntax_strict_reserved`. `tests/COVERAGE.md` maps the rules, including the device tests. |
+| 10 | `ldd` on the release build of `examples/hello.12am` lists `libm.so.6`, `libc.so.6` and the loader, as on 0.3.1. |
+| 11 | The reference says 0.4 and `midnight --version` prints `midnight 0.4.0`. Every command in the README was run as written, `./move` built into a scratch directory. |
+
+### Measured
+
+`RUNS=5 nix run .#bench-gpu`, fastest of 5, ms per tick, with nothing else
+running; 0.3.1 built from `cbbf36c`, run just before in the same session.
+
+| Row | 0.3.1 GPU | 0.4.0 GPU | 0.3.1 CPU | 0.4.0 CPU |
+| --- | --------- | --------- | --------- | --------- |
+| Gravity, 16,384 bodies | 0.830 | 0.834 | 353.9 | 353.8 |
+| Gravity, 16,384 bodies, strict | | 7.188 | | 571.1 |
+| Gravity, 65,536 bodies | 3.671 | 3.734 | | |
+| Move 1,000,000, data stays | 0.028 | 0.029 | 0.096 | 0.098 |
+| Move 1,000,000, read each tick | 0.806 | 0.799 | 0.507 | 0.505 |
+| `gpu_block` | 0.0239 | 0.0236 | 0.0 | 0.0 |
+| `gpu_blocks8` | 0.0434 | 0.0433 | 0.0003 | 0.0003 |
+| `gpu_fallible` | 0.0288 | 0.0288 | 0.0011 | 0.0011 |
+| `gpu_read_tables` | 0.1463 | 0.1428 | 0.0038 | 0.0038 |
+| `gpu_poke` | 0.0466 | 0.0460 | 0.0979 | 0.0978 |
+| `gpu_spawn` | 0.0306 | 0.0307 | 0.0982 | 0.1036 |
+| `gpu_despawn` | 0.0343 | 0.0340 | 0.1010 | 0.0996 |
+| `gpu_tag` | 0.0598 | 0.0590 | 0.1015 | 0.1016 |
+| `gpu_rare_write` | 0.5803 | 0.5802 | 0.2876 | 0.2872 |
+| `gpu_overwrite` | 0.0675 | 0.0656 | 0.1612 | 0.1591 |
+
+Strict gravity on the 5090 is 8.6 times the default, against 6.4 for the
+hand-written WGSL of the cost probe; it is 79 times the speed of the strict
+CPU path. Unquiet single runs on the other devices: 224 ms per tick on RADV
+and 151 ms on `llvmpipe`.
+
+`nix run .#bench`: `bench.12am` 0.292 against `baseline.c` 0.284 ms per
+tick in the first run (0.3.1: 0.284 and 0.284), 0.280 to 0.287 in the three
+runs after.
+
+The start-up check, timed as the start of `strict_div_sqrt` with and
+without `strict-cpu` (which also skips building the strict block's
+pipeline), adds at most 1 ms on the 5090, 6 ms on RADV and 8 ms on
+`llvmpipe`.
+
+The check was tried with its barrier removed (`^ mn_z[i]` replaced by
+`^ 0u` in the generated shader): all three devices failed it, the 5090 and
+RADV on `a * b + c` (fused, 2^-46 where the CPU gives 0) and `llvmpipe` on
+`a * b + b * c` (factored).
+
+### Differences from the design
+
+- **The check is not a block.** It is the library function `s32_check(a,
+  b, c, k)`, built from the same strict operations as lowered code, which
+  returns the bits of expression `k` over one row (NaN as `0x7fc00000`).
+  `midnight_rt.h` gains `MnGpuCheck` (its shader, the input rows, the
+  number of results per row and a C function that runs every row under
+  `mn_strict_enter`) and `mn_gpu_check`, which `main` sets before
+  `mn_start` in a program with a strict system. Its shader binds three
+  buffers: the inputs, the results and `mn_z`. `midnight_gpu.h` gains
+  `mn_gpu_device_check` and `mn_gpu_strict_refused`. 39 rows, 14 results
+  each; unit tests in `src/emit/gpu/check.rs` show that each row meant to
+  catch a rewrite does. `midnight emit-wgsl` prints the check's shader
+  after the blocks'.
+- **`info` lines.** A device that passes prints `strict check passed`. One
+  that fails prints the device and the first difference: `strict blocks
+  run on the CPU: <device> failed the strict check (result K of row R is X
+  on the device and Y on the CPU)`. Each strict block that then runs on the
+  CPU also prints its usual line, with the same reason.
+- **The `strict-cpu` run** is a third run of `gpu_programs` for every
+  program with a strict system, not a test program of its own.
+- **`strict_both_kinds`** has a tolerance: its system that is not strict
+  makes a subnormal, which a device may flush.
+- **`gpu_driver_finds_its_parts`** puts its stand-in driver in front of a
+  `VK_DRIVER_FILES` the caller set, which the loader prefers over
+  `VK_ADD_DRIVER_FILES`.
+- **The CPU path is 1.6 times slower.** `#pragma STDC FENV_ACCESS ON` costs
+  it: strict gravity built without the pragma runs in 354.5 ms per tick,
+  the default's time, and gives the same checksum. Left as designed; the
+  alternative the design names, wrapping literal operands in C so that
+  clang cannot fold a subnormal product, would recover the speed.

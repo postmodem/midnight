@@ -66,6 +66,9 @@ end
 
 [`examples/nbody.12am`](examples/nbody.12am) is a fuller one: gravity, every
 body against every other.
+A GPU system agrees closely with its CPU run and with other GPUs, but not
+to the last bit. Declared `strict gpu system`, it gives the same bits on
+every device and on the CPU, at a cost in speed.
 
 - [`docs/language.md`](docs/language.md) is the language reference.
 - [`specs/`](specs/) holds one spec per change, with its acceptance criteria
@@ -162,9 +165,10 @@ adapter. `MIDNIGHT_GPU` changes that. It is a comma-separated list of:
 | ---------- | --------------------------------------------------------------- |
 | `off`      | Use no device: every GPU system runs its C functions.           |
 | `software` | Accept an adapter that computes on the CPU (Mesa's `llvmpipe`) when there is no hardware one. |
-| `info`     | Print one line to standard error naming the device in use, or `no device`, and one line for each `each` of a GPU system that runs on the CPU, with the reason. |
+| `info`     | Print one line to standard error naming the device in use, or `no device`; in a program with a strict GPU system, one line saying whether the device passed the strict check; and one line for each `each` of a GPU system that runs on the CPU, with the reason. |
 | `stats`    | Print one line to standard error for each tick: what its systems and the top-level code after it move between CPU and GPU memory, and how often they hand work to the device and wait for it. |
 | `rows`     | Move every row on its own, whatever it costs, where a program would otherwise move a whole array because the rows cost more. For tests. |
+| `strict-cpu` | Run the blocks of strict GPU systems on the CPU, as when the device fails the strict check, and the others on the device. For tests. |
 
 ```sh
 MIDNIGHT_GPU=info,stats nix run . -- run tests/plan/reader.12am
@@ -184,6 +188,13 @@ that ticks.
 With no device, because none was found or `off` is set, every GPU system runs
 on the CPU. A single `each` also does when it needs more than the device
 offers, such as an array larger than the largest buffer the device binds.
+A program with a strict GPU system checks the device when it opens it: it
+runs a fixed piece of strict code on the device and on the CPU and compares
+the results bit for bit. When they differ, `info` prints `strict blocks run
+on the CPU:` with the device and the first difference, and every strict
+block runs on the CPU; the other GPU systems still use the device. When
+they agree it prints `strict check passed`.
+
 An error from the device after start-up prints `midnight: GPU error: …` and
 ends the program with status 70. It is reported when the work is handed to
 the device, which can be later in the tick than the block that caused it.
@@ -206,10 +217,12 @@ nix run .#bench-gpu
 
 runs gravity among 16,384 bodies on the GPU and on the CPU and prints the
 time per tick of each, and a checksum of the bodies after four ticks from
-each; the two must agree within a relative 0.00001. It runs gravity among
-65,536 bodies on the GPU only. It then moves one million entities three ways and
-prints the time per tick of each: on the CPU; on the GPU with the data left
-there; and on the GPU with a CPU system reading the result in every tick.
+each; the two must agree within a relative 0.00001. It does the same for
+gravity as a strict GPU system, whose two checksums must be equal. It
+runs gravity among 65,536 bodies on the GPU only. It then moves one million
+entities three ways and prints the time per tick of each: on the CPU; on
+the GPU with the data left there; and on the GPU with a CPU system reading
+the result in every tick.
 It then prints, on the GPU and on the CPU, the time per tick of ten costs:
 one block, eight blocks, a block that can fail, a reader over 64 tables, one
 `e[C]` read and write, one `spawn`, one `despawn` and one `add` of a tag a
@@ -250,7 +263,14 @@ nix run .#gpu-test                       # the packaged compiler, on the machine
 
 Every program runs as a release and as a debug build, as it is and with
 `MIDNIGHT_GPU=rows`. A run that finds no device, or runs a GPU system on the
-CPU, fails. A program of `tests/run` with a `NAME.stats` file must also
+CPU, fails. A program whose GPU systems are all strict must print exactly
+its expected output and may not state a tolerance. A program with a strict
+GPU system must report that the device passed the strict check, and runs a
+third time with `MIDNIGHT_GPU=strict-cpu`. `gpu_strict_div_sqrt` runs the
+strict `/` and `Math.sqrt` of shaders on the device against the CPU's: on
+hardware `sqrt` of every 32-bit pattern and `/` of 2^28 pairs, on software
+Vulkan 2^24 of each. In hardware mode a `VK_DRIVER_FILES` set by the caller
+chooses the device. A program of `tests/run` with a `NAME.stats` file must also
 print exactly those `stats` lines, and with a `NAME.rows.stats` file, those
 lines with `rows` as well. The software mode points programs at the Vulkan driver file named in
 `MIDNIGHT_TEST_SOFTWARE_ICD`, which the dev shell sets to Mesa's `llvmpipe`.
@@ -283,11 +303,12 @@ files, the only expected files that come from a device.
 
 ## Status
 
-Midnight 0.3 is the language core, GPU systems, and the rules that move
-only what is needed between CPU and GPU memory. It is tested on
-`x86_64-linux`, GPU systems on an NVIDIA device and on Mesa's software
-Vulkan; the flake also offers `aarch64-linux`, `x86_64-darwin` and
-`aarch64-darwin`, which evaluate but have not been run. What 0.3 leaves out
+Midnight 0.4 is the language core, GPU systems, the rules that move only
+what is needed between CPU and GPU memory, and strict GPU systems. It is
+tested on `x86_64-linux`, GPU systems on an NVIDIA device, on an AMD iGPU
+through Mesa's RADV, and on Mesa's software Vulkan; the flake also offers
+`aarch64-linux`, `x86_64-darwin` and `aarch64-darwin`, which evaluate but
+have not been run. What 0.4 leaves out
 is listed at the end of the reference.
 
 ## License

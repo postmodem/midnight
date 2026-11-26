@@ -217,7 +217,7 @@
         bench-gpu = {
           type = "app";
           program = lib.getExe (benchGpuFor pkgs);
-          meta.description = "Time GPU systems on the GPU and on the CPU: gravity on 16,384 bodies, then a move of one million entities";
+          meta.description = "Time GPU systems on the GPU and on the CPU: gravity on 16,384 bodies, also strict, then a move of one million entities";
         };
       });
 

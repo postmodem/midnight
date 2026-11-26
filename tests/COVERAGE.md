@@ -12,8 +12,8 @@ Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
 
-Counts: 262 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-334 in `tests/fail`, 81 in `tests/panic`, 15 in `tests/plan`.
+Counts: 269 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+344 in `tests/fail`, 81 in `tests/panic`, 16 in `tests/plan`.
 
 ## A first program, The model
 
@@ -481,6 +481,17 @@ tolerance.
 | A function called from a strict and from an ordinary GPU system means the strict thing in the first only | `strict_both_kinds` |
 | `rand` and `rand(n)` in a strict system | `strict_rand` |
 
+### Strict GPU systems on a device
+
+| Rule | Files |
+| --- | --- |
+| A strict GPU system gives the same results on every device and on the CPU, in both build modes | `gpu_programs` in GPU mode, over every `strict_*` program, as it is and with `rows` |
+| A program whose GPU systems are all strict states no tolerance | `gpu_programs` |
+| A device that passes the start-up check says so under `info` | `gpu_programs` |
+| With `strict-cpu`, strict blocks run on the CPU with the same results and the other GPU systems on the device; `info` names the reason | `gpu_programs`, third run of every program with a strict system; `strict_both_kinds` has both kinds |
+| A device that fails the start-up check runs strict blocks on the CPU | not covered: no device here fails it. `strict-cpu` takes the same path, and the unit tests of `src/emit/gpu/check.rs` show that each row of the check tells apart the rewrite it is there for |
+| `/` and `Math.sqrt` of strict shaders are correctly rounded on the device: `sqrt` of every bit pattern, `/` of 2^28 pairs with edges and quotients next to a midpoint | `gpu_strict_div_sqrt` |
+
 ## Events
 
 | Rule | Files |
@@ -617,7 +628,7 @@ Syntax errors are in `fail/syntax_*`: `syntax_unexpected_token`,
 `syntax_unclosed_do`, `syntax_unclosed_struct`, `syntax_unclosed_while`,
 `syntax_unclosed_system`, `syntax_assignment_as_expression`,
 `syntax_call_without_parentheses`, `syntax_keyword_as_variable`,
-`syntax_gpu_reserved`, `syntax_lowercase_type_name`,
+`syntax_gpu_reserved`, `syntax_strict_reserved`, `syntax_lowercase_type_name`,
 `syntax_param_without_type`, `syntax_unless_elsif`,
 `syntax_system_with_parameters`, `syntax_resource_method`,
 `syntax_unterminated_string`, `syntax_variable_question_mark`.
@@ -1118,6 +1129,15 @@ against that header.
 | `spawn` takes components and tags; `Vec2` is a struct | `spawn_non_component.12am` | 9 | Entities |
 | `spawn` lists the tag `Player` twice | `spawn_tag_twice.12am` | 6 | Entities |
 | `spawn` lists the component `Position` twice | `spawn_type_twice.12am` | 9 | Entities |
+| `Math.sin` cannot be used in a function called from a strict GPU system, though a GPU system that is not strict calls the same function first; a note names the call in `exact` | `strict_function_math.12am` | 9 | Strict GPU systems |
+| `Math.atan2` cannot be used in a strict GPU system | `strict_math_atan2.12am` | 11 | Strict GPU systems |
+| `Math.cos` cannot be used in a strict GPU system | `strict_math_cos.12am` | 10 | Strict GPU systems |
+| `Math.exp` cannot be used in a strict GPU system | `strict_math_exp.12am` | 10 | Strict GPU systems |
+| `Math.log` cannot be used in a strict GPU system | `strict_math_log.12am` | 10 | Strict GPU systems |
+| `Math.sin` cannot be used in a strict GPU system | `strict_math_sin.12am` | 10 | Strict GPU systems |
+| `Math.tan` cannot be used in a strict GPU system | `strict_math_tan.12am` | 10 | Strict GPU systems |
+| `**` on `Float` cannot be used in a strict GPU system; a square is allowed, a cube is not | `strict_pow.12am` | 11 | Strict GPU systems |
+| `strict` applies to a `gpu system` only | `strict_system_not_gpu.12am` | 8 | Strict GPU systems |
 | the struct `Node` contains itself through the field `child` (allowed only through a list, `[Node]`) | `struct_contains_itself.12am` | 6 | Structs |
 | the struct `Parent` contains itself through `Parent.child` and `Child.parent`; one diagnostic for the cycle | `struct_contains_itself_mutual.12am` | 5 | Structs |
 | `==` is provided for every struct and can't be redefined (it is also not one of the operator names a method may have) | `struct_redefines_equality.12am` | 8 | Structs |
@@ -1130,6 +1150,7 @@ against that header.
 | syntax error: the parameter `n` needs a type (`n: Type`); found `)` where `:` is expected | `syntax_param_without_type.12am` | 4 | Grammar; Lexical structure |
 | syntax error: unexpected `def` in a resource body (a resource holds fields only) | `syntax_resource_method.12am` | 7 | Grammar; Lexical structure |
 | syntax error: unexpected `end`; no block is open | `syntax_stray_end.12am` | 6 | Grammar; Lexical structure |
+| syntax error: `strict` is a keyword (it goes before `gpu system`) and can't name a variable | `syntax_strict_reserved.12am` | 4 | Grammar; Lexical structure |
 | syntax error: unexpected `(` after the system name (a system has no parameters) | `syntax_system_with_parameters.12am` | 4 | Grammar; Lexical structure |
 | the `def` block is never closed (an `end` is missing); the diagnostic points at the `def` that opened it, not at the end of the file | `syntax_unclosed_def.12am` | 4 | Grammar; Lexical structure |
 | the `do` block is never closed (an `end` is missing); the diagnostic points at the `do` that opened it, not at the end of the file | `syntax_unclosed_do.12am` | 4 | Grammar; Lexical structure |

@@ -1,12 +1,14 @@
 # Builds and runs the GPU benchmarks.
 #
-# bench/gpu_gravity.12am, bench/gpu_move.12am, bench/gpu_move_read.12am and
-# the programs of COSTS each run on the GPU and on the CPU. "On the CPU" is
+# bench/gpu_gravity.12am, bench/gpu_gravity_strict.12am, bench/gpu_move.12am,
+# bench/gpu_move_read.12am and the programs of COSTS each run on the GPU and
+# on the CPU. "On the CPU" is
 # the same program with MIDNIGHT_GPU=off, which runs the C implementation of
 # its GPU system on one thread, as a machine with no GPU does.
 # bench/gpu_gravity_64k.12am runs on the GPU only. Each runs RUNS times
 # (default 3) and its fastest run counts. The gravity checksums of the GPU
-# and the CPU must agree within GRAVITY_TOLERANCE, relative. Then the
+# and the CPU must agree within GRAVITY_TOLERANCE, relative, and the strict
+# gravity checksums must be the same. Then the
 # transfers `midnight plan` lists for the two move programs are compared
 # with the ones MIDNIGHT_GPU=stats counts, and what it counts in a tick is
 # checked for the move programs and the programs of COSTS.
@@ -34,7 +36,7 @@ words=${MIDNIGHT_GPU:+$MIDNIGHT_GPU,}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-for name in gpu_gravity gpu_gravity_64k gpu_move gpu_move_read "${COSTS[@]%%:*}"; do
+for name in gpu_gravity gpu_gravity_strict gpu_gravity_64k gpu_move gpu_move_read "${COSTS[@]%%:*}"; do
   midnight build "$BENCH_SRC/bench/$name.12am" -o "$work/$name"
 done
 
@@ -83,10 +85,12 @@ else
 fi
 
 run_best gravity_cpu gpu_gravity off
+run_best strict_cpu gpu_gravity_strict off
 run_best move_cpu gpu_move off
 run_best read_cpu gpu_move_read off
 if [ -n "$device" ]; then
   run_best gravity_gpu gpu_gravity "${words}info"
+  run_best strict_gpu gpu_gravity_strict "${words}info"
   run_best move_gpu gpu_move "${words}info"
   run_best read_gpu gpu_move_read "${words}info"
 fi
@@ -115,6 +119,14 @@ if [ -n "$device" ]; then
   echo "checksum $(value gravity_gpu checksum) (GPU)"
   row "GPU, $(value gravity64_gpu bodies) bodies" gravity64_gpu "  ($(value gravity64_gpu ticks) ticks)"
 fi
+if [ -n "$device" ]; then
+  row "GPU, strict" strict_gpu "  ($(value strict_gpu ticks) ticks)"
+fi
+row "CPU, strict" strict_cpu "  ($(value strict_cpu ticks) ticks)"
+echo "checksum $(value strict_cpu checksum) (CPU, strict)"
+if [ -n "$device" ]; then
+  echo "checksum $(value strict_gpu checksum) (GPU, strict)"
+fi
 
 echo
 echo "Move: $(value move_cpu entities) entities, $(value move_cpu ticks) ticks; fastest of $runs runs"
@@ -142,6 +154,10 @@ status=0
 if [ -n "$device" ] && ! awk -v cpu="$(value gravity_cpu checksum)" -v gpu="$(value gravity_gpu checksum)" -v t="$GRAVITY_TOLERANCE" \
   'BEGIN { d = cpu - gpu; if (d < 0) d = -d; m = cpu < 0 ? -cpu : cpu; exit !(d <= t * m) }'; then
   echo "the gravity checksums differ by more than $GRAVITY_TOLERANCE of the CPU's"
+  status=1
+fi
+if [ -n "$device" ] && [ "$(value strict_cpu checksum)" != "$(value strict_gpu checksum)" ]; then
+  echo "the strict gravity checksums differ"
   status=1
 fi
 
