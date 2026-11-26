@@ -1,0 +1,2532 @@
+{
+  "format": 1,
+  "commit": "a8f0a5fa5ff7b3cdf031337dc6866392ea997f69",
+  "version": "0.7.0",
+  "ruby": "3.4.12",
+  "claude_code": "2.1.327",
+  "date": "2026-11-26",
+  "label": "no-structural",
+  "models": [
+    "sonnet",
+    "haiku"
+  ],
+  "trials": 1,
+  "effort": null,
+  "task_names": [
+    "fixup",
+    "thermostat",
+    "warren"
+  ],
+  "preamble_sha256": "0a7f8ff0a107d36d2eda2a422116df16b984b6abc9b971a3d8a576f7a17f8a71",
+  "agent_tools": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin:/nix/store/9g53s4a9kv7k5xbfjhyaxjymgw62di6r-bash-interactive-5.3p9/bin:/nix/store/8kxpzdb09cbn252h8wl14zds9jgbw2q0-findutils-4.10.0/bin:/nix/store/hi1zxw2mg94cwrpbq1s8bbjm1k5y3vci-gnugrep-3.12/bin:/nix/store/r3fwyjb1k9v7y6qd5l2jq1sx3b46dx2y-gnused-4.10/bin:/nix/store/q7p8cvfxi5vplngni9a38n17ykhgcx1d-ripgrep-15.1.0/bin",
+  "coreutils": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin",
+  "kit": {
+    "file": "evals/test/kit-no-structural/kit",
+    "files": [
+      {
+        "dest": "language.md",
+        "source": "evals/test/kit-no-structural/language.md",
+        "sha256": "f3b4f561cad04fbbfbe2b70cd833490815c0e7bf5008b378f88cc7cacb25adc1"
+      },
+      {
+        "dest": "README.md",
+        "source": "README.md",
+        "sha256": "051dad22857548628ba65ec413a667f809382b440e6512e24fa483d467f0fd83"
+      },
+      {
+        "dest": "examples/battle.12am",
+        "source": "examples/battle.12am",
+        "sha256": "b7628c2fc79e99d078c9e1dbb4ce347cf2fa13c812247db60b3e135d4ba03206"
+      },
+      {
+        "dest": "examples/battle.out",
+        "source": "examples/battle.out",
+        "sha256": "e61cf6d3ee973c95479b104a630a60b07a6e1c41e2eb47faedbd84d43dcbcf91"
+      },
+      {
+        "dest": "examples/bench.12am",
+        "source": "examples/bench.12am",
+        "sha256": "45d982b13b601831617b5bedddd9aac4665484e2a078356500c1119da3fd9782"
+      },
+      {
+        "dest": "examples/bounce.12am",
+        "source": "examples/bounce.12am",
+        "sha256": "c9a859451f8eb76dc6f83144b1549a04e48aa7c929216baba6e7ce95027cf4f7"
+      },
+      {
+        "dest": "examples/bounce.out",
+        "source": "examples/bounce.out",
+        "sha256": "f4f990ff8ca88db06fe33598444fd5eddff567f841bfab2c4f9a310e4ad35e3a"
+      },
+      {
+        "dest": "examples/hello.12am",
+        "source": "examples/hello.12am",
+        "sha256": "45637b2c36f48ab214412d095ee8060e0f5897cbc7434e7d9802f04d7893dc8e"
+      },
+      {
+        "dest": "examples/hello.out",
+        "source": "examples/hello.out",
+        "sha256": "d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5"
+      },
+      {
+        "dest": "examples/input.12am",
+        "source": "examples/input.12am",
+        "sha256": "31cf9ccb91a3ba1a896211ce86eabb3deebc1b4894fe4cf357bdfaa09e854d14"
+      },
+      {
+        "dest": "examples/input.drive",
+        "source": "examples/input.drive",
+        "sha256": "399a96abf52ccb9af87fdc728ae0da381390d9061031d20079dbbbe3fbae16b9"
+      },
+      {
+        "dest": "examples/input.out",
+        "source": "examples/input.out",
+        "sha256": "1cae9f27cd6bcff432d1339c443a6215b45629dad1cff3771e06bab6950b5d68"
+      },
+      {
+        "dest": "examples/life.12am",
+        "source": "examples/life.12am",
+        "sha256": "5505814cfd6fe21583fa3c6b33d9c194fb95b64b32a577fab47fe8f37636e23d"
+      },
+      {
+        "dest": "examples/life.out",
+        "source": "examples/life.out",
+        "sha256": "10769d19937b68aa5515ac8a6e525a1f84bc4a985fb625241be89695b1b64074"
+      },
+      {
+        "dest": "examples/life_rules.12am",
+        "source": "examples/life_rules.12am",
+        "sha256": "268afe3044121e468878985f408f3ac5f0ad80ae12e146277bb893ce80545a3a"
+      },
+      {
+        "dest": "examples/life_rules.out",
+        "source": "examples/life_rules.out",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "dest": "examples/move.12am",
+        "source": "examples/move.12am",
+        "sha256": "ba4ca27197bbc8617b6cf6edf42d3262a2c4fafe2565944052dc69fd59ca4d6f"
+      },
+      {
+        "dest": "examples/move.out",
+        "source": "examples/move.out",
+        "sha256": "eed2aa0dbec0f13f0fc00f257e3de666e113db91e07a083af9cb3807d92f12a0"
+      },
+      {
+        "dest": "examples/nbody.12am",
+        "source": "examples/nbody.12am",
+        "sha256": "6158862f5218fd773da8005da5a15afe578333545a4c79421fb420d98c0f028f"
+      },
+      {
+        "dest": "examples/nbody.out",
+        "source": "examples/nbody.out",
+        "sha256": "deecf226e42be730c657467146a8a39fcffff051a76f25d94de56505e19f3bb8"
+      },
+      {
+        "dest": "examples/window.12am",
+        "source": "examples/window.12am",
+        "sha256": "2ce4755a13a9fdfd00caad0e5a487f111ad9b91c58fd030085d297e004d5c984"
+      },
+      {
+        "dest": "examples/window.drive",
+        "source": "examples/window.drive",
+        "sha256": "61229ae96139f3a775a1d7aee931e1b1a2ef1d58d9f5b95a9ea100ec025164b0"
+      },
+      {
+        "dest": "examples/window.out",
+        "source": "examples/window.out",
+        "sha256": "78bf297d417ce4aae145876b4a9173ba5d7ed29925cbca944c812b4c8c6754d1"
+      }
+    ],
+    "sections": {
+      "language.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          23,
+          "A first program"
+        ],
+        [
+          63,
+          "The model"
+        ],
+        [
+          92,
+          "Lexical structure"
+        ],
+        [
+          142,
+          "Types"
+        ],
+        [
+          176,
+          "Compact field types"
+        ],
+        [
+          221,
+          "Variables and values"
+        ],
+        [
+          250,
+          "What can be modified"
+        ],
+        [
+          273,
+          "Expressions"
+        ],
+        [
+          328,
+          "Control flow"
+        ],
+        [
+          401,
+          "Functions"
+        ],
+        [
+          431,
+          "Declaring data"
+        ],
+        [
+          433,
+          "Structs"
+        ],
+        [
+          476,
+          "Enums"
+        ],
+        [
+          489,
+          "Components and tags"
+        ],
+        [
+          508,
+          "Resources"
+        ],
+        [
+          523,
+          "Events"
+        ],
+        [
+          536,
+          "Constants"
+        ],
+        [
+          547,
+          "Entities"
+        ],
+        [
+          582,
+          "Queries"
+        ],
+        [
+          623,
+          "Systems and ticks"
+        ],
+        [
+          663,
+          "The window"
+        ],
+        [
+          817,
+          "Without a display"
+        ],
+        [
+          916,
+          "Keyboard and mouse"
+        ],
+        [
+          1140,
+          "Commands for the keyboard and the mouse"
+        ],
+        [
+          1203,
+          "GPU systems"
+        ],
+        [
+          1247,
+          "What a GPU block may contain"
+        ],
+        [
+          1279,
+          "What a GPU system may touch"
+        ],
+        [
+          1317,
+          "Snapshot semantics"
+        ],
+        [
+          1355,
+          "Arithmetic at 32 bits"
+        ],
+        [
+          1407,
+          "Runtime errors in a GPU system"
+        ],
+        [
+          1447,
+          "Random numbers in a GPU system"
+        ],
+        [
+          1481,
+          "Determinism"
+        ],
+        [
+          1521,
+          "Strict GPU systems"
+        ],
+        [
+          1628,
+          "Without a GPU"
+        ],
+        [
+          1642,
+          "The transfer plan"
+        ],
+        [
+          1820,
+          "Several cores"
+        ],
+        [
+          2023,
+          "Events"
+        ],
+        [
+          2059,
+          "Built-ins"
+        ],
+        [
+          2061,
+          "Output"
+        ],
+        [
+          2081,
+          "Numbers"
+        ],
+        [
+          2098,
+          "Strings"
+        ],
+        [
+          2111,
+          "Lists"
+        ],
+        [
+          2131,
+          "Random numbers, time and exit"
+        ],
+        [
+          2148,
+          "Programs and files"
+        ],
+        [
+          2168,
+          "What things cost"
+        ],
+        [
+          2222,
+          "What a GPU system costs"
+        ],
+        [
+          2328,
+          "What several cores cost"
+        ],
+        [
+          2419,
+          "Errors"
+        ],
+        [
+          2470,
+          "Grammar"
+        ],
+        [
+          2553,
+          "Not in 0.7"
+        ]
+      ],
+      "README.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          87,
+          "Try it"
+        ],
+        [
+          107,
+          "The compiler"
+        ],
+        [
+          158,
+          "GPU systems"
+        ],
+        [
+          217,
+          "Several cores"
+        ],
+        [
+          260,
+          "A window"
+        ],
+        [
+          304,
+          "Keyboard and mouse"
+        ],
+        [
+          353,
+          "Benchmarks"
+        ],
+        [
+          406,
+          "Working on it"
+        ],
+        [
+          559,
+          "Status"
+        ],
+        [
+          571,
+          "License"
+        ]
+      ],
+      "examples/battle.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/battle.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bench.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.out": [
+        [
+          1,
+          null
+        ]
+      ]
+    }
+  },
+  "tasks": {
+    "fixup": {
+      "sha256": "ad85ac10ed5fe4503f4d47798996bdc17661eba14c86d6e86d32855e8c9a8860",
+      "control": false,
+      "areas": [
+        "repair",
+        "ecs",
+        "structural"
+      ],
+      "ruby": "the given program's own: systems called by name like methods and declared in another order than they are called, changes inside a loop expected to take effect at once, an index on a query's block, changing objects through a list of them"
+    },
+    "thermostat": {
+      "sha256": "9f113ff1e16036e7ed6093d2f665260b1d11eb0075edb2087af1824f27aec0d5",
+      "control": true,
+      "areas": [
+        "ecs",
+        "strings"
+      ],
+      "ruby": ""
+    },
+    "warren": {
+      "sha256": "f54bf65549473c41f91a1e58e42f67ceca984ca56d70f146d657ed0ba98a88e5",
+      "control": false,
+      "areas": [
+        "ecs",
+        "structural"
+      ],
+      "ruby": "changes that take effect at once (an eaten rabbit gone before the next fox looks, newborns counted at once)"
+    }
+  },
+  "runs": [
+    {
+      "task": "fixup",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T22:21:34Z",
+      "dir": "evals/runs/2026-11-26-a8f0a5f-no-structural/fixup/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "3dae4b5eb02751317eaea261740b686edf6288c7cc129296ca03afef63deedfa",
+      "graded_program_sha256": "e10f70a003d757505277d43774167859cd51ad07d52d725d06aa6f89cbe6ff8f",
+      "grading": {
+        "ms": 682,
+        "load": 0.53,
+        "timeout": false
+      },
+      "calls": {
+        "total": 3,
+        "by_subcommand": {
+          "check": 2,
+          "run": 1
+        },
+        "failed": {
+          "compile": 1
+        },
+        "failed_total": 1
+      },
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "can't assign to `p.patience`",
+          "template": "can't assign to `…`",
+          "spans": [
+            "p.patience"
+          ],
+          "file": "solution.12am",
+          "line": 96,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "this query has 1 term, but its block takes 2 parameters",
+          "template": "this query has 1 term, but its block takes 2 parameters",
+          "spans": [],
+          "file": "solution.12am",
+          "line": 114,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`arrive` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "arrive"
+          ],
+          "file": "solution.12am",
+          "line": 125,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`board` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "board"
+          ],
+          "file": "solution.12am",
+          "line": 126,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`sail` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "sail"
+          ],
+          "file": "solution.12am",
+          "line": 127,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`wait` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "wait"
+          ],
+          "file": "solution.12am",
+          "line": 128,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`report` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "report"
+          ],
+          "file": "solution.12am",
+          "line": 129,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        }
+      ],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            92,
+            92
+          ],
+          [
+            142,
+            142
+          ],
+          [
+            176,
+            176
+          ],
+          [
+            221,
+            675
+          ],
+          [
+            817,
+            817
+          ],
+          [
+            916,
+            916
+          ],
+          [
+            1140,
+            1140
+          ],
+          [
+            1203,
+            1203
+          ],
+          [
+            1247,
+            1247
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1317,
+            1317
+          ],
+          [
+            1355,
+            1355
+          ],
+          [
+            1407,
+            1407
+          ],
+          [
+            1447,
+            1447
+          ],
+          [
+            1481,
+            1481
+          ],
+          [
+            1521,
+            1521
+          ],
+          [
+            1628,
+            1628
+          ],
+          [
+            1642,
+            1642
+          ],
+          [
+            1820,
+            1820
+          ],
+          [
+            2023,
+            2152
+          ],
+          [
+            2168,
+            2168
+          ],
+          [
+            2222,
+            2222
+          ],
+          [
+            2328,
+            2328
+          ],
+          [
+            2419,
+            2419
+          ],
+          [
+            2470,
+            2470
+          ],
+          [
+            2553,
+            2553
+          ]
+        ],
+        "examples/life.12am": [
+          [
+            1,
+            4
+          ],
+          [
+            6,
+            7
+          ],
+          [
+            9,
+            14
+          ],
+          [
+            16,
+            16
+          ],
+          [
+            18,
+            21
+          ],
+          [
+            23,
+            27
+          ],
+          [
+            29,
+            38
+          ],
+          [
+            40,
+            51
+          ],
+          [
+            53,
+            59
+          ],
+          [
+            61,
+            68
+          ],
+          [
+            70,
+            75
+          ],
+          [
+            77,
+            81
+          ],
+          [
+            83,
+            88
+          ],
+          [
+            90,
+            93
+          ],
+          [
+            95,
+            99
+          ]
+        ]
+      },
+      "turns": 12,
+      "duration_ms": 54063,
+      "input_tokens": 20,
+      "output_tokens": 11778,
+      "cache_read_tokens": 185085,
+      "cache_creation_tokens": 27145,
+      "cost_usd": 0.013170849999999998,
+      "partial": false
+    },
+    {
+      "task": "fixup",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T22:21:34Z",
+      "dir": "evals/runs/2026-11-26-a8f0a5f-no-structural/fixup/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "187b53534239be23b64bd952bda5ba8c2475f74e198419c6afcd3fec4265873d",
+      "graded_program_sha256": "f314d93cf4081a0785c1d43f543a3a776b83de6ae914757120b1a14d53de1f3c",
+      "grading": {
+        "ms": 680,
+        "load": 0.57,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {
+          "compile": 1
+        },
+        "failed_total": 1
+      },
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "can't assign to `p.patience`",
+          "template": "can't assign to `…`",
+          "spans": [
+            "p.patience"
+          ],
+          "file": "/tmp/eval.mqEvB7IJ/solution.12am",
+          "line": 96,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "this query has 1 term, but its block takes 2 parameters",
+          "template": "this query has 1 term, but its block takes 2 parameters",
+          "spans": [],
+          "file": "/tmp/eval.mqEvB7IJ/solution.12am",
+          "line": 114,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`arrive` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "arrive"
+          ],
+          "file": "/tmp/eval.mqEvB7IJ/solution.12am",
+          "line": 125,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`board` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "board"
+          ],
+          "file": "/tmp/eval.mqEvB7IJ/solution.12am",
+          "line": 126,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`sail` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "sail"
+          ],
+          "file": "/tmp/eval.mqEvB7IJ/solution.12am",
+          "line": 127,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`wait` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "wait"
+          ],
+          "file": "/tmp/eval.mqEvB7IJ/solution.12am",
+          "line": 128,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`report` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "report"
+          ],
+          "file": "/tmp/eval.mqEvB7IJ/solution.12am",
+          "line": 129,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        }
+      ],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1254
+          ],
+          [
+            1888,
+            1888
+          ],
+          [
+            2164,
+            2164
+          ]
+        ]
+      },
+      "turns": 9,
+      "duration_ms": 25127,
+      "input_tokens": 14,
+      "output_tokens": 3484,
+      "cache_read_tokens": 136038,
+      "cache_creation_tokens": 29705,
+      "cost_usd": 0.16729180000000002,
+      "partial": false
+    },
+    {
+      "task": "thermostat",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T22:21:34Z",
+      "dir": "evals/runs/2026-11-26-a8f0a5f-no-structural/thermostat/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "b1eb933cdeb4293361c4a84dabc0c2636b22afde9e314e6c84fa0ff544192e38",
+      "graded_program_sha256": "26101a37c6f97159038201f8bd4809c89520a4647ab555e4992361a9670f0f44",
+      "grading": {
+        "ms": 485,
+        "load": 0.57,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "README.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            6
+          ],
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ],
+          [
+            43,
+            46
+          ],
+          [
+            48,
+            49
+          ],
+          [
+            51,
+            57
+          ],
+          [
+            59,
+            65
+          ],
+          [
+            67,
+            71
+          ],
+          [
+            73,
+            77
+          ],
+          [
+            79,
+            85
+          ],
+          [
+            87,
+            87
+          ],
+          [
+            89,
+            90
+          ],
+          [
+            92,
+            105
+          ],
+          [
+            107,
+            107
+          ],
+          [
+            109,
+            118
+          ],
+          [
+            120,
+            122
+          ],
+          [
+            124,
+            128
+          ],
+          [
+            130,
+            133
+          ],
+          [
+            135,
+            142
+          ],
+          [
+            144,
+            146
+          ],
+          [
+            148,
+            148
+          ],
+          [
+            150,
+            156
+          ],
+          [
+            158,
+            158
+          ],
+          [
+            160,
+            162
+          ]
+        ],
+        "examples/bounce.12am": [
+          [
+            1,
+            5
+          ],
+          [
+            7,
+            9
+          ],
+          [
+            11,
+            13
+          ],
+          [
+            15,
+            18
+          ],
+          [
+            20,
+            24
+          ],
+          [
+            26,
+            27
+          ],
+          [
+            29,
+            30
+          ],
+          [
+            32,
+            34
+          ],
+          [
+            36,
+            38
+          ],
+          [
+            40,
+            43
+          ],
+          [
+            45,
+            50
+          ],
+          [
+            52,
+            59
+          ],
+          [
+            61,
+            66
+          ],
+          [
+            68,
+            83
+          ],
+          [
+            85,
+            94
+          ],
+          [
+            96,
+            105
+          ],
+          [
+            107,
+            118
+          ],
+          [
+            120,
+            125
+          ],
+          [
+            127,
+            132
+          ],
+          [
+            134,
+            134
+          ],
+          [
+            136,
+            138
+          ],
+          [
+            140,
+            142
+          ]
+        ],
+        "examples/bounce.out": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            17
+          ],
+          [
+            19,
+            33
+          ],
+          [
+            35,
+            49
+          ],
+          [
+            51,
+            65
+          ],
+          [
+            67,
+            81
+          ],
+          [
+            83,
+            97
+          ]
+        ],
+        "examples/input.12am": [
+          [
+            49,
+            51
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            92,
+            92
+          ],
+          [
+            116,
+            116
+          ],
+          [
+            139,
+            139
+          ],
+          [
+            142,
+            142
+          ],
+          [
+            169,
+            169
+          ],
+          [
+            176,
+            176
+          ],
+          [
+            221,
+            221
+          ],
+          [
+            223,
+            223
+          ],
+          [
+            225,
+            230
+          ],
+          [
+            232,
+            235
+          ],
+          [
+            237,
+            238
+          ],
+          [
+            240,
+            245
+          ],
+          [
+            247,
+            248
+          ],
+          [
+            250,
+            250
+          ],
+          [
+            252,
+            252
+          ],
+          [
+            254,
+            258
+          ],
+          [
+            260,
+            262
+          ],
+          [
+            264,
+            265
+          ],
+          [
+            267,
+            271
+          ],
+          [
+            273,
+            273
+          ],
+          [
+            275,
+            275
+          ],
+          [
+            277,
+            289
+          ],
+          [
+            291,
+            294
+          ],
+          [
+            296,
+            298
+          ],
+          [
+            300,
+            306
+          ],
+          [
+            308,
+            309
+          ],
+          [
+            311,
+            314
+          ],
+          [
+            316,
+            318
+          ],
+          [
+            320,
+            322
+          ],
+          [
+            324,
+            326
+          ],
+          [
+            328,
+            328
+          ],
+          [
+            330,
+            337
+          ],
+          [
+            339,
+            341
+          ],
+          [
+            343,
+            344
+          ],
+          [
+            346,
+            348
+          ],
+          [
+            350,
+            352
+          ],
+          [
+            354,
+            357
+          ],
+          [
+            359,
+            359
+          ],
+          [
+            361,
+            362
+          ],
+          [
+            364,
+            370
+          ],
+          [
+            372,
+            373
+          ],
+          [
+            375,
+            375
+          ],
+          [
+            377,
+            380
+          ],
+          [
+            382,
+            383
+          ],
+          [
+            385,
+            387
+          ],
+          [
+            389,
+            391
+          ],
+          [
+            393,
+            396
+          ],
+          [
+            398,
+            399
+          ],
+          [
+            401,
+            401
+          ],
+          [
+            431,
+            431
+          ],
+          [
+            433,
+            433
+          ],
+          [
+            476,
+            476
+          ],
+          [
+            489,
+            489
+          ],
+          [
+            508,
+            508
+          ],
+          [
+            523,
+            523
+          ],
+          [
+            536,
+            536
+          ],
+          [
+            547,
+            547
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            647,
+            647
+          ],
+          [
+            663,
+            663
+          ],
+          [
+            679,
+            679
+          ],
+          [
+            734,
+            734
+          ],
+          [
+            777,
+            777
+          ],
+          [
+            785,
+            785
+          ],
+          [
+            798,
+            798
+          ],
+          [
+            817,
+            817
+          ],
+          [
+            853,
+            853
+          ],
+          [
+            870,
+            871
+          ],
+          [
+            916,
+            916
+          ],
+          [
+            1036,
+            1036
+          ],
+          [
+            1087,
+            1087
+          ],
+          [
+            1140,
+            1140
+          ],
+          [
+            1188,
+            1188
+          ],
+          [
+            1191,
+            1191
+          ],
+          [
+            1193,
+            1193
+          ],
+          [
+            1195,
+            1195
+          ],
+          [
+            1203,
+            1203
+          ],
+          [
+            1247,
+            1247
+          ],
+          [
+            1256,
+            1256
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1315,
+            1315
+          ],
+          [
+            1317,
+            1317
+          ],
+          [
+            1355,
+            1355
+          ],
+          [
+            1357,
+            1357
+          ],
+          [
+            1378,
+            1378
+          ],
+          [
+            1407,
+            1407
+          ],
+          [
+            1447,
+            1447
+          ],
+          [
+            1481,
+            1481
+          ],
+          [
+            1521,
+            1521
+          ],
+          [
+            1536,
+            1536
+          ],
+          [
+            1559,
+            1559
+          ],
+          [
+            1628,
+            1628
+          ],
+          [
+            1642,
+            1642
+          ],
+          [
+            1820,
+            1820
+          ],
+          [
+            2023,
+            2023
+          ],
+          [
+            2053,
+            2053
+          ],
+          [
+            2059,
+            2059
+          ],
+          [
+            2061,
+            2061
+          ],
+          [
+            2063,
+            2064
+          ],
+          [
+            2066,
+            2066
+          ],
+          [
+            2068,
+            2077
+          ],
+          [
+            2079,
+            2079
+          ],
+          [
+            2081,
+            2081
+          ],
+          [
+            2083,
+            2092
+          ],
+          [
+            2094,
+            2096
+          ],
+          [
+            2098,
+            2098
+          ],
+          [
+            2100,
+            2100
+          ],
+          [
+            2111,
+            2111
+          ],
+          [
+            2131,
+            2131
+          ],
+          [
+            2148,
+            2148
+          ],
+          [
+            2168,
+            2168
+          ],
+          [
+            2222,
+            2222
+          ],
+          [
+            2328,
+            2328
+          ],
+          [
+            2333,
+            2333
+          ],
+          [
+            2343,
+            2343
+          ],
+          [
+            2419,
+            2419
+          ],
+          [
+            2444,
+            2444
+          ],
+          [
+            2448,
+            2448
+          ],
+          [
+            2450,
+            2450
+          ],
+          [
+            2470,
+            2470
+          ],
+          [
+            2496,
+            2496
+          ],
+          [
+            2509,
+            2509
+          ],
+          [
+            2553,
+            2553
+          ],
+          [
+            2565,
+            2565
+          ]
+        ]
+      },
+      "turns": 10,
+      "duration_ms": 21130,
+      "input_tokens": 18,
+      "output_tokens": 4197,
+      "cache_read_tokens": 123844,
+      "cache_creation_tokens": 16081,
+      "cost_usd": 0.0065549399999999996,
+      "partial": false
+    },
+    {
+      "task": "thermostat",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T22:21:34Z",
+      "dir": "evals/runs/2026-11-26-a8f0a5f-no-structural/thermostat/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "13632c49efc84c63c596de662c352f4cba59f8369cb20f17da03b3eab869868a",
+      "graded_program_sha256": "8f09fbb8fc0ee51cf3e95b55503fda3a5ddb98049e1f8eb7d9785540c374c132",
+      "grading": {
+        "ms": 489,
+        "load": 0.65,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "run": 2
+        },
+        "failed": {
+          "compile": 1
+        },
+        "failed_total": 1
+      },
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "`on` is a keyword and can't be used as a name",
+          "template": "`…` is a keyword and can't be used as a name",
+          "spans": [
+            "on"
+          ],
+          "file": "solution.12am",
+          "line": 6,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        }
+      ],
+      "compiler_bug": false,
+      "first_try": false,
+      "verified": true,
+      "denied": [
+        {
+          "tool": "Bash",
+          "input": "sed -i 's/\\bon\\b = 0/n_on = 0/; s/    on = 2/    n_on = 2/; s/      on += 1/      n_on += 1/; s/#{on}/#{n_on}/' solution.12am; cat solution.12am"
+        }
+      ],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            17
+          ],
+          [
+            19,
+            21
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            25,
+            29
+          ],
+          [
+            31,
+            34
+          ],
+          [
+            36,
+            36
+          ],
+          [
+            38,
+            43
+          ],
+          [
+            45,
+            49
+          ],
+          [
+            51,
+            52
+          ],
+          [
+            54,
+            58
+          ],
+          [
+            60,
+            61
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            65,
+            65
+          ],
+          [
+            67,
+            74
+          ],
+          [
+            76,
+            78
+          ],
+          [
+            80,
+            80
+          ],
+          [
+            82,
+            87
+          ],
+          [
+            89,
+            90
+          ],
+          [
+            92,
+            92
+          ],
+          [
+            94,
+            94
+          ],
+          [
+            96,
+            98
+          ],
+          [
+            100,
+            100
+          ],
+          [
+            102,
+            105
+          ],
+          [
+            107,
+            109
+          ],
+          [
+            111,
+            111
+          ],
+          [
+            113,
+            117
+          ],
+          [
+            119,
+            119
+          ],
+          [
+            121,
+            126
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            130,
+            136
+          ],
+          [
+            138,
+            140
+          ],
+          [
+            142,
+            142
+          ],
+          [
+            144,
+            155
+          ],
+          [
+            157,
+            158
+          ],
+          [
+            160,
+            163
+          ],
+          [
+            165,
+            169
+          ],
+          [
+            171,
+            171
+          ],
+          [
+            173,
+            174
+          ],
+          [
+            176,
+            176
+          ],
+          [
+            178,
+            179
+          ],
+          [
+            181,
+            189
+          ],
+          [
+            191,
+            195
+          ],
+          [
+            197,
+            200
+          ],
+          [
+            202,
+            208
+          ],
+          [
+            210,
+            210
+          ],
+          [
+            212,
+            216
+          ],
+          [
+            218,
+            219
+          ],
+          [
+            221,
+            221
+          ],
+          [
+            223,
+            223
+          ],
+          [
+            225,
+            230
+          ],
+          [
+            232,
+            235
+          ],
+          [
+            237,
+            238
+          ],
+          [
+            240,
+            245
+          ],
+          [
+            247,
+            248
+          ],
+          [
+            250,
+            250
+          ],
+          [
+            252,
+            252
+          ],
+          [
+            254,
+            258
+          ],
+          [
+            260,
+            262
+          ],
+          [
+            264,
+            265
+          ],
+          [
+            267,
+            271
+          ],
+          [
+            273,
+            273
+          ],
+          [
+            275,
+            275
+          ],
+          [
+            277,
+            289
+          ],
+          [
+            291,
+            294
+          ],
+          [
+            296,
+            298
+          ],
+          [
+            300,
+            306
+          ],
+          [
+            308,
+            309
+          ],
+          [
+            311,
+            314
+          ],
+          [
+            316,
+            318
+          ],
+          [
+            320,
+            322
+          ],
+          [
+            324,
+            326
+          ],
+          [
+            328,
+            328
+          ],
+          [
+            330,
+            337
+          ],
+          [
+            339,
+            341
+          ],
+          [
+            343,
+            344
+          ],
+          [
+            346,
+            348
+          ],
+          [
+            350,
+            352
+          ],
+          [
+            354,
+            357
+          ],
+          [
+            359,
+            359
+          ],
+          [
+            361,
+            362
+          ],
+          [
+            364,
+            370
+          ],
+          [
+            372,
+            373
+          ],
+          [
+            375,
+            375
+          ],
+          [
+            377,
+            380
+          ],
+          [
+            382,
+            383
+          ],
+          [
+            385,
+            387
+          ],
+          [
+            389,
+            391
+          ],
+          [
+            393,
+            396
+          ],
+          [
+            398,
+            399
+          ]
+        ],
+        "README.md": [
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ]
+        ]
+      },
+      "turns": 8,
+      "duration_ms": 10286,
+      "input_tokens": 12,
+      "output_tokens": 1224,
+      "cache_read_tokens": 64589,
+      "cache_creation_tokens": 8896,
+      "cost_usd": 0.0543069,
+      "partial": false
+    },
+    {
+      "task": "warren",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T22:21:56Z",
+      "dir": "evals/runs/2026-11-26-a8f0a5f-no-structural/warren/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "ae0dcad38f7f61e217232fe7454f2c5253cbc036b16d3e1a81d6ef3a732918a6",
+      "graded_program_sha256": "f46ec5866fbba67cf7cc87f750b88eedd2ee3a654bb27fd4d4ab65f496001b47",
+      "grading": {
+        "ms": 700,
+        "load": 0.46,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1254
+          ]
+        ],
+        "README.md": [
+          [
+            1,
+            573
+          ]
+        ]
+      },
+      "turns": 8,
+      "duration_ms": 72925,
+      "input_tokens": 14,
+      "output_tokens": 15661,
+      "cache_read_tokens": 196577,
+      "cache_creation_tokens": 52014,
+      "cost_usd": 0.02020047,
+      "partial": false
+    },
+    {
+      "task": "warren",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T22:21:45Z",
+      "dir": "evals/runs/2026-11-26-a8f0a5f-no-structural/warren/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "1d259e57e6f1af31486050724d8f250afd42ed04359988b66df4113b6809a6ca",
+      "graded_program_sha256": "d5445b32f398403b34fde431ec5608277a8bf18170723c36ea303b783a4090ec",
+      "grading": {
+        "ms": 696,
+        "load": 0.53,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "README.md": [
+          [
+            1,
+            573
+          ]
+        ],
+        "examples/battle.12am": [
+          [
+            1,
+            160
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            700
+          ],
+          [
+            1267,
+            1268
+          ],
+          [
+            1665,
+            1666
+          ],
+          [
+            1669,
+            1669
+          ],
+          [
+            1744,
+            1744
+          ],
+          [
+            1754,
+            1754
+          ],
+          [
+            1761,
+            1761
+          ],
+          [
+            1775,
+            1775
+          ],
+          [
+            1785,
+            1786
+          ],
+          [
+            1808,
+            1808
+          ],
+          [
+            1828,
+            1828
+          ],
+          [
+            1887,
+            1887
+          ],
+          [
+            1891,
+            1891
+          ],
+          [
+            1997,
+            1997
+          ],
+          [
+            2196,
+            2196
+          ],
+          [
+            2250,
+            2250
+          ],
+          [
+            2347,
+            2347
+          ],
+          [
+            2386,
+            2386
+          ],
+          [
+            2410,
+            2410
+          ],
+          [
+            2535,
+            2535
+          ],
+          [
+            2579,
+            2579
+          ]
+        ]
+      },
+      "turns": 10,
+      "duration_ms": 30245,
+      "input_tokens": 18,
+      "output_tokens": 3956,
+      "cache_read_tokens": 196603,
+      "cache_creation_tokens": 32451,
+      "cost_usd": 0.18906030000000001,
+      "partial": false
+    }
+  ]
+}

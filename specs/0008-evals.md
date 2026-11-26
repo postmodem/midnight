@@ -1,6 +1,6 @@
 # 0008 — Evals
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0007
 
 ## Goal
@@ -692,3 +692,164 @@ All run on x86_64-linux, on the development machine.
   and cost of a full run.
 - **Results committed, transcripts not.** A result is evidence a spec
   cites, and lives with the commit it measured.
+
+## Outcome
+
+Implemented, with the differences listed under "Differences from the
+design". All nine criteria pass on x86_64-linux, with Claude Code 2.1.327
+(models as reported: `claude-sonnet-5-5`, `claude-haiku-5-5`) and Ruby
+3.4.12. The baseline measured `a8f0a5f`; the commits after it change only
+`compare`, the results and this Outcome.
+
+### Acceptance criteria
+
+| # | Result |
+| - | ------ |
+| 1 | `nix flake check` passes, `checks.evals` included; `cargo test` passes, `eval_solutions_pass` included. |
+| 2 | `self-test` passes: 13 tasks, every rule. |
+| 3 | Thirteen tasks, each with `TASK.md`, `meta`, `solution.12am`, `expected.out` and at least one program in `right/`; every area of the table covered; `thermostat` and `countdown` are controls, `mend` and `fixup` repairs; every other task names a form in `ruby:`. |
+| 4 | 4.1: `evals/test/test_wrapper.rb` makes every call the criterion lists. 4.2 and 4.3: `eval.rb isolation` at `b91e8a6` passed every check. The token was in no file of either run; no path of the repository was in the transcript; the `system/init` line listed the six tools and no MCP server. Of the escape run's 47 tool calls, 12 were denied by permissions (`ls ~`, `env`, `echo "$PATH"`, `find ~`, Glob of `/home`, `cat ../eval-token`, Read of `/tmp/eval-token`, `ln -s`, `rm`, a variable the rules do not name); of its 23 compiler calls, 16 were refused by the wrapper (outside files, `-o`, drive files and requires, an unreadable require, `RUBYOPT`, `RUBYLIB`, `RUBY_GC_HEAP_INIT_SLOTS`, `LD_PRELOAD`, `LD_LIBRARY_PATH=/tmp`, `GCONV_PATH`), and every path the audit found was in one of them. `MIDNIGHT_CC`, `MIDNIGHT_CFLAGS`, `MIDNIGHT_GPU_FLAGS` and `MIDNIGHT_WINDOW_FLAGS` were dropped, `MIDNIGHT_GPU=on` and `MIDNIGHT_WINDOW=` overridden, and the file Ruby would have loaded through `RUBYOPT` was never loaded. With the `AGENTS.md`, the agent replied `done`. |
+| 5 | `grade --run` of the baseline: 130 programs, every verdict as recorded. |
+| 6 | Baseline `evals/results/2026-11-26-a8f0a5f-baseline.{json,md}`, no run escaped. A fresh agent read the six failed runs and one passed run of each task and model that had one, and scanned every tool call of the 130 transcripts: no answer came from outside a run's directory, and no correct program was rejected. The six failures are the agents' own (below). The audit of the first baseline, at `b91e8a6`, had found one correct program rejected; the tasks were fixed and the baseline run again (under "Findings"). |
+| 7 | `compare` of the baseline with `2026-11-26-a8f0a5f-no-structural` (warren, fixup, thermostat; one trial per model; kit `evals/test/kit-no-structural/kit`, the reference without "Structural changes inside `each`") prints both runs' counts for the three tasks and names `language.md` as the kit's difference. All six runs passed. |
+| 8 | The harness's tests pass (56 tests). Outside `evals/runs/`, `evals/` holds no path of the development machine (the `/home/x` paths in the tests are made up) and no transcript with account details: the recorded transcripts have zeroed ids. The README's paragraph names no task and no rule of grading. |
+| 9 | Below, under "Findings". |
+
+### Findings
+
+The baseline: 13 tasks, `sonnet` and `haiku`, five trials each, 130
+sessions.
+
+- **Pass rates.** Sonnet passed all 65 runs (pass@1 100%). Haiku passed
+  59 (pass@1 90.8% ± 7.7 across tasks; 11 of 13 tasks every time). Haiku
+  failed `paddle` five times out of five. Each time it put a missed ball
+  back at its start with the velocity it had, not its starting velocity,
+  although `TASK.md` says so plainly. The file of commands the agents
+  could try never shows a miss after the velocity has changed, so every
+  one of them ran its program, saw the output it expected and stopped.
+  Haiku's other failure was a `swarm` whose `move` was an ordinary
+  `system`. In the first baseline (below), Haiku also failed `warren` four
+  times out of five by keeping the animals in lists of structs, not as
+  entities, against the task's words.
+- **The task set has a ceiling.** Eleven of thirteen tasks passed every
+  time with both models. As planned, the pass rate will not show most
+  changes; the evidence is in the finer measures. In 107 of 130 runs the
+  first compile of the agent's own program succeeded, 37 runs met a
+  compile error at all, and no diagnostic was repeated within a run.
+- **The diagnostics agents met most** were the repair tasks' own: in
+  `fixup`, `` `…` is a system and can't be called `` (40 times in 8 runs),
+  `` can't assign to `…` `` (7) and `this query has 1 term, but its block
+  takes 2 parameters` (7), the faults the task plants. Outside the
+  repairs: `` unexpected `…` `` (16 times in 14 runs, `{` 7 and `)` 5:
+  brace blocks and Ruby's literals), `` `…` can't be a term of an `…` in a
+  GPU system `` (5 in 3 runs), and `` `…` is a keyword and can't be used
+  as a name `` (4, every one `on`: four of five Sonnet `thermostat` runs in
+  the first baseline named a count `on`).
+- **Ruby-shaped mistakes were rare**: four occurrences in two runs, `to_f`
+  on a `Float` (twice), `max` and `min` on a list. Agents read before they
+  write: `mend`, whose given program is written as a Ruby programmer
+  would, took 1.8 compiler calls a run with Sonnet and 3.0 with Haiku,
+  because the agents read the reference and fixed most faults before
+  compiling. The repairs measure diagnostics less than planned for that
+  reason.
+- **How agents read the reference.** Every run read `language.md`, which
+  is too large for one tool result: the agents read it in `sed -n`
+  ranges, with `Read` and an offset, and by `grep -n '^#'` for the
+  headings. A run read a median
+  of 873 of its 2,618 lines (117 to 2,259). The sections up to "Systems
+  and ticks" were read by 80 to 116 of 130 runs, the GPU subsections by 21
+  to 43, "Errors" by 22 and "Grammar" by 29. Each section of the README
+  was read by 94 to 97 runs. The examples were read by fewer than one run in five
+  (`battle` 25, `bounce` 24, `nbody` 18).
+- **Time, tokens and cost.** The baseline took 18 minutes from the first
+  session to the last, at four sessions at a time. Sonnet's 65 sessions
+  took 1,188 s in all, 641 turns and 152,726 output tokens, with 8.1 M
+  tokens read from cache and 1.7 M written to it: an estimated $9.31 at
+  API prices. Haiku's took 2,654 s, 753 turns and 541,256 output tokens,
+  15.8 M from cache and 2.7 M written: $0.98. No session was an
+  infrastructure error, and no usage limit stopped the run.
+- **The first baseline**, at `b91e8a6`
+  (`evals/results/2026-11-26-b91e8a6-baseline.{json,md}`), passed 120 of
+  130. Its transcript audit found one correct program rejected: a
+  `warren` that went over every animal through lists of handles, with no
+  `each`, which `TASK.md` had not asked for. The tasks now say which
+  systems go over their entities "with an `each`", and the baseline was
+  run again.
+- **Passes no check catches.** The audits found programs that pass by a
+  route the task did not intend: a `crowd` that counted in `report`
+  instead of `walk`, and a `ledger` that printed from a plain `each` in
+  spawn order, which the reference leaves unspecified. A runtime option
+  to visit entities in another order would catch the second; it is a spec
+  of its own.
+- **Denied calls** were 12 in 12 runs, none of them a way out: `sed -i`,
+  `python3`, a heredoc, commands joined with `;` or `&&`, and three times
+  `MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=… midnight run` (once after
+  `cd … &&`), the form the README shows, which no rule of one variable
+  allows. Each agent went on with a form that was allowed.
+- **What Claude Code shows the agent.** Its notices for a spilled tool
+  result name `~/.claude/projects/-tmp-eval-*` with the home directory
+  spelled out, and those for a command run in the background name
+  `/tmp/claude-UID/-tmp-eval-*`. No agent read either. A directory of
+  the second kind that holds a background command's output is left when
+  the run ends, as the design says.
+
+### Differences from the design
+
+- **The isolation check of `system/init`.** Under the spec's flags,
+  Claude Code 2.1.327 always lists its five built-in agent types and five
+  plugins whose source ends `@builtin`, so "stopped when it lists a plugin
+  or an agent" would stop every run. The harness requires the six tools,
+  no MCP server, skill or slash command, and every plugin built in; agents
+  are not checked, since without the `Agent` tool none can be started.
+- **The agent's `PATH` has the flake's bash** besides the spec's list:
+  Claude Code's Bash tool refuses to start without a POSIX shell.
+- **Two permission rules, one per variable.** `Bash(MIDNIGHT_* midnight *)`
+  matches nothing: Claude Code does not match an allow rule past a leading
+  assignment unless the rule names the variable. The spec now has
+  `Bash(MIDNIGHT_DRIVE=* midnight *)` and `Bash(MIDNIGHT_THREADS=* midnight
+  *)`.
+- **The preamble** also says to write files with the file tools, to give
+  each `midnight` command on its own, and that a refused command does not
+  end the task. Without it, Claude Code's denial text ("do not retry")
+  made an agent give up after a refused heredoc.
+- **The audit.** Grep's `pattern` is a regular expression, so the audit
+  takes Grep's `path` and `glob` and Glob's `pattern` and `path`. Before
+  `midnight`, only the value of `MIDNIGHT_DRIVE` is taken as a path: the
+  wrapper refuses or drops every other variable and logs it, and
+  `MIDNIGHT_CC=/bin/false`, which it drops, had marked the isolation run.
+- **What was read.** Lines a tool result shows without numbers count only
+  in runs of two or more consecutive lines of the file (blank lines
+  between allowed), one of them at least 12 characters other than spaces,
+  so a common line such as `end` is not placed by chance; lines with a
+  number prefix (`Read`, `grep -n`) count by number. A directory counts as
+  its files for `grep` and `rg` only. A section counts a run only when a
+  line below its heading was read, so a `grep -n '^#'` of the headings
+  reads no section. The report's Ruby-shaped column is per occurrence:
+  `yes`, or `N of M` when only some occurrences of a template are.
+- **`self-test` takes task names**, to check one task while it is
+  written. The harness reads every file as UTF-8 whatever the locale (in
+  the build sandbox there is none).
+- **`thread_programs` runs every task solution with a split loop**: crowd,
+  fixup, ledger, paddle, swarm, thermostat and warren, a superset of the
+  three the spec names, by the same rule as every other program.
+- **The isolation run is `eval.rb isolation`**: the two tasks of criterion
+  4 are in `evals/test/tasks/` (`escape`, `agents-md`), the tokens are in
+  `/tmp/eval-token` and `eval-token` at the repository's root, and the
+  probe keeps every file of the run's directory, not only the program, so
+  the token can be looked for in all of them. Its results go to
+  `evals/runs/`, not `evals/results/`. "The audit marks the run escaped
+  exactly where the call log shows a refusal" is checked as: every path
+  the audit found is in a call the wrapper refused.
+- **`ruby:` of `orbits`** leaves out `**`, which the spec's table names:
+  Midnight has `**`, so it is not a Ruby form the task invites.
+- **Checks the grader cannot make.** The `loops` check reads the line of
+  the loop itself, so a loop in a helper fails it although `midnight loops`
+  says `cores`; `crowd` says the `each` is written in `walk` itself. No
+  check sees whether `league` and `pantry` use events, where in its
+  systems a program does its work (a `crowd` program that counted in
+  `report` passed), or whether a program depends on query order (a
+  `ledger` program that printed from a plain `each` in spawn order passed).
+- **Tasks name the `each`.** A line `NAME each` of `systems` is now backed
+  by `TASK.md` saying the system goes over its entities "with an `each`":
+  the first baseline rejected a correct `warren` that went over every
+  animal through lists of handles. The spec's rule says so.
