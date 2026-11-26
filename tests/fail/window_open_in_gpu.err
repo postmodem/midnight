@@ -1,0 +1,16 @@
+error: `Window.open` is not allowed in a function called from a GPU system
+ --> tests/fail/window_open_in_gpu.12am:5:3
+  |
+5 |   Window.open("x", 10, 10)
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^ the window is opened from the CPU; call it from top-level code
+note: GPU system `place` calls `start` here
+  --> tests/fail/window_open_in_gpu.12am:15:5
+   |
+15 |     start
+   |     -----
+
+error: `Window.open` is not allowed in a GPU system
+  --> tests/fail/window_open_in_gpu.12am:14:5
+   |
+14 |     Window.open("y", 10, 10)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^ the window is opened from the CPU; call it from top-level code

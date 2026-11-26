@@ -1,0 +1,4 @@
+# A height larger than the largest frame.
+# Expected: `Window.open: a height of 8193 is more than 8192`
+
+Window.open("tall", 100, 8193)

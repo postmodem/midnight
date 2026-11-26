@@ -6,7 +6,7 @@ struct Size
   h: Int
 end
 
-enum Color
+enum Hue
   Red
   Blue
 end
@@ -23,9 +23,9 @@ def scaled(v: Float, by: Float) -> Float
   v * by
 end
 
-def describe(name: String, shiny: Bool, color: Color) -> String
+def describe(name: String, shiny: Bool, hue: Hue) -> String
   prefix = if shiny then "shiny " else "" end
-  "#{prefix}#{color} #{name}"
+  "#{prefix}#{hue} #{name}"
 end
 
 def total(xs: [Int]) -> Int
@@ -52,8 +52,8 @@ end
 puts area(Size(3, 4))
 puts scaled(3, 2)
 puts scaled(1.5, 2)
-puts describe("ring", true, Color::Red)
-puts describe("rock", false, Color::Blue)
+puts describe("ring", true, Hue::Red)
+puts describe("rock", false, Hue::Blue)
 puts total([1, 2, 3])
 puts longest(["a", "abc", "ab"])
 hero = spawn Health(25)

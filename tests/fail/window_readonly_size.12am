@@ -1,0 +1,7 @@
+# expect: the four sizes and `open?` of `Window` are read-only; only `background` can be assigned
+# at: line 4, `Window.width`; line 5, `Window.pixel_height`; line 6, `Window.height` in a `+=`
+
+Window.width = 10
+Window.pixel_height = 10
+Window.height += 1
+Window.background = Color(1, 2, 3)

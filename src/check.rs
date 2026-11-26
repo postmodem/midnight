@@ -33,7 +33,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ast;
 use crate::diag::Diagnostic;
-use crate::source::{SourceMap, Span};
+use crate::source::{FileId, SourceMap, Span};
 use crate::tir::{self, ComponentId, ConstId, EnumId, FuncId, LocalId, RecordId, ResourceId, Type};
 
 /// Checks a whole program. Reports every independent error, in source
@@ -49,8 +49,25 @@ pub fn check(program: &ast::Program, sources: &SourceMap) -> Result<tir::Program
 
 /// Names that are built in and can't be redefined.
 const BUILTIN_NAMES: &[&str] = &[
-    "Int", "Float", "Bool", "String", "Entity", "World", "Time", "Math", "Float32", "Int8",
-    "Int16", "Int32", "UInt8", "UInt16", "UInt32",
+    "Int",
+    "Float",
+    "Bool",
+    "String",
+    "Entity",
+    "World",
+    "Time",
+    "Math",
+    "Float32",
+    "Int8",
+    "Int16",
+    "Int32",
+    "UInt8",
+    "UInt16",
+    "UInt32",
+    "Window",
+    "Color",
+    "WindowResized",
+    "WindowClosed",
 ];
 
 /// The built-in names that are types.
@@ -214,6 +231,7 @@ enum ReadOnly {
     IndexParam(String),
     CountParam(String),
     TimeField(&'static str),
+    WindowField(String),
 }
 
 impl ReadOnly {
@@ -243,6 +261,9 @@ impl ReadOnly {
             }
             ReadOnly::TimeField(name) => {
                 format!("`Time.{name}` is read-only; only `Time.dt` can be assigned")
+            }
+            ReadOnly::WindowField(name) => {
+                format!("`Window.{name}` is read-only; only `Window.background` can be assigned")
             }
         }
     }
@@ -442,6 +463,8 @@ struct Checker<'a> {
     cx: FnCtx,
     /// Some call was typed before its function's return type was known.
     deferred_calls: bool,
+    /// The file of the built-in declarations, if the program has them.
+    builtins: Option<FileId>,
 }
 
 fn mk(kind: tir::ExprKind, ty: Type, span: Span) -> tir::Expr {
@@ -484,7 +507,37 @@ impl<'a> Checker<'a> {
             main: None,
             cx: FnCtx::new(BodyKind::Top),
             deferred_calls: false,
+            builtins: None,
         }
+    }
+
+    /// The built-in declarations of the window, when the program has them.
+    fn window(&self) -> Option<tir::Window> {
+        let record = |name: &str| match self.globals.get(name) {
+            Some((Global::Record(id), _)) => Some(*id),
+            _ => None,
+        };
+        let event = |name: &str| match self.records[record(name)?.0].kind {
+            tir::RecordKind::Event(id) => Some(id),
+            _ => None,
+        };
+        let Some((Global::Resource(resource), span)) = self.globals.get("Window") else {
+            return None;
+        };
+        if !self.is_builtin(*span) {
+            return None;
+        }
+        Some(tir::Window {
+            resource: *resource,
+            color: record("Color")?,
+            resized: event("WindowResized")?,
+            closed: event("WindowClosed")?,
+        })
+    }
+
+    /// Whether a declaration is one of the built-in ones.
+    fn is_builtin(&self, span: Span) -> bool {
+        self.builtins == Some(span.file)
     }
 
     fn error(&mut self, diagnostic: Diagnostic) {
@@ -669,6 +722,7 @@ impl<'a> Checker<'a> {
         }
 
         const CHECKED: &str = "a program without errors is fully typed";
+        let window = self.window();
         let rets: Vec<Type> = self
             .funcs
             .iter()
@@ -797,6 +851,7 @@ impl<'a> Checker<'a> {
             summaries: Vec::new(),
             systems,
             main,
+            window,
         };
         let errors = gpu::check(&mut program, &system_decls, &known_ints);
         if errors.is_empty() {

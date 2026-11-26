@@ -1,0 +1,21 @@
+# When the commands run out the window is closed, and from then on ticks
+# run freely. This program has no commands at all: World.run ends in the
+# first tick, a window opened again is closed in the next tick, and ticks
+# with no window open are not held.
+
+system report
+  on WindowClosed do
+    puts "tick #{Time.tick}: closed"
+  end
+end
+
+Window.open("Runs out", 200, 100)
+World.run
+puts "ran #{Time.tick} tick"
+3.times do
+  World.tick
+end
+puts "then #{Time.tick} ticks with no window"
+Window.open("Again", 200, 100)
+World.tick
+puts "open #{Window.open?} after #{Time.tick} ticks"

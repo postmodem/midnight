@@ -1,0 +1,11 @@
+error: `WindowClosed` is a built-in event and can't be emitted
+ --> tests/fail/window_emit_builtin.12am:5:8
+  |
+5 |   emit WindowClosed
+  |        ^^^^^^^^^^^^ the runtime emits it when a tick begins
+
+error: `WindowResized` is a built-in event and can't be emitted
+ --> tests/fail/window_emit_builtin.12am:6:8
+  |
+6 |   emit WindowResized(width: 1, height: 1, pixel_width: 1, pixel_height: 1)
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the runtime emits it when a tick begins

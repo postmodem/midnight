@@ -1,0 +1,10 @@
+tick
+resize 320 240
+tick
+close
+tick
+# the second window
+tick 2
+resize 64 48
+close
+tick

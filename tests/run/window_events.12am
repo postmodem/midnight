@@ -1,0 +1,22 @@
+# What happens to the window reaches the program when a tick begins: one
+# WindowResized for any number of changes, none when the sizes come back to
+# what they were, and WindowClosed, seen by every `on` of that tick.
+
+system report
+  on WindowResized do |size|
+    puts "tick #{Time.tick}: resized to #{size.width}x#{size.height}, #{size.pixel_width}x#{size.pixel_height} pixels; Window says #{Window.width}x#{Window.height}"
+  end
+  on WindowClosed do
+    puts "tick #{Time.tick}: closed, open #{Window.open?}"
+  end
+end
+
+system also
+  on WindowClosed do
+    puts "tick #{Time.tick}: also seen here"
+  end
+end
+
+Window.open("Events", 800, 600)
+World.run
+puts "World.run ended after #{Time.tick} ticks"

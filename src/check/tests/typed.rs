@@ -1407,3 +1407,52 @@ World.run
 "
     ));
 }
+
+#[test]
+fn a_program_that_names_the_window_has_one() {
+    let program = ok("system s\n  on WindowClosed do\n    puts 1\n  end\nend\n");
+    let window = program.window.expect("a window");
+    assert_eq!(program.resources[window.resource.0].name, "Window");
+    let fields: Vec<&str> = program.resources[window.resource.0]
+        .fields
+        .iter()
+        .map(|field| field.name.as_str())
+        .collect();
+    assert_eq!(
+        fields,
+        [
+            "width",
+            "height",
+            "pixel_width",
+            "pixel_height",
+            "background",
+            "open"
+        ]
+    );
+    assert_eq!(program.records[window.color.0].name, "Color");
+    assert_eq!(program.events[window.resized.0].name, "WindowResized");
+    assert_eq!(program.events[window.closed.0].name, "WindowClosed");
+}
+
+#[test]
+fn color_alone_is_a_struct_and_no_window() {
+    let program = ok("puts Color(1, 2, 3)\n");
+    assert!(program.window.is_none());
+    assert!(program.resources.is_empty() && program.events.is_empty());
+    let names: Vec<&str> = program.records.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["Color"]);
+}
+
+#[test]
+fn a_program_that_names_none_of_them_has_no_built_in_declarations() {
+    let program = ok("puts 1\n");
+    assert!(program.window.is_none() && program.records.is_empty());
+}
+
+#[test]
+fn window_open_is_a_statement_of_its_own() {
+    assert_eq!(
+        stmts("Window.open(\"t\", 3, 4)\nputs Window.open?"),
+        ["Window.open \"t\" 3 4", "puts Window.open"]
+    );
+}

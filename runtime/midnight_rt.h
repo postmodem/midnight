@@ -37,6 +37,9 @@
  *     negative exponent -2                         Int **
  *     rand(0): the argument must be positive
  *     World.tick called while a tick is in progress      also World.run
+ *     Window.open called while a window is open
+ *     Window.open: a width of 0 is less than 1           also height
+ *     Window.open: no window can be shown: REASON; set MIDNIGHT_WINDOW=headless to run without one
  *
  * With MN_DEBUG defined, the runtime counts live string and list buffers.
  * mn_finish then tears the world down and, if any buffer is still alive,
@@ -678,6 +681,71 @@ double mn_clock(void);
 /* Flushes standard output, then pauses for that many real seconds;
  * returns at once for zero or less. */
 void mn_sleep(double seconds);
+
+/* ---- The window -------------------------------------------------------------- */
+
+/*
+ * A program that names `Window`, `WindowResized` or `WindowClosed` has a
+ * window. It is compiled with MN_WINDOW, and before mn_start it sets
+ * mn_window_program to a description of the `Window` resource and the two
+ * events. Generated code lays them out as the structs below and asserts
+ * that it does.
+ *
+ * The resource belongs to generated code: it gives the fields their
+ * defaults after mn_start and assigns `background`. The runtime assigns
+ * the other fields in mn_window_open and when a tick begins, and at no
+ * other time.
+ *
+ * When a window is open, a tick does this before the first system runs:
+ * it carries out MIDNIGHT_DRIVE's commands until one lets the tick run,
+ * or waits for the tick's time; takes what happened to the window since
+ * the last tick began; when a size changed, assigns the four sizes and
+ * emits one WindowResized; when the window was closed, sets `open` to
+ * false, emits WindowClosed and calls mn_stop. When the tick has ended,
+ * the window shows the frame of that tick.
+ *
+ * mn_finish and mn_exit carry out the commands up to the next `tick` and
+ * close the window.
+ */
+
+/* The largest width and height of a frame, in pixels. */
+#define MN_WINDOW_LARGEST 8192
+
+typedef struct MnColor {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+} MnColor;
+
+typedef struct MnWindow {
+    int64_t width;
+    int64_t height;
+    int64_t pixel_width;
+    int64_t pixel_height;
+    MnColor background;
+    bool open;
+} MnWindow;
+
+typedef struct MnWindowResized {
+    int64_t width;
+    int64_t height;
+    int64_t pixel_width;
+    int64_t pixel_height;
+} MnWindowResized;
+
+typedef struct MnWindowProgram {
+    MnWindow *window;
+    uint32_t resized; /* the id of WindowResized */
+    uint32_t closed;  /* the id of WindowClosed */
+} MnWindowProgram;
+
+/* Set by generated code before mn_start in a program with a window. */
+extern const MnWindowProgram *mn_window_program;
+
+/* `Window.open(title, width, height)`: the run-time errors listed at the
+ * top, and those of World.tick for a tick in progress and an `each`. */
+void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc);
 
 /* ---- GPU systems ------------------------------------------------------------- */
 

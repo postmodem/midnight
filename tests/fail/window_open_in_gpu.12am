@@ -1,0 +1,17 @@
+# expect: `Window.open` is not allowed in a GPU system, directly or through a function
+# at: line 9, the call in the block; line 4, the call in `start` called from it
+
+def start()
+  Window.open("x", 10, 10)
+end
+
+component Spot
+  x: Int32 = 0
+end
+
+gpu system place
+  each Spot do |spot|
+    Window.open("y", 10, 10)
+    start
+  end
+end

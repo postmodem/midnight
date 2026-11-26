@@ -1,0 +1,25 @@
+# The fields of Window before a window is opened, while it is open, during
+# a tick, and after it is closed. The program assigns only `background`.
+
+def sizes() -> String
+  "#{Window.width}x#{Window.height} points, #{Window.pixel_width}x#{Window.pixel_height} pixels, open #{Window.open?}"
+end
+
+puts "before: #{sizes}"
+puts Window.background
+Window.background = Color(16, 16, 32)
+Window.background.g = 64
+puts Window.background
+
+Window.open("Fields", 320, 200)
+puts "opened: #{sizes}"
+
+system look
+  puts "tick #{Time.tick}: #{sizes}"
+end
+
+World.tick
+World.tick
+World.tick
+puts "after: #{sizes}"
+puts Window.background

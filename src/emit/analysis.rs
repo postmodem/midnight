@@ -71,6 +71,15 @@ pub fn walk_stmt<'a>(stmt: &'a Stmt, f: &mut dyn FnMut(Node<'a>)) {
             }
         }
         StmtKind::Emit { value, .. } => walk_expr(value, f),
+        StmtKind::WindowOpen {
+            title,
+            width,
+            height,
+        } => {
+            walk_expr(title, f);
+            walk_expr(width, f);
+            walk_expr(height, f);
+        }
     }
 }
 

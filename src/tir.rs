@@ -165,8 +165,8 @@ pub struct Program {
     pub enums: Vec<Enum>,
     /// Components and tags, in source order.
     pub components: Vec<Component>,
-    /// User resources. The built-in `Time` is not listed; see
-    /// [`PlaceKind::Time`].
+    /// Resources, the built-in `Window` among them in a program with a
+    /// window. The built-in `Time` is not listed; see [`PlaceKind::Time`].
     pub resources: Vec<Resource>,
     pub events: Vec<Event>,
     /// In definition order. A constant's `init` may read earlier constants.
@@ -179,6 +179,29 @@ pub struct Program {
     pub systems: Vec<System>,
     /// The top-level statements, in order.
     pub main: Body,
+    /// Set when the program has a window: when it names `Window`,
+    /// `WindowResized` or `WindowClosed`.
+    pub window: Option<Window>,
+}
+
+/// The built-in declarations of a program with a window. They are
+/// ordinary declarations of `records`, `resources` and `events`, and a
+/// backend handles them as it handles any other; it also hands the
+/// resource and the two events to the runtime.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Window {
+    /// `Window`. Its fields, in order: `width`, `height`, `pixel_width`,
+    /// `pixel_height` (`Int`), `background` (`Color`) and `open` (`Bool`,
+    /// which `Window.open?` reads). The program assigns only `background`;
+    /// the runtime assigns the others when a tick begins and in
+    /// [`StmtKind::WindowOpen`].
+    pub resource: ResourceId,
+    /// The struct `Color`: `r`, `g`, `b`, `a`, each a `UInt8`.
+    pub color: RecordId,
+    /// `WindowResized`: `width`, `height`, `pixel_width`, `pixel_height`.
+    pub resized: EventId,
+    /// `WindowClosed`, with no fields.
+    pub closed: EventId,
 }
 
 /// A struct, a component with fields, or an event: a value with named
@@ -412,6 +435,13 @@ pub enum StmtKind {
         event: EventId,
         value: Expr,
     },
+    /// `Window.open(title, width, height)`: a `String` and two `Int`s,
+    /// evaluated in that order. Never inside an `each` or a GPU system.
+    WindowOpen {
+        title: Expr,
+        width: Expr,
+        height: Expr,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -609,6 +639,7 @@ pub enum Deed {
     WorldStop,
     WorldTick,
     WorldRun,
+    WindowOpen,
     /// A `break` that leaves the `each`. Never in a [`Summary`].
     Break,
     /// A `return` in the block. Never in a [`Summary`].
@@ -631,6 +662,7 @@ impl Deed {
             Deed::WorldStop => "World.stop",
             Deed::WorldTick => "World.tick",
             Deed::WorldRun => "World.run",
+            Deed::WindowOpen => "Window.open",
             Deed::Break => "break",
             Deed::Return => "return",
         }

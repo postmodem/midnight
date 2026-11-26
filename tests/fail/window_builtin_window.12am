@@ -1,0 +1,6 @@
+# expect: `Window` is a built-in name and can't be redefined
+# at: line 4, the name `Window`
+
+resource Window
+  title: String = ""
+end

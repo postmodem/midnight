@@ -684,6 +684,11 @@ impl<'a, 'p> Walk<'a, 'p> {
                 span,
                 "events are sent on the CPU; emit from an ordinary system",
             ),
+            StmtKind::WindowOpen { .. } => self.not_allowed(
+                "Window.open",
+                span,
+                "the window is opened from the CPU; call it from top-level code",
+            ),
         }
     }
 

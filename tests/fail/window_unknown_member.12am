@@ -1,0 +1,5 @@
+# expect: an unknown member of `Window`, with the closest name suggested; `open?` read with parentheses
+# at: line 4, `widht`; line 5, `open?`
+
+puts Window.widht
+puts Window.open?()

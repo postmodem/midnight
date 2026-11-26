@@ -1,0 +1,1 @@
+tests/loops/does_window_open.12am:13  top level  each Health  one core: `Window.open` in `start` (line 10), called at line 14

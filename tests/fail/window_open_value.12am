@@ -1,0 +1,5 @@
+# expect: `Window.open` has no value: it is a statement of its own
+# at: line 4, the `Window.open(…)` used as a value; line 5, `Window.open` without arguments
+
+x = Window.open("x", 10, 10)
+puts Window.open

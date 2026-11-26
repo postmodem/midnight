@@ -1,0 +1,5 @@
+# A width less than 1.
+# Expected: `Window.open: a width of 0 is less than 1`
+
+w = 0
+Window.open("empty", w, 100)

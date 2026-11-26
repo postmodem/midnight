@@ -1,0 +1,9 @@
+# expect: `WindowClosed` and `WindowResized` are built-in names and can't be redefined
+# at: line 4, the name `WindowClosed`; line 7, the name `WindowResized`
+
+event WindowClosed
+end
+
+component WindowResized
+  width: Int = 0
+end

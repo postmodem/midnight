@@ -1,0 +1,8 @@
+# Window.open from a system, while a tick is in progress.
+# Expected: `Window.open called while a tick is in progress`, on line 5
+
+system start
+  Window.open("late", 100, 100)
+end
+
+World.tick

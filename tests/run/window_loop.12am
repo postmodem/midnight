@@ -1,0 +1,11 @@
+# A program that ticks in a loop of its own until its window is closed.
+
+system count
+  puts "tick #{Time.tick}"
+end
+
+Window.open("Loop", 100, 100)
+while Window.open?
+  World.tick
+end
+puts "the loop ended after #{Time.tick} ticks"

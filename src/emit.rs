@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 
 use crate::source::{SourceMap, Span};
-use crate::tir::{ComponentId, Cores, Program, Query, QueryId, Run, StmtKind, Term, Type};
+use crate::tir::{self, ComponentId, Cores, Program, Query, QueryId, Run, StmtKind, Term, Type};
 
 use analysis::Folded;
 use body::FnCx;
@@ -31,6 +31,9 @@ use body::FnCx;
 const C_FILE: &str = "program.c";
 /// Stands for a `#line` directive that points back at the generated file.
 const RESET_LINE: &str = "#line RESET";
+
+/// The tag of the struct of the `Window` resource.
+const WINDOW_STRUCT: &str = "mn_window_fields";
 
 /// Turns off the C warnings about what a program may legitimately say:
 /// `x == x`, `x = x`, a compact field compared with a constant it can't
@@ -424,6 +427,11 @@ impl<'a> Cx<'a> {
         } else {
             String::new()
         };
+        let window = if prog.window.is_some() {
+            "    mn_window_program = &window_program;\n"
+        } else {
+            ""
+        };
 
         let mut out = String::new();
         out.push_str("#include \"midnight_rt.h\"\n\n#include <math.h>\n\n");
@@ -466,6 +474,7 @@ impl<'a> Cx<'a> {
         out.push_str(&tables);
         out.push_str("int main(void) {\n");
         out.push_str(&check);
+        out.push_str(window);
         out.push_str(
             "    mn_start(&program);\n    \
              init_globals();\n    \
@@ -495,12 +504,16 @@ impl<'a> Cx<'a> {
                 let _ = writeln!(drop, "    {}", cx.cx.drop_stmt(&name, &item.ty));
             }
         }
-        for resource in &prog.resources {
+        for (index, resource) in prog.resources.iter().enumerate() {
             if resource.fields.is_empty() {
                 continue;
             }
             let name = names::resource(&resource.name);
-            defs.push_str("static struct {\n");
+            if prog.window.is_some_and(|window| window.resource.0 == index) {
+                let _ = writeln!(defs, "static struct {WINDOW_STRUCT} {{");
+            } else {
+                defs.push_str("static struct {\n");
+            }
             for index in cx
                 .cx
                 .layout_order(resource.fields.iter().map(|field| &field.ty))
@@ -576,6 +589,16 @@ impl<'a> Cx<'a> {
                 format!("{name}, {count}")
             }
         };
+        if let Some(window) = prog.window {
+            out.push_str(&self.window_layout(window));
+            let _ = writeln!(
+                out,
+                "static const MnWindowProgram window_program = {{\n    (MnWindow *)&{},\n    {},\n    {},\n}};\n",
+                names::resource(&prog.resources[window.resource.0].name),
+                window.resized.0,
+                window.closed.0
+            );
+        }
         let _ = writeln!(
             out,
             "static const MnProgram program = {{\n    {},\n    {},\n    {},\n    drop_globals,\n}};\n",
@@ -583,6 +606,50 @@ impl<'a> Cx<'a> {
             table("event_info", prog.events.len()),
             table("systems", prog.systems.len()),
         );
+        out
+    }
+
+    /// Assertions that the window's resource and events are laid out as
+    /// `MnWindow`, `MnColor` and `MnWindowResized` in the runtime's header.
+    fn window_layout(&self, window: tir::Window) -> String {
+        let prog = self.prog;
+        let resized = names::record(&prog.records[prog.events[window.resized.0].record.0].name);
+        let color = names::record(&prog.records[window.color.0].name);
+        let mut checks = vec![format!(
+            "sizeof(struct {WINDOW_STRUCT}) == sizeof(MnWindow)"
+        )];
+        for field in [
+            "width",
+            "height",
+            "pixel_width",
+            "pixel_height",
+            "background",
+            "open",
+        ] {
+            checks.push(format!(
+                "offsetof(struct {WINDOW_STRUCT}, {}) == offsetof(MnWindow, {field})",
+                names::field(field)
+            ));
+        }
+        checks.push(format!("sizeof({color}) == sizeof(MnColor)"));
+        for field in ["r", "g", "b", "a"] {
+            checks.push(format!(
+                "offsetof({color}, {}) == offsetof(MnColor, {field})",
+                names::field(field)
+            ));
+        }
+        checks.push(format!("sizeof({resized}) == sizeof(MnWindowResized)"));
+        for field in ["width", "height", "pixel_width", "pixel_height"] {
+            checks.push(format!(
+                "offsetof({resized}, {}) == offsetof(MnWindowResized, {field})",
+                names::field(field)
+            ));
+        }
+        let mut out = String::new();
+        for check in checks {
+            let _ = writeln!(out, "_Static_assert({check}, \"the window's layout\");");
+        }
+        out.push('\n');
         out
     }
 }

@@ -58,6 +58,15 @@ pub(super) fn stmt(s: &mut Stmt, f: Visit<'_>) {
                 expr(arg, f);
             }
         }
+        StmtKind::WindowOpen {
+            title,
+            width,
+            height,
+        } => {
+            expr(title, f);
+            expr(width, f);
+            expr(height, f);
+        }
     }
 }
 

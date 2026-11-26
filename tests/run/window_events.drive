@@ -1,0 +1,20 @@
+# One tick with no change.
+tick
+# Three changes: one event.
+resize 400 300
+scale 2
+resize 500 300
+tick
+# A change and back: no event.
+resize 640 480
+resize 500 300
+tick 2
+# Half points round up.
+scale 1.5
+resize 333 111
+tick
+# A resize and a close in the same tick.
+scale 1
+resize 100 100
+close
+tick

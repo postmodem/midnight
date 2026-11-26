@@ -25,6 +25,7 @@ pub fn empty_program() -> Program {
             locals: Vec::new(),
             block: blk(vec![]),
         },
+        window: None,
     }
 }
 

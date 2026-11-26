@@ -856,6 +856,15 @@ impl<'p> Walker<'p> {
                     self.expr(arg);
                 }
             }
+            StmtKind::WindowOpen {
+                title,
+                width,
+                height,
+            } => {
+                self.expr(title);
+                self.expr(width);
+                self.expr(height);
+            }
         }
     }
 

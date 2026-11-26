@@ -1,0 +1,5 @@
+error: `Window.open` is not allowed inside an `each`
+ --> tests/fail/window_open_in_each.12am:9:3
+  |
+9 |   Window.open("x", seen.n, 10)
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the loop holds the world's rows; call it from top-level code

@@ -1,0 +1,43 @@
+# The fields of Window are read in a GPU system and in an independent
+# `each` as any resource field is, with the values they have in the tick.
+
+component Spot
+  x: Int32 = 0
+  w: Int32 = 0
+end
+
+component Mark
+  h: Int = 0
+end
+
+gpu system place
+  each Spot do |spot|
+    spot.w = Window.pixel_width - spot.x
+  end
+end
+
+system measure
+  each Mark do |mark|
+    mark.h = Window.height * 2
+  end
+end
+
+def show()
+  each Spot do |spot|
+    puts "tick #{Time.tick}: spot at #{spot.x}: #{spot.w}"
+  end
+  each Mark do |mark|
+    puts "tick #{Time.tick}: mark #{mark.h}"
+  end
+end
+
+3.times do |i|
+  spawn Spot(x: i * 10)
+  spawn Mark
+end
+
+Window.open("GPU", 320, 200)
+World.tick
+show
+World.tick
+show

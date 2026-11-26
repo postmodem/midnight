@@ -1,0 +1,15 @@
+# Window.open reached from an `each` through a function.
+# Expected: `Window.open called inside an `each``, on line 9
+
+component Level
+  n: Int
+end
+
+def start(n: Int)
+  Window.open("inside", n, n)
+end
+
+spawn Level(10)
+each Level do |level|
+  start(level.n)
+end

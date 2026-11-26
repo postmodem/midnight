@@ -27,7 +27,8 @@ fn parse(text: &str) -> (SourceMap, ast::Program) {
             error.message, error.span.start, error.span.end
         )
     });
-    (sources, ast::Program { items })
+    let program = crate::source::with_builtins(&mut sources, items);
+    (sources, program)
 }
 
 /// The typed program for `text`, which must have no errors.
@@ -403,6 +404,16 @@ impl Dump<'_> {
                 "emit {} {}",
                 self.program.events[event.0].name,
                 self.expr(value)
+            ),
+            StmtKind::WindowOpen {
+                title,
+                width,
+                height,
+            } => format!(
+                "Window.open {} {} {}",
+                self.expr(title),
+                self.expr(width),
+                self.expr(height)
             ),
         }
     }

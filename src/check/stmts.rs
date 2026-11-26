@@ -34,6 +34,23 @@ fn is_loop(expr: &ast::Expr) -> bool {
     matches!(expr.kind, ast::ExprKind::Member { block: Some(_), .. })
 }
 
+/// The arguments of `Window.open(…)` written as a statement.
+fn window_open(expr: &ast::Expr) -> Option<&[ast::Arg]> {
+    match &expr.kind {
+        ast::ExprKind::Member {
+            recv,
+            name,
+            args: Some(args),
+            block: None,
+        } if name.name == "open"
+            && matches!(&recv.kind, ast::ExprKind::Const(owner) if owner == "Window") =>
+        {
+            Some(args)
+        }
+        _ => None,
+    }
+}
+
 impl Checker<'_> {
     /// Checks the block of a whole body in a scope of its own.
     pub(super) fn block(
@@ -78,6 +95,7 @@ impl Checker<'_> {
                 && mode != Mode::Stmt
                 && let ast::StmtKind::Expr(e) = &stmt.kind
                 && !is_loop(e)
+                && window_open(e).is_none()
             {
                 match self.expr(e, mode, expected) {
                     None => tail = Tail::Poison,
@@ -100,13 +118,17 @@ impl Checker<'_> {
     fn stmt(&mut self, stmt: &ast::Stmt) -> Option<tir::Stmt> {
         let span = stmt.span;
         let kind = match &stmt.kind {
-            ast::StmtKind::Expr(e) => match &e.kind {
-                ast::ExprKind::Member {
-                    recv,
-                    name,
-                    args,
-                    block: Some(block),
-                } => self.loop_stmt(recv, name, args.as_deref(), block)?,
+            ast::StmtKind::Expr(e) => match (&e.kind, window_open(e)) {
+                (_, Some(args)) => self.window_open(args, e.span)?,
+                (
+                    ast::ExprKind::Member {
+                        recv,
+                        name,
+                        args,
+                        block: Some(block),
+                    },
+                    None,
+                ) => self.loop_stmt(recv, name, args.as_deref(), block)?,
                 _ => StmtKind::Expr(self.expr(e, Mode::Stmt, None)?),
             },
             ast::StmtKind::VarDecl { name, ty, value } => self.var_decl(name, ty, value)?,
@@ -446,7 +468,53 @@ impl Checker<'_> {
         result
     }
 
+    /// `Window.open(title, width, height)`.
+    fn window_open(&mut self, args: &[ast::Arg], span: Span) -> Option<StmtKind> {
+        if self.cx.query_eaches > 0 && !self.cx.gpu {
+            self.err_label(
+                "`Window.open` is not allowed inside an `each`",
+                span,
+                "the loop holds the world's rows; call it from top-level code",
+            );
+        }
+        self.no_keywords("Window.open", args);
+        let types = [Type::String, Type::Int, Type::Int];
+        let values: Vec<Option<tir::Expr>> = args
+            .iter()
+            .zip(&types)
+            .map(|(arg, ty)| self.store(&arg.value, ty))
+            .collect();
+        for arg in args.iter().skip(types.len()) {
+            self.probe(&arg.value);
+        }
+        if !self.arity("Window.open", 3, args.len(), span) {
+            return None;
+        }
+        let mut values = values.into_iter().collect::<Option<Vec<_>>>()?.into_iter();
+        Some(StmtKind::WindowOpen {
+            title: values.next()?,
+            width: values.next()?,
+            height: values.next()?,
+        })
+    }
+
     fn emit(&mut self, event: &ast::Expr) -> Option<StmtKind> {
+        let kind = self.emit_kind(event)?;
+        if let StmtKind::Emit { event: id, .. } = &kind
+            && self.is_builtin(self.records[self.events[id.0].record.0].decl.span)
+        {
+            let name = self.events[id.0].name.clone();
+            self.err_label(
+                format!("`{name}` is a built-in event and can't be emitted"),
+                event.span,
+                "the runtime emits it when a tick begins",
+            );
+            return None;
+        }
+        Some(kind)
+    }
+
+    fn emit_kind(&mut self, event: &ast::Expr) -> Option<StmtKind> {
         // A bare event name, when every field has a default.
         if let ast::ExprKind::Const(name) = &event.kind
             && let Some(Global::Record(record)) = self.global(name)

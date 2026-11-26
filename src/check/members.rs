@@ -172,6 +172,9 @@ impl Checker<'_> {
                 _ => {}
             }
             match self.global(owner) {
+                Some(Global::Resource(id)) if owner == "Window" => {
+                    return self.window_member(id, name, args, span);
+                }
                 Some(Global::Resource(id)) => return self.resource_field(id, name, args, span),
                 Some(Global::Const(_)) | None => {}
                 Some(Global::Enum(id)) => {
@@ -729,6 +732,73 @@ impl Checker<'_> {
             Type::Entity,
             span,
         )))
+    }
+
+    /// A member of the built-in `Window`: one of its fields, or `open?`.
+    /// `Window.open(…)` is a statement and is checked as one.
+    fn window_member(
+        &mut self,
+        id: ResourceId,
+        name: &ast::Ident,
+        args: Option<&[ast::Arg]>,
+        span: Span,
+    ) -> Option<Resolved> {
+        const FIELDS: [&str; 5] = [
+            "width",
+            "height",
+            "pixel_width",
+            "pixel_height",
+            "background",
+        ];
+        let field = match name.name.as_str() {
+            "open" => {
+                self.err_label(
+                    "`Window.open` has no value",
+                    span,
+                    "it opens the window: write it as a statement of its own",
+                );
+                if let Some(args) = args {
+                    for arg in args {
+                        self.probe(&arg.value);
+                    }
+                }
+                return None;
+            }
+            "open?" => ast::Ident {
+                name: "open".to_string(),
+                span: name.span,
+            },
+            other if FIELDS.contains(&other) => name.clone(),
+            other => {
+                let candidates: Vec<String> = FIELDS
+                    .iter()
+                    .chain(&["open?", "open"])
+                    .map(|f| f.to_string())
+                    .collect();
+                self.unknown(
+                    format!("unknown member `{other}` for `Window`"),
+                    name.span,
+                    other,
+                    &candidates,
+                );
+                return None;
+            }
+        };
+        if name.name == "open?" && args.is_some() {
+            self.err_label(
+                "`Window.open?` takes no arguments",
+                name.span,
+                "read it without parentheses",
+            );
+            return None;
+        }
+        let mut resolved = self.resource_field(id, &field, args, span)?;
+        if let Resolved::Place(place) = &mut resolved
+            && name.name != "background"
+        {
+            place.readonly = Some(ReadOnly::WindowField(name.name.clone()));
+        }
+        Some(resolved)
     }
 
     fn resource_field(

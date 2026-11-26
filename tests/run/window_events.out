@@ -1,0 +1,6 @@
+tick 1: resized to 500x300, 1000x600 pixels; Window says 500x300
+tick 4: resized to 333x111, 500x167 pixels; Window says 333x111
+tick 5: resized to 100x100, 100x100 pixels; Window says 100x100
+tick 5: closed, open false
+tick 5: also seen here
+World.run ended after 6 ticks

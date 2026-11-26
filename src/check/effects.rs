@@ -299,6 +299,16 @@ impl<'p> Scan<'_, 'p> {
                 self.effect(EffectKind::Emit(*event), span);
                 self.expr(value, depth);
             }
+            StmtKind::WindowOpen {
+                title,
+                width,
+                height,
+            } => {
+                self.effect(EffectKind::Does(Deed::WindowOpen), span);
+                self.expr(title, depth);
+                self.expr(width, depth);
+                self.expr(height, depth);
+            }
         }
     }
 
@@ -723,6 +733,16 @@ impl Weigher<'_> {
             StmtKind::On { body, .. } => self.block(body, locals).scaled(LOOP_ROUNDS),
             StmtKind::Puts(args) | StmtKind::Print(args) => self.exprs(args, locals).plus(8),
             StmtKind::Emit { value, .. } => self.expr(value, locals).plus(8),
+            StmtKind::WindowOpen {
+                title,
+                width,
+                height,
+            } => {
+                let mut total = self.expr(title, locals);
+                total.add(self.expr(width, locals));
+                total.add(self.expr(height, locals));
+                total.plus(8)
+            }
         }
     }
 

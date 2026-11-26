@@ -1,0 +1,9 @@
+before: 0x0 points, 0x0 pixels, open false
+Color(r: 0, g: 0, b: 0, a: 255)
+Color(r: 16, g: 64, b: 32, a: 255)
+opened: 320x200 points, 320x200 pixels, open true
+tick 0: 320x200 points, 320x200 pixels, open true
+tick 1: 320x200 points, 320x200 pixels, open true
+tick 2: 640x480 points, 640x480 pixels, open false
+after: 640x480 points, 640x480 pixels, open false
+Color(r: 16, g: 64, b: 32, a: 255)

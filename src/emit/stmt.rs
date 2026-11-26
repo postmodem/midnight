@@ -11,7 +11,7 @@ use crate::tir::{
 
 use super::analysis::{self, HoistKey, Node};
 use super::body::{ADD, Dep, FnCx, Mode, Own, ScopeKind, UNARY, Val};
-use super::expr::{Sink, Want, push_lit, text_parts};
+use super::expr::{Sink, Want, arg_list, push_lit, text_parts};
 use super::names;
 use super::place::{Prepared, load};
 use super::{LoopDesc, RESET_LINE};
@@ -79,6 +79,15 @@ impl<'a> FnCx<'a, '_> {
             StmtKind::Puts(args) => self.output(args, true),
             StmtKind::Print(args) => self.output(args, false),
             StmtKind::Emit { event, value } => self.emit_event(*event, value),
+            StmtKind::WindowOpen {
+                title,
+                width,
+                height,
+            } => {
+                let values = self.operands(&[title, width, height], Want::Peek);
+                let loc = self.cx.loc(stmt.span);
+                self.line(&format!("mn_window_open({}, {loc});", arg_list(&values)));
+            }
         }
         if analysis::leaves(stmt) {
             self.forget(mark);

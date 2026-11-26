@@ -1,0 +1,11 @@
+error: `Window.open` has no value
+ --> tests/fail/window_open_value.12am:4:5
+  |
+4 | x = Window.open("x", 10, 10)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^ it opens the window: write it as a statement of its own
+
+error: `Window.open` has no value
+ --> tests/fail/window_open_value.12am:5:6
+  |
+5 | puts Window.open
+  |      ^^^^^^^^^^^ it opens the window: write it as a statement of its own

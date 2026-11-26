@@ -1,0 +1,19 @@
+# A window opened again after it was closed: the sizes are the new
+# window's, and the commands go on where they were.
+
+system report
+  on WindowResized do |size|
+    puts "tick #{Time.tick}: #{size.width}x#{size.height}"
+  end
+  on WindowClosed do
+    puts "tick #{Time.tick}: closed"
+  end
+end
+
+Window.open("First", 300, 200)
+World.run
+puts "first: #{Window.width}x#{Window.height}, open #{Window.open?}"
+Window.open("Second", 640, 480)
+puts "second: #{Window.width}x#{Window.height}, open #{Window.open?}"
+World.run
+puts "after #{Time.tick} ticks: #{Window.width}x#{Window.height}, open #{Window.open?}"

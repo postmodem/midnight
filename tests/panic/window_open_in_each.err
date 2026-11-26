@@ -1,0 +1,1 @@
+tests/panic/window_open_in_each.12am:9: runtime error: Window.open called inside an `each`

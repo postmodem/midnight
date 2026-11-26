@@ -173,6 +173,7 @@ fn compile(path: &Path, check_only: bool) -> Option<(String, driver::Parts)> {
     let parts = driver::Parts {
         gpu,
         threads: emit::has_split_loops(&program),
+        window: program.window.is_some(),
     };
     Some((emit::emit(&program, &sources), parts))
 }

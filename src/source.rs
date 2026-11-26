@@ -120,9 +120,95 @@ pub fn load(sources: &mut SourceMap, root: FileId) -> Result<ast::Program, Vec<D
     let mut errors = Vec::new();
     load_file(sources, root, &mut loaded, &mut items, &mut errors);
     if errors.is_empty() {
-        Ok(ast::Program { items })
+        Ok(with_builtins(sources, items))
     } else {
         Err(errors)
+    }
+}
+
+/// The built-in declarations written in Midnight. `Window` has a field the
+/// source cannot name: `open`, which `Window.open?` reads.
+const COLOR: &str = "\
+struct Color
+  r: UInt8 = 0
+  g: UInt8 = 0
+  b: UInt8 = 0
+  a: UInt8 = 255
+end
+";
+
+const WINDOW: &str = "\
+resource Window
+  width: Int = 0
+  height: Int = 0
+  pixel_width: Int = 0
+  pixel_height: Int = 0
+  background: Color = Color(0, 0, 0)
+  open: Bool = false
+end
+
+event WindowResized
+  width: Int
+  height: Int
+  pixel_width: Int
+  pixel_height: Int
+end
+
+event WindowClosed
+end
+";
+
+/// The program of `items`, from every file in `sources`, preceded by the
+/// built-in declarations the files name: all of them when one names
+/// `Window`, `WindowResized` or `WindowClosed`, `Color` alone when only it
+/// is named.
+pub fn with_builtins(sources: &mut SourceMap, items: Vec<ast::Item>) -> ast::Program {
+    let mut names = HashSet::new();
+    for file in &sources.files {
+        if let Ok(tokens) = crate::lexer::lex(FileId(0), &file.text) {
+            collect_names(&tokens, &mut names);
+        }
+    }
+    let window = ["Window", "WindowResized", "WindowClosed"]
+        .iter()
+        .any(|name| names.contains(*name));
+    let text = match (window, names.contains("Color")) {
+        (true, _) => format!("{COLOR}\n{WINDOW}"),
+        (false, true) => COLOR.to_string(),
+        (false, false) => {
+            return ast::Program {
+                items,
+                builtins: None,
+            };
+        }
+    };
+    let file = sources.add("<built-in>".to_string(), PathBuf::from("<built-in>"), text);
+    let mut all =
+        parser::parse(file, &sources.file(file).text).expect("the built-in declarations parse");
+    all.extend(items);
+    ast::Program {
+        items: all,
+        builtins: Some(file),
+    }
+}
+
+/// Every capitalized name among the tokens, interpolations included.
+fn collect_names(tokens: &[crate::lexer::Token], names: &mut HashSet<String>) {
+    use crate::lexer::{StrPiece, TokenKind};
+    for token in tokens {
+        match &token.kind {
+            TokenKind::Const(name) => {
+                names.insert(name.clone());
+            }
+            TokenKind::Str(pieces) => {
+                for piece in pieces {
+                    if let StrPiece::Interp(inner) = piece {
+                        collect_names(inner, names);
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 

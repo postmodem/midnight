@@ -79,6 +79,15 @@ fn visit_stmt(s: &Stmt, depth: usize, f: Visit<'_>) {
                 visit_expr(arg, depth, f);
             }
         }
+        StmtKind::WindowOpen {
+            title,
+            width,
+            height,
+        } => {
+            visit_expr(title, depth, f);
+            visit_expr(width, depth, f);
+            visit_expr(height, depth, f);
+        }
     }
 }
 

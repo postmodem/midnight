@@ -112,7 +112,7 @@ use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -173,12 +173,76 @@ fn midnight() -> Command {
     }
 }
 
-/// A command that runs a compiled program with no GPU device.
-fn on_cpu(exe: &Path) -> Command {
+/// A command that runs a compiled program with no GPU device and, when it
+/// has a window, headless, with the commands of its `.drive` file.
+fn on_cpu(exe: &Path, source: &Path) -> Command {
     let mut command = Command::new(exe);
     command.env("MIDNIGHT_GPU", "off");
+    headless(&mut command, source, false);
     command
 }
+
+/// Sets the variables of a headless run of `source`, read only by a
+/// program with a window: `MIDNIGHT_WINDOW=headless`, and `MIDNIGHT_DRIVE`
+/// set to the program's `.drive` file, or to an empty one. Unless
+/// `captures`, the `capture` commands are left out, since a run with no
+/// device has no frames. The desktop's display variables are removed.
+fn headless(command: &mut Command, source: &Path, captures: bool) {
+    command
+        .env("MIDNIGHT_WINDOW", "headless")
+        .env("MIDNIGHT_DRIVE", drive_file(source, captures))
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("DISPLAY");
+}
+
+/// The commands a test run of `source` is given. `capture` lines are kept
+/// as empty lines when they are left out, so line numbers stay the same.
+fn drive_file(source: &Path, captures: bool) -> PathBuf {
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    let dir = DIR.get_or_init(|| scratch("drives"));
+    let commands = std::fs::read_to_string(source.with_extension("drive")).unwrap_or_default();
+    let kept: String = commands
+        .split_inclusive('\n')
+        .map(|line| {
+            let command = line.trim_start();
+            if !captures && (command.starts_with("capture ") || command.starts_with("capture\t")) {
+                "\n"
+            } else {
+                line
+            }
+        })
+        .collect();
+    let name = format!(
+        "{}{}.drive",
+        source.to_string_lossy().replace(['/', '.'], "_"),
+        if captures { "-captures" } else { "" }
+    );
+    let path = dir.join(name);
+    let partial = dir.join(format!(
+        "{}.{:?}",
+        path.file_name().unwrap().to_string_lossy(),
+        std::thread::current().id()
+    ));
+    std::fs::write(&partial, kept).expect("write a drive file");
+    std::fs::rename(&partial, &path).expect("move a drive file");
+    path
+}
+
+/// The answers of `MIDNIGHT_DRIVE`'s commands in standard error, and the
+/// rest of it.
+fn split_drive(stderr: &str) -> (String, String) {
+    let mut drive = String::new();
+    let mut rest = String::new();
+    for line in stderr.split_inclusive('\n') {
+        match line.strip_prefix(DRIVE_SAID) {
+            Some(answer) => drive.push_str(answer),
+            None => rest.push_str(line),
+        }
+    }
+    (drive, rest)
+}
+
+const DRIVE_SAID: &str = "midnight: drive: ";
 
 /// The `.12am` files directly inside `dir`, sorted. Empty if it is missing.
 fn programs(dir: &str) -> Vec<PathBuf> {
@@ -288,28 +352,30 @@ fn expect(expected_path: &Path, actual: &str, what: &str) -> Result<(), String> 
 fn run_ok(dir: &Path, source: &Path, mode: Mode) -> Result<(), String> {
     let exe = exe_path(dir, source, mode);
     build(source, &exe, mode)?;
-    let output: Output = on_cpu(&exe).output().expect("run program");
+    let run = run_within(&mut on_cpu(&exe, source), RUN_LIMIT);
     let label = format!("{} ({mode:?})", source.display());
-    if output.status.code() != Some(0) {
+    if run.status != Some(0) {
         return Err(format!(
-            "{label}: exited with {:?}\n--- stdout\n{}--- stderr\n{}",
-            output.status,
-            text(&output.stdout),
-            text(&output.stderr)
+            "{label}: exited with {:?}{}\n--- stdout\n{}--- stderr\n{}",
+            run.status,
+            if run.timed_out {
+                " (still running)"
+            } else {
+                ""
+            },
+            run.stdout,
+            run.stderr
         ));
     }
-    if !output.stderr.is_empty() {
-        return Err(format!(
-            "{label}: wrote to standard error\n{}",
-            text(&output.stderr)
-        ));
+    if !run.stderr.is_empty() {
+        return Err(format!("{label}: wrote to standard error\n{}", run.stderr));
     }
     // Only the release run may write the expected file; debug must match it.
     let out_path = source.with_extension("out");
     if update_expect() && mode == Mode::Debug {
         return Ok(());
     }
-    expect(&out_path, &text(&output.stdout), "standard output")
+    expect(&out_path, &run.stdout, "standard output")
         .map_err(|message| format!("{label}: {message}"))
 }
 
@@ -462,7 +528,7 @@ fn panic_programs() {
     let failures = for_each_parallel(&jobs, |(source, mode)| {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
-        let run = run_within(&mut on_cpu(&exe), PANIC_LIMIT);
+        let run = run_within(&mut on_cpu(&exe, source), PANIC_LIMIT);
         let label = format!("{} ({mode:?})", source.display());
         if run.timed_out {
             return Err(format!(
@@ -771,14 +837,18 @@ const DEVICE_THREADS: &str = "4,small";
 /// the `info` lines and giving the further words of `MIDNIGHT_GPU` in
 /// `more`, and with `MIDNIGHT_THREADS` set to `threads` when that is
 /// given. Fails when the program finds no such device or runs a GPU block
-/// on the CPU, unless `more` has `strict-cpu` and the block is strict.
+/// on the CPU, unless `more` has `strict-cpu` and the block is strict. A
+/// program with a window runs headless with its commands, `capture` left
+/// out, and the answers to them are not in `stderr`.
 fn run_on_device(
     exe: &Path,
+    source: &Path,
     device: Device,
     more: &[&str],
     threads: Option<&str>,
 ) -> Result<DeviceRun, String> {
     let mut command = Command::new(exe);
+    headless(&mut command, source, false);
     if let Some(threads) = threads {
         command.env("MIDNIGHT_THREADS", threads);
     }
@@ -802,7 +872,8 @@ fn run_on_device(
         stats: String::new(),
         strict: None,
     };
-    for line in text(&output.stderr).split_inclusive('\n') {
+    let (_, stderr) = split_drive(&text(&output.stderr));
+    for line in stderr.split_inclusive('\n') {
         let Some(said) = line.strip_prefix("midnight: gpu: ") else {
             run.stderr.push_str(line);
             continue;
@@ -907,7 +978,7 @@ fn run_gpu_program(
             how.push_str(&format!(", MIDNIGHT_THREADS={threads}"));
         }
         let label = format!("{} ({how})", source.display());
-        let run = run_on_device(&exe, device, more, threads)
+        let run = run_on_device(&exe, source, device, more, threads)
             .map_err(|message| format!("{label}: {message}"))?;
         let strict_line = match more {
             _ if !strict => None,
@@ -1148,7 +1219,7 @@ fn gpu_stats_match_plan() {
                     format!("{STATS_PROGRAM} ({mode:?}, MIDNIGHT_THREADS={threads})")
                 }
             };
-            let run = run_on_device(&exe, device, &["stats"], threads)
+            let run = run_on_device(&exe, source, device, &["stats"], threads)
                 .map_err(|message| format!("{label}: {message}"))?;
             if run.status != Some(0) || run.ticks.len() < 3 {
                 return Err(format!(
@@ -1235,7 +1306,7 @@ fn gpu_stats_match_expected() {
                 continue;
             }
             let label = format!("{} ({mode:?}{how})", source.display());
-            let run = run_on_device(&exe, device, &words, threads)
+            let run = run_on_device(&exe, source, device, &words, threads)
                 .map_err(|message| format!("{label}: {message}"))?;
             if run.status != Some(0) || !run.stderr.is_empty() {
                 return Err(format!(
@@ -1562,6 +1633,9 @@ struct TimedRun {
     status: Option<i32>,
     stdout: String,
     stderr: String,
+    /// The answers to `MIDNIGHT_DRIVE`'s commands, without their
+    /// `midnight: drive: `. They are not in `stderr`.
+    drive: String,
     /// The program was still running when the limit passed, and was killed.
     timed_out: bool,
 }
@@ -1601,10 +1675,12 @@ fn run_within(command: &mut Command, limit: Duration) -> TimedRun {
             }
             std::thread::sleep(Duration::from_millis(2));
         };
+        let (drive, stderr) = split_drive(&text(&read_err.join().expect("read standard error")));
         TimedRun {
             status: if timed_out { None } else { status.code() },
             stdout: text(&read_out.join().expect("read standard output")),
-            stderr: text(&read_err.join().expect("read standard error")),
+            stderr,
+            drive,
             timed_out,
         }
     })
@@ -1813,7 +1889,7 @@ fn run_with_threads(
     let mut expected_stdout = if stops { None } else { Some(read("out")?) };
     for setting in settings {
         let label = format!("{} ({how}, MIDNIGHT_THREADS={setting})", source.display());
-        let mut command = on_cpu(exe);
+        let mut command = on_cpu(exe, source);
         command.env("MIDNIGHT_THREADS", setting);
         let run = run_within(&mut command, limit);
         if run.timed_out {
@@ -1878,7 +1954,7 @@ fn splits_match_expected() {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
         let label = format!("{} ({mode:?})", source.display());
-        let mut command = on_cpu(&exe);
+        let mut command = on_cpu(&exe, source);
         command.env("MIDNIGHT_THREADS", "4,small,info");
         let run = run_within(&mut command, RUN_LIMIT);
         let said = run.stderr.strip_prefix(&format!("{THREADS_SAID}4\n"));
@@ -1993,7 +2069,7 @@ fn tsan_programs() {
 fn threads_said(dir: &Path, source: &Path, threads: &str) -> String {
     let exe = exe_path(dir, source, Mode::Release);
     build(source, &exe, Mode::Release).unwrap_or_else(|message| panic!("{message}"));
-    let mut command = on_cpu(&exe);
+    let mut command = on_cpu(&exe, source);
     command.env("MIDNIGHT_THREADS", threads);
     let run = run_within(&mut command, RUN_LIMIT);
     let expected = std::fs::read_to_string(source.with_extension("out")).expect("read .out");
@@ -2030,6 +2106,231 @@ fn pieces_and_threads_follow_the_work() {
         threads_said(&dir, source, "1,info"),
         format!("{THREADS_SAID}1\n")
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A program with a window that opens it, lets ticks run until it is
+/// closed, and ticks twice more.
+const DRIVEN: &str = "\
+Window.open(\"driven\", 100, 100)
+World.run
+World.tick
+World.tick
+";
+
+/// Builds `text` in release mode as `dir/NAME` and returns its path.
+fn build_text(dir: &Path, name: &str, text: &str) -> PathBuf {
+    let source = dir.join(format!("{name}.12am"));
+    std::fs::write(&source, text).expect("write a test program");
+    let exe = dir.join(name);
+    build(&source, &exe, Mode::Release).unwrap_or_else(|message| panic!("{message}"));
+    exe
+}
+
+/// Runs a program with no device, `MIDNIGHT_WINDOW` set to `words` and the
+/// commands in `commands`, written to `dir/NAME.drive`. Returns the run
+/// and the name of the file of commands.
+fn drive(dir: &Path, exe: &Path, name: &str, words: &str, commands: &str) -> (TimedRun, String) {
+    let file = dir.join(format!("{name}.drive"));
+    std::fs::write(&file, commands).expect("write commands");
+    let mut command = Command::new(exe);
+    command
+        .env("MIDNIGHT_GPU", "off")
+        .env("MIDNIGHT_WINDOW", words)
+        .env("MIDNIGHT_DRIVE", &file)
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("DISPLAY");
+    (
+        run_within(&mut command, PANIC_LIMIT),
+        file.to_string_lossy().into_owned(),
+    )
+}
+
+/// Every way a command can be wrong stops the program with status 1 and a
+/// line that names the file and the line, after the answers to the
+/// commands before it.
+#[test]
+fn drive_errors() {
+    let dir = scratch("drive-errors");
+    let exe = build_text(&dir, "driven", DRIVEN);
+    let cases: &[(&str, &str, &str)] = &[
+        ("tick\nfly\n", "tick\n", "2: unknown command `fly`"),
+        (
+            "tick 0\n",
+            "",
+            "1: `tick` takes a number of ticks from 1 up, or nothing",
+        ),
+        (
+            "tick two\n",
+            "",
+            "1: `tick` takes a number of ticks from 1 up, or nothing",
+        ),
+        (
+            "tick 1 2\n",
+            "",
+            "1: `tick` takes a number of ticks from 1 up, or nothing",
+        ),
+        (
+            "# a comment\n\nresize 10\n",
+            "",
+            "3: `resize` takes a width and a height in points, each from 1 to 8192",
+        ),
+        (
+            "resize 0 10\n",
+            "",
+            "1: `resize` takes a width and a height in points, each from 1 to 8192",
+        ),
+        (
+            "resize 8193 10\n",
+            "",
+            "1: `resize` takes a width and a height in points, each from 1 to 8192",
+        ),
+        (
+            "resize 10 10 10\n",
+            "",
+            "1: `resize` takes a width and a height in points, each from 1 to 8192",
+        ),
+        ("scale 0.4\n", "", "1: `scale` takes a number from 0.5 to 4"),
+        (
+            "scale 4.01\n",
+            "",
+            "1: `scale` takes a number from 0.5 to 4",
+        ),
+        ("scale 1e2\n", "", "1: `scale` takes a number from 0.5 to 4"),
+        ("scale -1\n", "", "1: `scale` takes a number from 0.5 to 4"),
+        ("scale\n", "", "1: `scale` takes a number from 0.5 to 4"),
+        (
+            "scale 4\nresize 4000 10\n",
+            "scale 4\n",
+            "2: a frame of 16000x40 pixels is larger than 8192 by 8192",
+        ),
+        ("close now\n", "", "1: `close` takes nothing"),
+        ("capture\n", "", "1: `capture` takes the name of a file"),
+        (
+            "capture frame.png\n",
+            "",
+            "1: can't capture: the program has no device",
+        ),
+        (
+            "close\ntick\ncapture frame.png\n",
+            "close\ntick\n",
+            "3: can't capture: no window is open",
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (index, (commands, answers, error)) in cases.iter().enumerate() {
+        let (run, file) = drive(&dir, &exe, &format!("case{index}"), "headless", commands);
+        let expected = format!("{answers}{file}:{error}\n");
+        if run.status != Some(1) || run.drive != expected || !run.stderr.is_empty() {
+            failures.push(format!(
+                "{commands:?}: exited with {:?}\n--- expected\n{expected}--- answers\n{}--- stderr\n{}---",
+                run.status, run.drive, run.stderr
+            ));
+        }
+    }
+    // A program that shows its window takes no `resize`; one that never
+    // opens it carries the command out when it ends.
+    let quiet = build_text(&dir, "quiet", "Window.background = Color(1, 2, 3)\n");
+    let (run, file) = drive(&dir, &quiet, "shown", "", "resize 10 10\n");
+    let expected = format!("{file}:1: `resize` needs MIDNIGHT_WINDOW=headless\n");
+    if run.status != Some(1) || run.drive != expected {
+        failures.push(format!(
+            "resize with a window: exited with {:?}\n--- expected\n{expected}--- answers\n{}---",
+            run.status, run.drive
+        ));
+    }
+    // A file that can't be opened.
+    let missing = dir.join("missing").join("commands");
+    let mut command = Command::new(&exe);
+    command
+        .env("MIDNIGHT_GPU", "off")
+        .env("MIDNIGHT_WINDOW", "headless")
+        .env("MIDNIGHT_DRIVE", &missing);
+    let run = run_within(&mut command, PANIC_LIMIT);
+    let expected = format!(
+        "can't open {}: No such file or directory\n",
+        missing.display()
+    );
+    if run.status != Some(1) || run.drive != expected {
+        failures.push(format!(
+            "a missing file: exited with {:?}\n--- expected\n{expected}--- answers\n{}---",
+            run.status, run.drive
+        ));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("command errors", cases.len() + 2, failures);
+}
+
+/// Each command is answered with the command as written, `tick` when its
+/// last tick has finished or with the ticks that ran when the program
+/// ended first; when the program ends the commands up to the next `tick`
+/// are carried out, and that `tick` is not.
+#[test]
+fn drive_answers() {
+    let dir = scratch("drive-answers");
+    let exe = build_text(&dir, "driven", DRIVEN);
+    let (run, _) = drive(
+        &dir,
+        &exe,
+        "ended",
+        "headless",
+        "  tick   2  \n# no answer\n\nclose\ntick 5\nclose\n\tclose\ntick\nclose\n",
+    );
+    assert_eq!(run.status, Some(0), "{}", run.stderr);
+    assert_eq!(
+        run.drive,
+        "tick   2\nclose\ntick 5: the program ended after 3 ticks\nclose\nclose\n"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Without `headless`, a program that cannot show a window stops at
+/// `Window.open` with a run-time error that names `MIDNIGHT_WINDOW`.
+#[test]
+fn a_window_that_cannot_be_shown_is_an_error() {
+    let dir = scratch("window-not-shown");
+    let exe = build_text(&dir, "driven", DRIVEN);
+    let (run, _) = drive(&dir, &exe, "shown", "", "tick\n");
+    assert_eq!(run.status, Some(1), "{}", run.stderr);
+    let prefix = format!(
+        "{}:1: runtime error: Window.open: no window can be shown: ",
+        dir.join("driven.12am").display()
+    );
+    assert!(
+        run.stderr.starts_with(&prefix)
+            && run
+                .stderr
+                .ends_with("; set MIDNIGHT_WINDOW=headless to run without one\n"),
+        "{}",
+        run.stderr
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A program with a window reports each word of `MIDNIGHT_WINDOW` it does
+/// not know, and goes on. A program without one reads neither that
+/// variable nor `MIDNIGHT_DRIVE`.
+#[test]
+fn only_programs_with_a_window_read_the_window_variables() {
+    let dir = scratch("window-variables");
+    let exe = build_text(&dir, "driven", DRIVEN);
+    let (run, _) = drive(&dir, &exe, "words", "bogus,headless,,info", "close\ntick\n");
+    assert_eq!(run.status, Some(0), "{}", run.stderr);
+    assert_eq!(
+        run.stderr,
+        "midnight: MIDNIGHT_WINDOW: unknown word `bogus`\n\
+         midnight: window: 100x100 points, 100x100 pixels, headless\n"
+    );
+    let hello = dir.join("hello");
+    build(Path::new("examples/hello.12am"), &hello, Mode::Release)
+        .unwrap_or_else(|message| panic!("{message}"));
+    let mut command = Command::new(&hello);
+    command
+        .env("MIDNIGHT_WINDOW", "bogus")
+        .env("MIDNIGHT_DRIVE", dir.join("missing").join("commands"));
+    let run = run_within(&mut command, PANIC_LIMIT);
+    assert_eq!(run.status, Some(0));
+    assert_eq!((run.stderr.as_str(), run.drive.as_str()), ("", ""));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

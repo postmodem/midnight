@@ -1,0 +1,7 @@
+tick 1: 320x240
+tick 2: closed
+first: 320x240, open false
+second: 640x480, open true
+tick 5: 64x48
+tick 5: closed
+after 6 ticks: 64x48, open false

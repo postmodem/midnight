@@ -38,6 +38,7 @@ impl<'a> Checker<'a> {
     // ----- pass 1: names -----
 
     pub(super) fn declare(&mut self, program: &'a ast::Program) {
+        self.builtins = program.builtins;
         for item in &program.items {
             match item {
                 ast::Item::Require(_) => {}
@@ -110,7 +111,7 @@ impl<'a> Checker<'a> {
     /// Registers a capitalized name. Reports a built-in name or a
     /// duplicate, and returns whether the name was free.
     fn claim_global(&mut self, name: &ast::Ident, global: Global) -> bool {
-        if BUILTIN_NAMES.contains(&name.name.as_str()) {
+        if BUILTIN_NAMES.contains(&name.name.as_str()) && !self.is_builtin(name.span) {
             self.err(
                 format!("`{}` is a built-in name and can't be redefined", name.name),
                 name.span,

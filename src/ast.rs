@@ -11,7 +11,7 @@
 //! - a `-` directly before a number literal is folded into the literal
 //!   (except before `**`, as the reference describes).
 
-use crate::source::Span;
+use crate::source::{FileId, Span};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ident {
@@ -22,9 +22,15 @@ pub struct Ident {
 /// A whole program: the root file's items, with each required file's items
 /// in place of its first `require`. The parser returns the items of one file;
 /// `source::load` splices files together and removes [`Item::Require`].
+///
+/// When the program names a built-in declaration that is written in
+/// Midnight (`Color`, `Window`, `WindowResized`, `WindowClosed`), the items
+/// begin with those declarations, parsed from a file of their own.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Program {
     pub items: Vec<Item>,
+    /// The file of the built-in declarations among the items, if any.
+    pub builtins: Option<FileId>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

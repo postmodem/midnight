@@ -287,6 +287,15 @@ fn stmt_eaches<'p>(stmt: &'p Stmt, out: &mut Vec<&'p Stmt>) {
                 expr_eaches(arg, out);
             }
         }
+        StmtKind::WindowOpen {
+            title,
+            width,
+            height,
+        } => {
+            expr_eaches(title, out);
+            expr_eaches(width, out);
+            expr_eaches(height, out);
+        }
     }
 }
 

@@ -1,0 +1,23 @@
+error: expected `Int`, found `Float`
+ --> tests/fail/window_open_arguments.12am:4:18
+  |
+4 | Window.open("x", 1.5, 10)
+  |                  ^^^ a `Float` does not convert to `Int`; use `to_i`, `floor`, `ceil` or `round`
+
+error: expected `String`, found `Int`
+ --> tests/fail/window_open_arguments.12am:5:13
+  |
+5 | Window.open(3, 10, 10)
+  |             ^
+
+error: `Window.open` takes 3 arguments, but 2 were given
+ --> tests/fail/window_open_arguments.12am:6:1
+  |
+6 | Window.open("x", 10)
+  | ^^^^^^^^^^^^^^^^^^^^
+
+error: `Window.open` takes no keyword arguments
+ --> tests/fail/window_open_arguments.12am:7:18
+  |
+7 | Window.open("x", width: 10, 10)
+  |                  ^^^^^ pass the value by position

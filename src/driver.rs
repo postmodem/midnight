@@ -18,6 +18,8 @@ pub struct Parts {
     /// The program has a loop that can be split across threads: a GPU
     /// block or an independent `each`.
     pub threads: bool,
+    /// The program has a window.
+    pub window: bool,
 }
 
 const RELEASE_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off"];
@@ -102,7 +104,11 @@ fn compile_in(
     debug: bool,
     parts: Parts,
 ) -> Result<(), String> {
-    let Parts { gpu, threads } = parts;
+    let Parts {
+        gpu,
+        threads,
+        window,
+    } = parts;
     let write = |name: &str, text: &str| {
         std::fs::write(dir.join(name), text).map_err(|error| {
             format!(
@@ -141,6 +147,11 @@ fn compile_in(
     }
     if gpu_flags.is_some() {
         command.arg("-DMN_GPU");
+    }
+    // The runtime keeps the window's state and reads MIDNIGHT_WINDOW and
+    // MIDNIGHT_DRIVE when the program has a window.
+    if window {
+        command.arg("-DMN_WINDOW");
     }
     // The runtime reads MIDNIGHT_THREADS and splits loops when the pool is
     // built with it.

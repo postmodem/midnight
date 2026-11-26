@@ -1,0 +1,11 @@
+error: unknown member `widht` for `Window`
+ --> tests/fail/window_unknown_member.12am:4:13
+  |
+4 | puts Window.widht
+  |             ^^^^^ did you mean `width`?
+
+error: `Window.open?` takes no arguments
+ --> tests/fail/window_unknown_member.12am:5:13
+  |
+5 | puts Window.open?()
+  |             ^^^^^ read it without parentheses

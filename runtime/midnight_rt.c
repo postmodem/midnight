@@ -102,7 +102,14 @@ _Noreturn void mn_panic(MnLoc loc, const char *format, ...) {
 
 static void gpu_stats_line(void);
 
+#ifdef MN_WINDOW
+static void window_finish(void);
+#endif
+
 _Noreturn void mn_exit(int64_t status) {
+#ifdef MN_WINDOW
+    window_finish();
+#endif
     gpu_stats_line();
     mn_leave((int)(status & 0xff));
 }
@@ -933,6 +940,378 @@ static void events_discard(uint32_t event, uint64_t until) {
     buf->base = until;
 }
 
+/* ---- The window ------------------------------------------------------------ */
+
+#ifdef MN_WINDOW
+const MnWindowProgram *mn_window_program;
+
+/* The window as the runtime knows it. `open` is true from Window.open to
+ * the tick that reports the close; the sizes are what the desktop gives
+ * now, and reach the resource when a tick begins. */
+static struct {
+    bool headless;
+    bool info;
+
+    bool open;
+    bool closing;
+    int64_t width;
+    int64_t height;
+    int64_t pixel_width;
+    int64_t pixel_height;
+    /* A headless window's scale: `scale_num / scale_den` pixels a point. */
+    int64_t scale_num;
+    int64_t scale_den;
+
+    /* MIDNIGHT_DRIVE, or NULL. */
+    const char *drive_name;
+    FILE *drive;
+    /* The commands have run out. */
+    bool drive_done;
+    int64_t drive_line;
+    char *line;
+    size_t line_capacity;
+    /* The `tick` command being carried out: its text, and how many of its
+     * ticks are still to begin and have begun. */
+    char *tick_text;
+    int64_t ticks_left;
+    int64_t ticks_run;
+} win;
+
+/* Prints a command's answer. */
+static void drive_answer(const char *format, ...)
+    __attribute__((format(printf, 1, 2)));
+static void drive_answer(const char *format, ...) {
+    va_list args;
+    fflush(stdout);
+    fputs("midnight: drive: ", stderr);
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputc('\n', stderr);
+}
+
+/* Reports a command that can't be carried out and ends the program. */
+static _Noreturn void drive_fail(const char *format, ...)
+    __attribute__((format(printf, 1, 2)));
+static _Noreturn void drive_fail(const char *format, ...) {
+    va_list args;
+    fflush(stdout);
+    fprintf(stderr, "midnight: drive: %s:%lld: ", win.drive_name,
+            (long long)win.drive_line);
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputc('\n', stderr);
+    mn_leave(1);
+}
+
+/* Reads MIDNIGHT_WINDOW and MIDNIGHT_DRIVE. */
+static void window_start(void) {
+    const char *list = getenv("MIDNIGHT_WINDOW");
+    while (list && *list != '\0') {
+        size_t len = strcspn(list, ",");
+        if (len == 8 && memcmp(list, "headless", 8) == 0) {
+            win.headless = true;
+        } else if (len == 4 && memcmp(list, "info", 4) == 0) {
+            win.info = true;
+        } else if (len != 0) {
+            fprintf(stderr, "midnight: MIDNIGHT_WINDOW: unknown word `%.*s`\n",
+                    (int)len, list);
+        }
+        list += len;
+        if (*list == ',') list++;
+    }
+    const char *drive = getenv("MIDNIGHT_DRIVE");
+    if (drive && *drive != '\0') win.drive_name = drive;
+}
+
+/* The pixels of `points` at the headless window's scale, halves rounded
+ * up. */
+static int64_t scaled(int64_t points) {
+    return (points * win.scale_num * 2 + win.scale_den) / (win.scale_den * 2);
+}
+
+/* A whole number from 1 to `most`, the whole of `word`, or -1. */
+static int64_t drive_count(const char *word, int64_t most) {
+    int64_t value = 0;
+    if (*word == '\0') return -1;
+    for (const char *c = word; *c != '\0'; c++) {
+        if (*c < '0' || *c > '9') return -1;
+        value = value * 10 + (*c - '0');
+        if (value > most) return -1;
+    }
+    return value < 1 ? -1 : value;
+}
+
+/* The command's words, split at spaces and tabs, in place. Returns how
+ * many there are, at most `most`; one more means too many. */
+static int drive_words(char *text, char **words, int most) {
+    int count = 0;
+    char *at = text;
+    while (*at != '\0') {
+        while (*at == ' ' || *at == '\t') *at++ = '\0';
+        if (*at == '\0') break;
+        if (count == most) return most + 1;
+        words[count++] = at;
+        while (*at != '\0' && *at != ' ' && *at != '\t') at++;
+    }
+    return count;
+}
+
+static void window_capture(const char *text, const char *file);
+
+/* Carries out one command, given without its line break and without the
+ * spaces around it. Returns true when it lets ticks run. */
+static bool drive_command(char *text) {
+    if (strncmp(text, "capture", 7) == 0 &&
+        (text[7] == ' ' || text[7] == '\t' || text[7] == '\0')) {
+        const char *file = text + 7;
+        while (*file == ' ' || *file == '\t') file++;
+        window_capture(text, file);
+        return false;
+    }
+    char *copy = mn_malloc(strlen(text) + 1);
+    strcpy(copy, text);
+    char *words[4];
+    int count = drive_words(copy, words, 3);
+    const char *name = words[0];
+    bool runs = false;
+    if (strcmp(name, "tick") == 0) {
+        int64_t ticks = 1;
+        if (count == 2) ticks = drive_count(words[1], INT64_MAX / 16);
+        if (count > 2 || ticks < 1) {
+            drive_fail("`tick` takes a number of ticks from 1 up, or nothing");
+        }
+        free(win.tick_text);
+        win.tick_text = mn_malloc(strlen(text) + 1);
+        strcpy(win.tick_text, text);
+        win.ticks_left = ticks;
+        win.ticks_run = 0;
+        runs = true;
+    } else if (strcmp(name, "resize") == 0 || strcmp(name, "scale") == 0) {
+        if (!win.headless) {
+            drive_fail("`%s` needs MIDNIGHT_WINDOW=headless", name);
+        }
+        if (name[0] == 'r') {
+            int64_t width = count == 3 ? drive_count(words[1], MN_WINDOW_LARGEST) : -1;
+            int64_t height = count == 3 ? drive_count(words[2], MN_WINDOW_LARGEST) : -1;
+            if (width < 1 || height < 1) {
+                drive_fail("`resize` takes a width and a height in points, "
+                           "each from 1 to %d",
+                           MN_WINDOW_LARGEST);
+            }
+            win.width = width;
+            win.height = height;
+        } else {
+            /* A decimal number: digits, then optionally a point and at
+             * most six digits more. */
+            int64_t num = 0;
+            int64_t den = 1;
+            bool point = false;
+            bool digits = false;
+            bool bad = count != 2;
+            for (const char *c = bad ? "" : words[1]; *c != '\0' && !bad; c++) {
+                if (*c == '.' && !point) {
+                    point = true;
+                } else if (*c >= '0' && *c <= '9' && num < 100000000 &&
+                           den < 1000000) {
+                    num = num * 10 + (*c - '0');
+                    if (point) den *= 10;
+                    digits = true;
+                } else {
+                    bad = true;
+                }
+            }
+            if (bad || !digits || num * 2 < den || num > den * 4) {
+                drive_fail("`scale` takes a number from 0.5 to 4");
+            }
+            win.scale_num = num;
+            win.scale_den = den;
+        }
+        if (win.open && (scaled(win.width) > MN_WINDOW_LARGEST ||
+                         scaled(win.height) > MN_WINDOW_LARGEST)) {
+            drive_fail("a frame of %lldx%lld pixels is larger than %d by %d",
+                       (long long)scaled(win.width),
+                       (long long)scaled(win.height), MN_WINDOW_LARGEST,
+                       MN_WINDOW_LARGEST);
+        }
+        win.pixel_width = scaled(win.width);
+        win.pixel_height = scaled(win.height);
+        drive_answer("%s", text);
+    } else if (strcmp(name, "close") == 0) {
+        if (count != 1) drive_fail("`close` takes nothing");
+        if (win.open) win.closing = true;
+        drive_answer("%s", text);
+    } else {
+        drive_fail("unknown command `%s`", name);
+    }
+    free(copy);
+    return runs;
+}
+
+/* Reads and carries out commands until one lets ticks run, or until
+ * `until_tick` is false and the commands run out. Returns false when they
+ * have run out. */
+static bool drive_until_tick(void) {
+    if (win.drive_done) return false;
+    if (!win.drive) {
+        win.drive = fopen(win.drive_name, "r");
+        if (!win.drive) {
+            fflush(stdout);
+            fprintf(stderr, "midnight: drive: can't open %s: %s\n",
+                    win.drive_name, strerror(errno));
+            mn_leave(1);
+        }
+    }
+    for (;;) {
+        ssize_t got = getline(&win.line, &win.line_capacity, win.drive);
+        if (got < 0) {
+            win.drive_done = true;
+            return false;
+        }
+        win.drive_line++;
+        char *text = win.line;
+        size_t len = (size_t)got;
+        while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r' ||
+                           text[len - 1] == ' ' || text[len - 1] == '\t')) {
+            len--;
+        }
+        text[len] = '\0';
+        while (*text == ' ' || *text == '\t') text++;
+        if (*text == '\0' || *text == '#') continue;
+        if (drive_command(text)) return true;
+    }
+}
+
+/* Answers the `tick` command when its last tick has run, or with the
+ * number that ran when the program ended first. */
+static void drive_tick_answer(bool ending) {
+    if (!win.tick_text) return;
+    if (win.ticks_left == 0) {
+        drive_answer("%s", win.tick_text);
+    } else if (ending) {
+        drive_answer("%s: the program ended after %lld tick%s", win.tick_text,
+                     (long long)win.ticks_run, win.ticks_run == 1 ? "" : "s");
+    } else {
+        return;
+    }
+    free(win.tick_text);
+    win.tick_text = NULL;
+}
+
+void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
+    (void)title;
+    if (mn_world.in_tick) {
+        mn_panic(loc, "Window.open called while a tick is in progress");
+    }
+    if (mn_world.defer_depth != 0) {
+        mn_panic(loc, "Window.open called inside an `each`");
+    }
+    if (win.open) mn_panic(loc, "Window.open called while a window is open");
+    const char *names[2] = {"width", "height"};
+    int64_t sizes[2] = {width, height};
+    for (int i = 0; i < 2; i++) {
+        if (sizes[i] < 1) {
+            mn_panic(loc, "Window.open: a %s of %lld is less than 1", names[i],
+                     (long long)sizes[i]);
+        }
+        if (sizes[i] > MN_WINDOW_LARGEST) {
+            mn_panic(loc, "Window.open: a %s of %lld is more than %d", names[i],
+                     (long long)sizes[i], MN_WINDOW_LARGEST);
+        }
+    }
+    if (!win.headless) {
+        mn_panic(loc,
+                 "Window.open: no window can be shown: %s; set "
+                 "MIDNIGHT_WINDOW=headless to run without one",
+                 "the program was built without the window flags");
+    }
+    win.open = true;
+    win.closing = false;
+    win.scale_num = 1;
+    win.scale_den = 1;
+    win.width = width;
+    win.height = height;
+    win.pixel_width = width;
+    win.pixel_height = height;
+    MnWindow *window = mn_window_program->window;
+    window->width = win.width;
+    window->height = win.height;
+    window->pixel_width = win.pixel_width;
+    window->pixel_height = win.pixel_height;
+    window->open = true;
+    if (win.info) {
+        fflush(stdout);
+        fprintf(stderr,
+                "midnight: window: %lldx%lld points, %lldx%lld pixels, "
+                "headless\n",
+                (long long)win.width, (long long)win.height,
+                (long long)win.pixel_width, (long long)win.pixel_height);
+    }
+}
+
+/* What happens before the first system of a tick runs. */
+static void window_tick_begin(void) {
+    if (win.open && win.drive_name && win.ticks_left == 0 &&
+        !drive_until_tick()) {
+        win.closing = true;
+    }
+    if (win.ticks_left > 0) {
+        win.ticks_left--;
+        win.ticks_run++;
+    }
+    if (!win.open) return;
+    if (win.drive_done) win.closing = true;
+    MnWindow *window = mn_window_program->window;
+    if (window->width != win.width || window->height != win.height ||
+        window->pixel_width != win.pixel_width ||
+        window->pixel_height != win.pixel_height) {
+        window->width = win.width;
+        window->height = win.height;
+        window->pixel_width = win.pixel_width;
+        window->pixel_height = win.pixel_height;
+        MnWindowResized *event = mn_emit(mn_window_program->resized);
+        event->width = win.width;
+        event->height = win.height;
+        event->pixel_width = win.pixel_width;
+        event->pixel_height = win.pixel_height;
+    }
+    if (win.closing) {
+        win.open = false;
+        win.closing = false;
+        window->open = false;
+        mn_emit(mn_window_program->closed);
+        mn_stop();
+    }
+}
+
+/* What happens when a tick has ended. */
+static void window_tick_end(void) { drive_tick_answer(false); }
+
+/* Writes the last frame to `file`, for `capture`. */
+static void window_capture(const char *text, const char *file) {
+    (void)text;
+    if (*file == '\0') drive_fail("`capture` takes the name of a file");
+    if (!win.open) drive_fail("can't capture: no window is open");
+    drive_fail("can't capture: the program has no device");
+}
+
+/* When the program ends: answers the `tick` command, carries out the
+ * commands up to the next `tick`, and closes the window. */
+static void window_finish(void) {
+    drive_tick_answer(true);
+    if (win.drive_name && !win.drive_done) drive_until_tick();
+    free(win.tick_text);
+    win.tick_text = NULL;
+    free(win.line);
+    win.line = NULL;
+    if (win.drive) fclose(win.drive);
+    win.drive = NULL;
+    win.drive_done = true;
+    win.open = false;
+}
+#endif
+
 /* ---- Systems and ticks --------------------------------------------------- */
 
 #ifdef MN_GPU_SYSTEMS
@@ -942,6 +1321,9 @@ static void gpu_tick_end(void);
 static void tick(void) {
     MnWorld *w = &mn_world;
     const MnProgram *program = w->program;
+#ifdef MN_WINDOW
+    window_tick_begin();
+#endif
     gpu_stats_line();
     w->in_tick = true;
     for (uint32_t i = 0; i < program->system_count; i++) program->systems[i]();
@@ -955,6 +1337,9 @@ static void tick(void) {
         events_discard(i, w->events[i].mark);
         w->events[i].mark = w->events[i].end;
     }
+#ifdef MN_WINDOW
+    window_tick_end();
+#endif
 }
 
 void mn_tick(MnLoc loc) {
@@ -2845,6 +3230,9 @@ void mn_start(const MnProgram *program) {
 #ifdef MN_GPU_SYSTEMS
     gpu_start();
 #endif
+#ifdef MN_WINDOW
+    window_start();
+#endif
     clock_gettime(CLOCK_MONOTONIC, &mn_started);
 }
 
@@ -2895,6 +3283,9 @@ static void world_destroy(void) {
 #endif
 
 void mn_finish(void) {
+#ifdef MN_WINDOW
+    window_finish();
+#endif
     gpu_stats_line();
     fflush(stdout);
     gpu_finish();

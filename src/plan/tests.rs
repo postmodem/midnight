@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::source::SourceMap;
-use crate::{ast, check, diag, parser};
+use crate::{check, diag, parser};
 
 const WORLD: &str = "
 component Position
@@ -44,7 +44,8 @@ fn plan_of(text: &str) -> String {
             error.message, error.span.start, error.span.end
         )
     });
-    match check::check(&ast::Program { items }, &sources) {
+    let program = crate::source::with_builtins(&mut sources, items);
+    match check::check(&program, &sources) {
         Ok(program) => render(&plan(&program)),
         Err(errors) => panic!(
             "unexpected errors:\n{}",

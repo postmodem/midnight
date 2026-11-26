@@ -1,0 +1,5 @@
+error: `Color` is a built-in name and can't be redefined
+ --> tests/fail/window_builtin_color.12am:4:8
+  |
+4 | struct Color
+  |        ^^^^^

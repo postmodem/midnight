@@ -1,0 +1,10 @@
+# expect: `Window.open` is not allowed inside an `each`
+# at: line 9, the call in the body of the `each`
+
+component Seen
+  n: Int = 0
+end
+
+each Seen do |seen|
+  Window.open("x", seen.n, 10)
+end

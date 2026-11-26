@@ -1,0 +1,5 @@
+error: `Window` is a built-in name and can't be redefined
+ --> tests/fail/window_builtin_window.12am:4:10
+  |
+4 | resource Window
+  |          ^^^^^^

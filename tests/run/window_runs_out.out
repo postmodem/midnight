@@ -1,0 +1,5 @@
+tick 0: closed
+ran 1 tick
+then 4 ticks with no window
+tick 4: closed
+open false after 5 ticks

@@ -1319,7 +1319,7 @@ impl<'a> FnCx<'a, '_> {
 }
 
 /// The values as the arguments of a C call.
-fn arg_list(values: &[Val]) -> String {
+pub(super) fn arg_list(values: &[Val]) -> String {
     let list: Vec<&str> = values.iter().map(|value| value.c.as_str()).collect();
     list.join(", ")
 }

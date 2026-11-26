@@ -1,0 +1,17 @@
+error: can't assign to `Window.width`
+ --> tests/fail/window_readonly_size.12am:4:1
+  |
+4 | Window.width = 10
+  | ^^^^^^^^^^^^ `Window.width` is read-only; only `Window.background` can be assigned
+
+error: can't assign to `Window.pixel_height`
+ --> tests/fail/window_readonly_size.12am:5:1
+  |
+5 | Window.pixel_height = 10
+  | ^^^^^^^^^^^^^^^^^^^ `Window.pixel_height` is read-only; only `Window.background` can be assigned
+
+error: can't assign to `Window.height`
+ --> tests/fail/window_readonly_size.12am:6:1
+  |
+6 | Window.height += 1
+  | ^^^^^^^^^^^^^ `Window.height` is read-only; only `Window.background` can be assigned

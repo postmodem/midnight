@@ -1,0 +1,6 @@
+# expect: `Color` is a built-in name and can't be redefined
+# at: line 4, the name `Color`
+
+struct Color
+  r: Int
+end

@@ -1,0 +1,7 @@
+# expect: `Window.open` takes a `String` and two `Int`s, by position
+# at: line 4, the `Float` width; line 5, the title that is an `Int`; line 6, two arguments; line 7, a keyword
+
+Window.open("x", 1.5, 10)
+Window.open(3, 10, 10)
+Window.open("x", 10)
+Window.open("x", width: 10, 10)

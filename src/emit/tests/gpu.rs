@@ -22,13 +22,13 @@ fn compile(text: &str) -> (Program, SourceMap) {
     );
     let items = crate::parser::parse(file, text)
         .unwrap_or_else(|error| panic!("syntax error in a test: {}\n{text}", error.message));
-    let program =
-        crate::check::check(&crate::ast::Program { items }, &sources).unwrap_or_else(|errors| {
-            panic!(
-                "errors in a test:\n{}",
-                crate::diag::render(&sources, &errors, false)
-            )
-        });
+    let program = crate::source::with_builtins(&mut sources, items);
+    let program = crate::check::check(&program, &sources).unwrap_or_else(|errors| {
+        panic!(
+            "errors in a test:\n{}",
+            crate::diag::render(&sources, &errors, false)
+        )
+    });
     (program, sources)
 }
 

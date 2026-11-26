@@ -973,8 +973,11 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             | StmtKind::On { .. }
             | StmtKind::Puts(_)
             | StmtKind::Print(_)
-            | StmtKind::Emit { .. } => {
-                unreachable!("the checker keeps lists, events and output out of GPU code")
+            | StmtKind::Emit { .. }
+            | StmtKind::WindowOpen { .. } => {
+                unreachable!(
+                    "the checker keeps lists, events, output and the window out of GPU code"
+                )
             }
         }
     }

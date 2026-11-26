@@ -1,0 +1,11 @@
+error: `WindowClosed` is a built-in name and can't be redefined
+ --> tests/fail/window_builtin_event.12am:4:7
+  |
+4 | event WindowClosed
+  |       ^^^^^^^^^^^^
+
+error: `WindowResized` is a built-in name and can't be redefined
+ --> tests/fail/window_builtin_event.12am:7:11
+  |
+7 | component WindowResized
+  |           ^^^^^^^^^^^^^

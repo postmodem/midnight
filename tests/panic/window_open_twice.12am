@@ -1,0 +1,5 @@
+# A window is open, and Window.open is called again.
+# Expected: `Window.open called while a window is open`, on line 5
+
+Window.open("first", 100, 100)
+Window.open("second", 100, 100)

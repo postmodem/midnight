@@ -1,0 +1,20 @@
+# Color alone: a built-in struct of four bytes, with a default alpha of 255.
+# A program that names Color and not Window has no window.
+
+component Paint
+  color: Color = Color(255, 128, 0)
+end
+
+c = Color(16, 32, 48)
+puts c
+puts Color(1, 2, 3, 4)
+puts c.a
+puts c == Color(16, 32, 48, 255)
+d = c
+d.r = 200
+puts d
+spawn Paint
+spawn Paint(color: Color(0, 0, 0, 0))
+each Paint do |paint|
+  puts paint.color
+end

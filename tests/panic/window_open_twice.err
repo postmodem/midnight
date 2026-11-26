@@ -1,0 +1,1 @@
+tests/panic/window_open_twice.12am:5: runtime error: Window.open called while a window is open

@@ -1,0 +1,15 @@
+# expect: the loop stays on one core for rule 6: a function it calls holds
+# `Window.open`, which is a run-time error when the call is reached. The
+# loop keeps every other rule.
+
+component Health
+  hp: Int = 10
+end
+
+def start(n: Int)
+  Window.open("x", n, n) if n > 2
+end
+
+each Health do |health|
+  start(health.hp)
+end
