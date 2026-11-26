@@ -529,13 +529,15 @@ impl<'a> FnCx<'a, '_> {
 
     /// Declares, for the table an `each` is at, the column of each term
     /// the block uses, and the handles when it reads an `Entity`
-    /// parameter. Returns those parameters.
+    /// parameter. Returns those parameters. With `from`, row 0 of what is
+    /// declared is that row of the table.
     fn columns(
         &mut self,
         query: &Query,
         params: &[LocalId],
         vector: bool,
         sfx: &str,
+        from: Option<&str>,
     ) -> Vec<LocalId> {
         let prog = self.cx.prog;
         let restrict = if vector { "restrict " } else { "" };
@@ -561,17 +563,24 @@ impl<'a> FnCx<'a, '_> {
                         .expect("a tag is not a query term");
                     let cty = self.cx.cty(&Type::Record(record));
                     let konst = if *write { "" } else { "const " };
+                    let column = match from {
+                        Some(row) => format!(
+                            "({konst}{cty} *)mn_column(table{sfx}, {}) + {row}",
+                            component.0
+                        ),
+                        None => format!("mn_column(table{sfx}, {})", component.0),
+                    };
                     self.line(&format!(
-                        "{konst}{cty} *{restrict}c{sfx}{index} = mn_column(table{sfx}, {});",
-                        component.0
+                        "{konst}{cty} *{restrict}c{sfx}{index} = {column};"
                     ));
                     self.views.insert(param.0, format!("c{sfx}{index}[i{sfx}]"));
                 }
             }
         }
         if !entities.is_empty() {
+            let from = from.map_or(String::new(), |row| format!(" + {row}"));
             self.line(&format!(
-                "const MnEntity *ents{sfx} = table{sfx}->entities;"
+                "const MnEntity *ents{sfx} = table{sfx}->entities{from};"
             ));
         }
         entities
@@ -630,7 +639,7 @@ impl<'a> FnCx<'a, '_> {
         self.line(&format!("MnTable *table{sfx} = {q}.tables[t{sfx}];"));
         self.line(&format!("uint32_t n{sfx} = table{sfx}->count;"));
         self.line(&format!("if (n{sfx} == 0) continue;"));
-        let entities = self.columns(query, params, vector, &sfx);
+        let entities = self.columns(query, params, vector, &sfx, None);
         self.line(&format!(
             "for (uint32_t i{sfx} = 0; i{sfx} < n{sfx}; i{sfx}++) {{"
         ));
@@ -777,14 +786,17 @@ impl<'a> FnCx<'a, '_> {
 
             cx.line("for (uint32_t t = 0; t < piece->table_count; t++) {");
             cx.indent += 1;
+            // The rows of the piece in this table are counted from 0, as
+            // the rows of a table are in a loop that is not split.
             cx.line("MnTable *table = piece->tables[t];");
             cx.line("const uint32_t first = t == 0 ? piece->first : 0;");
             cx.line(
-                "const uint32_t n = t + 1 == piece->table_count ? piece->end : table->count;",
+                "const uint32_t end = t + 1 == piece->table_count ? piece->end : table->count;",
             );
-            cx.line("if (first >= n) continue;");
-            let entities = cx.columns(query, params, analysis::vector_ok(body), "");
-            cx.line("for (uint32_t i = first; i < n; i++) {");
+            cx.line("if (first >= end) continue;");
+            cx.line("uint32_t n = end - first;");
+            let entities = cx.columns(query, params, analysis::vector_ok(body), "", Some("first"));
+            cx.line("for (uint32_t i = 0; i < n; i++) {");
             cx.push_scope(ScopeKind::Each {
                 label: String::new(),
                 used: false,
@@ -804,8 +816,9 @@ impl<'a> FnCx<'a, '_> {
             let flags = terms.written.len();
             for (index, (flag, _)) in terms.written.iter().enumerate() {
                 cx.line(&format!(
-                    "if ({flag}) {{ if (piece->wrote) piece->wrote[(size_t)t * {flags} + {index}] = true; {flag} = false; }}"
+                    "if (piece->wrote) piece->wrote[(size_t)t * {flags} + {index}] |= {flag};"
                 ));
+                cx.line(&format!("{flag} = false;"));
             }
             cx.indent -= 1;
             cx.line("}");

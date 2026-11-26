@@ -518,15 +518,19 @@ fn an_independent_loop_lists_what_gpu_blocks_name() {
     assert_seq(
         function,
         &[
-            "T_Body *restrict c0 = mn_column(table, 0);",
-            "const T_Other *restrict c1 = mn_column(table, 1);",
-            "for (uint32_t i = first; i < n; i++) {",
+            "uint32_t n = end - first;",
+            "T_Body *restrict c0 = (T_Body *)mn_column(table, 0) + first;",
+            "const T_Other *restrict c1 = (const T_Other *)mn_column(table, 1) + first;",
+            "for (uint32_t i = 0; i < n; i++) {",
         ],
     );
     assert_has(function, "w_0 = true;");
-    assert_has(
+    assert_seq(
         function,
-        "if (w_0) { if (piece->wrote) piece->wrote[(size_t)t * 1 + 0] = true; w_0 = false; }",
+        &[
+            "if (piece->wrote) piece->wrote[(size_t)t * 1 + 0] |= w_0;",
+            "w_0 = false;",
+        ],
     );
     assert_lacks(function, "mn_gpu_use");
     assert_lacks(function, "mn_wrote");
