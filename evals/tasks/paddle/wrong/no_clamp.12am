@@ -1,0 +1,93 @@
+# The paddle can leave the window.
+component Paddle
+  x: Int
+end
+
+component Ball
+  num: Int
+  x: Int
+  y: Int
+  vx: Int
+  vy: Int
+end
+
+resource Game
+  hits: Int = 0
+  misses: Int = 0
+end
+
+WIDTH = 320
+HEIGHT = 240
+LINE = 220
+PADDLE = 48
+STEP = 6
+
+# Where a ball starts, and where it starts again after a miss.
+def serve(num: Int) -> Ball
+  if num == 1
+    Ball(1, 40, 30, 4, 5)
+  else
+    Ball(2, 250, 106, -3, 6)
+  end
+end
+
+system steer
+  left = Keyboard.down?(Key::ArrowLeft)
+  right = Keyboard.down?(Key::ArrowRight)
+  each Paddle do |paddle|
+    paddle.x -= STEP if left && !right
+    paddle.x += STEP if right && !left
+  end
+end
+
+system move
+  each Ball do |ball|
+    ball.x += ball.vx
+    ball.y += ball.vy
+    if ball.x < 0
+      ball.x = -ball.x
+      ball.vx = -ball.vx
+    elsif ball.x > WIDTH
+      ball.x = 2 * WIDTH - ball.x
+      ball.vx = -ball.vx
+    end
+    if ball.y < 0
+      ball.y = -ball.y
+      ball.vy = -ball.vy
+    end
+  end
+end
+
+system score
+  left = 0
+  each Paddle do |paddle|
+    left = paddle.x
+  end
+  1.upto(2) do |n|
+    each Ball do |ball|
+      next unless ball.num == n && ball.y >= LINE
+      if ball.x >= left && ball.x <= left + PADDLE
+        ball.y = 2 * LINE - ball.y
+        ball.vy = -ball.vy
+        Game.hits += 1
+        puts "tick #{Time.tick + 1}: ball #{n} hit at #{ball.x}"
+      else
+        ball = serve(n)
+        Game.misses += 1
+        puts "tick #{Time.tick + 1}: ball #{n} missed"
+      end
+    end
+  end
+end
+
+spawn serve(2)
+spawn Paddle(136)
+spawn serve(1)
+
+Window.open("Paddle", WIDTH, HEIGHT)
+World.run
+at = 0
+each Paddle do |paddle|
+  at = paddle.x
+end
+puts "#{Game.hits} hits, #{Game.misses} misses, #{Time.tick} ticks, paddle at #{at}"

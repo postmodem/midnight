@@ -1,0 +1,35 @@
+month 1
+loan 1: pays 15993, owes 165807
+loan 2: pays 14205, owes 438982
+loan 3: pays 48332, owes 2464168
+loan 4: pays 44886, owes 961156
+loan 5: pays 66412, owes 13481402
+loan 6: pays 10532, owes 50368
+month 12
+loan 1: pays 15993, owes 0
+loan 2: pays 14205, owes 312510
+loan 3: pays 48332, owes 2057992
+loan 4: pays 44886, owes 518061
+loan 5: pays 66412, owes 13272422
+loan 6: pays 10532, owes 0
+month 24
+loan 1: pays 15993, owes 0
+loan 2: pays 14205, owes 162867
+loan 3: pays 48332, owes 1588721
+loan 4: pays 44886, owes -4
+loan 5: pays 66412, owes 13034976
+loan 6: pays 10532, owes 0
+month 36
+loan 1: pays 15993, owes 0
+loan 2: pays 14205, owes -2
+loan 3: pays 48332, owes 1090508
+loan 4: pays 44886, owes -4
+loan 5: pays 66412, owes 12787233
+loan 6: pays 10532, owes 0
+month 48
+loan 1: pays 15993, owes 0
+loan 2: pays 14205, owes -2
+loan 3: pays 48332, owes 561565
+loan 4: pays 44886, owes -4
+loan 5: pays 66412, owes 12528754
+loan 6: pays 10532, owes 0

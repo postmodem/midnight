@@ -1,0 +1,34 @@
+tick 30
+key down ArrowRight
+tick 2
+key up ArrowRight
+tick 28
+key down ArrowLeft
+tick 40
+key up ArrowLeft
+tick 12
+key down ArrowRight
+tick 8
+key down ArrowLeft
+tick 3
+key up ArrowLeft
+key up ArrowRight
+key ArrowLeft
+tick 3
+key down ArrowRight
+tick 5
+blur
+tick 5
+focus
+key down ArrowRight
+tick 36
+key up ArrowRight
+key down ArrowLeft
+tick 4
+key up ArrowLeft
+tick 126
+key down ArrowLeft
+tick 14
+key up ArrowLeft
+tick 30
+close

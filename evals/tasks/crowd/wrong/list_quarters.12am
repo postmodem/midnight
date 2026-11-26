@@ -1,0 +1,45 @@
+# The quarters counted in a list in the resource: walk stays on one core.
+component Walker
+  pos: Int32
+  speed: Int32
+  stamina: Int32
+end
+
+resource Tally
+  steps: Int = 0
+  resting: Int = 0
+  quarters: [Int] = [0, 0, 0, 0]
+  total: Int = 0
+end
+
+ROAD = 400
+
+system walk
+  Tally.steps = 0
+  Tally.resting = 0
+  Tally.quarters = [0, 0, 0, 0]
+  each Walker do |w|
+    if w.stamina > 0
+      w.pos = (w.pos + w.speed) % ROAD
+      w.stamina -= 1
+      Tally.steps += w.speed
+    else
+      w.stamina = 6 - w.speed
+      Tally.resting += 1
+    end
+    Tally.quarters[w.pos / 100] += 1
+  end
+  Tally.total += Tally.steps
+end
+
+system report
+  puts "tick #{Time.tick + 1}: #{Tally.steps} steps, #{Tally.resting} resting, quarters #{Tally.quarters[0]} #{Tally.quarters[1]} #{Tally.quarters[2]} #{Tally.quarters[3]}, #{Tally.total} in all"
+end
+
+200000.times do |n|
+  spawn Walker(pos: 100 + n * 37 % 300, speed: 1 + n % 5, stamina: n % 6)
+end
+
+12.times do
+  World.tick
+end

@@ -1,0 +1,54 @@
+# The growth factor computed with Ruby's ** in the strict system.
+component Loan
+  num: Int32
+  principal: Float32
+  rate: Float32
+  months: Int32
+  left: Int32 = 0
+  balance: Float32 = 0.0
+  payment: Float32 = 0.0
+end
+
+strict gpu system amortize
+  each Loan do |loan|
+    r = loan.rate / 12.0
+    if loan.payment == 0.0
+      f = 1.0
+      f = (1.0 + r) ** loan.months
+      loan.payment = loan.principal * r * f / (f - 1.0)
+      loan.balance = loan.principal
+      loan.left = loan.months
+    end
+    next if loan.left == 0
+    interest = loan.balance * r
+    loan.balance = loan.balance + interest - loan.payment
+    loan.left -= 1
+  end
+end
+
+def cents(amount: Float) -> Int
+  (amount * 100.0).round
+end
+
+def report
+  puts "month #{Time.tick}"
+  1.upto(World.count(Loan)) do |n|
+    each Loan do |loan|
+      if loan.num == n
+        puts "loan #{n}: pays #{cents(loan.payment)}, owes #{cents(loan.balance)}"
+      end
+    end
+  end
+end
+
+spawn Loan(num: 3, principal: 25000.0, rate: 0.06, months: 60)
+spawn Loan(num: 6, principal: 600.0, rate: 0.18, months: 6)
+spawn Loan(num: 1, principal: 1800.0, rate: 0.12, months: 12)
+spawn Loan(num: 5, principal: 135000.0, rate: 0.0425, months: 360)
+spawn Loan(num: 2, principal: 4500.0, rate: 0.085, months: 36)
+spawn Loan(num: 4, principal: 10000.0, rate: 0.0725, months: 24)
+
+1.upto(48) do |month|
+  World.tick
+  report if month == 1 || month % 12 == 0
+end

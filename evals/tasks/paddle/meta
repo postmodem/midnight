@@ -1,0 +1,3 @@
+areas: window input ecs
+control: no
+ruby: a game loop of its own with loop do and sleep, keys read with gets, a key press taken for a key held

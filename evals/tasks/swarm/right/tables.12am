@@ -1,0 +1,100 @@
+# Position, velocity and bounces in components of their own, odd particles
+# tagged, spawned from the last to the first; walls and floor in a helper.
+
+component Pos
+  x: Float32
+  y: Float32
+end
+
+component Vel
+  vx: Float32
+  vy: Float32
+end
+
+component Hits
+  walls: Int32 = 0
+  floors: Int32 = 0
+end
+
+tag Odd
+
+struct Bounce
+  at: Float
+  speed: Float
+  hit: Bool
+end
+
+def reflect(at: Float, speed: Float) -> Bounce
+  if at < 0.0
+    Bounce(-at, -speed, true)
+  elsif at > 64.0
+    Bounce(128.0 - at, -speed, true)
+  else
+    Bounce(at, speed, false)
+  end
+end
+
+gpu system move
+  each Pos, Vel, Hits do |pos, vel, hits|
+    vel.vy = vel.vy - 0.0625
+    pos.x = pos.x + vel.vx
+    pos.y = pos.y + vel.vy
+    bx = reflect(pos.x, vel.vx)
+    pos.x = bx.at
+    vel.vx = bx.speed
+    hits.walls += 1 if bx.hit
+    by = reflect(pos.y, vel.vy)
+    pos.y = by.at
+    vel.vy = by.speed
+    hits.floors += 1 if by.hit
+  end
+end
+
+def column(x: Float) -> Int
+  return 1 if x < 16.0
+  return 2 if x < 32.0
+  return 3 if x < 48.0
+  4
+end
+
+def row(y: Float) -> Int
+  return 1 if y >= 48.0
+  return 2 if y >= 32.0
+  return 3 if y >= 16.0
+  4
+end
+
+def show
+  total = 0
+  each Hits do |h|
+    total += h.walls + h.floors
+  end
+  puts "tick #{Time.tick}: #{total} bounces"
+  1.upto(4) do |r|
+    line = "row #{r}:"
+    1.upto(4) do |c|
+      n = 0
+      each Pos do |p|
+        n += 1 if row(p.y) == r && column(p.x) == c
+      end
+      line = line + " #{n}"
+    end
+    puts line
+  end
+end
+
+9999.downto(0) do |n|
+  pos = Pos((n * 37) % 1024 / 16.0, (n * 91) % 1024 / 16.0)
+  vel = Vel(((n % 7) - 3).to_f / 4.0, ((n % 5) - 2).to_f / 4.0)
+  if n % 2 == 1
+    spawn pos, vel, Hits, Odd
+  else
+    spawn vel, Hits, pos
+  end
+end
+
+show
+1.upto(60) do |t|
+  World.tick
+  show if t % 10 == 0
+end
