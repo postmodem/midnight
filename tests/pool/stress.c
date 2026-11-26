@@ -13,11 +13,12 @@
  *     restart   the pool started and stopped a thousand times
  *     fail      a loop in which four pieces fail
  *     hang      a failing piece, and a later piece that never ends
+ *     swarm     a piece for every thread, all of them short, two failing
  *
  * Every loop checks that each piece ran exactly once and that no two
  * pieces ran at the same time under one thread number. The first five
- * modes print `ok` and exit with status 0. `fail` and `hang` print
- * `failed N`, the earliest failing piece, and exit with status 3.
+ * modes print `ok` and exit with status 0. `fail`, `hang` and `swarm`
+ * print `failed N`, the earliest failing piece, and exit with status 3.
  */
 
 #if defined(__linux__)
@@ -105,6 +106,16 @@ static void failing_piece(void *context, uint64_t piece, uint32_t thread) {
             mn_pool_fail(piece);
             return;
         }
+    }
+    count_piece(piece, thread);
+}
+
+/* The pieces of `swarm`: piece 5 and the last one fail, at once. */
+static void swarm_piece(void *context, uint64_t piece, uint32_t thread) {
+    uint64_t pieces = *(const uint64_t *)context;
+    if (piece == 5 || piece == pieces - 1) {
+        mn_pool_fail(piece);
+        return;
     }
     count_piece(piece, thread);
 }
@@ -213,6 +224,16 @@ int main(int argc, char **argv) {
         loop(100, asked);
         if (strcmp(mode, "hang") == 0) endless = 800;
         MnPoolLoop description = {failing_piece, report, NULL, 1000, asked};
+        mn_pool_loop(&description);
+        die("a failed loop returned", 0);
+    } else if (strcmp(mode, "swarm") == 0) {
+        /* Every thread is in the loop when the pieces fail, and every one
+         * of them then waits for the pieces before the failure. */
+        uint64_t pieces = options.threads ? options.threads : 64;
+        options.threads = (uint32_t)pieces;
+        mn_pool_start(&options);
+        loop(pieces, (uint32_t)pieces);
+        MnPoolLoop description = {swarm_piece, report, &pieces, pieces, (uint32_t)pieces};
         mn_pool_loop(&description);
         die("a failed loop returned", 0);
     } else {

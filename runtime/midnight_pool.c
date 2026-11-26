@@ -362,13 +362,15 @@ static bool all_before_finished(uint64_t limit) {
     return true;
 }
 
-/* A piece has failed. Runs what is left before the earliest failed piece,
- * waits for the pieces before it that other threads are running, and
- * reports. */
-static _Noreturn void fail_wait(Worker *me) {
+/* A piece has failed, and this thread has been through every region: each
+ * piece before the earliest failed one has been claimed, by this thread or
+ * another, and a later failure leaves no more of them to claim. Waits for
+ * the ones that are still running, and reports. The thread claims nothing
+ * while it waits, so that it does not look to the others as if it might
+ * be about to run one. */
+static _Noreturn void fail_wait(void) {
     const MnPoolLoop *loop = &pool.loop;
     for (;;) {
-        claim_all(me);
         pthread_mutex_lock(&pool.fail_mutex);
         uint64_t limit = atomic_load(&pool.limit);
         if (all_before_finished(limit)) loop->failed(loop->context, limit);
@@ -383,7 +385,7 @@ static void run_pieces(Worker *me) {
     claim_all(me);
     if (pool.loop.failed &&
         atomic_load(&pool.limit) != pool.loop.pieces) {
-        fail_wait(me);
+        fail_wait();
     }
 }
 

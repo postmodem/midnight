@@ -1611,9 +1611,9 @@ const STRESS_LIMIT: Duration = Duration::from_secs(300);
 /// Builds `tests/pool/stress.c` with `runtime/midnight_pool.c`, with
 /// ThreadSanitizer when `sanitize`, and runs each of its modes, one after
 /// another, plain and with further words. A mode that ends well prints
-/// `ok`; `fail` and `hang` must name piece 400, the earliest failing one,
-/// and exit with status 3. Nothing may be written to standard error, where
-/// ThreadSanitizer reports.
+/// `ok`; `fail` and `hang` must name piece 400 and `swarm` piece 5, the
+/// earliest failing one, and exit with status 3. Nothing may be written to
+/// standard error, where ThreadSanitizer reports.
 fn pool_stress_runs(name: &str, sanitize: bool) {
     let dir = scratch(name);
     let exe = dir.join("stress");
@@ -1664,6 +1664,15 @@ fn pool_stress_runs(name: &str, sanitize: bool) {
                 .iter()
                 .map(|words| (mode, *words, "failed 400\n", 3)),
         );
+    }
+    for words in [
+        "64,jitter",
+        "64,jitter",
+        "48,reverse,jitter",
+        "32",
+        "7,awake",
+    ] {
+        runs.push(("swarm", words, "failed 5\n", 3));
     }
     let mut failures = Vec::new();
     for (mode, words, stdout, status) in &runs {
