@@ -88,18 +88,23 @@ command that needs it.
   implementation, so the suite needs no device and is exact.
 - GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe) or
   `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU), the tests
-  `gpu_programs`, `gpu_stats_match_plan`, `gpu_stats_match_expected` and
-  `gpu_driver_finds_its_parts` also run, on release and debug builds.
-  Without it they do nothing. `checks.gpu` is the software mode in the
-  build sandbox; `apps.gpu-test` is the hardware mode.
+  `gpu_programs`, `gpu_stats_match_plan`, `gpu_stats_match_expected`,
+  `gpu_driver_finds_its_parts` and `gpu_strict_div_sqrt` also run, on
+  release and debug builds. Without it they do nothing. `checks.gpu` is the
+  software mode in the build sandbox; `apps.gpu-test` is the hardware mode,
+  on the device the Vulkan loader finds, which a `VK_DRIVER_FILES` the
+  caller sets chooses.
   - `gpu_programs` runs every program of `tests/run`, `tests/panic` and
     `examples` that declares a GPU system on the device, as it is and
     again with `MIDNIGHT_GPU=rows`, which makes every row travel alone.
     Output must match `NAME.out`: exactly, or, when the program has a
     `# tolerance: T` line, each `Float` within `T * max(1, |expected|)` and
-    everything else, whole numbers included, exactly. A panic program must
+    everything else, whole numbers included, exactly. A program whose GPU
+    systems are all strict may not have the line. A panic program must
     stop with status 1 and exactly `NAME.err`. A run that finds no device,
-    or runs a GPU block on the CPU, fails.
+    or runs a GPU block on the CPU, fails. A program with a strict GPU
+    system must say the device passed the strict check, and runs once more
+    with `MIDNIGHT_GPU=strict-cpu`, which must give the same output.
   - `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
     `MIDNIGHT_GPU=stats` and requires every tick but the first and the last
     to make the uploads and downloads `midnight plan` lists, and no row
@@ -117,6 +122,11 @@ command that needs it.
     `midnight_gpu.c` for this: AddressSanitizer's would make the dynamic
     loader search the executable's runpath, and a driver such as NVIDIA's
     would not start.
+  - `gpu_strict_div_sqrt` runs the strict `/` and `sqrt` of shaders on the
+    device through `tests/device/strict_div_sqrt.c`, and requires the bits
+    of the CPU's `/` and `sqrtf` with subnormals flushed: `sqrt` of every
+    bit pattern and `/` of 2^28 pairs on hardware, 2^24 of each on
+    llvmpipe.
   - The first three print the device they ran on. In GPU mode
     `UPDATE_EXPECT=1` rewrites `.stats` files and no others.
   - The dev shell sets `MIDNIGHT_TEST_SOFTWARE_ICD`, the Vulkan driver file

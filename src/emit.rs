@@ -282,6 +282,11 @@ impl<'a> Cx<'a> {
         let _ = writeln!(defs, "static void drop_globals(void) {{\n{drop}}}\n");
         let tables = self.tables();
         let gpu_section = gpu::c::section(&lowered, &mut self);
+        let check = if lowered.check {
+            format!("    mn_gpu_check = &{};\n", gpu::c::CHECK_NAME)
+        } else {
+            String::new()
+        };
 
         let mut out = String::new();
         out.push_str("#include \"midnight_rt.h\"\n\n#include <math.h>\n\n");
@@ -317,9 +322,10 @@ impl<'a> Cx<'a> {
         out.push_str(&gpu_section);
         out.push_str(&defs);
         out.push_str(&tables);
+        out.push_str("int main(void) {\n");
+        out.push_str(&check);
         out.push_str(
-            "int main(void) {\n    \
-             mn_start(&program);\n    \
+            "    mn_start(&program);\n    \
              init_globals();\n    \
              run_main();\n    \
              mn_finish();\n    \

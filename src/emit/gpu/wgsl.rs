@@ -15,7 +15,8 @@
 
 use std::fmt::Write as _;
 
-use super::ir::{BinOp, Cell, Expr, Func, MathFn, Stmt, Storage, Ty, UnOp};
+use super::check;
+use super::ir::{BinOp, Cell, Expr, Func, MathFn, Stmt, Storage, Ty, UnOp, Uses, closure};
 use super::layout::gpu_struct;
 use super::lower::{Block, INNER_ROW, Lowered, ROW};
 
@@ -31,6 +32,10 @@ pub fn listing(gpu: &Lowered) -> String {
         }
         let _ = writeln!(out, "// system {}, each {}", block.system, block.each);
         out.push_str(&module(gpu, block));
+    }
+    if gpu.check {
+        out.push_str("\n// the strict check\n");
+        out.push_str(&check_module(gpu));
     }
     out
 }
@@ -133,6 +138,52 @@ pub fn module(gpu: &Lowered, block: &Block) -> String {
     p.line("}");
     p.stmts(&block.body);
     p.indent = 0;
+    p.line("}");
+    printer.out
+}
+
+/// The shader of the strict check, in the layout `MnGpuCheck` gives: the
+/// run for row `row` writes the result of each expression over the row's
+/// inputs.
+pub fn check_module(gpu: &Lowered) -> String {
+    let mut printer = Printer {
+        gpu,
+        out: String::new(),
+        indent: 0,
+    };
+    let p = &mut printer;
+    p.line("@group(0) @binding(0) var<storage, read> mn_in: array<u32>;");
+    p.line("@group(0) @binding(1) var<storage, read_write> mn_out: array<u32>;");
+    p.line("@group(0) @binding(2) var<storage, read> mn_z: array<u32, 2>;");
+    p.out.push('\n');
+    let mut direct = Uses::default();
+    direct.calls.insert(check::CHECK.to_string());
+    let reached = closure(&gpu.library, &direct);
+    for func in &gpu.library.funcs {
+        if reached.calls.contains(&func.name) {
+            p.function(func);
+            p.out.push('\n');
+        }
+    }
+    let inputs = check::INPUTS.len();
+    let results = check::EXPRESSIONS;
+    p.line("@compute @workgroup_size(64)");
+    p.line("fn main(@builtin(global_invocation_id) gid: vec3<u32>) {");
+    p.line(&format!("    let {ROW} = gid.x;"));
+    p.line(&format!("    if ({ROW} >= {inputs}u) {{"));
+    p.line("        return;");
+    p.line("    }");
+    for (index, name) in ["a", "b", "c"].iter().enumerate() {
+        p.line(&format!(
+            "    let {name} = bitcast<f32>(mn_in[{ROW} * 3u + {index}u]);"
+        ));
+    }
+    p.line(&format!("    for (var k = 0; k < {results}; k++) {{"));
+    p.line(&format!(
+        "        mn_out[{ROW} * {results}u + u32(k)] = {}(a, b, c, k);",
+        check::CHECK
+    ));
+    p.line("    }");
     p.line("}");
     printer.out
 }

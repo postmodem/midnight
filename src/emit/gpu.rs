@@ -28,6 +28,7 @@
 //! reserves many plain words (`target`, `filter`, `mod`).
 
 pub(super) mod c;
+mod check;
 mod helpers;
 pub(super) mod ir;
 pub(super) mod layout;

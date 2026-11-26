@@ -47,6 +47,10 @@ extern uint64_t mn_gpu_rows_down;
 extern uint64_t mn_gpu_submissions;
 extern uint64_t mn_gpu_waits;
 
+/* Why strict blocks run on the CPU, as the end of their `info` line, or
+ * NULL when they may run on the device. */
+extern const char *mn_gpu_strict_refused;
+
 /* ---- In midnight_gpu.c --------------------------------------------------- */
 
 /* Chooses the device: the fastest adapter of the primary backends, with
@@ -68,6 +72,11 @@ const char *mn_gpu_device_start(bool software);
  * `*state` is what the device keeps for the block, NULL at first. */
 const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
                               void **state);
+
+/* Runs the strict check's shader on the device and writes its results to
+ * `out`, as check->cpu does. Returns NULL, or why the device cannot run it.
+ * Counts no submission and no wait. */
+const char *mn_gpu_device_check(const MnGpuCheck *check, uint32_t *out);
 
 /* Releases what mn_gpu_device_run kept for a block. */
 void mn_gpu_device_forget(void *state);

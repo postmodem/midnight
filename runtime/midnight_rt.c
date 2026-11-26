@@ -1732,6 +1732,8 @@ void mn_gpu_wrote(MnTable *table, uint32_t component) {
 }
 #endif
 
+const MnGpuCheck *mn_gpu_check;
+
 /* The words of MIDNIGHT_GPU. */
 static struct {
     bool off;
@@ -1739,6 +1741,7 @@ static struct {
     bool info;
     bool stats;
     bool rows;
+    bool strict_cpu;
 } gpu_options;
 
 /* A tick has ended whose `stats` line is not printed yet. */
@@ -1886,6 +1889,52 @@ void mn_gpu_submit(void) {
 #endif
 }
 
+#ifdef MN_GPU
+const char *mn_gpu_strict_refused;
+
+/* Runs the strict check on `device` and on the CPU, sets
+ * mn_gpu_strict_refused when they differ or with `strict-cpu`, and prints
+ * the `info` line that says where strict blocks run. */
+static void gpu_strict_check(const char *device) {
+    static char reason[400];
+    const MnGpuCheck *check = mn_gpu_check;
+    if (gpu_options.strict_cpu) {
+        snprintf(reason, sizeof reason, "MIDNIGHT_GPU has strict-cpu");
+    } else {
+        size_t words = (size_t)check->rows * check->results;
+        uint32_t *on_device = mn_calloc(words, sizeof(uint32_t));
+        uint32_t *on_cpu = mn_calloc(words, sizeof(uint32_t));
+        const char *unable = mn_gpu_device_check(check, on_device);
+        check->cpu(check->inputs, on_cpu);
+        if (unable) {
+            snprintf(reason, sizeof reason, "%s can't run the strict check: %s",
+                     device, unable);
+        } else {
+            for (size_t i = 0; i < words; i++) {
+                if (on_device[i] == on_cpu[i]) continue;
+                snprintf(reason, sizeof reason,
+                         "%s failed the strict check (result %u of row %u is "
+                         "0x%08x on the device and 0x%08x on the CPU)",
+                         device, (unsigned)(i % check->results),
+                         (unsigned)(i / check->results), (unsigned)on_device[i],
+                         (unsigned)on_cpu[i]);
+                break;
+            }
+        }
+        free(on_device);
+        free(on_cpu);
+    }
+    if (reason[0] != '\0') mn_gpu_strict_refused = reason;
+    if (!gpu_options.info) return;
+    if (mn_gpu_strict_refused) {
+        fprintf(stderr, "midnight: gpu: strict blocks run on the CPU: %s\n",
+                reason);
+    } else {
+        fprintf(stderr, "midnight: gpu: strict check passed\n");
+    }
+}
+#endif
+
 #ifdef MN_GPU_SYSTEMS
 /* Reads MIDNIGHT_GPU, chooses the device and prints the `info` line. */
 static void gpu_start(void) {
@@ -1898,6 +1947,7 @@ static void gpu_start(void) {
         {"info", &gpu_options.info},
         {"stats", &gpu_options.stats},
         {"rows", &gpu_options.rows},
+        {"strict-cpu", &gpu_options.strict_cpu},
     };
     const size_t word_count = sizeof words / sizeof words[0];
     const char *list = getenv("MIDNIGHT_GPU");
@@ -1926,6 +1976,9 @@ static void gpu_start(void) {
     if (gpu_options.info) {
         fprintf(stderr, "midnight: gpu: %s\n", device ? device : "no device");
     }
+#ifdef MN_GPU
+    if (device && mn_gpu_check) gpu_strict_check(device);
+#endif
 }
 
 /* Waits for the device. With `stats`, the tick's line is printed when the

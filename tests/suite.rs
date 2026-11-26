@@ -43,6 +43,9 @@
 //! have the line. A `tests/panic` program must exit 1 with exactly
 //! `NAME.err`. A run in which there is no device, or in which a GPU block
 //! runs on the CPU, fails.
+//! A program with a strict GPU system must say that the device passed the
+//! strict check, and runs once more with `MIDNIGHT_GPU=strict-cpu`, which
+//! must give the same output with every strict block on the CPU.
 //!
 //! `gpu_strict_div_sqrt` runs the `/` and `sqrt` of strict shaders on the
 //! device through `tests/device/strict_div_sqrt.c`, built with
@@ -625,6 +628,9 @@ struct DeviceRun {
     ticks: Vec<Counts>,
     /// The `stats` lines, each without `midnight: gpu: `.
     stats: String,
+    /// The `info` line that says where strict blocks run, without
+    /// `midnight: gpu: `.
+    strict: Option<String>,
 }
 
 /// What one `stats` line counts.
@@ -676,10 +682,18 @@ fn parse_stats(line: &str) -> Option<(usize, Counts)> {
     Some((tick.parse().ok()?, counts))
 }
 
+/// The `info` line of a device that passed the strict check.
+const STRICT_PASSED: &str = "strict check passed";
+
+/// How the `info` lines end that say a strict block runs on the CPU because
+/// of `strict-cpu`.
+const STRICT_REFUSED: &str = ": MIDNIGHT_GPU has strict-cpu";
+
 /// Runs a compiled program with its GPU systems on `device`, asking for
 /// the `info` lines and giving the further words of `MIDNIGHT_GPU` in
 /// `more`. Fails when the program finds no such device or runs a GPU
-/// block on the CPU.
+/// block on the CPU, unless `more` has `strict-cpu` and the block is
+/// strict.
 fn run_on_device(exe: &Path, device: Device, more: &[&str]) -> Result<DeviceRun, String> {
     let mut command = Command::new(exe);
     let mut words = vec!["info"];
@@ -700,6 +714,7 @@ fn run_on_device(exe: &Path, device: Device, more: &[&str]) -> Result<DeviceRun,
         device: String::new(),
         ticks: Vec::new(),
         stats: String::new(),
+        strict: None,
     };
     for line in text(&output.stderr).split_inclusive('\n') {
         let Some(said) = line.strip_prefix("midnight: gpu: ") else {
@@ -718,8 +733,12 @@ fn run_on_device(exe: &Path, device: Device, more: &[&str]) -> Result<DeviceRun,
             }
         } else if said == "no device" {
             return Err(format!("no {device:?} device").to_lowercase());
+        } else if said == STRICT_PASSED || said.starts_with("strict blocks run on the CPU: ") {
+            run.strict = Some(said.to_string());
         } else if said.contains(" runs on the CPU: ") {
-            return Err(said.to_string());
+            if !(more.contains(&"strict-cpu") && said.ends_with(STRICT_REFUSED)) {
+                return Err(said.to_string());
+            }
         } else {
             run.device = said.to_string();
         }
@@ -737,7 +756,9 @@ fn run_on_device(exe: &Path, device: Device, more: &[&str]) -> Result<DeviceRun,
 }
 
 /// Builds a program in one mode and runs it on `device` twice: as it is,
-/// and with `MIDNIGHT_GPU=rows`, which makes every row travel alone. One
+/// and with `MIDNIGHT_GPU=rows`, which makes every row travel alone. A
+/// program with a strict GPU system must pass the strict check, and runs a
+/// third time with `strict-cpu`, with its strict blocks on the CPU. One
 /// that `stops` must exit 1 with exactly `NAME.err`; any other must exit 0,
 /// print `NAME.out` within the tolerance it states, and print nothing else
 /// to standard error. Returns the device and the largest difference from
@@ -783,14 +804,31 @@ fn run_gpu_program(
     } else {
         read(&out_path)?
     };
+    let strict = gpu_system_lines(&program).any(|line| line.starts_with("strict "));
+    let mut runs: Vec<&[&str]> = vec![&[], &["rows"]];
+    if strict {
+        runs.push(&["strict-cpu"]);
+    }
     let mut found = (String::new(), 0.0f64);
-    for more in [&[][..], &["rows"][..]] {
+    for more in runs {
         let label = match more {
             [] => format!("{} ({mode:?})", source.display()),
-            _ => format!("{} ({mode:?}, rows)", source.display()),
+            [word] => format!("{} ({mode:?}, {word})", source.display()),
+            _ => unreachable!("one word at most"),
         };
         let run =
             run_on_device(&exe, device, more).map_err(|message| format!("{label}: {message}"))?;
+        let strict_line = match more {
+            _ if !strict => None,
+            ["strict-cpu"] => Some(format!("strict blocks run on the CPU{STRICT_REFUSED}")),
+            _ => Some(STRICT_PASSED.to_string()),
+        };
+        if run.strict != strict_line {
+            return Err(format!(
+                "{label}: the `info` line about strict blocks is {:?}, expected {strict_line:?}",
+                run.strict
+            ));
+        }
         if run.status != Some(status) {
             return Err(format!(
                 "{label}: exited with {:?}, expected {status}\n--- stdout\n{}--- stderr\n{}---",
@@ -865,7 +903,7 @@ fn gpu_programs() {
     report("runs on a device", jobs.len(), failures);
     let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
     note(&format!(
-        "gpu_programs: {} builds of {} programs, each run as it is and with rows, on {}",
+        "gpu_programs: {} builds of {} programs, each run as it is and with rows, and strict ones with strict-cpu, on {}",
         jobs.len(),
         jobs.len() / MODES.len(),
         devices.join(" and ")
@@ -888,12 +926,18 @@ strict gpu system exact
 end
 ";
 
-/// The functions `s32_div` and `s32_sqrt` of a shader.
+/// The functions `s32_div` and `s32_sqrt` of a listing of shaders, each
+/// once.
 fn strict_helpers(wgsl: &str) -> String {
     let mut out = String::new();
     let mut inside = false;
+    let mut seen = BTreeSet::new();
     for line in wgsl.lines() {
-        inside |= line.starts_with("fn s32_div(") || line.starts_with("fn s32_sqrt(");
+        if (line.starts_with("fn s32_div(") || line.starts_with("fn s32_sqrt("))
+            && seen.insert(line)
+        {
+            inside = true;
+        }
         if inside {
             out.push_str(line);
             out.push('\n');

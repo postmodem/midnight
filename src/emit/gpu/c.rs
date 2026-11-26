@@ -21,6 +21,7 @@ use crate::tir::{Compact, Program, Type};
 
 use super::super::Cx;
 use super::super::names;
+use super::check;
 use super::helpers;
 use super::ir::{BinOp, Cell, Expr, Func, MathFn, Stmt, Storage, Ty, UnOp, Uses, closure};
 use super::layout::{Source, gpu_struct};
@@ -256,7 +257,70 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
         }
         out.push_str("    .state = NULL,\n};\n\n");
     }
+    if gpu.check {
+        out.push_str(&strict_check(gpu));
+    }
     out.push_str(CLOSE);
+    out
+}
+
+/// The name of the strict check's `MnGpuCheck`.
+pub const CHECK_NAME: &str = "gpu_check";
+
+/// The strict check's C implementation, inputs, shader and `MnGpuCheck`.
+fn strict_check(gpu: &Lowered) -> String {
+    let rows = check::INPUTS.len();
+    let results = check::EXPRESSIONS;
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "static void {CHECK_NAME}_cpu(const uint32_t *in, uint32_t *out) {{"
+    );
+    let _ = writeln!(out, "    {FENV_ACCESS}");
+    out.push_str("    const uint64_t fp_state = mn_strict_enter();\n");
+    let _ = writeln!(
+        out,
+        "    for (uint32_t {ROW} = 0; {ROW} < {rows}; {ROW}++) {{"
+    );
+    for (index, name) in ["a", "b", "c"].iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "        const float {name} = g32_float(in[{ROW} * 3 + {index}]);"
+        );
+    }
+    let _ = writeln!(out, "        for (int32_t k = 0; k < {results}; k++) {{");
+    let _ = writeln!(
+        out,
+        "            out[{ROW} * {results} + (uint32_t)k] = {}(a, b, c, k);",
+        check::CHECK
+    );
+    out.push_str("        }\n    }\n    mn_strict_leave(fp_state);\n}\n\n");
+
+    let _ = writeln!(out, "static const uint32_t {CHECK_NAME}_inputs[] = {{");
+    for row in &check::INPUTS {
+        let _ = writeln!(
+            out,
+            "    {:#010x}u, {:#010x}u, {:#010x}u,",
+            row[0], row[1], row[2]
+        );
+    }
+    out.push_str("};\n");
+    let _ = writeln!(out, "static const char {CHECK_NAME}_wgsl[] =");
+    for line in wgsl::check_module(gpu).lines() {
+        let _ = writeln!(
+            out,
+            "    {}",
+            names::c_string(format!("{line}\n").as_bytes())
+        );
+    }
+    out.push_str("    ;\n");
+    let _ = writeln!(out, "static const MnGpuCheck {CHECK_NAME} = {{");
+    let _ = writeln!(out, "    .wgsl = {CHECK_NAME}_wgsl,");
+    let _ = writeln!(out, "    .inputs = {CHECK_NAME}_inputs,");
+    let _ = writeln!(out, "    .rows = {rows},");
+    let _ = writeln!(out, "    .results = {results},");
+    let _ = writeln!(out, "    .cpu = {CHECK_NAME}_cpu,");
+    out.push_str("};\n\n");
     out
 }
 

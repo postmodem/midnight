@@ -1188,7 +1188,8 @@ fn strict_c_flushes_subnormals_around_the_block() {
     let c = emit_c("strict", STRICT);
     assert!(c.contains("const uint64_t fp_state = mn_strict_enter();"));
     assert!(c.contains("mn_strict_leave(fp_state);"));
-    assert_eq!(c.matches("mn_strict_enter").count(), 1);
+    // The strict block and the strict check.
+    assert_eq!(c.matches("mn_strict_enter").count(), 2);
     assert!(c.contains(
         "static float SF_scale(float v_0) {\n#pragma STDC FENV_ACCESS ON\n    return v_0 * 0.5f;"
     ));
@@ -1196,6 +1197,27 @@ fn strict_c_flushes_subnormals_around_the_block() {
     assert!(c.contains("(t0 / b_0.f_x)"));
     assert!(!c.contains("static float s32_div"));
     assert!(c.contains("(b_0.f_x * b_0.f_y) + (1.0f * 2.0f)"));
+}
+
+/// A program with a strict GPU system checks the device when it opens it:
+/// `main` names the check before `mn_start`, the check is strict code in C
+/// and in its shader, and the shader binds the inputs, the results and the
+/// zeros. A program whose GPU systems are not strict has no check.
+#[test]
+fn a_strict_program_checks_the_device() {
+    let c = emit_c("strict_check", STRICT);
+    assert!(
+        c.contains("int main(void) {\n    mn_gpu_check = &gpu_check;\n    mn_start(&program);")
+    );
+    assert!(c.contains("static const MnGpuCheck gpu_check = {"));
+    assert!(c.contains(
+        "static uint32_t s32_check(float a, float b, float c, int32_t k) {\n#pragma STDC FENV_ACCESS ON"
+    ));
+    assert!(c.contains("\"@group(0) @binding(2) var<storage, read> mn_z: array<u32, 2>;\\n\""));
+    assert!(c.contains("\"fn s32_check(a: f32, b: f32, c: f32, k: i32) -> u32 {\\n\""));
+    let loose = emit_c("loose_check", GUARDED);
+    assert_lacks(&loose, "gpu_check");
+    assert_lacks(&loose, "s32_");
 }
 
 /// The strict `/` and `sqrt` that shaders run, compiled as C, give the bits

@@ -18,6 +18,7 @@ use crate::tir::{
 
 use super::super::analysis::{self, Folded, LocalUse, Node, Use};
 use super::super::names;
+use super::check;
 use super::helpers;
 use super::ir::{
     BinOp, Cell, Expr, Func, Library, MathFn, Param, Stmt, Storage, Ty, UnOp, Uses, assign, binary,
@@ -85,6 +86,9 @@ pub struct Lowered<'a> {
     /// The index in `sites` of each `Expr::Site`.
     pub site_index: Vec<usize>,
     pub uniforms: Uniforms,
+    /// The program has a strict GPU system, and the library holds
+    /// [`check::CHECK`].
+    pub check: bool,
 }
 
 impl Lowered<'_> {
@@ -141,6 +145,14 @@ pub fn lower<'a>(prog: &'a Program, folded: &[Option<Folded>], wide: Vec<bool>) 
         let func = lower.function(id, strict);
         lower.library.add(func);
     }
+    let check = prog.systems.iter().any(|system| system.strict);
+    if check {
+        let func = check::function();
+        for name in &Uses::of_func(&func).calls {
+            helpers::require(&mut lower.library, name);
+        }
+        lower.library.add(func);
+    }
     let blocks = drafts
         .into_iter()
         .enumerate()
@@ -165,6 +177,7 @@ pub fn lower<'a>(prog: &'a Program, folded: &[Option<Folded>], wide: Vec<bool>) 
         sites,
         site_index,
         uniforms: lower.uniforms,
+        check,
     }
 }
 

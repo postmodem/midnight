@@ -1394,6 +1394,10 @@ static void target_bind(const MnGpuBlock *block, Block *state, uint32_t t) {
 const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
                               void **block_state) {
     if (!gpu.device) return "no device";
+    if (block->strict && mn_gpu_strict_refused) {
+        block_to_cpu(block);
+        return mn_gpu_strict_refused;
+    }
     const char *reason = block_unfit(block);
     if (reason) {
         block_to_cpu(block);
@@ -1527,6 +1531,108 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
             mn_panic(site->loc, "%s", site->message);
         }
     }
+    return NULL;
+}
+
+/* ---- The strict check ---------------------------------------------------- */
+
+const char *mn_gpu_device_check(const MnGpuCheck *check, uint32_t *out) {
+    if (!gpu.device) return "no device";
+    if (gpu.max_storage_buffers < 3) {
+        return "it binds 3 storage buffers and the device binds fewer";
+    }
+    uint64_t submissions = mn_gpu_submissions;
+    uint64_t waits = mn_gpu_waits;
+
+    WGPUBindGroupLayoutEntry entries[3];
+    memset(entries, 0, sizeof entries);
+    for (uint32_t i = 0; i < 3; i++) {
+        entries[i].binding = i;
+        entries[i].visibility = WGPUShaderStage_Compute;
+        entries[i].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
+    }
+    entries[1].buffer.type = WGPUBufferBindingType_Storage;
+    WGPUBindGroupLayoutDescriptor layout_descriptor = {0};
+    layout_descriptor.label = view("the strict check");
+    layout_descriptor.entryCount = 3;
+    layout_descriptor.entries = entries;
+    WGPUBindGroupLayout layout =
+        wgpuDeviceCreateBindGroupLayout(gpu.device, &layout_descriptor);
+
+    WGPUPipelineLayoutDescriptor pipeline_layout = {0};
+    pipeline_layout.label = view("the strict check");
+    pipeline_layout.bindGroupLayoutCount = 1;
+    pipeline_layout.bindGroupLayouts = &layout;
+    WGPUPipelineLayout bindings =
+        wgpuDeviceCreatePipelineLayout(gpu.device, &pipeline_layout);
+
+    WGPUShaderSourceWGSL source = {0};
+    source.chain.sType = WGPUSType_ShaderSourceWGSL;
+    source.code = view(check->wgsl);
+    WGPUShaderModuleDescriptor module = {0};
+    module.nextInChain = &source.chain;
+    module.label = view("the strict check");
+    WGPUShaderModule shader = wgpuDeviceCreateShaderModule(gpu.device, &module);
+
+    WGPUComputePipelineDescriptor pipeline_descriptor = {0};
+    pipeline_descriptor.label = view("the strict check");
+    pipeline_descriptor.layout = bindings;
+    pipeline_descriptor.compute.module = shader;
+    pipeline_descriptor.compute.entryPoint = view("main");
+    WGPUComputePipeline pipeline =
+        wgpuDeviceCreateComputePipeline(gpu.device, &pipeline_descriptor);
+    if (!layout || !bindings || !shader || !pipeline) {
+        gpu_fail("can't build the pipeline of the strict check");
+    }
+    wgpuShaderModuleRelease(shader);
+    wgpuPipelineLayoutRelease(bindings);
+
+    uint64_t in_bytes = (uint64_t)check->rows * 3 * 4;
+    uint64_t out_bytes = (uint64_t)check->rows * check->results * 4;
+    Buffer inputs = {0};
+    Buffer results = {0};
+    Buffer read = {0};
+    buffer_make(&inputs, in_bytes, COLUMN_USAGE);
+    buffer_make(&results, out_bytes, COLUMN_USAGE);
+    buffer_make(&read, out_bytes, READBACK_USAGE);
+    if (!gpu.zeros.handle) buffer_make(&gpu.zeros, 8, COLUMN_USAGE);
+    queue_write(&inputs, 0, check->inputs, in_bytes);
+
+    WGPUBindGroupEntry bound[3];
+    memset(bound, 0, sizeof bound);
+    const Buffer *buffers[3] = {&inputs, &results, &gpu.zeros};
+    for (uint32_t i = 0; i < 3; i++) {
+        bound[i].binding = i;
+        bound[i].buffer = buffers[i]->handle;
+        bound[i].size = buffers[i]->size;
+    }
+    WGPUBindGroupDescriptor group_descriptor = {0};
+    group_descriptor.layout = layout;
+    group_descriptor.entryCount = 3;
+    group_descriptor.entries = bound;
+    WGPUBindGroup group = wgpuDeviceCreateBindGroup(gpu.device, &group_descriptor);
+    if (!group) gpu_fail("can't bind the buffers of the strict check");
+
+    WGPUComputePassEncoder pass = pass_open();
+    wgpuComputePassEncoderSetPipeline(pass, pipeline);
+    wgpuComputePassEncoderSetBindGroup(pass, 0, group, 0, NULL);
+    wgpuComputePassEncoderDispatchWorkgroups(pass, (check->rows + 63) / 64, 1, 1);
+    buffer_use(&inputs);
+    buffer_use(&results);
+    buffer_use(&gpu.zeros);
+    buffer_copy(&results, 0, &read, 0, out_bytes);
+    encoder_submit();
+    memcpy(out, buffer_read(&read, out_bytes), (size_t)out_bytes);
+    wgpuBufferUnmap(read.handle);
+
+    wgpuBindGroupRelease(group);
+    wgpuComputePipelineRelease(pipeline);
+    wgpuBindGroupLayoutRelease(layout);
+    buffer_drop(&inputs);
+    buffer_drop(&results);
+    buffer_drop(&read);
+    mn_gpu_submissions = submissions;
+    mn_gpu_waits = waits;
     return NULL;
 }
 

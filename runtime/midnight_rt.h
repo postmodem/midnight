@@ -813,6 +813,33 @@ static inline void mn_strict_leave(uint64_t saved) {
 }
 #endif
 
+/* The strict check of a program with a strict GPU system: strict code the
+ * runtime runs on the device and on the CPU when it opens the device. When
+ * the two give different bits, or the device cannot run it, every strict
+ * block runs on the CPU, and the `info` line after the device's says so.
+ *
+ * `inputs` holds `rows` rows of three words. `cpu` writes `results` words
+ * per row to `out`, row after row. `wgsl` is one module with the compute
+ * entry point `main`, `@workgroup_size(64)`, that does the same: the run
+ * for row global_invocation_id.x, when that is below `rows`, writes the
+ * row's words. Its bindings, all in group 0, are
+ *
+ *     0  the inputs   var<storage, read> array<u32>
+ *     1  the results  var<storage, read_write> array<u32>
+ *     2  two zeros    var<storage, read> array<u32, 2>
+ */
+typedef struct MnGpuCheck {
+    const char *wgsl;
+    const uint32_t *inputs;
+    uint32_t rows;
+    uint32_t results;
+    void (*cpu)(const uint32_t *inputs, uint32_t *out);
+} MnGpuCheck;
+
+/* Set by generated code before mn_start in a program with a strict GPU
+ * system; NULL otherwise. */
+extern const MnGpuCheck *mn_gpu_check;
+
 /* Hands the GPU work recorded so far to the device without waiting for
  * it. Generated code calls it after the last block of a GPU system that an
  * ordinary system follows in the tick, so that the device works while the
