@@ -614,7 +614,7 @@ beside an RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10,
 | 8  | Every window test runs inside `tests/window/compositor.sh`, which sets `DISPLAY` to an address that can't be connected to and gives sway and a session bus a runtime directory of their own; every other run of a window program in the suite sets `WAYLAND_DISPLAY` and `DISPLAY` to names that can't be connected to and `XDG_RUNTIME_DIR` to an empty directory. |
 | 9  | `ldd` on the release builds of `examples/hello.12am` and of `examples/nbody.12am` lists what it lists on 0.5.0. |
 | 10 | With `LD_LIBRARY_PATH` set to a directory holding another build of ALSA, which SDL 3 links, `midnight run examples/window.12am` builds and runs headless with `examples/window.drive`. |
-| 11 | Run by hand at the development machine's desktop, in release and debug builds. The window showed, kept time and went on ticking on another workspace, but 0.6.0 aborted at exit with a D-Bus assertion: see "Differences from the design". 0.6.1 ends with status 0 on a live session bus in the window tests; the run by hand is to be repeated on it. |
+| 11 | Run by hand at the development machine's desktop, in release and debug builds. The window showed, kept time and went on ticking on another workspace, but 0.6.0 aborted at exit with a D-Bus assertion: see "Differences from the design". On 0.6.1 both builds end cleanly when the window is closed: passes. |
 | 12 | The reference says 0.6 and `midnight --version` prints `midnight 0.6.0`. Every command in the README was run as written, `./move` and the headless window in scratch directories, the window on the desktop inside `tests/window/compositor.sh`. `tests/COVERAGE.md` has "The window". |
 
 ### Measured
