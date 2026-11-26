@@ -1730,13 +1730,14 @@ module Eval
              "would mark about #{Report.fmt(chance)} of #{rows.size} rows.\n"
 
       out << "\n## Templates whose count changed\n\n"
-      ta = template_counts(a)
-      tb = template_counts(b)
+      ta = template_counts(a, tasks)
+      tb = template_counts(b, tasks)
       changed = (ta.keys | tb.keys).select { |k| ta[k] != tb[k] }.sort_by { |k| [-(tb[k] - ta[k]).abs, k] }
       if changed.empty?
         out << "None.\n"
       else
         out << Report.table(%w[Kind Template A B], changed.map { |k| [k[0], Report.code(k[1]), ta[k], tb[k]] })
+        out << "\nOccurrences over the tasks in both, in all their runs.\n"
       end
       out
     end
@@ -1747,9 +1748,11 @@ module Eval
       format(signed ? "%+.1f%%" : "%.1f%%", x * 100)
     end
 
-    def template_counts(results)
+    def template_counts(results, tasks)
       counts = Hash.new(0)
       Runs.trials(results).each_value do |r|
+        next unless tasks.include?(r["task"])
+
         r["diagnostics"].to_a.each { |d| counts[[d["kind"], d["template"]]] += 1 }
       end
       counts

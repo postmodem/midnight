@@ -400,7 +400,7 @@ in B, marking a difference when Fisher's exact test, two-sided, on the two
 pairs of counts gives p < 0.1, and saying under the table how many marks
 chance alone would give: the sum over the rows of the chance of a mark
 when both sides pass at the row's pooled rate; then each template whose
-count changed, with both counts. It names the tasks whose hash differs,
+count over the tasks in both changed, with both counts. It names the tasks whose hash differs,
 and says when the models as reported, effort, trials, kit, preamble, the
 agent's tools or Claude Code's version differ.
 

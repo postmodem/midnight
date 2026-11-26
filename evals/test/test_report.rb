@@ -138,4 +138,14 @@ class ReportTest < Minitest::Test
     b = results("results-b.json").merge("preamble_sha256" => "other")
     assert_match(/The preamble differs/, Eval::Compare.render(results("results-a.json"), b))
   end
+
+  def test_compare_counts_templates_of_the_tasks_in_both
+    a = results("results-a.json")
+    b = results("results-b.json")
+    b = b.merge("runs" => b["runs"].reject { |r| r["task"] == "thermostat" },
+                "tasks" => b["tasks"].except("thermostat"), "task_names" => b["task_names"] - ["thermostat"])
+    text = Eval::Compare.render(a, b)
+    refute_match(/is a keyword and can't be used as a name/, text)
+    assert_match(/\| error \| `` unknown method `…` for `…` `` \| 0 \| 1 \|/, text)
+  end
 end
