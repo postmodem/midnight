@@ -110,30 +110,37 @@
           meta.mainProgram = "midnight-suite";
         };
 
-      # Runs the suite's GPU tests by name, and fails unless every name
-      # matches a test.
-      gpuTestsFor =
-        pkgs:
+      # Runs tests of the suite by name, and fails unless every name matches
+      # a test.
+      suiteTestsFor =
+        pkgs: names:
         let
           suite = lib.getExe (suiteFor pkgs);
-          names = [
-            "gpu_programs"
-            "gpu_stats_match_plan"
-            "gpu_stats_match_expected"
-            "gpu_driver_finds_its_parts"
-            "gpu_strict_div_sqrt"
-          ];
           list = lib.concatStringsSep " " names;
           count = toString (builtins.length names);
         in
         ''
           found=$(${suite} --exact --list ${list} | grep -c ': test$' || true)
           if [ "$found" != ${count} ]; then
-            echo "midnight-gpu-test: ${count} GPU tests named, $found found" >&2
+            echo "midnight-suite: ${count} tests named, $found found" >&2
             exit 1
           fi
           ${suite} --exact ${list}
         '';
+
+      # The suite's GPU tests.
+      gpuTestsFor =
+        pkgs:
+        suiteTestsFor pkgs [
+          "gpu_programs"
+          "gpu_stats_match_plan"
+          "gpu_stats_match_expected"
+          "gpu_driver_finds_its_parts"
+          "gpu_strict_div_sqrt"
+        ];
+
+      # The suite's ThreadSanitizer tests.
+      tsanTestsFor = pkgs: suiteTestsFor pkgs [ "tsan_pool_stress" ];
 
       # The suite's GPU mode on the machine's hardware device.
       gpuTestFor =
@@ -303,6 +310,21 @@
                 export HOME=$TMPDIR XDG_RUNTIME_DIR=$TMPDIR
                 cd ${src}
                 ${gpuTestsFor pkgs}
+                touch $out
+              '';
+
+          # The suite's ThreadSanitizer tests.
+          tsan =
+            pkgs.runCommand "midnight-tsan-tests"
+              {
+                MIDNIGHT_BIN = lib.getExe midnight;
+                MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+                MIDNIGHT_TEST_TSAN = "1";
+              }
+              ''
+                export HOME=$TMPDIR
+                cd ${src}
+                ${tsanTestsFor pkgs}
                 touch $out
               '';
         }

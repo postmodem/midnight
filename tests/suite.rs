@@ -63,6 +63,14 @@
 //! `UPDATE_EXPECT=1` the release run writes the files instead: `.stats`
 //! files are the only expected files GPU mode writes.
 //!
+//! # The thread pool
+//!
+//! `pool_stress` builds `tests/pool/stress.c` with
+//! `runtime/midnight_pool.c` and runs each of its modes. With
+//! `MIDNIGHT_TEST_TSAN=1`, `tsan_pool_stress` does the same with
+//! ThreadSanitizer and fails on any report; without it that test does
+//! nothing.
+//!
 //! The compiler is the one cargo built, or `MIDNIGHT_BIN` when that is set.
 //! Programs are found relative to the working directory, which must be the
 //! repository root.
@@ -71,9 +79,10 @@ use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 const STRICT_CFLAGS: &str = "-Wall -Wextra -Werror";
 const MODES: [Mode; 2] = [Mode::Release, Mode::Debug];
@@ -1449,4 +1458,170 @@ fn stats_lines_are_read() {
         parse_stats("0: 3 uploads, 1 download, 2 rows up, 1 row down, 2 submissions, 1 wait, 4"),
         None
     );
+}
+
+/// What a program did within its time limit.
+struct TimedRun {
+    /// `None` when the program was stopped by a signal or by the limit.
+    status: Option<i32>,
+    stdout: String,
+    stderr: String,
+    /// The program was still running when the limit passed, and was killed.
+    timed_out: bool,
+}
+
+/// Runs a command, and kills it when it has not ended after `limit`.
+fn run_within(command: &mut Command, limit: Duration) -> TimedRun {
+    use std::io::Read;
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run program");
+    let mut stdout = child.stdout.take().expect("piped");
+    let mut stderr = child.stderr.take().expect("piped");
+    std::thread::scope(|scope| {
+        let read_out = scope.spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = stdout.read_to_end(&mut bytes);
+            bytes
+        });
+        let read_err = scope.spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = stderr.read_to_end(&mut bytes);
+            bytes
+        });
+        let started = Instant::now();
+        let mut timed_out = false;
+        let status = loop {
+            if let Some(status) = child.try_wait().expect("wait for program") {
+                break status;
+            }
+            if started.elapsed() >= limit {
+                timed_out = true;
+                let _ = child.kill();
+                break child.wait().expect("wait for program");
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        };
+        TimedRun {
+            status: if timed_out { None } else { status.code() },
+            stdout: text(&read_out.join().expect("read standard output")),
+            stderr: text(&read_err.join().expect("read standard error")),
+            timed_out,
+        }
+    })
+}
+
+/// Whether `MIDNIGHT_TEST_TSAN` asks for the ThreadSanitizer tests.
+fn tsan_mode() -> bool {
+    std::env::var_os("MIDNIGHT_TEST_TSAN").is_some_and(|value| !value.is_empty())
+}
+
+/// How long a run of the pool's stress test may take.
+const STRESS_LIMIT: Duration = Duration::from_secs(300);
+
+/// Builds `tests/pool/stress.c` with `runtime/midnight_pool.c`, with
+/// ThreadSanitizer when `sanitize`, and runs each of its modes, one after
+/// another, plain and with further words. A mode that ends well prints
+/// `ok`; `fail` and `hang` must name piece 400, the earliest failing one,
+/// and exit with status 3. Nothing may be written to standard error, where
+/// ThreadSanitizer reports.
+fn pool_stress_runs(name: &str, sanitize: bool) {
+    let dir = scratch(name);
+    let exe = dir.join("stress");
+    let mut args: Vec<OsString> = ["-std=c11", "-O2", "-pthread", "-Iruntime"]
+        .iter()
+        .map(OsString::from)
+        .collect();
+    args.extend(STRICT_CFLAGS.split_whitespace().map(OsString::from));
+    if sanitize {
+        args.extend(["-g".into(), "-fsanitize=thread".into()]);
+    }
+    args.extend([
+        "tests/pool/stress.c".into(),
+        "runtime/midnight_pool.c".into(),
+        "-o".into(),
+        exe.clone().into_os_string(),
+    ]);
+    let args: Vec<&OsStr> = args.iter().map(OsString::as_os_str).collect();
+    cc(&args);
+
+    let passing = [
+        ("back", ""),
+        ("back", "8,reverse"),
+        ("idle", ""),
+        ("idle", "4,awake"),
+        ("crowd", ""),
+        ("crowd", "jitter"),
+        ("one", ""),
+        ("restart", ""),
+        ("restart", "5,reverse,jitter"),
+    ];
+    let failing = [
+        "4",
+        "8,reverse",
+        "3,jitter",
+        "2,awake",
+        "1",
+        "16,reverse,jitter",
+        "64",
+    ];
+    let mut runs: Vec<(&str, &str, &str, i32)> = passing
+        .iter()
+        .map(|(mode, words)| (*mode, *words, "ok\n", 0))
+        .collect();
+    for mode in ["fail", "hang"] {
+        runs.extend(
+            failing
+                .iter()
+                .map(|words| (mode, *words, "failed 400\n", 3)),
+        );
+    }
+    let mut failures = Vec::new();
+    for (mode, words, stdout, status) in &runs {
+        let mut command = Command::new(&exe);
+        command.arg(mode);
+        if !words.is_empty() {
+            command.arg(words);
+        }
+        let run = run_within(&mut command, STRESS_LIMIT);
+        if run.timed_out
+            || run.status != Some(*status)
+            || run.stdout != *stdout
+            || !run.stderr.is_empty()
+        {
+            failures.push(format!(
+                "stress {mode} {words}: {}, expected status {status} and `{}`\n\
+                 --- stdout\n{}--- stderr\n{}---",
+                if run.timed_out {
+                    format!("still running after {} s", STRESS_LIMIT.as_secs())
+                } else {
+                    format!("exited with {:?}", run.status)
+                },
+                stdout.trim_end(),
+                run.stdout,
+                run.stderr
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs of the pool's stress test", runs.len(), failures);
+}
+
+/// The thread pool on its own.
+#[test]
+fn pool_stress() {
+    pool_stress_runs("pool-stress", false);
+}
+
+/// The thread pool on its own, under ThreadSanitizer.
+#[test]
+fn tsan_pool_stress() {
+    if !tsan_mode() {
+        return;
+    }
+    pool_stress_runs("tsan-pool-stress", true);
+    note("tsan_pool_stress: every mode of tests/pool/stress.c, with no report");
 }
