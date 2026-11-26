@@ -1,0 +1,140 @@
+# Eval results 2026-11-26, f39bbd2 (paddle-rules)
+
+- Commit: `f39bbd2a9d141cb060ee3ea8f6e70c2df425c3c9`, Midnight 0.7.0
+- Claude Code 2.1.327, Ruby 3.4.12
+- Kit: `evals/kit` (23 files)
+- Agent's tools: `/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin:/nix/store/9g53s4a9kv7k5xbfjhyaxjymgw62di6r-bash-interactive-5.3p9/bin:/nix/store/8kxpzdb09cbn252h8wl14zds9jgbw2q0-findutils-4.10.0/bin:/nix/store/hi1zxw2mg94cwrpbq1s8bbjm1k5y3vci-gnugrep-3.12/bin:/nix/store/r3fwyjb1k9v7y6qd5l2jq1sx3b46dx2y-gnused-4.10/bin:/nix/store/q7p8cvfxi5vplngni9a38n17ykhgcx1d-ripgrep-15.1.0/bin`; compiler's PATH: `/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin`
+- Models: sonnet, haiku (as reported: claude-haiku-5-5, claude-sonnet-5-5); effort: default; trials: 1
+
+## Pass rates
+
+| Model | pass@1 (± s.e. across tasks) | Tasks passed every time |
+| --- | --- | --- |
+| `sonnet` | 100.0% | 1 of 1 |
+| `haiku` | 0.0% | 0 of 1 |
+
+## Tasks
+
+| Task | Model | Passed | Every time | Calls | Failed calls | Turns | Seconds | Output tokens | Input tokens | Cost (est. $) | First try | Verified |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `paddle` | `sonnet` | 1/1 | yes | 1.0 | 0.0 | 12.0 | 18 | 2348 | 146430 | 0.156 | 1 | 1 |
+| `paddle` | `haiku` | 0/1 | no | 2.0 | 0.0 | 12.0 | 37 | 7884 | 185782 | 0.015 | 1 | 1 |
+
+Means over graded runs. Cost is Claude Code's estimate at API prices.
+
+## Diagnostics and run-time errors
+
+| Kind | Template | Count | Runs | Passed | Repeated | Ruby-shaped | Spans |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| midnight | `drive: key down ArrowLeft` | 6 | 2 | 1 | 0 |  |  |
+| midnight | `drive: key up ArrowLeft` | 6 | 2 | 1 | 0 |  |  |
+| midnight | `drive: blur` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: close` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: focus` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: key ArrowRight` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: key down ArrowRight` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 10` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 20` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 3` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 30` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 4` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 6` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 60` | 2 | 2 | 1 | 0 |  |  |
+| midnight | `drive: tick 9` | 2 | 2 | 1 | 0 |  |  |
+
+## The reference as read
+
+| File | Section | Runs |
+| --- | --- | --- |
+| `language.md` | (before the first section) | 2 |
+| `language.md` | A first program | 1 |
+| `language.md` | The model | 1 |
+| `language.md` | Lexical structure | 2 |
+| `language.md` | Types | 1 |
+| `language.md` | Compact field types | 1 |
+| `language.md` | Variables and values | 1 |
+| `language.md` | What can be modified | 1 |
+| `language.md` | Expressions | 1 |
+| `language.md` | Control flow | 1 |
+| `language.md` | Functions | 1 |
+| `language.md` | Declaring data | 1 |
+| `language.md` | Structs | 1 |
+| `language.md` | Enums | 1 |
+| `language.md` | Components and tags | 1 |
+| `language.md` | Resources | 1 |
+| `language.md` | Events | 1 |
+| `language.md` | Constants | 1 |
+| `language.md` | Entities | 2 |
+| `language.md` | Queries | 2 |
+| `language.md` | Structural changes inside `each` | 2 |
+| `language.md` | Systems and ticks | 2 |
+| `language.md` | The window | 2 |
+| `language.md` | Without a display | 2 |
+| `language.md` | Keyboard and mouse | 2 |
+| `language.md` | Commands for the keyboard and the mouse | 2 |
+| `language.md` | GPU systems | 2 |
+| `language.md` | What a GPU block may contain | 1 |
+| `language.md` | What a GPU system may touch | 0 |
+| `language.md` | Snapshot semantics | 0 |
+| `language.md` | Arithmetic at 32 bits | 1 |
+| `language.md` | Runtime errors in a GPU system | 0 |
+| `language.md` | Random numbers in a GPU system | 1 |
+| `language.md` | Determinism | 0 |
+| `language.md` | Strict GPU systems | 0 |
+| `language.md` | Without a GPU | 0 |
+| `language.md` | The transfer plan | 1 |
+| `language.md` | Several cores | 1 |
+| `language.md` | Events | 0 |
+| `language.md` | Built-ins | 0 |
+| `language.md` | Output | 0 |
+| `language.md` | Numbers | 0 |
+| `language.md` | Strings | 0 |
+| `language.md` | Lists | 0 |
+| `language.md` | Random numbers, time and exit | 0 |
+| `language.md` | Programs and files | 0 |
+| `language.md` | What things cost | 0 |
+| `language.md` | What a GPU system costs | 0 |
+| `language.md` | What several cores cost | 0 |
+| `language.md` | Errors | 1 |
+| `language.md` | Grammar | 0 |
+| `language.md` | Not in 0.7 | 1 |
+| `README.md` | (before the first section) | 2 |
+| `README.md` | Try it | 2 |
+| `README.md` | The compiler | 2 |
+| `README.md` | GPU systems | 2 |
+| `README.md` | Several cores | 2 |
+| `README.md` | A window | 2 |
+| `README.md` | Keyboard and mouse | 2 |
+| `README.md` | Benchmarks | 2 |
+| `README.md` | Working on it | 2 |
+| `README.md` | Status | 2 |
+| `README.md` | License | 2 |
+| `examples/battle.12am` | (whole file) | 0 |
+| `examples/battle.out` | (whole file) | 0 |
+| `examples/bench.12am` | (whole file) | 0 |
+| `examples/bounce.12am` | (whole file) | 2 |
+| `examples/bounce.out` | (whole file) | 0 |
+| `examples/hello.12am` | (whole file) | 0 |
+| `examples/hello.out` | (whole file) | 0 |
+| `examples/input.12am` | (whole file) | 2 |
+| `examples/input.drive` | (whole file) | 1 |
+| `examples/input.out` | (whole file) | 0 |
+| `examples/life.12am` | (whole file) | 0 |
+| `examples/life.out` | (whole file) | 0 |
+| `examples/life_rules.12am` | (whole file) | 0 |
+| `examples/life_rules.out` | (whole file) | 0 |
+| `examples/move.12am` | (whole file) | 0 |
+| `examples/move.out` | (whole file) | 0 |
+| `examples/nbody.12am` | (whole file) | 0 |
+| `examples/nbody.out` | (whole file) | 0 |
+| `examples/window.12am` | (whole file) | 2 |
+| `examples/window.drive` | (whole file) | 0 |
+| `examples/window.out` | (whole file) | 0 |
+
+Runs of 2 graded that a tool result showed a line of the section to, below its heading.
+
+## Exceptions
+
+None.
+
+2 counted runs, 2 graded.
