@@ -1,0 +1,47 @@
+count = 20
+pressure = 30
+hold = 0
+tick = 0
+aborts = 0
+loop do
+  tick += 1
+  label = ""
+  if hold > 0
+    hold -= 1
+    pressure -= 2
+    label = "hold"
+  else
+    count -= 1
+    if count >= 11
+      pressure += 2
+      label = "fueling"
+    elsif count >= 4
+      pressure += 6
+      label = "pressurizing"
+    elsif count >= 1
+      pressure += 8
+      label = "ignition"
+    else
+      label = "liftoff"
+    end
+    if count == 15
+      hold = 3
+    elsif count == 6
+      hold = 2
+    end
+  end
+  if pressure > 88
+    aborts += 1
+    if aborts == 2
+      puts "tick #{tick}: scrubbed"
+      break
+    end
+    count = 10
+    pressure = 40
+    hold = 4
+    label = "abort"
+  end
+  print "tick ", tick, ": T-", count, " ", label
+  puts ", pressure #{pressure}"
+  break if count == 0
+end

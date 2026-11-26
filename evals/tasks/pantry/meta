@@ -1,0 +1,3 @@
+areas: enums events strings
+control: no
+ruby: Hash, group_by, tally, symbols, sort_by, join

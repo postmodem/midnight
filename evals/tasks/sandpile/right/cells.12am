@@ -1,0 +1,74 @@
+component Cell
+  row: Int
+  col: Int
+  grains: Int = 0
+end
+
+resource Count
+  topples: Int = 0
+  lost: Int = 0
+  moving: Bool = false
+end
+
+def neighbours(row: Int, col: Int) -> Int
+  n = 0
+  n += 1 if row > 0
+  n += 1 if row < 6
+  n += 1 if col > 0
+  n += 1 if col < 6
+  n
+end
+
+system settle
+  Count.moving = true
+  while Count.moving
+    Count.moving = false
+    each Cell do |a|
+      if a.grains >= 4
+        Count.moving = true
+        a.grains -= 4
+        Count.topples += 1
+        Count.lost += 4 - neighbours(a.row, a.col)
+        each Cell do |b|
+          b.grains += 1 if (b.row - a.row).abs + (b.col - a.col).abs == 1
+        end
+      end
+    end
+  end
+end
+
+6.downto(0) do |c|
+  0.upto(6) do |r|
+    spawn Cell(row: r, col: c)
+  end
+end
+
+each Cell do |cell|
+  cell.grains = 30 if cell.row == 5 && cell.col == 1
+end
+
+80.times do |i|
+  each Cell do |cell|
+    if i < 50
+      cell.grains += 1 if cell.row == 3 && cell.col == 3
+    else
+      cell.grains += 1 if cell.row == 1 && cell.col == 4
+    end
+  end
+  World.tick
+  if (i + 1) % 10 == 0
+    puts "after #{i + 1} grains: #{Count.topples} topples, #{Count.lost} lost"
+  end
+end
+
+7.times do |r|
+  shown: [Int] = [0] * 7
+  each Cell do |cell|
+    shown[cell.col] = cell.grains if cell.row == r
+  end
+  out = "#{shown[0]}"
+  1.upto(6) do |k|
+    out += " #{shown[k]}"
+  end
+  puts out
+end

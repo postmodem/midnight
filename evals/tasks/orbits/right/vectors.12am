@@ -1,0 +1,89 @@
+struct Vec2
+  x: Float = 0
+  y: Float = 0
+
+  def +(o: Vec2) -> Vec2
+    Vec2(x + o.x, y + o.y)
+  end
+
+  def -(o: Vec2) -> Vec2
+    Vec2(x - o.x, y - o.y)
+  end
+
+  def *(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+end
+
+component Body
+  name: String
+  mass: Float
+  pos: Vec2
+  vel: Vec2
+end
+
+tag Heavy
+
+resource Sim
+  step: Int = 0
+end
+
+STEP = 0.0625
+
+# Rounded to thousandths and written with three decimals.
+def three(v: Float) -> String
+  thousandths = (v.round(3) * 1000).round
+  head = thousandths.abs / 1000
+  tail = thousandths.abs - head * 1000
+  pad = tail < 10 ? "00" : (tail < 100 ? "0" : "")
+  (thousandths < 0 ? "-" : "") + head.to_s + "." + pad + tail.to_s
+end
+
+def pull(m: Float, d: Vec2, s: Float) -> Vec2
+  Vec2(m * d.x / s * STEP, m * d.y / s * STEP)
+end
+
+system step
+  heavy = Body("", 0, Vec2(), Vec2())
+  light = Body("", 0, Vec2(), Vec2())
+  each Body, with: Heavy do |b|
+    heavy = b
+  end
+  each Body, without: Heavy do |b|
+    light = b
+  end
+  d = light.pos - heavy.pos
+  d2 = d.x * d.x + d.y * d.y
+  s = d2 * Math.sqrt(d2)
+  each Body do |b|
+    if b.name == "A"
+      b.vel = b.vel + pull(light.mass, d, s)
+    else
+      b.vel = b.vel - pull(heavy.mass, d, s)
+    end
+    b.pos = b.pos + b.vel * STEP
+  end
+  Sim.step += 1
+end
+
+system report
+  return unless Sim.step % 32 == 0
+  a = ""
+  b = ""
+  each Body do |body|
+    text = "(" + three(body.pos.x) + ", " + three(body.pos.y) + ")"
+    if body.name == "A"
+      a = text
+    else
+      b = text
+    end
+  end
+  puts "t=#{Sim.step / 16}.0 A#{a} B#{b}"
+end
+
+spawn Body("B", 1, Vec2(4, 0), Vec2(0, 1.6))
+spawn Body("A", 8, Vec2(0, 0), Vec2(0, -0.2)), Heavy
+
+640.times do
+  World.tick
+end

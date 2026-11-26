@@ -1,0 +1,139 @@
+enum Sort
+  Fruit
+  Dairy
+  Grain
+end
+
+component Label
+  name: String
+  sort: Sort
+end
+
+component Shelf
+  units: Int
+  sold_today: Int = 0
+end
+
+tag Perishable
+
+event Arrival
+  item: String
+  units: Int
+end
+
+event Purchase
+  item: String
+  units: Int
+end
+
+resource Tally
+  ok: Int = 0
+  no: Int = 0
+end
+
+def arrivals(day: Int) -> [Arrival]
+  case day
+  when 1 then [Arrival("figs", 3)]
+  when 2 then [Arrival("oats", 5), Arrival("cheese", 2)]
+  when 3 then [Arrival("milk", 6), Arrival("apples", 2), Arrival("rice", 3)]
+  else [Arrival("butter", 2), Arrival("pears", 1)]
+  end
+end
+
+def purchases(day: Int) -> [Purchase]
+  case day
+  when 1
+    [Purchase("rice", 4), Purchase("milk", 2), Purchase("cheese", 3), Purchase("pears", 1), Purchase("oats", 3)]
+  when 2
+    [Purchase("apples", 4), Purchase("butter", 1), Purchase("flour", 2), Purchase("figs", 5),
+     Purchase("milk", 3), Purchase("rice", 2), Purchase("rice", 4)]
+  when 3
+    [Purchase("pears", 2), Purchase("cheese", 4), Purchase("milk", 6), Purchase("apples", 3),
+     Purchase("butter", 3), Purchase("oats", 1)]
+  else
+    [Purchase("flour", 5), Purchase("figs", 1), Purchase("rice", 3), Purchase("oats", 4),
+     Purchase("cheese", 1), Purchase("butter", 2)]
+  end
+end
+
+system announce
+  arrivals(Time.tick + 1).each do |a|
+    emit a
+  end
+  purchases(Time.tick + 1).each do |p|
+    emit p
+  end
+end
+
+system deliver
+  on Arrival do |a|
+    each Label, Shelf do |label, shelf|
+      shelf.units = shelf.units + a.units if label.name == a.item
+    end
+  end
+end
+
+system sell
+  Tally.ok = 0
+  Tally.no = 0
+  on Purchase do |p|
+    each Label, Shelf do |label, shelf|
+      if label.name == p.item
+        if p.units <= shelf.units
+          shelf.units = shelf.units - p.units
+          shelf.sold_today = shelf.sold_today + p.units
+          Tally.ok += 1
+        else
+          Tally.no += 1
+        end
+      end
+    end
+  end
+end
+
+system report
+  print "day ", Time.tick + 1, ": ", Tally.ok, " filled, ", Tally.no, " refused\n"
+  [Sort::Grain, Sort::Dairy, Sort::Fruit].each do |s|
+    names: [String] = []
+    units: [Int] = []
+    total = 0
+    each Label, Shelf do |label, shelf|
+      if label.sort == s
+        names.push(label.name)
+        units.push(shelf.units)
+        total = total + shelf.sold_today
+        shelf.sold_today = 0
+      end
+    end
+    out = s.to_s + " (" + total.to_s + " sold): "
+    first = true
+    while !names.empty?
+      best = 0
+      names.length.times do |i|
+        if units[i] > units[best] || (units[i] == units[best] && names[i] < names[best])
+          best = i
+        end
+      end
+      out = out + (first ? "" : ", ") + names[best] + " " + units[best].to_s
+      first = false
+      names.delete_at(best)
+      units.delete_at(best)
+    end
+    puts out
+  end
+end
+
+spawn Label("cheese", Sort::Dairy), Shelf(2), Perishable
+spawn Label("flour", Sort::Grain), Shelf(7)
+spawn Label("figs", Sort::Fruit), Shelf(0), Perishable
+spawn Label("butter", Sort::Dairy), Shelf(4), Perishable
+spawn Label("oats", Sort::Grain), Shelf(3)
+spawn Label("apples", Sort::Fruit), Shelf(4), Perishable
+spawn Label("rice", Sort::Grain), Shelf(9)
+spawn Label("milk", Sort::Dairy), Shelf(5), Perishable
+spawn Label("pears", Sort::Fruit), Shelf(6), Perishable
+
+World.tick
+World.tick
+World.tick
+World.tick

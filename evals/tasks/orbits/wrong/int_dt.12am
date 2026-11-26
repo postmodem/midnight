@@ -1,0 +1,43 @@
+struct Body
+  mass: Float
+  x: Float
+  y: Float
+  vx: Float
+  vy: Float
+end
+
+DT = 1 / 16
+
+# A number rounded to three decimal places, halves away from zero, with
+# exactly three digits after the point and no sign on zero.
+def fixed(v: Float) -> String
+  n = (v * 1000).round
+  sign = n < 0 ? "-" : ""
+  n = n.abs
+  frac = (n % 1000).to_s
+  "#{sign}#{n / 1000}." + "0" * (3 - frac.length) + frac
+end
+
+def show(b: Body) -> String
+  "(#{fixed(b.x)}, #{fixed(b.y)})"
+end
+
+a = Body(8.0, 0.0, 0.0, 0.0, -0.2)
+b = Body(1.0, 4.0, 0.0, 0.0, 1.6)
+1.upto(640) do |step|
+  dx = b.x - a.x
+  dy = b.y - a.y
+  d2 = dx * dx + dy * dy
+  s = d2 * Math.sqrt(d2)
+  a.vx = a.vx + b.mass * dx / s * DT
+  a.vy = a.vy + b.mass * dy / s * DT
+  b.vx = b.vx - a.mass * dx / s * DT
+  b.vy = b.vy - a.mass * dy / s * DT
+  a.x = a.x + a.vx * DT
+  a.y = a.y + a.vy * DT
+  b.x = b.x + b.vx * DT
+  b.y = b.y + b.vy * DT
+  if step % 32 == 0
+    puts "t=#{step * DT} A#{show(a)} B#{show(b)}"
+  end
+end

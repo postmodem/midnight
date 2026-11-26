@@ -1,0 +1,131 @@
+enum Kind
+  Grain
+  Dairy
+  Fruit
+end
+
+component Good
+  name: String
+  kind: Kind
+  stock: Int
+  sold: Int = 0
+end
+
+event Delivery
+  good: String
+  amount: Int
+end
+
+event Order
+  good: String
+  amount: Int
+end
+
+struct Line
+  day: Int
+  good: String
+  amount: Int
+end
+
+DELIVERIES = [
+  Line(1, "figs", 3),
+  Line(2, "oats", 5), Line(2, "cheese", 2),
+  Line(3, "milk", 6), Line(3, "apples", 2), Line(3, "rice", 3),
+  Line(4, "butter", 2), Line(4, "pears", 1)
+]
+
+ORDERS = [
+  Line(1, "rice", 4), Line(1, "milk", 2), Line(1, "cheese", 3), Line(1, "pears", 1), Line(1, "oats", 3),
+  Line(2, "apples", 4), Line(2, "butter", 1), Line(2, "flour", 2), Line(2, "figs", 5), Line(2, "milk", 3),
+  Line(2, "rice", 2), Line(2, "rice", 4),
+  Line(3, "pears", 2), Line(3, "cheese", 4), Line(3, "milk", 6), Line(3, "apples", 3), Line(3, "butter", 3),
+  Line(3, "oats", 1),
+  Line(4, "flour", 5), Line(4, "figs", 1), Line(4, "rice", 3), Line(4, "oats", 4), Line(4, "cheese", 1),
+  Line(4, "butter", 2)
+]
+
+resource Day
+  filled: Int = 0
+  refused: Int = 0
+end
+
+system announce
+  day = Time.tick + 1
+  DELIVERIES.each do |d|
+    emit Delivery(d.good, d.amount) if d.day == day
+  end
+  ORDERS.each do |o|
+    emit Order(o.good, o.amount) if o.day == day
+  end
+end
+
+system deliver
+  on Delivery do |d|
+    each Good do |g|
+      g.stock += d.amount if g.name == d.good
+    end
+  end
+end
+
+system sell
+  Day.filled = 0
+  Day.refused = 0
+  on Order do |o|
+    each Good do |g|
+      next unless g.name == o.good
+      if g.stock >= o.amount
+        g.stock -= o.amount
+        g.sold += o.amount
+        Day.filled += 1
+      else
+        Day.refused += 1
+      end
+    end
+  end
+end
+
+# Whether a comes before b in a kind's line: more stock first.
+def before?(a: Good, b: Good) -> Bool
+  a.stock >= b.stock
+end
+
+system report
+  puts "day #{Time.tick + 1}: #{Day.filled} filled, #{Day.refused} refused"
+  [Kind::Grain, Kind::Dairy, Kind::Fruit].each do |kind|
+    goods: [Good] = []
+    sold = 0
+    each Good do |g|
+      next unless g.kind == kind
+      sold += g.sold
+      g.sold = 0
+      i = goods.length
+      goods.push(g)
+      while i > 0 && before?(goods[i], goods[i - 1])
+        moved = goods[i - 1]
+        goods[i - 1] = goods[i]
+        goods[i] = moved
+        i -= 1
+      end
+    end
+    text = "#{kind} (#{sold} sold): "
+    goods.each_with_index do |g, i|
+      text += ", " if i > 0
+      text += "#{g.name} #{g.stock}"
+    end
+    puts text
+  end
+end
+
+spawn Good("pears", Kind::Fruit, 6)
+spawn Good("milk", Kind::Dairy, 5)
+spawn Good("rice", Kind::Grain, 9)
+spawn Good("apples", Kind::Fruit, 4)
+spawn Good("oats", Kind::Grain, 3)
+spawn Good("butter", Kind::Dairy, 4)
+spawn Good("figs", Kind::Fruit, 0)
+spawn Good("flour", Kind::Grain, 7)
+spawn Good("cheese", Kind::Dairy, 2)
+
+4.times do
+  World.tick
+end
