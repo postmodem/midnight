@@ -8,7 +8,7 @@
 #   ruby evals/eval.rb run --resume RESULTS
 #   ruby evals/eval.rb grade [--run RESULTS] TASK FILE
 #   ruby evals/eval.rb grade --run RESULTS
-#   ruby evals/eval.rb self-test
+#   ruby evals/eval.rb self-test [TASK...]
 #   ruby evals/eval.rb report RESULTS
 #   ruby evals/eval.rb compare A B
 
@@ -2241,9 +2241,13 @@ module Eval
   module SelfTest
     module_function
 
-    def run(root = File.join(ROOT, "evals", "tasks"), compiler: Grade.compiler)
+    def run(root = File.join(ROOT, "evals", "tasks"), compiler: Grade.compiler, only: [])
       problems = []
       tasks = Task.all(root)
+      unknown = only - tasks.map(&:name)
+      raise Failure, "no task #{unknown.map { |n| "`#{n}`" }.join(', ')}" unless unknown.empty?
+
+      tasks = tasks.select { |t| only.include?(t.name) } unless only.empty?
       tasks.each do |task|
         check = ->(ok, what) { problems << "#{task.name}: #{what}" unless ok }
         %w[TASK.md meta solution.12am expected.out].each { |f| check.(task.exist?(f), "no #{f}") }
@@ -2316,7 +2320,7 @@ module Eval
              eval.rb run --resume RESULTS
              eval.rb grade [--run RESULTS] TASK FILE
              eval.rb grade --run RESULTS
-             eval.rb self-test
+             eval.rb self-test [TASK...]
              eval.rb report RESULTS
              eval.rb compare A B
     TEXT
@@ -2417,8 +2421,7 @@ module Eval
     end
 
     def self_test(argv)
-      usage! unless argv.empty?
-      count, problems = SelfTest.run
+      count, problems = SelfTest.run(only: argv)
       problems.each { |p| puts p }
       puts "self-test: #{count} tasks, #{problems.empty? ? 'all checks pass' : "#{problems.size} problems"}"
       exit(problems.empty? ? 0 : 1)
