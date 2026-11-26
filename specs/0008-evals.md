@@ -146,13 +146,17 @@ anything that would need a permission prompt is refused.
 
 The harness reads the transcript's `system/init` line first. A run whose
 tools are not exactly `Bash`, `Read`, `Edit`, `Write`, `Glob` and `Grep`,
-or that lists an MCP server, a skill, a plugin or an agent, is stopped,
-and so is the whole `run`, with a message: the flags no longer isolate.
+whose `cwd` is not the run's directory, whose permission mode is not
+`default`, or that lists an MCP server, a skill, a plugin or an agent, is
+stopped, and so is the whole `run`, with a message: the flags no longer
+isolate.
 
 A tool result too large for the context is saved by Claude Code under
 `~/.claude/projects/`, in a directory named after the run's directory, and
-the agent is shown that path. The harness removes that directory with
-`rmdir` when the run ends, which removes it only if it is empty.
+the agent is shown that path. Claude Code also makes a directory named the
+same way under `/tmp/claude-UID/`. When the run ends, the harness removes
+each of the two, and the directories under it, when no file is among
+them, and leaves it otherwise.
 
 ### The wrapper
 
@@ -317,10 +321,17 @@ For each run the results file holds:
   with no `result` line, counted from the
   transcript's assistant messages and marked partial.
 
+For each graded run it also records how long grading took, the load
+average when it began, and whether the time limit stopped one of its
+steps. When the run's sessions have finished, `run` grades each kept
+program the time limit stopped in grading again, with nothing else
+running, and keeps the second grade.
+
 The results file also records the commit, Midnight's version, the Ruby
-version, for each task a hash of `TASK.md`, `expected.out`, `check.drive`,
-`loops`, `systems` and `given/`, and for the kit each source path with its
-hash.
+version, a hash of `preamble.md`, for each task a hash of `TASK.md`,
+`meta`, `expected.out`, `check.drive`, `loops`, `systems` and `given/`,
+for the kit each source path with its hash, and the store paths of the
+agent's tools and of the compiler's `PATH`.
 
 A diagnostic is **Ruby-shaped** when the name in its first backticked
 span is Ruby's in that place and Midnight's is not:
@@ -330,6 +341,8 @@ span is Ruby's in that place and Midnight's is not:
   Ruby's `Array` when `T` is a list, `String` when `T` is `String`,
   `Integer` when `T` is `Int`, `Float` when `T` is `Float`, and `Object`
   otherwise;
+- ``unknown method `N` for the type `T` ``: `N` is a public instance
+  method of Ruby's `Class`, as `new` is;
 - ``unknown function `N` `` or ``unknown variable or function `N` ``: `N`
   is a private or public instance method of `Kernel`, or a Ruby keyword
   (`nil` among them);
@@ -340,7 +353,8 @@ span is Ruby's in that place and Midnight's is not:
   required.
 
 The harness takes the names from `ruby --disable-gems`, the flake's Ruby
-3.4. The rule finds names only; a Ruby habit of syntax, such as a range or
+3.4, and records each diagnostic's verdict when the run is graded. The
+rule finds names only; a Ruby habit of syntax, such as a range or
 a brace block, shows as its parse error in the table of templates.
 
 Transcripts, call logs and the agents' programs are copied to
@@ -353,7 +367,8 @@ account details and are large.
 `report FILE` prints Markdown and `run` writes it beside the results:
 
 1. A header: the commit, Midnight's, Claude Code's and Ruby's versions,
-   the kit, the models as reported, effort, trials, date.
+   the kit, the agent's tools, the models as reported, effort, trials,
+   date.
 2. For each model, **pass@1** over all tasks (the mean of the tasks' pass
    rates over graded runs) with its standard error taken across tasks, and
    the number of tasks **passed every time**. A task with fewer graded
@@ -368,21 +383,25 @@ account details and are large.
    whether it is Ruby-shaped, and its spans with their counts (as
    `insert ×3, map ×2`).
 5. The reference as read: for each `##` and `###` section of each file in
-   `docs/`, and for each file with no headings, the number of runs that
-   read any of its lines.
+   `docs/`, for the lines before a file's first such heading (below line
+   1), and for each file with no headings, the number of runs that read
+   any of its lines.
 6. Compiler bugs, escaped runs, runs for review with what the audit could
-   not follow, infrastructure errors, denied calls, runs
-   that ended in `timeout` or `no solution`, and calls the time limit
-   ended while the load average exceeded the number of cores, if any.
+   not follow, infrastructure errors, denied calls, runs that ended in
+   `timeout` or `no solution`, calls the time limit ended while the load
+   average exceeded the number of cores, and programs graded again alone,
+   with both outcomes, if any.
 
-`compare A B` prints each model's pass@1 in both and the difference, with
-the standard error of the per-task differences; then, for each task and
-model in both, the passes in A and in B, marking a difference when
-Fisher's exact test, two-sided, on the two pairs of counts gives p < 0.1,
-and saying under the table how many marks chance alone would give (rows ×
-0.1); then each template whose count changed, with both counts. It names
-the tasks whose hash differs, and says when the models as reported,
-effort, trials, kit or Claude Code's version differ.
+`compare A B` prints each model's pass@1 in both and the difference, all
+three over the tasks in both, with the standard error of the per-task
+differences; then, for each task and model in both, the passes in A and
+in B, marking a difference when Fisher's exact test, two-sided, on the two
+pairs of counts gives p < 0.1, and saying under the table how many marks
+chance alone would give: the sum over the rows of the chance of a mark
+when both sides pass at the row's pooled rate; then each template whose
+count changed, with both counts. It names the tasks whose hash differs,
+and says when the models as reported, effort, trials, kit, preamble, the
+agent's tools or Claude Code's version differ.
 
 ### Tasks
 
@@ -397,9 +416,9 @@ exactly `expected.out`:
   rounded, with the rounding and the printing of `-0.0` stated.
 - No task depends on `rand`, `clock`, or the order of anything the
   reference leaves unspecified, query order included. A task that prints a
-  line per entity gives each entity a number and asks for the lines in the
-  order of that number; a rule that picks one entity among several breaks
-  ties by that number.
+  line per entity gives each entity a number, or states a total order, and
+  asks for the lines in that order; a rule that picks one entity among
+  several breaks ties by that number or order.
 - `TASK.md` shows the first lines of the expected output, never all of it.
 - `TASK.md` asks for what to build, in the domain's words, and names a
   language construct only where a check needs it (a system's name for
@@ -425,7 +444,9 @@ exactly `expected.out`:
   programmer would write it is Midnight, and it prints only what does not
   depend on order (totals, counts, the state of one entity or resource).
   Controls show what the rest of the set costs agents beyond the language
-  being new. Every other task names at least one form in `ruby:`.
+  being new. A control's areas are those its program touches when written
+  the way a Ruby programmer would; it cannot require them. Every other
+  task names at least one form in `ruby:`.
 - A **repair** gives a `solution.12am` in `given/` that does not pass, and
   asks for it to be fixed. It measures how well diagnostics and run-time
   errors lead to a fix.
@@ -472,8 +493,9 @@ root, and refuses to start elsewhere. Its commands:
   kit's files from that commit (`git show COMMIT:PATH`), and refuses a
   `--kit` file that is not in it, so uncommitted changes change nothing
   that is measured. It refuses to start when `evals/eval.rb` differs from
-  the commit, and refuses to write a results file that exists, saying to
-  give `--label`. It runs every task, model and trial, grades, and writes
+  the commit, while `/tmp` or `/` holds an `AGENTS.md` or a `CLAUDE.md`
+  (the run directories' parents), and refuses to write a results file that
+  exists, saying to give `--label`. It runs every task, model and trial, grades, and writes
   `evals/results/DATE-COMMIT[-LABEL].json` after every run and the `.md`
   at the end. Defaults: every task, `sonnet,haiku`, 5 trials, Claude
   Code's default effort, `evals/kit`, 4 jobs.
@@ -481,9 +503,14 @@ root, and refuses to start elsewhere. Its commands:
   the command that continues it.
 - `run --resume RESULTS`: refuses unless `RESULTS` names the commit `HEAD`
   names and the same Claude Code version, runs every trial that has no
-  graded result, infrastructure errors included, and writes to `RESULTS`.
+  graded result, infrastructure errors and isolation stops included, and
+  writes to `RESULTS`.
 - `report FILE` and `compare A B`, as above.
 - `grade TASK FILE`: grades one program against one task.
+- `grade --run RESULTS [TASK FILE]`: the same against the run's own copy
+  of its tasks, under `evals/runs/`, with the compiler of its commit; with
+  no `TASK FILE`, grades every kept program of the run and names each
+  whose verdict differs from the recorded one.
 - `self-test`: every reference solution and every program in `right/`
   passes; every program in `wrong/` fails; for a task with `loops`, one
   program in `wrong/` prints `expected.out` and fails only `loops`, and
@@ -494,16 +521,19 @@ root, and refuses to start elsewhere. Its commands:
   commands in `given/`.
 
 `grade` and `self-test` use the compiler `MIDNIGHT_BIN` names, and build
-it from the working tree with `nix build` when it is unset. `claude` is
+it with `nix build` when it is unset: from the working tree, or for
+`grade --run` from the run's commit. `claude` is
 whatever is first on the caller's PATH; the results record its version.
 
 The harness's tests, in `evals/test/`, use Ruby's bundled `minitest` and
 need no network or account. They cover parsing call logs and transcripts
 (recorded from real runs, plus transcripts of an API error and a usage
 limit in the format of a real `result` line), templates, the Ruby-shaped
-rule, the audit, first try and verified, what was read, Fisher's test,
-`report` and `compare` (two recorded results with a known difference
-included), and the wrapper, called directly with no agent.
+rule (every template it names is one the compiler's `tests/fail` print),
+the audit, first try and verified, what was read, Fisher's test and the
+chance of a mark, `report` and `compare` (two recorded results with a
+known difference included), and the wrapper, called directly with no
+agent.
 
 ### The suite
 
@@ -602,8 +632,12 @@ All run on x86_64-linux, on the development machine.
       `system/init` line lists only the six tools and no MCP server; and
       the audit marks the run escaped exactly where the call log shows a
       refusal.
-5. `grade` gives the same verdict as the run did for every run of the
-   baseline, from the programs under `evals/runs/`.
+   3. A run with `haiku` whose `TASK.md` asks only for the one-word reply
+      `done`, with an `AGENTS.md` in the run's directory that asks for a
+      random token instead, replies `done`: Claude Code loads no
+      `AGENTS.md` of the run's directory into an agent.
+5. `grade --run` of the baseline's results gives the recorded verdict for
+   every kept program.
 6. The baseline: every task, `sonnet` and `haiku`, 5 trials, committed in
    `evals/results/` with its report; no run escaped. A fresh agent that
    has not seen the tasks' design reads every failed run's transcript and
@@ -616,7 +650,8 @@ All run on x86_64-linux, on the development machine.
    reference with one section cut, prints both runs' counts for those
    tasks and names the kit's difference.
 8. The harness's tests pass; nothing in `evals/` other than `runs/` holds
-   a path of the development machine or a transcript; the README's
+   a path of the development machine or a transcript with account details
+   (the tests' recorded transcripts have their ids zeroed); the README's
    paragraph names no task and no rule of grading.
 9. The Outcome has the findings: the diagnostics agents met most, the
    Ruby-shaped mistakes, the tasks no model passed every time, how agents

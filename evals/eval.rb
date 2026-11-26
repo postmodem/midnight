@@ -6,7 +6,8 @@
 #   ruby evals/eval.rb run [--tasks A,B] [--models M,N] [--trials K]
 #                          [--effort E] [--kit FILE] [--jobs J] [--label L]
 #   ruby evals/eval.rb run --resume RESULTS
-#   ruby evals/eval.rb grade TASK FILE
+#   ruby evals/eval.rb grade [--run RESULTS] TASK FILE
+#   ruby evals/eval.rb grade --run RESULTS
 #   ruby evals/eval.rb self-test
 #   ruby evals/eval.rb report RESULTS
 #   ruby evals/eval.rb compare A B
@@ -453,7 +454,7 @@ module Eval
     # A hash of what the agent is given and graded against.
     def sha256
       d = Digest::SHA256.new
-      %w[TASK.md expected.out check.drive loops systems].each do |f|
+      %w[TASK.md meta expected.out check.drive loops systems].each do |f|
         d << "#{f}\0#{exist?(f) ? read(f) : ''}\0"
       end
       given_files.each { |f| d << "given/#{f}\0#{read('given', f)}\0" }
@@ -496,19 +497,27 @@ module Eval
       end
     end
 
-    # Each `##` and `###` heading of a Markdown file as [line, title]; a
-    # file with none gets one section for the whole file.
+    BEFORE = "(before the first section)"
+
+    # Each `##` and `###` heading of a Markdown file as [line, title], after
+    # a section for the lines before the first one, below line 1, when any
+    # of them has text; a file with none gets one section for the whole
+    # file.
     def sections(text)
       fence = false
       found = []
-      text.each_line.with_index(1) do |line, n|
+      lines = text.lines
+      lines.each.with_index(1) do |line, n|
         fence = !fence if line.start_with?("```")
         next if fence
 
         m = line.match(/\A(##|###) (.+)/)
         found << [n, m[2].strip] if m
       end
-      found.empty? ? [[1, nil]] : found
+      return [[1, nil]] if found.empty?
+
+      intro = lines[1...(found.first[0] - 1)].to_a.any? { |l| !l.strip.empty? }
+      intro ? [[1, BEFORE], *found] : found
     end
   end
 
@@ -672,11 +681,14 @@ module Eval
     def result = @lines.reverse.find { |l| l["type"] == "result" }
     def version = init&.dig("claude_code_version")
 
-    # Why the init line shows the flags no longer isolate, or nil.
-    def self.isolation_problem(init)
+    # Why the init line shows the flags no longer isolate, or nil. root is
+    # the run's directory, when known.
+    def self.isolation_problem(init, root = nil)
       return "no init line" unless init
 
       problems = []
+      problems << "cwd #{init['cwd'].inspect}" if root && init["cwd"] != root
+      problems << "permission mode #{init['permissionMode'].inspect}" unless init["permissionMode"] == "default"
       problems << "tools #{init['tools'].inspect}" unless init["tools"].to_a.sort == TOOLS.sort
       problems << "MCP servers #{init['mcp_servers'].inspect}" unless init["mcp_servers"].to_a.empty?
       problems << "skills #{init['skills'].inspect}" unless init["skills"].to_a.empty?
@@ -988,9 +1000,10 @@ module Eval
     end
 
     # { "escapes" => the paths outside the allowed places that calls which
-    # ran reached, "review" => what the audit could not follow }.
-    def check(calls, root:, wrapper:, tool_results:)
-      allowed = [root, wrapper, tool_results].compact
+    # ran reached, "review" => what the audit could not follow }. scratch
+    # is Claude Code's directory under /tmp for the run.
+    def check(calls, root:, wrapper:, tool_results:, scratch: nil)
+      allowed = [root, wrapper, tool_results, scratch].compact
       escapes = []
       review = []
       walk(calls, root) do |c, cwd|
@@ -1034,6 +1047,14 @@ module Eval
       end
     end
 
+    # The compiler of a commit.
+    def compiler_of(commit)
+      out = IO.popen(["nix", "build", "git+file://#{ROOT}?rev=#{commit}", "--no-link", "--print-out-paths"], &:read)
+      raise Failure, "nix build of #{commit[0, 7]} failed" unless $?.success?
+
+      File.join(out.lines.last.strip, "bin", "midnight")
+    end
+
     # An environment like the wrapper's for a directory of its own.
     def environment(dir)
       home = File.join(dir, ".home")
@@ -1043,14 +1064,15 @@ module Eval
       Guard.environment({}, { "path" => Env.coreutils, "home" => home, "xdg" => xdg, "tmp" => tmp }).first
     end
 
-    # Copies the program in src (or src itself, as solution.12am) into a
-    # fresh directory with the task's check.drive, and grades it. Returns
+    # Copies the program in src (or src itself, as solution.12am; nothing
+    # when src does not exist) into a fresh directory with the task's
+    # check.drive, and grades it. Returns
     # { "verdict", "checks" => {build:, output:, loops:}, ... }.
     def grade(task, src, compiler: Grade.compiler, keep: nil)
       LOCK.synchronize do
         dir = Env.mktemp
         begin
-          if File.directory?(src)
+          if File.directory?(src) || !File.exist?(src)
             Eval.keep_program(src, dir)
           else
             FileUtils.cp(src, File.join(dir, "solution.12am"))
@@ -1080,6 +1102,9 @@ module Eval
       notes = {}
       sha = Guard.sha256(solution)
       program_sha = Guard.program_sha256(dir)
+      load = Guard.load_average
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      timed_out = false
       refused = Guard.refusal(["build", "solution.12am"], {}, dir, File.realpath(dir))
       if refused
         notes["build"] = refused
@@ -1087,13 +1112,15 @@ module Eval
       else
         b = Guard.capture(env, [compiler, "build", "solution.12am", "-o", "solution"],
                           chdir: dir, limit: LIMIT, cap: CAP)
+        timed_out ||= b[:timeout]
         checks["build"] = b[:status].zero?
-        notes["build"] = b[:err].lines.first(5).join unless checks["build"]
+        notes["build"] = b[:timeout] ? "time limit" : b[:err].lines.first(5).join unless checks["build"]
       end
       stdout = ""
       if checks["build"]
         run_env = task.drive ? env.merge("MIDNIGHT_DRIVE" => "check.drive") : env
         r = Guard.capture(run_env, [File.join(dir, "solution")], chdir: dir, limit: LIMIT, cap: CAP)
+        timed_out ||= r[:timeout]
         stdout = r[:out].scrub
         checks["output"] = r[:status].zero? && same_output?(r[:out], task.expected)
         unless checks["output"]
@@ -1105,6 +1132,7 @@ module Eval
       end
       unless task.loops.empty? && task.systems.empty?
         l = Guard.capture(env, [compiler, "loops", "solution.12am"], chdir: dir, limit: LIMIT, cap: CAP)
+        timed_out ||= l[:timeout]
         loops = l[:status].zero? ? l[:out] : nil
       end
       unless task.loops.empty?
@@ -1117,8 +1145,10 @@ module Eval
         notes["systems"] = "missing: #{missing.join(', ')}" unless missing.empty?
       end
       verdict = checks.values.all? ? "pass" : "fail"
+      ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round
       { "verdict" => verdict, "checks" => checks, "notes" => notes, "sha256" => sha,
-        "program_sha256" => program_sha, "stdout" => stdout }
+        "program_sha256" => program_sha, "timeout" => timed_out, "load" => load, "ms" => ms,
+        "stdout" => stdout }
     end
 
     def same_output?(got, want) = got.b == want.b
@@ -1353,6 +1383,7 @@ module Eval
         "Integer" => Integer.public_instance_methods.map(&:to_s),
         "Float" => Float.public_instance_methods.map(&:to_s),
         "Object" => Object.public_instance_methods.map(&:to_s),
+        "Class" => Class.public_instance_methods.map(&:to_s),
         "Kernel" => (Kernel.private_instance_methods + Kernel.public_instance_methods).map(&:to_s),
         "Math" => Math.singleton_methods.map(&:to_s),
         "Math::" => Math.constants.map(&:to_s),
@@ -1382,12 +1413,18 @@ module Eval
       end
     end
 
+    TEMPLATES = ["unknown method `…` for `…`", "unknown field or method `…` for `…`",
+                 "unknown method `…` for the type `…`", "unknown function `…`",
+                 "unknown variable or function `…`", "unknown constant `…`", "unknown type `…`"].freeze
+
     # Whether a diagnostic (template and spans) names something Ruby has.
     def ruby_shaped?(template, spans)
       n = spans.first.to_s
       case template
       when "unknown method `…` for `…`", "unknown field or method `…` for `…`"
         names[ruby_class(spans[1].to_s)].include?(n)
+      when "unknown method `…` for the type `…`"
+        names["Class"].include?(n)
       when "unknown function `…`", "unknown variable or function `…`"
         if n.start_with?("Math.")
           names["Math"].include?(n.delete_prefix("Math."))
@@ -1434,6 +1471,16 @@ module Eval
       observed = prob.(a)
       ([0, k - n2].max..[k, n1].min).sum { |x| (p = prob.(x)) <= observed ? p : 0 }.to_f
     end
+
+    # The chance that Fisher's test gives p < 0.1 for na runs against nb
+    # when both pass at the pooled rate of pa + pb passes.
+    def chance_of_mark(pa, na, pb, nb)
+      rate = (pa + pb).to_f / (na + nb)
+      binom = ->(n, k) { choose(n, k) * (rate**k) * ((1 - rate)**(n - k)) }
+      (0..na).sum do |a|
+        (0..nb).sum { |b| fisher(a, na - a, b, nb - b) < 0.1 ? binom.(na, a) * binom.(nb, b) : 0.0 }
+      end
+    end
   end
 
   # Grouping a results file's runs.
@@ -1473,6 +1520,9 @@ module Eval
       x.is_a?(Float) ? format("%.#{digits}f", x) : x.to_s
     end
 
+    # text as a Markdown code span; one with backquotes in it gets two.
+    def code(text) = text.include?("`") ? "`` #{text} ``" : "`#{text}`"
+
     def table(header, rows)
       out = +"| #{header.join(' | ')} |\n| #{header.map { '---' }.join(' | ')} |\n"
       rows.each { |r| out << "| #{r.map { |c| c.to_s.gsub('|', '\|') }.join(' | ')} |\n" }
@@ -1493,6 +1543,7 @@ module Eval
       out << "- Commit: `#{results['commit']}`, Midnight #{results['version']}\n"
       out << "- Claude Code #{results['claude_code']}, Ruby #{results['ruby']}\n"
       out << "- Kit: `#{results.dig('kit', 'file')}` (#{results.dig('kit', 'files').size} files)\n"
+      out << "- Agent's tools: `#{results['agent_tools']}`; compiler's PATH: `#{results['coreutils']}`\n" if results["agent_tools"]
       out << "- Models: #{models.join(', ')} (as reported: #{models_reported(results).join(', ')}); " \
              "effort: #{results['effort'] || 'default'}; trials: #{trials}\n\n"
 
@@ -1535,7 +1586,7 @@ module Eval
         rows = groups.sort_by { |(kind, tmpl), v| [-v.size, kind, tmpl] }.map do |(kind, tmpl), v|
           runs = v.map(&:first).uniq
           spans = v.map { |_, d| d["spans"] }.reject(&:empty?).tally.sort_by { |s, c| [-c, s] }
-          [kind, "`#{tmpl}`", v.size, runs.size, runs.count { |r| r["outcome"] == "pass" },
+          [kind, Report.code(tmpl), v.size, runs.size, runs.count { |r| r["outcome"] == "pass" },
            v.count { |_, d| d["repeated"] }, ruby_mark(kind, v),
            spans.first(6).map { |s, c| "#{s.join(' / ')} ×#{c}" }.join(", ")]
         end
@@ -1573,7 +1624,8 @@ module Eval
         "Infrastructure errors" => results["runs"].select { |r| r["outcome"] == "infrastructure" },
         "Timeouts" => graded.select { |r| r["outcome"] == "timeout" },
         "No solution" => graded.select { |r| r["outcome"] == "no solution" },
-        "Calls stopped by the time limit under load" => graded.select { |r| r["slow_calls"].to_i.positive? }
+        "Calls stopped by the time limit under load" => graded.select { |r| r["slow_calls"].to_i.positive? },
+        "Programs the time limit stopped in grading, graded again alone" => graded.select { |r| r["regraded"] }
       }
       lists.each do |name, rs|
         next if rs.empty?
@@ -1595,7 +1647,9 @@ module Eval
     def ruby_mark(kind, occurrences)
       return "" unless kind == "error"
 
-      n = occurrences.count { |_, d| RubyShaped.ruby_shaped?(d["template"], d["spans"].to_a) }
+      n = occurrences.count do |_, d|
+        d.key?("ruby_shaped") ? d["ruby_shaped"] : RubyShaped.ruby_shaped?(d["template"], d["spans"].to_a)
+      end
       if n.zero? then ""
       elsif n == occurrences.size then "yes"
       else "#{n} of #{occurrences.size}"
@@ -1606,7 +1660,10 @@ module Eval
       case r["outcome"]
       when "infrastructure" then " (#{r['infrastructure']})"
       when "escaped" then " (#{r['escapes'].map { |e| e['path'] }.join(', ')})"
-      else r["review"] ? " (#{r['review'].map { |e| e['what'] }.first(3).join('; ')})" : ""
+      else
+        parts = r["review"].to_a.map { |e| e["what"] }.first(3)
+        parts << "#{r['regraded']['before']} under load, #{r['outcome']} alone" if r["regraded"]
+        parts.empty? ? "" : " (#{parts.join('; ')})"
       end
     end
   end
@@ -1635,28 +1692,31 @@ module Eval
           y = Runs.pass_rate(cb[[t, m]])
           y - x if x && y
         end
-        pa = Stats.mean(Runs.tasks(a).filter_map { |t| Runs.pass_rate(ca[[t, m]]) })
-        pb = Stats.mean(Runs.tasks(b).filter_map { |t| Runs.pass_rate(cb[[t, m]]) })
         se = Stats.se(diffs)
-        ["`#{m}`", pct(pa), pct(pb), "#{pct(Stats.mean(diffs), signed: true)}#{se ? " ± #{Report.fmt(se * 100)}" : ''}",
+        ["`#{m}`", pct(Stats.mean(ra)), pct(Stats.mean(rb)),
+         "#{pct(Stats.mean(diffs), signed: true)}#{se ? " ± #{Report.fmt(se * 100)}" : ''}",
          ra.size == rb.size ? "" : "#{ra.size}/#{rb.size}"]
       end
-      out << Report.table(["Model", "pass@1 A", "pass@1 B", "Difference (tasks in both, ± s.e.)", ""], rows)
+      out << Report.table(["Model", "pass@1 A", "pass@1 B", "Difference (± s.e.)", ""], rows)
+      out << "\nOver the tasks in both.\n"
 
       out << "\n## Tasks\n\n"
       marks = 0
+      chance = 0.0
       rows = tasks.product(models).map do |t, m|
         x = ca[[t, m]]
         y = cb[[t, m]]
         pa = x.count { |r| r["outcome"] == "pass" }
         pb = y.count { |r| r["outcome"] == "pass" }
         p = x.empty? || y.empty? ? nil : Stats.fisher(pa, x.size - pa, pb, y.size - pb)
+        chance += Stats.chance_of_mark(pa, x.size, pb, y.size) if p
         mark = p && p < 0.1
         marks += 1 if mark
         ["`#{t}`", "`#{m}`", "#{pa}/#{x.size}", "#{pb}/#{y.size}", p ? format("%.3f", p) : "–", mark ? "**differs**" : ""]
       end
       out << Report.table(["Task", "Model", "A", "B", "Fisher p", ""], rows)
-      out << "\n#{marks} marked (p < 0.1). Chance alone would mark about #{Report.fmt(rows.size * 0.1)} of #{rows.size} rows.\n"
+      out << "\n#{marks} marked (p < 0.1). Chance alone, with each row passing at its pooled rate in both, " \
+             "would mark about #{Report.fmt(chance)} of #{rows.size} rows.\n"
 
       out << "\n## Templates whose count changed\n\n"
       ta = template_counts(a)
@@ -1665,7 +1725,7 @@ module Eval
       if changed.empty?
         out << "None.\n"
       else
-        out << Report.table(%w[Kind Template A B], changed.map { |k| [k[0], "`#{k[1]}`", ta[k], tb[k]] })
+        out << Report.table(%w[Kind Template A B], changed.map { |k| [k[0], Report.code(k[1]), ta[k], tb[k]] })
       end
       out
     end
@@ -1699,6 +1759,10 @@ module Eval
       out << "Effort: A #{a['effort'] || 'default'}; B #{b['effort'] || 'default'}" unless a["effort"] == b["effort"]
       out << "Trials: A #{a['trials']}; B #{b['trials']}" unless a["trials"] == b["trials"]
       out << "Claude Code: A #{a['claude_code']}; B #{b['claude_code']}" unless a["claude_code"] == b["claude_code"]
+      out << "The preamble differs" unless a["preamble_sha256"] == b["preamble_sha256"]
+      unless a["agent_tools"] == b["agent_tools"] && a["coreutils"] == b["coreutils"]
+        out << "The agent's tools or the compiler's PATH differ"
+      end
       kit = kit_difference(a["kit"], b["kit"])
       out << kit if kit
       out
@@ -1793,7 +1857,7 @@ module Eval
           first = File.open(transcript, &:gets) rescue nil
           if first&.end_with?("\n")
             checked = true
-            problem = Transcript.isolation_problem(Transcript.new(first).init)
+            problem = Transcript.isolation_problem(Transcript.new(first).init, File.realpath(@root))
             if problem
               @isolation = problem
               outcome = :isolation
@@ -1815,7 +1879,7 @@ module Eval
         sleep 0.25
       end
       if outcome == :done && !checked
-        @isolation = Transcript.isolation_problem(Transcript.load(transcript).init)
+        @isolation = Transcript.isolation_problem(Transcript.load(transcript).init, File.realpath(@root))
         outcome = :isolation if @isolation
       end
       Guard.kill_group(pid)
@@ -1866,26 +1930,19 @@ module Eval
       end
 
       audit = Audit.check(tool_calls, root: @root, wrapper: @wrapper,
-                                      tool_results: Eval.tool_results_dir(@root))
+                                      tool_results: Eval.tool_results_dir(@root),
+                                      scratch: Eval.claude_tmp_dir(@root))
       escapes = audit["escapes"]
       escapes += calls.select { |c| c["refused"] }.map { |c| { "tool" => "midnight", "path" => c["refused"] } }
       graded = Grade.grade(@task, program_dir, compiler: @runner.compiler, keep: @keep)
       given_sha = @task.repair? ? Guard.sha256(@task.path("given", "solution.12am")) : nil
-      rec["outcome"] =
-        if !escapes.empty? then "escaped"
-        elsif status == :timeout then "timeout"
-        elsif graded["verdict"] == "no solution" then "no solution"
-        else graded["verdict"]
-        end
-      rec["checks"] = graded["checks"]
-      rec["failed_checks"] = graded["checks"].reject { |_, v| v }.keys
-      rec["grade_notes"] = graded["notes"] unless graded["notes"].to_h.empty?
-      rec["graded_sha256"] = graded["sha256"]
-      rec["graded_program_sha256"] = graded["program_sha256"]
+      Eval.apply_grade(rec, graded, escaped: !escapes.empty?, timeout: status == :timeout)
       rec["escapes"] = escapes unless escapes.empty?
       rec["review"] = audit["review"] unless audit["review"].empty?
       rec["calls"] = CallLog.summary(calls)
-      rec["diagnostics"] = CallLog.diagnostics(calls)
+      rec["diagnostics"] = CallLog.diagnostics(calls).each do |d|
+        d["ruby_shaped"] = RubyShaped.ruby_shaped?(d["template"], d["spans"]) if d["kind"] == "error"
+      end
       rec["compiler_bug"] = calls.any? { |c| Stderr.compiler_bug?(c["stderr"]) }
       rec["first_try"] = CallLog.first_try(calls, given_sha)
       rec["verified"] = CallLog.verified(calls, graded["sha256"], graded["program_sha256"])
@@ -1900,11 +1957,26 @@ module Eval
 
     def cleanup
       [@root, @wrapper, @logs].compact.each { |d| FileUtils.rm_rf(d) }
-      dir = @root && Eval.tool_results_dir(@root)
-      Dir.rmdir(dir) if dir && File.directory?(dir) && Dir.empty?(dir)
-    rescue SystemCallError
-      nil
+      Eval.remove_empty_tree(Eval.tool_results_dir(@root)) if @root
+      Eval.remove_empty_tree(Eval.claude_tmp_dir(@root)) if @root
     end
+  end
+
+  # Sets a run's outcome, checks and grading facts from its grade.
+  def self.apply_grade(rec, graded, escaped:, timeout:)
+    rec["outcome"] =
+      if escaped then "escaped"
+      elsif timeout then "timeout"
+      elsif graded["verdict"] == "no solution" then "no solution"
+      else graded["verdict"]
+      end
+    rec["checks"] = graded["checks"]
+    rec["failed_checks"] = graded["checks"].reject { |_, v| v }.keys
+    rec.delete("grade_notes")
+    rec["grade_notes"] = graded["notes"] unless graded["notes"].to_h.empty?
+    rec["graded_sha256"] = graded["sha256"]
+    rec["graded_program_sha256"] = graded["program_sha256"]
+    rec["grading"] = graded.slice("ms", "load", "timeout")
   end
 
   # Copies the program in src to the same paths under dest.
@@ -1919,6 +1991,25 @@ module Eval
   # Claude Code's directory for a working directory's spilled tool results.
   def self.tool_results_dir(root)
     File.join(Dir.home, ".claude", "projects", root.gsub(/[^A-Za-z0-9]/, "-"))
+  end
+
+  # The directory Claude Code makes under /tmp for a working directory.
+  def self.claude_tmp_dir(root)
+    File.join("/tmp", "claude-#{Process.uid}", root.gsub(/[^A-Za-z0-9]/, "-"))
+  end
+
+  # Removes dir and the directories under it, deepest first, when no file
+  # is among them; leaves everything otherwise.
+  def self.remove_empty_tree(dir)
+    return unless File.directory?(dir) && !File.symlink?(dir)
+
+    entries = Dir.glob("**/*", File::FNM_DOTMATCH, base: dir).reject { |e| File.basename(e) == "." }
+    return unless entries.all? { |e| File.directory?(File.join(dir, e)) && !File.symlink?(File.join(dir, e)) }
+
+    entries.sort_by { |e| -e.count("/") }.each { |e| Dir.rmdir(File.join(dir, e)) }
+    Dir.rmdir(dir)
+  rescue SystemCallError
+    nil
   end
 
   # Writes the agent's `midnight` into dir.
@@ -1965,6 +2056,9 @@ module Eval
       @commit = Git.head
       raise Failure, "evals/eval.rb differs from #{@commit[0, 7]}; commit it first" unless Git.clean?(@commit, "evals/eval.rb")
 
+      %w[/tmp /].product(%w[AGENTS.md CLAUDE.md]).map { |d, f| File.join(d, f) }.each do |path|
+        raise Failure, "#{path} would reach every agent; move it first" if File.exist?(path)
+      end
       @claude = Env.which("claude") or raise Failure, "`claude` is not on the PATH"
       @claude_version = IO.popen([@claude, "--version"], &:read).to_s[/\d+\.\d+\.\d+/]
       @date = Time.now.strftime("%Y-%m-%d")
@@ -2011,12 +2105,7 @@ module Eval
       @results ||= header(kit_file, kit)
     end
 
-    def build_compiler
-      out = IO.popen(["nix", "build", "git+file://#{ROOT}?rev=#{@commit}", "--no-link", "--print-out-paths"], &:read)
-      raise Failure, "nix build of #{@commit[0, 7]} failed" unless $?.success?
-
-      File.join(out.lines.last.strip, "bin", "midnight")
-    end
+    def build_compiler = Grade.compiler_of(@commit)
 
     def header(kit_file, kit)
       {
@@ -2025,6 +2114,8 @@ module Eval
         "ruby" => RUBY_VERSION, "claude_code" => @claude_version, "date" => @date,
         "label" => @opts[:label], "models" => @opts[:models], "trials" => @opts[:trials],
         "effort" => @opts[:effort], "task_names" => @tasks.map(&:name),
+        "preamble_sha256" => Digest::SHA256.hexdigest(@preamble),
+        "agent_tools" => Env.agent_tools, "coreutils" => Env.coreutils,
         "kit" => {
           "file" => kit_file,
           "files" => kit.map { |dest, source| { "dest" => dest, "source" => source, "sha256" => Digest::SHA256.file(@kit_files[dest]).hexdigest } },
@@ -2042,7 +2133,7 @@ module Eval
         @opts[:models].flat_map do |m|
           (1..@opts[:trials]).filter_map do |k|
             mine = runs.select { |r| r["task"] == t.name && r["model"] == m && r["trial"] == k }
-            next if mine.any? { |r| r["outcome"] != "infrastructure" }
+            next if mine.any? { |r| !%w[infrastructure isolation].include?(r["outcome"]) }
             next if mine.count { |r| r["counts"] } >= 3
 
             [t, m, k, mine.size + 1]
@@ -2053,6 +2144,7 @@ module Eval
 
     def save
       @mutex.synchronize do
+        @results["runs"].sort_by! { |r| [r["task"], r["model"], r["trial"], r["attempt"]] }
         FileUtils.mkdir_p(File.dirname(@results_path))
         tmp = "#{@results_path}.tmp"
         File.write(tmp, "#{JSON.pretty_generate(@results)}\n")
@@ -2103,6 +2195,7 @@ module Eval
         end
       end
       workers.each(&:join)
+      regrade
       save
       rel = @results_path.delete_prefix("#{ROOT}/")
       if isolation
@@ -2116,6 +2209,22 @@ module Eval
       report = File.join(File.dirname(@results_path), "#{File.basename(@results_path, '.json')}.md")
       File.write(report, Report.render(@results))
       puts "eval: results in #{rel}"
+    end
+
+    # Grades again, with no session running, each kept program the time
+    # limit stopped in grading, and keeps the second grade.
+    def regrade
+      @results["runs"].each do |rec|
+        next unless rec.dig("grading", "timeout") && !rec["regraded"]
+
+        task = @tasks.find { |t| t.name == rec["task"] } or next
+        keep = File.join(ROOT, rec["dir"])
+        before = rec["outcome"]
+        g = Grade.grade(task, File.join(keep, "program"), compiler: @compiler, keep: keep)
+        Eval.apply_grade(rec, g, escaped: before == "escaped", timeout: before == "timeout")
+        rec["regraded"] = { "before" => before }
+        puts "eval: graded #{rec['task']} #{rec['model']} #{rec['trial']} again alone: #{rec['outcome']}"
+      end
     end
 
     def describe(rec)
@@ -2205,7 +2314,8 @@ module Eval
       usage: eval.rb run [--tasks A,B] [--models M,N] [--trials K] [--effort E]
                          [--kit FILE] [--jobs J] [--label L]
              eval.rb run --resume RESULTS
-             eval.rb grade TASK FILE
+             eval.rb grade [--run RESULTS] TASK FILE
+             eval.rb grade --run RESULTS
              eval.rb self-test
              eval.rb report RESULTS
              eval.rb compare A B
@@ -2255,18 +2365,55 @@ module Eval
       opts
     end
 
+    # grade TASK FILE: against the working tree's task. With --run RESULTS,
+    # against that run's snapshot of its tasks, with the compiler of its
+    # commit; and with no TASK FILE, every kept program of the run, saying
+    # where the verdict differs from the recorded one.
     def grade(argv)
-      usage! unless argv.size == 2
-      dir = File.join(ROOT, "evals", "tasks", argv[0])
+      results = nil
+      if argv.first == "--run"
+        argv.shift
+        results = argv.shift or usage!
+      end
+      usage! unless argv.size == 2 || (results && argv.empty?)
+      tasks = File.join(ROOT, "evals", "tasks")
+      compiler = Grade.compiler if results.nil?
+      if results
+        r = JSON.parse(File.read(results))
+        tasks = File.join(ROOT, "evals", "runs", File.basename(results, ".json"), "commit", "evals", "tasks")
+        raise Failure, "no snapshot of the run's tasks in #{tasks.delete_prefix("#{ROOT}/")}" unless File.directory?(tasks)
+
+        compiler = ENV["MIDNIGHT_BIN"].to_s.empty? ? Grade.compiler_of(r["commit"]) : ENV["MIDNIGHT_BIN"]
+        return grade_run(r, tasks, compiler) if argv.empty?
+      end
+      dir = File.join(tasks, argv[0])
       raise Failure, "no task `#{argv[0]}`" unless File.file?(File.join(dir, "meta"))
 
-      task = Task.new(dir)
       src = File.expand_path(argv[1])
       src = File.dirname(src) if File.basename(src) == "solution.12am"
-      g = Grade.grade(task, src)
+      g = Grade.grade(Task.new(dir), src, compiler: compiler)
       puts g["verdict"]
       g["notes"].to_h.each { |check, note| puts "#{check}: #{note.strip}" }
       exit(g["verdict"] == "pass" ? 0 : 1)
+    end
+
+    def grade_run(results, tasks, compiler)
+      differ = 0
+      graded = results["runs"].select { |rec| rec["checks"] }
+      graded.each do |rec|
+        g = Grade.grade(Task.new(File.join(tasks, rec["task"])), File.join(ROOT, rec["dir"], "program"),
+                        compiler: compiler)
+        recorded = if rec["outcome"] == "no solution" || rec["checks"].empty? then "no solution"
+                   elsif rec["checks"].values.all? then "pass"
+                   else "fail"
+                   end
+        next if g["verdict"] == recorded
+
+        differ += 1
+        puts "#{rec['dir'].delete_prefix('evals/runs/')}: recorded #{recorded}, now #{g['verdict']} #{g['notes']}"
+      end
+      puts "grade: #{graded.size} programs, #{differ.zero? ? 'every verdict as recorded' : "#{differ} differ"}"
+      exit(differ.zero? ? 0 : 1)
     end
 
     def self_test(argv)

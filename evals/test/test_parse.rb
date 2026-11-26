@@ -28,7 +28,9 @@ class ParseTest < Minitest::Test
 
   def test_sections
     text = "# Title\n\nintro\n\n## One\n\n```\n## not a heading\n```\n\n### Two\n\n#### Deeper\n"
-    assert_equal [[5, "One"], [11, "Two"]], Eval::Kit.sections(text)
+    assert_equal [[1, Eval::Kit::BEFORE], [5, "One"], [11, "Two"]], Eval::Kit.sections(text)
+    assert_equal [[3, "One"]], Eval::Kit.sections("# Title\n\n## One\n")
+    assert_equal [[1, "One"]], Eval::Kit.sections("## One\ntext\n")
     assert_equal [[1, nil]], Eval::Kit.sections("no headings\n")
   end
 
@@ -94,6 +96,19 @@ class ParseTest < Minitest::Test
     refute_equal sha, Guard.program_sha256(dir)
   ensure
     FileUtils.rm_rf([dir, keep])
+  end
+
+  def test_empty_trees_are_removed_and_others_kept
+    dir = Eval::Env.mktemp
+    FileUtils.mkdir_p(File.join(dir, "a", "session", "started"))
+    Eval.remove_empty_tree(File.join(dir, "a"))
+    refute File.exist?(File.join(dir, "a"))
+    FileUtils.mkdir_p(File.join(dir, "b", "session"))
+    File.write(File.join(dir, "b", "session", "file"), "")
+    Eval.remove_empty_tree(File.join(dir, "b"))
+    assert File.exist?(File.join(dir, "b", "session", "file"))
+  ensure
+    FileUtils.rm_rf(dir)
   end
 
   def test_output_is_compared_as_bytes
@@ -191,6 +206,9 @@ class ParseTest < Minitest::Test
     mine = init["plugins"] + [{ "name" => "mine", "path" => "/home/x/.claude/plugins/mine", "source" => "mine@local" }]
     assert_match(/plugins \["mine"\]/, Eval::Transcript.isolation_problem(init.merge("plugins" => mine)))
     assert_equal "no init line", Eval::Transcript.isolation_problem(nil)
+    assert_nil Eval::Transcript.isolation_problem(init, "/tmp/eval.Root0000")
+    assert_match(/cwd/, Eval::Transcript.isolation_problem(init, "/tmp/eval.Other000"))
+    assert_match(/permission mode/, Eval::Transcript.isolation_problem(init.merge("permissionMode" => "bypassPermissions")))
   end
 
   def test_tool_calls_and_denials

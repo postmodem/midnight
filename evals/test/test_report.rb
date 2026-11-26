@@ -80,6 +80,14 @@ class ReportTest < Minitest::Test
     assert shaped.("unknown type `Symbol`")
     refute shaped.("unknown constant `Widget`")
     refute shaped.("expected a component, found `Vec2`")
+    assert shaped.("unknown method `new` for the type `Entity`")
+    refute shaped.("unknown method `spawn` for the type `Entity`")
+  end
+
+  def test_every_template_of_the_rule_is_one_the_compiler_prints
+    printed = Dir.glob(File.join(Eval::ROOT, "tests", "fail", "*.err")).flat_map { |f| File.readlines(f) }
+                 .filter_map { |l| l[/\Aerror: (.*)/, 1] }.map { |m| Eval::Stderr.template(m) }
+    Eval::RubyShaped::TEMPLATES.each { |t| assert_includes printed, t }
   end
 
   def test_fisher
@@ -89,6 +97,19 @@ class ReportTest < Minitest::Test
     assert_in_delta 1.0, Eval::Stats.fisher(5, 0, 5, 0), 1e-12
   end
 
+  def test_chance_of_a_mark
+    assert_in_delta 0.0, Eval::Stats.chance_of_mark(1, 1, 0, 1), 1e-12
+    assert_in_delta 0.0, Eval::Stats.chance_of_mark(5, 5, 5, 5), 1e-12
+    half = Eval::Stats.chance_of_mark(3, 5, 2, 5)
+    assert_operator half, :>, 0.0
+    assert_operator half, :<, 0.1
+  end
+
+  def test_code_spans
+    assert_equal "`plain`", Eval::Report.code("plain")
+    assert_equal "`` unknown `…` ``", Eval::Report.code("unknown `…`")
+  end
+
   def results(name) = JSON.parse(File.read(File.join(FIXTURES, name)))
 
   def test_report
@@ -96,13 +117,13 @@ class ReportTest < Minitest::Test
     %w[Pass\ rates Tasks Diagnostics The\ reference\ as\ read Exceptions].each { |h| assert_includes text, "## #{h}" }
     assert_match(/\| `league` \| `haiku` \| 1\/1 \| yes \|/, text)
     assert_match(/\| `sonnet` \| 100\.0% ± 0\.0 \| 3 of 3 \|/, text)
-    assert_match(/``…` is a keyword and can't be used as a name` \| 1 \| 1 \| 1 \| 0 \|  \| on ×1 \|/, text)
+    assert_match(/`` `…` is a keyword and can't be used as a name `` \| 1 \| 1 \| 1 \| 0 \|  \| on ×1 \|/, text)
     assert_match(/\| `language.md` \| Lists \| 3 \|/, text)
     assert_match(/Denied tool calls: 6 in 5 runs/, text)
 
     b = Eval::Report.render(results("results-b.json"))
     assert_match(/\| `league` \| `haiku` \| 0\/1 \| no \|/, b)
-    assert_match(/\| error \| `unknown method `…` for `…`` \| 1 \| 1 \| 0 \| 0 \| yes \| insert \/ \[Row\] ×1 \|/, b)
+    assert_match(/\| error \| `` unknown method `…` for `…` `` \| 1 \| 1 \| 0 \| 0 \| yes \| insert \/ \[Row\] ×1 \|/, b)
   end
 
   def test_compare
@@ -110,8 +131,11 @@ class ReportTest < Minitest::Test
     assert_match(/\| `haiku` \| 100\.0% \| 66\.7% \| -33\.3% ± 33\.3 \|/, text)
     assert_match(/\| `league` \| `haiku` \| 1\/1 \| 0\/1 \| 1\.000 \|  \|/, text)
     assert_match(/Kit: A `evals\/kit`, B `evals\/test\/kit-cut`; changed: language.md/, text)
-    assert_match(/0 marked \(p < 0\.1\)\. Chance alone would mark about 0\.6 of 6 rows/, text)
-    assert_match(/\| error \| `unknown method `…` for `…`` \| 0 \| 1 \|/, text)
-    assert_match(/\| error \| ``…` is a keyword and can't be used as a name` \| 1 \| 0 \|/, text)
+    assert_match(/0 marked \(p < 0\.1\)\. Chance alone, with each row passing at its pooled rate in both, would mark about 0\.0 of 6 rows/, text)
+    assert_match(/\| error \| `` unknown method `…` for `…` `` \| 0 \| 1 \|/, text)
+    assert_match(/\| error \| `` `…` is a keyword and can't be used as a name `` \| 1 \| 0 \|/, text)
+    refute_match(/preamble differs/, text)
+    b = results("results-b.json").merge("preamble_sha256" => "other")
+    assert_match(/The preamble differs/, Eval::Compare.render(results("results-a.json"), b))
   end
 end
