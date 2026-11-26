@@ -618,10 +618,9 @@ All run on x86_64-linux, on the development machine.
 ## Outcome
 
 Implemented, with the differences listed under "Differences from the
-design". Eight of the nine criteria pass on x86_64-linux: a Ryzen 9
-9950X3D beside an RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10,
-`wgpu-native` 27.0.4.0, sway 1.12, clang 21.1.8. Criterion 8 is a run
-by hand at the development machine's desktop and has not been made yet.
+design". All nine criteria pass on x86_64-linux: a Ryzen 9 9950X3D beside an
+RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10, `wgpu-native`
+27.0.4.0, sway 1.12, clang 21.1.8.
 
 ### Acceptance criteria
 
@@ -634,7 +633,7 @@ by hand at the development machine's desktop and has not been made yet.
 | 5 | No sanitizer report from any debug run of a program that reads input, in the suite, in the runs of criterion 3 and in `window_input`. |
 | 6 | Every window test runs inside `tests/window/compositor.sh`. `tests/window/input.c` opens only the socket it is given and sends nothing to a compositor with an output not named `HEADLESS-`; `input_client_refuses_a_desktop` holds it to that. |
 | 7 | `window_input` passes 20 runs in each build mode in the sandbox (sway with pixman, `llvmpipe`) and on the 5090. |
-| 8 | Not yet run: `examples/input.12am` at the desktop, release and debug. |
+| 8 | Run by hand at the development machine's desktop, release and debug: keys and clicks reach the program, a key held while the focus moves to another window is released, Escape ends it, and the debug build ends with no sanitizer report. |
 | 9 | The reference says 0.7 and `midnight --version` prints `midnight 0.7.0`. The README's commands were run as written: those that write files in a scratch copy, the two windows inside `tests/window/compositor.sh`, closed through sway. `tests/COVERAGE.md` has "Keyboard and mouse". |
 
 ### Differences from the design
