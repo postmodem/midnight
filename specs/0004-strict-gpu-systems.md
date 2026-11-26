@@ -261,13 +261,12 @@ for the tests.
   above is the same idea without depending on float rounding.
 - `Math` functions agree nowhere.
 
-The subnormal boundary:
-64 products of two normal numbers whose exact value lies in
-[2 ** -126 (1 - 2 ** -25), 2 ** -126), which rounds to 2 ** -126 at 24
-bits. The 5090, llvmpipe, RADV and the Ryzen 9950X3D with FTZ and DAZ set
-all give 2 ** -126 with the sign on every row: they flush after rounding,
-the rule the language adopts. A product with a subnormal operand is zero
-on all four. Intel CPUs were not tried.
+The subnormal boundary: 64 products of two normal numbers whose exact
+value lies in [2 ** -126 (1 - 2 ** -25), 2 ** -126), which rounds to
+2 ** -126 at 24 bits. The 5090, llvmpipe, RADV and the Ryzen 9950X3D with
+FTZ and DAZ set all give 2 ** -126 with the sign on every row: they flush
+after rounding, the rule the language adopts. A product with a subnormal
+operand is zero on all four. Intel CPUs were not tried.
 
 On Metal, `wgpu-hal` 27 compiles shaders with `MTLCompileOptions` whose
 math mode it never sets, so Metal's default applies, historically fast
@@ -307,8 +306,8 @@ the CPU path (355 ms per tick).
 - A new GPU-mode test, `gpu_strict_div_sqrt`, runs the WGSL of the strict
   `/` and `sqrt` on the device: `sqrt` for every one of the 2 ** 32 bit
   patterns, `/` for 2 ** 28 pairs (random bits, edge values, and quotients
-  next to a midpoint). Every result
-  must equal the CPU's `/` and `sqrtf` under FTZ and DAZ. Those sizes are
+  next to a midpoint). Every result must equal the CPU's `/` and `sqrtf`
+  under FTZ and DAZ. Those sizes are
   for `MIDNIGHT_TEST_GPU=hardware`. With `software` (llvmpipe, and so
   `nix flake check`) it takes 2 ** 24 inputs of each, the edge values and
   midpoint cases included.
