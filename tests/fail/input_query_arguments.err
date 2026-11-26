@@ -1,0 +1,35 @@
+error: `Keyboard.down?` takes a `Key`
+ --> tests/fail/input_query_arguments.12am:7:6
+  |
+7 | puts Keyboard.down?
+  |      ^^^^^^^^^^^^^^ write it in parentheses, like `Keyboard.down?(Key::A)`
+
+error: `Keyboard.pressed?` takes 1 argument, but 2 were given
+ --> tests/fail/input_query_arguments.12am:8:6
+  |
+8 | puts Keyboard.pressed?(Key::A, Key::B)
+  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the argument is a `Key`, like `Key::A`
+
+error: expected `Key`, found `MouseButton`
+ --> tests/fail/input_query_arguments.12am:9:25
+  |
+9 | puts Keyboard.released?(MouseButton::Left)
+  |                         ^^^^^^^^^^^^^^^^^ `Keyboard.released?` takes a `Key`, like `Key::A`
+
+error: expected `MouseButton`, found `Int`
+  --> tests/fail/input_query_arguments.12am:10:18
+   |
+10 | puts Mouse.down?(1)
+   |                  ^ `Mouse.down?` takes a `MouseButton`, like `MouseButton::Left`
+
+error: `Mouse.released?` takes 1 argument, but none were given
+  --> tests/fail/input_query_arguments.12am:11:6
+   |
+11 | puts Mouse.released?()
+   |      ^^^^^^^^^^^^^^^^^ the argument is a `MouseButton`, like `MouseButton::Left`
+
+error: `Mouse.pressed?` takes no keyword arguments
+  --> tests/fail/input_query_arguments.12am:12:21
+   |
+12 | puts Mouse.pressed?(button: MouseButton::Left)
+   |                     ^^^^^^ pass the value by position

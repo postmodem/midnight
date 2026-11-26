@@ -1,0 +1,5 @@
+# expect: `Keyboard` and `Mouse` are not values
+# at: line 4, `Keyboard`; line 5, `Mouse`
+
+keys = Keyboard
+puts Mouse

@@ -685,24 +685,31 @@ void mn_sleep(double seconds);
 /* ---- The window -------------------------------------------------------------- */
 
 /*
- * A program that names `Window`, `WindowResized` or `WindowClosed` has a
- * window. It is compiled with MN_WINDOW, and before mn_start it sets
- * mn_window_program to a description of the `Window` resource and the two
- * events. Generated code lays them out as the structs below and asserts
- * that it does.
+ * A program that names `Window`, `WindowResized`, `WindowClosed`,
+ * `Keyboard`, `Mouse`, `KeyPressed`, `KeyReleased`, `MousePressed`,
+ * `MouseReleased`, `WindowFocused` or `WindowUnfocused` has a window. It
+ * is compiled with MN_WINDOW, and before mn_start it sets
+ * mn_window_program to a description of the `Window` and `Mouse`
+ * resources and the eight events. Generated code lays them out as the
+ * structs below and asserts that it does.
  *
- * The resource belongs to generated code: it gives the fields their
+ * The resources belong to generated code: it gives the fields their
  * defaults after mn_start and assigns `background`. The runtime assigns
- * the other fields in mn_window_open and when a tick begins, and at no
- * other time.
+ * the other fields of `Window` in mn_window_open and when a tick begins,
+ * and those of `Mouse` when a tick begins, and at no other time.
  *
- * When a window is open, a tick does this before the first system runs:
- * it carries out MIDNIGHT_DRIVE's commands until one lets the tick run,
- * or waits for the tick's time; takes what happened to the window since
- * the last tick began; when a size changed, assigns the four sizes and
- * emits one WindowResized; when the window was closed, sets `open` to
- * false, emits WindowClosed and calls mn_stop. When the tick has ended,
- * the window shows the frame of that tick.
+ * When a tick begins, the keys and buttons pressed and released and the
+ * wheel's sums are cleared, whether a window is open or not. When a window
+ * is open, the tick then does this before the first system runs: it
+ * carries out MIDNIGHT_DRIVE's commands until one lets the tick run, or
+ * waits for the tick's time; takes what happened to the window since the
+ * last tick began; when a size changed, assigns the four sizes and emits
+ * one WindowResized; applies what happened to the keyboard, the mouse and
+ * the focus, in order, emitting their events; assigns the fields of
+ * `Mouse` and `focused`; and when the window was closed, releases what is
+ * held, sets `open` and `focused` to false, emits WindowClosed and calls
+ * mn_stop. When the tick has ended, the window shows the frame of that
+ * tick.
  *
  * mn_finish and mn_exit carry out the commands up to the next `tick` and
  * close the window.
@@ -710,6 +717,128 @@ void mn_sleep(double seconds);
 
 /* The largest width and height of a frame, in pixels. */
 #define MN_WINDOW_LARGEST 8192
+
+/* The variants of `Key`, in order, each with the USB usage number of its
+ * key, which is also SDL's scancode for it. */
+#define MN_KEYS(X) \
+    X(A, 4) \
+    X(B, 5) \
+    X(C, 6) \
+    X(D, 7) \
+    X(E, 8) \
+    X(F, 9) \
+    X(G, 10) \
+    X(H, 11) \
+    X(I, 12) \
+    X(J, 13) \
+    X(K, 14) \
+    X(L, 15) \
+    X(M, 16) \
+    X(N, 17) \
+    X(O, 18) \
+    X(P, 19) \
+    X(Q, 20) \
+    X(R, 21) \
+    X(S, 22) \
+    X(T, 23) \
+    X(U, 24) \
+    X(V, 25) \
+    X(W, 26) \
+    X(X, 27) \
+    X(Y, 28) \
+    X(Z, 29) \
+    X(Digit1, 30) \
+    X(Digit2, 31) \
+    X(Digit3, 32) \
+    X(Digit4, 33) \
+    X(Digit5, 34) \
+    X(Digit6, 35) \
+    X(Digit7, 36) \
+    X(Digit8, 37) \
+    X(Digit9, 38) \
+    X(Digit0, 39) \
+    X(Enter, 40) \
+    X(Escape, 41) \
+    X(Backspace, 42) \
+    X(Tab, 43) \
+    X(Space, 44) \
+    X(Minus, 45) \
+    X(Equal, 46) \
+    X(BracketLeft, 47) \
+    X(BracketRight, 48) \
+    X(Backslash, 49) \
+    X(Semicolon, 51) \
+    X(Quote, 52) \
+    X(Backquote, 53) \
+    X(Comma, 54) \
+    X(Period, 55) \
+    X(Slash, 56) \
+    X(CapsLock, 57) \
+    X(F1, 58) \
+    X(F2, 59) \
+    X(F3, 60) \
+    X(F4, 61) \
+    X(F5, 62) \
+    X(F6, 63) \
+    X(F7, 64) \
+    X(F8, 65) \
+    X(F9, 66) \
+    X(F10, 67) \
+    X(F11, 68) \
+    X(F12, 69) \
+    X(PrintScreen, 70) \
+    X(ScrollLock, 71) \
+    X(Pause, 72) \
+    X(Insert, 73) \
+    X(Home, 74) \
+    X(PageUp, 75) \
+    X(Delete, 76) \
+    X(End, 77) \
+    X(PageDown, 78) \
+    X(ArrowRight, 79) \
+    X(ArrowLeft, 80) \
+    X(ArrowDown, 81) \
+    X(ArrowUp, 82) \
+    X(NumLock, 83) \
+    X(NumpadDivide, 84) \
+    X(NumpadMultiply, 85) \
+    X(NumpadSubtract, 86) \
+    X(NumpadAdd, 87) \
+    X(NumpadEnter, 88) \
+    X(Numpad1, 89) \
+    X(Numpad2, 90) \
+    X(Numpad3, 91) \
+    X(Numpad4, 92) \
+    X(Numpad5, 93) \
+    X(Numpad6, 94) \
+    X(Numpad7, 95) \
+    X(Numpad8, 96) \
+    X(Numpad9, 97) \
+    X(Numpad0, 98) \
+    X(NumpadDecimal, 99) \
+    X(IntlBackslash, 100) \
+    X(ContextMenu, 101) \
+    X(ControlLeft, 224) \
+    X(ShiftLeft, 225) \
+    X(AltLeft, 226) \
+    X(MetaLeft, 227) \
+    X(ControlRight, 228) \
+    X(ShiftRight, 229) \
+    X(AltRight, 230) \
+    X(MetaRight, 231)
+
+#define MN_KEY_COUNT 105
+
+/* The variants of `MouseButton`, in order, each with SDL's number for the
+ * button. */
+#define MN_MOUSE_BUTTONS(X) \
+    X(Left, 1) \
+    X(Middle, 2) \
+    X(Right, 3) \
+    X(Back, 4) \
+    X(Forward, 5)
+
+#define MN_MOUSE_BUTTON_COUNT 5
 
 typedef struct MnColor {
     uint8_t r;
@@ -725,6 +854,7 @@ typedef struct MnWindow {
     int64_t pixel_height;
     MnColor background;
     bool open;
+    bool focused;
 } MnWindow;
 
 typedef struct MnWindowResized {
@@ -734,10 +864,37 @@ typedef struct MnWindowResized {
     int64_t pixel_height;
 } MnWindowResized;
 
+typedef struct MnMouse {
+    double x;
+    double y;
+    double wheel_x;
+    double wheel_y;
+    bool inside;
+} MnMouse;
+
+/* KeyPressed and KeyReleased. `key` is the variant's number. */
+typedef struct MnKeyEvent {
+    uint8_t key;
+} MnKeyEvent;
+
+/* MousePressed and MouseReleased. `button` is the variant's number. */
+typedef struct MnButtonEvent {
+    double x;
+    double y;
+    uint8_t button;
+} MnButtonEvent;
+
 typedef struct MnWindowProgram {
     MnWindow *window;
-    uint32_t resized; /* the id of WindowResized */
-    uint32_t closed;  /* the id of WindowClosed */
+    MnMouse *mouse;
+    uint32_t resized;        /* the id of WindowResized */
+    uint32_t closed;         /* the id of WindowClosed */
+    uint32_t key_pressed;    /* the id of KeyPressed */
+    uint32_t key_released;   /* the id of KeyReleased */
+    uint32_t mouse_pressed;  /* the id of MousePressed */
+    uint32_t mouse_released; /* the id of MouseReleased */
+    uint32_t focused;        /* the id of WindowFocused */
+    uint32_t unfocused;      /* the id of WindowUnfocused */
 } MnWindowProgram;
 
 /* Set by generated code before mn_start in a program with a window. */
@@ -746,6 +903,18 @@ extern const MnWindowProgram *mn_window_program;
 /* `Window.open(title, width, height)`: the run-time errors listed at the
  * top, and those of World.tick for a tick in progress and an `each`. */
 void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc);
+
+/* `Keyboard.down?`, `Keyboard.pressed?` and `Keyboard.released?` of the
+ * key with that number, and the same of `Mouse` for a button. They read
+ * what was set when the tick began, which does not change during a tick;
+ * code in a piece may call them (see "Several threads"). A number that is
+ * not a variant's gives false. */
+bool mn_key_down(uint32_t key);
+bool mn_key_pressed(uint32_t key);
+bool mn_key_released(uint32_t key);
+bool mn_button_down(uint32_t button);
+bool mn_button_pressed(uint32_t button);
+bool mn_button_released(uint32_t button);
 
 /* ---- GPU systems ------------------------------------------------------------- */
 
@@ -1066,6 +1235,8 @@ static inline void *mn_get_synced(MnEntity e, uint32_t component, size_t size,
  *           are given with the piece
  *       mn_defer_enter, mn_defer_leave
  *       mn_loop, which then runs the loop as part of the piece
+ *       mn_key_down, mn_key_pressed, mn_key_released, mn_button_down,
+ *           mn_button_pressed, mn_button_released
  *       the functions under "Numbers", and mn_panic
  *
  *   and nothing else: no mn_spawn, no string or list function, no output,

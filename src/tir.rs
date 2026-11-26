@@ -180,19 +180,21 @@ pub struct Program {
     /// The top-level statements, in order.
     pub main: Body,
     /// Set when the program has a window: when it names `Window`,
-    /// `WindowResized` or `WindowClosed`.
+    /// `WindowResized`, `WindowClosed`, `Keyboard`, `Mouse` or one of the
+    /// events of the keyboard, the mouse and the focus.
     pub window: Option<Window>,
 }
 
 /// The built-in declarations of a program with a window. They are
-/// ordinary declarations of `records`, `resources` and `events`, and a
-/// backend handles them as it handles any other; it also hands the
-/// resource and the two events to the runtime.
+/// ordinary declarations of `enums`, `records`, `resources` and `events`,
+/// and a backend handles them as it handles any other; it also hands the
+/// two resources and the eight events to the runtime.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Window {
     /// `Window`. Its fields, in order: `width`, `height`, `pixel_width`,
-    /// `pixel_height` (`Int`), `background` (`Color`) and `open` (`Bool`,
-    /// which `Window.open?` reads). The program assigns only `background`;
+    /// `pixel_height` (`Int`), `background` (`Color`), `open` (`Bool`,
+    /// which `Window.open?` reads) and `focused` (`Bool`, which
+    /// `Window.focused?` reads). The program assigns only `background`;
     /// the runtime assigns the others when a tick begins and in
     /// [`StmtKind::WindowOpen`].
     pub resource: ResourceId,
@@ -202,6 +204,48 @@ pub struct Window {
     pub resized: EventId,
     /// `WindowClosed`, with no fields.
     pub closed: EventId,
+    /// `Mouse`. Its fields, in order: `x`, `y`, `wheel_x`, `wheel_y`
+    /// (`Float`) and `inside` (`Bool`, which `Mouse.inside?` reads). The
+    /// runtime assigns them when a tick begins; the program assigns none.
+    pub mouse: ResourceId,
+    /// The enums `Key` and `MouseButton`.
+    pub key: EnumId,
+    pub button: EnumId,
+    /// `KeyPressed` and `KeyReleased`: `key`.
+    pub key_pressed: EventId,
+    pub key_released: EventId,
+    /// `MousePressed` and `MouseReleased`: `button`, `x`, `y`.
+    pub mouse_pressed: EventId,
+    pub mouse_released: EventId,
+    /// `WindowFocused` and `WindowUnfocused`, with no fields.
+    pub focused: EventId,
+    pub unfocused: EventId,
+}
+
+/// `Keyboard.down?(key)` and the other queries of the keyboard and the
+/// mouse. They answer from what the runtime set when the tick began.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InputQuery {
+    KeyDown,
+    KeyPressed,
+    KeyReleased,
+    ButtonDown,
+    ButtonPressed,
+    ButtonReleased,
+}
+
+impl InputQuery {
+    /// The query as the source writes it.
+    pub fn name(self) -> &'static str {
+        match self {
+            InputQuery::KeyDown => "Keyboard.down?",
+            InputQuery::KeyPressed => "Keyboard.pressed?",
+            InputQuery::KeyReleased => "Keyboard.released?",
+            InputQuery::ButtonDown => "Mouse.down?",
+            InputQuery::ButtonPressed => "Mouse.pressed?",
+            InputQuery::ButtonReleased => "Mouse.released?",
+        }
+    }
 }
 
 /// A struct, a component with fields, or an event: a value with named
@@ -891,6 +935,12 @@ pub enum ExprKind {
     },
     /// `e.alive?`. `Bool`.
     Alive(Box<Expr>),
+    /// A query of the keyboard or the mouse. `Bool`. `arg` is a `Key` for
+    /// the keyboard's and a `MouseButton` for the mouse's.
+    Input {
+        query: InputQuery,
+        arg: Box<Expr>,
+    },
 
     /// `xs.push(v)`. `Void`. `value` has the element's value type.
     ListPush {

@@ -1,0 +1,44 @@
+# The queries of the keyboard and the mouse are read in an independent
+# `each` while its rows run in pieces on several threads: every row sees
+# the state of the tick. The 9,000 entities are in three tables.
+
+component Unit
+  id: Int
+end
+
+tag Red
+tag Blue
+
+resource Totals
+  held: Int = 0
+  entered: Int = 0
+  clicked: Int = 0
+end
+
+system count
+  each Unit do |unit|
+    Totals.held += 1 if Keyboard.down?(Key::Space)
+    Totals.entered += 1 if Keyboard.pressed?(Key::Enter) && unit.id % 2 == 0
+    Totals.clicked += 1 if Mouse.released?(MouseButton::Left) && unit.id % 3 == 0
+  end
+end
+
+system report
+  puts "tick #{Time.tick}: held #{Totals.held}, entered #{Totals.entered}, clicked #{Totals.clicked}"
+  Totals.held = 0
+  Totals.entered = 0
+  Totals.clicked = 0
+end
+
+9000.times do |i|
+  if i % 3 == 0
+    spawn Unit(id: i), Red
+  elsif i % 3 == 1
+    spawn Unit(id: i), Blue
+  else
+    spawn Unit(id: i)
+  end
+end
+
+Window.open("Cores", 320, 200)
+World.run

@@ -1426,12 +1426,53 @@ fn a_program_that_names_the_window_has_one() {
             "pixel_width",
             "pixel_height",
             "background",
-            "open"
+            "open",
+            "focused"
         ]
     );
     assert_eq!(program.records[window.color.0].name, "Color");
     assert_eq!(program.events[window.resized.0].name, "WindowResized");
     assert_eq!(program.events[window.closed.0].name, "WindowClosed");
+    let mouse: Vec<&str> = program.resources[window.mouse.0]
+        .fields
+        .iter()
+        .map(|field| field.name.as_str())
+        .collect();
+    assert_eq!(mouse, ["x", "y", "wheel_x", "wheel_y", "inside"]);
+    assert_eq!(program.enums[window.key.0].name, "Key");
+    assert_eq!(program.enums[window.key.0].variants.len(), 105);
+    assert_eq!(program.enums[window.button.0].name, "MouseButton");
+    let events = [
+        (window.key_pressed, "KeyPressed"),
+        (window.key_released, "KeyReleased"),
+        (window.mouse_pressed, "MousePressed"),
+        (window.mouse_released, "MouseReleased"),
+        (window.focused, "WindowFocused"),
+        (window.unfocused, "WindowUnfocused"),
+    ];
+    for (id, name) in events {
+        assert_eq!(program.events[id.0].name, name);
+    }
+}
+
+#[test]
+fn a_program_that_names_the_keyboard_or_the_mouse_has_a_window() {
+    for text in [
+        "puts Keyboard.down?(Key::A)\n",
+        "puts Mouse.x\n",
+        "system s\n  on MousePressed do |m|\n    puts m.x\n  end\nend\n",
+        "system s\n  on WindowFocused do\n    puts 1\n  end\nend\n",
+    ] {
+        assert!(ok(text).window.is_some(), "{text}");
+    }
+}
+
+#[test]
+fn the_enums_alone_give_no_window() {
+    let program = ok("puts Key::A, MouseButton::Left\n");
+    assert!(program.window.is_none() && program.resources.is_empty());
+    let names: Vec<&str> = program.enums.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["Key", "MouseButton"]);
 }
 
 #[test]

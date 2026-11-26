@@ -895,6 +895,7 @@ impl<'p> Walker<'p> {
             ExprKind::Unary { expr: inner, .. }
             | ExprKind::IntToFloat(inner)
             | ExprKind::Alive(inner)
+            | ExprKind::Input { arg: inner, .. }
             | ExprKind::Has { entity: inner, .. } => self.expr(inner),
             ExprKind::Binary { lhs, rhs, .. }
             | ExprKind::And { lhs, rhs }

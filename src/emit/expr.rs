@@ -7,7 +7,8 @@
 
 use crate::source::Span;
 use crate::tir::{
-    BinOp, Block, Builtin, ComponentId, ComponentInit, Expr, ExprKind, StmtKind, Type, UnOp,
+    BinOp, Block, Builtin, ComponentId, ComponentInit, Expr, ExprKind, InputQuery, StmtKind, Type,
+    UnOp,
 };
 
 use super::Cx;
@@ -463,6 +464,18 @@ impl<'a> FnCx<'a, '_> {
             ExprKind::Alive(entity) => {
                 let entity = self.expr(entity, Mode::Peek);
                 Val::lazy(format!("mn_alive({})", entity.c), ATOM, Dep::World)
+            }
+            ExprKind::Input { query, arg } => {
+                let arg = self.expr(arg, Mode::Peek);
+                let function = match query {
+                    InputQuery::KeyDown => "mn_key_down",
+                    InputQuery::KeyPressed => "mn_key_pressed",
+                    InputQuery::KeyReleased => "mn_key_released",
+                    InputQuery::ButtonDown => "mn_button_down",
+                    InputQuery::ButtonPressed => "mn_button_pressed",
+                    InputQuery::ButtonReleased => "mn_button_released",
+                };
+                Val::lazy(format!("{function}({})", arg.c), ATOM, Dep::World)
             }
             ExprKind::ListPush { list, value } => {
                 let Type::List(elem) = &list.ty else {

@@ -1,0 +1,3 @@
+tests/loops/cores_input.12am:23  system steer     each Ship     cores
+tests/loops/cores_input.12am:31  system bindings  each Binding  cores
+tests/loops/cores_input.12am:37  system noisy     each Binding  one core: `puts` in `chosen` (line 18), called at line 38

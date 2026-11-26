@@ -35,6 +35,9 @@ const RESET_LINE: &str = "#line RESET";
 /// The tag of the struct of the `Window` resource.
 const WINDOW_STRUCT: &str = "mn_window_fields";
 
+/// The tag of the struct of the `Mouse` resource.
+const MOUSE_STRUCT: &str = "mn_mouse_fields";
+
 /// Turns off the C warnings about what a program may legitimately say:
 /// `x == x`, `x = x`, a compact field compared with a constant it can't
 /// hold.
@@ -511,6 +514,8 @@ impl<'a> Cx<'a> {
             let name = names::resource(&resource.name);
             if prog.window.is_some_and(|window| window.resource.0 == index) {
                 let _ = writeln!(defs, "static struct {WINDOW_STRUCT} {{");
+            } else if prog.window.is_some_and(|window| window.mouse.0 == index) {
+                let _ = writeln!(defs, "static struct {MOUSE_STRUCT} {{");
             } else {
                 defs.push_str("static struct {\n");
             }
@@ -593,10 +598,17 @@ impl<'a> Cx<'a> {
             out.push_str(&self.window_layout(window));
             let _ = writeln!(
                 out,
-                "static const MnWindowProgram window_program = {{\n    (MnWindow *)&{},\n    {},\n    {},\n}};\n",
+                "static const MnWindowProgram window_program = {{\n    (MnWindow *)&{},\n    (MnMouse *)&{},\n    {},\n    {},\n    {},\n    {},\n    {},\n    {},\n    {},\n    {},\n}};\n",
                 names::resource(&prog.resources[window.resource.0].name),
+                names::resource(&prog.resources[window.mouse.0].name),
                 window.resized.0,
-                window.closed.0
+                window.closed.0,
+                window.key_pressed.0,
+                window.key_released.0,
+                window.mouse_pressed.0,
+                window.mouse_released.0,
+                window.focused.0,
+                window.unfocused.0
             );
         }
         let _ = writeln!(
@@ -609,11 +621,15 @@ impl<'a> Cx<'a> {
         out
     }
 
-    /// Assertions that the window's resource and events are laid out as
-    /// `MnWindow`, `MnColor` and `MnWindowResized` in the runtime's header.
+    /// Assertions that the window's resources and events are laid out as
+    /// `MnWindow`, `MnColor`, `MnWindowResized`, `MnMouse`, `MnKeyEvent`
+    /// and `MnButtonEvent` in the runtime's header, and that `Key` and
+    /// `MouseButton` have as many variants as it lists.
     fn window_layout(&self, window: tir::Window) -> String {
         let prog = self.prog;
-        let resized = names::record(&prog.records[prog.events[window.resized.0].record.0].name);
+        let event =
+            |id: tir::EventId| names::record(&prog.records[prog.events[id.0].record.0].name);
+        let resized = event(window.resized);
         let color = names::record(&prog.records[window.color.0].name);
         let mut checks = vec![format!(
             "sizeof(struct {WINDOW_STRUCT}) == sizeof(MnWindow)"
@@ -625,12 +641,46 @@ impl<'a> Cx<'a> {
             "pixel_height",
             "background",
             "open",
+            "focused",
         ] {
             checks.push(format!(
                 "offsetof(struct {WINDOW_STRUCT}, {}) == offsetof(MnWindow, {field})",
                 names::field(field)
             ));
         }
+        checks.push(format!("sizeof(struct {MOUSE_STRUCT}) == sizeof(MnMouse)"));
+        for field in ["x", "y", "wheel_x", "wheel_y", "inside"] {
+            checks.push(format!(
+                "offsetof(struct {MOUSE_STRUCT}, {}) == offsetof(MnMouse, {field})",
+                names::field(field)
+            ));
+        }
+        for id in [window.key_pressed, window.key_released] {
+            let name = event(id);
+            checks.push(format!("sizeof({name}) == sizeof(MnKeyEvent)"));
+            checks.push(format!(
+                "offsetof({name}, {}) == offsetof(MnKeyEvent, key)",
+                names::field("key")
+            ));
+        }
+        for id in [window.mouse_pressed, window.mouse_released] {
+            let name = event(id);
+            checks.push(format!("sizeof({name}) == sizeof(MnButtonEvent)"));
+            for field in ["x", "y", "button"] {
+                checks.push(format!(
+                    "offsetof({name}, {}) == offsetof(MnButtonEvent, {field})",
+                    names::field(field)
+                ));
+            }
+        }
+        checks.push(format!(
+            "{} == MN_KEY_COUNT",
+            prog.enums[window.key.0].variants.len()
+        ));
+        checks.push(format!(
+            "{} == MN_MOUSE_BUTTON_COUNT",
+            prog.enums[window.button.0].variants.len()
+        ));
         checks.push(format!("sizeof({color}) == sizeof(MnColor)"));
         for field in ["r", "g", "b", "a"] {
             checks.push(format!(

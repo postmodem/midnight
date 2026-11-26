@@ -1,0 +1,10 @@
+# expect: a built-in event of the keyboard, the mouse or the focus can't be
+# emitted by the program
+# at: line 6, the `KeyPressed(…)`; line 7, the `MousePressed(…)`; line 8,
+# `WindowFocused`
+
+system send
+  emit KeyPressed(Key::A)
+  emit MousePressed(MouseButton::Left, 1.0, 2.0)
+  emit WindowFocused
+end

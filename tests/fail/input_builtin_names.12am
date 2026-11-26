@@ -1,0 +1,24 @@
+# expect: the names of the keyboard and the mouse are built in and can't be
+# redefined
+# at: line 6, `Key`; line 9, `Mouse`; line 13, `Keyboard`; line 16,
+# `KeyReleased`; line 19, `MouseButton`; line 23, `WindowUnfocused`
+
+enum Key
+  A
+end
+component Mouse
+  x: Int = 0
+end
+tag Fast
+resource Keyboard
+  layout: Int = 0
+end
+event KeyReleased
+  code: Int
+end
+struct MouseButton
+  n: Int
+end
+tag Slow
+event WindowUnfocused
+end

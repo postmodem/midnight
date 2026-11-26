@@ -1,0 +1,45 @@
+# Keyboard focus: a headless window has it from its first tick; losing it
+# releases every key and button held; a key held across the loss is not
+# down until it is pressed again; a close releases what is held without
+# WindowUnfocused, and nothing is held in the ticks after it; a window
+# opened again begins as the first did.
+
+def state()
+  "focused #{Window.focused?}, A down #{Keyboard.down?(Key::A)}, Left down #{Mouse.down?(MouseButton::Left)}, inside #{Mouse.inside?}, at #{Mouse.x}, #{Mouse.y}"
+end
+
+system report
+  puts "tick #{Time.tick}: #{state}"
+  on WindowFocused do
+    puts "  focused"
+  end
+  on WindowUnfocused do
+    puts "  unfocused"
+  end
+  on KeyPressed do |press|
+    puts "  pressed #{press.key}"
+  end
+  on KeyReleased do |release|
+    puts "  released #{release.key}"
+  end
+  on MousePressed do |press|
+    puts "  pressed #{press.button} at #{press.x}, #{press.y}"
+  end
+  on MouseReleased do |release|
+    puts "  released #{release.button} at #{release.x}, #{release.y}"
+  end
+  on WindowClosed do
+    puts "  closed"
+  end
+end
+
+puts "before: #{state}"
+Window.open("Focus", 320, 200)
+puts "opened: #{state}"
+World.run
+puts "closed: #{state}"
+World.tick
+World.tick
+Window.open("Again", 320, 200)
+puts "opened again: #{state}"
+World.run

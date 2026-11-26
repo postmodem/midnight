@@ -1,0 +1,52 @@
+tick 0
+  W: down false, pressed false, released false
+  ShiftLeft: down false, pressed false, released false
+tick 1
+  W: down false, pressed false, released false
+  ShiftLeft: down false, pressed false, released false
+tick 2
+  W: down true, pressed true, released false
+  ShiftLeft: down false, pressed false, released false
+  pressed W
+tick 3
+  W: down true, pressed false, released false
+  ShiftLeft: down false, pressed false, released false
+tick 4
+  W: down false, pressed false, released true
+  ShiftLeft: down false, pressed false, released false
+  released W
+tick 5
+  W: down false, pressed true, released true
+  ShiftLeft: down false, pressed false, released false
+  pressed W
+  released W
+tick 6
+  W: down false, pressed true, released true
+  ShiftLeft: down false, pressed false, released false
+  pressed W
+  pressed W
+  released W
+  released W
+tick 7
+  W: down false, pressed true, released true
+  ShiftLeft: down false, pressed true, released true
+  pressed ShiftLeft
+  pressed W
+  pressed Digit1
+  released ShiftLeft
+  released W
+  released Digit1
+tick 8
+  W: down true, pressed true, released false
+  ShiftLeft: down false, pressed false, released false
+  pressed W
+tick 9
+  W: down true, pressed true, released true
+  ShiftLeft: down false, pressed false, released false
+  pressed W
+  released W
+tick 10
+  W: down false, pressed false, released true
+  ShiftLeft: down false, pressed false, released false
+  released W
+after: W: down false, pressed false, released true

@@ -100,6 +100,7 @@ pub(super) fn expr(e: &mut Expr, f: Visit<'_>) {
         | ExprKind::IntToFloat(inner)
         | ExprKind::Despawn(inner)
         | ExprKind::Alive(inner)
+        | ExprKind::Input { arg: inner, .. }
         | ExprKind::Remove { entity: inner, .. }
         | ExprKind::Has { entity: inner, .. } => expr(inner, f),
         ExprKind::Binary { lhs, rhs, .. }

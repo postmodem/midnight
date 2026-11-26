@@ -330,6 +330,7 @@ fn expr_eaches<'p>(expr: &'p Expr, out: &mut Vec<&'p Stmt>) {
         | ExprKind::IntToFloat(inner)
         | ExprKind::Despawn(inner)
         | ExprKind::Alive(inner)
+        | ExprKind::Input { arg: inner, .. }
         | ExprKind::Remove { entity: inner, .. }
         | ExprKind::Has { entity: inner, .. } => expr_eaches(inner, out),
         ExprKind::Binary { lhs, rhs, .. }

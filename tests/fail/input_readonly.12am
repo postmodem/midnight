@@ -1,0 +1,8 @@
+# expect: the fields of `Mouse` and `Window.focused?` are read-only
+# at: line 5, `Mouse.x`; line 6, `Mouse.wheel_y` in a `+=`; line 7,
+# `Mouse.inside?`; line 8, `Window.focused?`
+
+Mouse.x = 1.0
+Mouse.wheel_y += 1.0
+Mouse.inside? = true
+Window.focused? = false

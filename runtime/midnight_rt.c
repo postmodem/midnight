@@ -1033,6 +1033,443 @@ static _Noreturn void drive_fail(const char *format, ...) {
     mn_leave(1);
 }
 
+/* ---- The keyboard and the mouse ---- */
+
+/* Something that happened to the keyboard, the mouse or the focus. `which`
+ * is the number of a `Key` or `MouseButton` variant; `x` and `y` are a
+ * position in points, or the wheel's notches. */
+typedef enum {
+    HAPPENED_KEY_DOWN,
+    HAPPENED_KEY_UP,
+    HAPPENED_BUTTON_DOWN,
+    HAPPENED_BUTTON_UP,
+    HAPPENED_MOVE,
+    HAPPENED_LEAVE,
+    HAPPENED_WHEEL,
+    HAPPENED_BLUR,
+    HAPPENED_FOCUS,
+    HAPPENED_CLOSE,
+} HappenedKind;
+
+typedef struct {
+    HappenedKind kind;
+    uint32_t which;
+    double x;
+    double y;
+} Happening;
+
+/* The keys and buttons held, where the pointer is, whether the last thing
+ * it did was a leave, and the focus. */
+typedef struct {
+    bool keys[MN_KEY_COUNT];
+    bool buttons[MN_MOUSE_BUTTON_COUNT];
+    double x;
+    double y;
+    bool left;
+    bool focused;
+} InputHeld;
+
+static struct {
+    /* What happened since the last tick began, in order. */
+    Happening *list;
+    size_t count;
+    size_t capacity;
+
+    /* The state when the tick began. */
+    InputHeld now;
+    bool key_pressed[MN_KEY_COUNT];
+    bool key_released[MN_KEY_COUNT];
+    bool button_pressed[MN_MOUSE_BUTTON_COUNT];
+    bool button_released[MN_MOUSE_BUTTON_COUNT];
+    double wheel_x;
+    double wheel_y;
+
+    /* The state the commands read so far leave. */
+    InputHeld commands;
+
+    /* The pointer has left the shown window, as the desktop says. */
+    bool desktop_left;
+} input;
+
+static const char *const key_names[MN_KEY_COUNT] = {
+#define MN_KEY_NAME(name, usage) #name,
+    MN_KEYS(MN_KEY_NAME)
+#undef MN_KEY_NAME
+};
+
+static const char *const button_names[MN_MOUSE_BUTTON_COUNT] = {
+#define MN_BUTTON_NAME(name, number) #name,
+    MN_MOUSE_BUTTONS(MN_BUTTON_NAME)
+#undef MN_BUTTON_NAME
+};
+
+/* The number of the name among `count` names, or -1. */
+static int input_named(const char *const *names, int count, const char *name) {
+    for (int i = 0; i < count; i++) {
+        if (strcmp(names[i], name) == 0) return i;
+    }
+    return -1;
+}
+
+static void input_happened(HappenedKind kind, uint32_t which, double x, double y) {
+    if (input.count == input.capacity) {
+        input.capacity = input.capacity ? input.capacity * 2 : 64;
+        input.list = mn_realloc(input.list, input.capacity * sizeof *input.list);
+    }
+    input.list[input.count++] = (Happening){kind, which, x, y};
+}
+
+/* Whether a position is within the window's size now. */
+static bool input_within(double x, double y) {
+    return x >= 0.0 && y >= 0.0 && x < (double)win.width && y < (double)win.height;
+}
+
+static bool input_any_button(const InputHeld *held) {
+    for (int i = 0; i < MN_MOUSE_BUTTON_COUNT; i++) {
+        if (held->buttons[i]) return true;
+    }
+    return false;
+}
+
+/* The state of a window that has just opened: nothing held, the pointer
+ * outside at 0, 0, and no focus. */
+static void input_opened(InputHeld *held) {
+    memset(held, 0, sizeof *held);
+    held->left = true;
+}
+
+/* Releases what is held, keys in the order of `Key`, then buttons in the
+ * order of `MouseButton`, emitting their events. */
+static void input_release_all(void) {
+    const MnWindowProgram *program = mn_window_program;
+    for (uint32_t key = 0; key < MN_KEY_COUNT; key++) {
+        if (!input.now.keys[key]) continue;
+        input.now.keys[key] = false;
+        input.key_released[key] = true;
+        MnKeyEvent *event = mn_emit(program->key_released);
+        event->key = (uint8_t)key;
+    }
+    for (uint32_t button = 0; button < MN_MOUSE_BUTTON_COUNT; button++) {
+        if (!input.now.buttons[button]) continue;
+        input.now.buttons[button] = false;
+        input.button_released[button] = true;
+        MnButtonEvent *event = mn_emit(program->mouse_released);
+        event->button = (uint8_t)button;
+        event->x = input.now.x;
+        event->y = input.now.y;
+    }
+}
+
+/* What a close does to the state: everything held is released, and there
+ * is no focus and no pointer over the window. */
+static void input_close(void) {
+    input_release_all();
+    input.now.focused = false;
+    input.now.left = true;
+}
+
+/* Applies what happened since the last tick began, in order, emitting
+ * the events. Nothing after a close is applied. */
+static void input_apply(void) {
+    const MnWindowProgram *program = mn_window_program;
+    for (size_t i = 0; i < input.count; i++) {
+        const Happening *h = &input.list[i];
+        switch (h->kind) {
+        case HAPPENED_KEY_DOWN:
+        case HAPPENED_KEY_UP: {
+            bool down = h->kind == HAPPENED_KEY_DOWN;
+            if (input.now.keys[h->which] == down) break;
+            input.now.keys[h->which] = down;
+            (down ? input.key_pressed : input.key_released)[h->which] = true;
+            MnKeyEvent *event =
+                mn_emit(down ? program->key_pressed : program->key_released);
+            event->key = (uint8_t)h->which;
+            break;
+        }
+        case HAPPENED_BUTTON_DOWN:
+        case HAPPENED_BUTTON_UP: {
+            bool down = h->kind == HAPPENED_BUTTON_DOWN;
+            input.now.x = h->x;
+            input.now.y = h->y;
+            if (input.now.buttons[h->which] == down) break;
+            input.now.buttons[h->which] = down;
+            (down ? input.button_pressed : input.button_released)[h->which] = true;
+            MnButtonEvent *event =
+                mn_emit(down ? program->mouse_pressed : program->mouse_released);
+            event->button = (uint8_t)h->which;
+            event->x = h->x;
+            event->y = h->y;
+            break;
+        }
+        case HAPPENED_MOVE:
+            input.now.x = h->x;
+            input.now.y = h->y;
+            input.now.left = false;
+            break;
+        case HAPPENED_LEAVE:
+            input.now.left = true;
+            break;
+        case HAPPENED_WHEEL:
+            input.wheel_x += h->x;
+            input.wheel_y += h->y;
+            break;
+        case HAPPENED_BLUR:
+            if (!input.now.focused) break;
+            input_release_all();
+            input.now.focused = false;
+            mn_emit(program->unfocused);
+            break;
+        case HAPPENED_FOCUS:
+            if (input.now.focused) break;
+            input.now.focused = true;
+            mn_emit(program->focused);
+            break;
+        case HAPPENED_CLOSE:
+            input_close();
+            input.count = 0;
+            return;
+        }
+    }
+    input.count = 0;
+}
+
+/* Clears what was pressed and released and the wheel, as every tick
+ * begins. */
+static void input_clear(void) {
+    memset(input.key_pressed, 0, sizeof input.key_pressed);
+    memset(input.key_released, 0, sizeof input.key_released);
+    memset(input.button_pressed, 0, sizeof input.button_pressed);
+    memset(input.button_released, 0, sizeof input.button_released);
+    input.wheel_x = 0.0;
+    input.wheel_y = 0.0;
+}
+
+/* Assigns the fields of `Mouse` and `Window.focused` from the state. */
+static void input_assign(void) {
+    MnMouse *mouse = mn_window_program->mouse;
+    mouse->x = input.now.x;
+    mouse->y = input.now.y;
+    mouse->wheel_x = input.wheel_x;
+    mouse->wheel_y = input.wheel_y;
+    mouse->inside = !input.now.left && input_within(input.now.x, input.now.y);
+    mn_window_program->window->focused = input.now.focused;
+}
+
+bool mn_key_down(uint32_t key) { return key < MN_KEY_COUNT && input.now.keys[key]; }
+
+bool mn_key_pressed(uint32_t key) { return key < MN_KEY_COUNT && input.key_pressed[key]; }
+
+bool mn_key_released(uint32_t key) {
+    return key < MN_KEY_COUNT && input.key_released[key];
+}
+
+bool mn_button_down(uint32_t button) {
+    return button < MN_MOUSE_BUTTON_COUNT && input.now.buttons[button];
+}
+
+bool mn_button_pressed(uint32_t button) {
+    return button < MN_MOUSE_BUTTON_COUNT && input.button_pressed[button];
+}
+
+bool mn_button_released(uint32_t button) {
+    return button < MN_MOUSE_BUTTON_COUNT && input.button_released[button];
+}
+
+#ifdef MN_FRAMES
+/* What the desktop says. A driven window takes its input from its
+ * commands, and these drop what they are given. */
+
+void mn_window_key(uint32_t key, bool down) {
+    if (win.drive_name || key >= MN_KEY_COUNT) return;
+    input_happened(down ? HAPPENED_KEY_DOWN : HAPPENED_KEY_UP, key, 0.0, 0.0);
+}
+
+void mn_window_button(uint32_t button, bool down, double x, double y) {
+    if (win.drive_name || button >= MN_MOUSE_BUTTON_COUNT) return;
+    input_happened(down ? HAPPENED_BUTTON_DOWN : HAPPENED_BUTTON_UP, button, x, y);
+}
+
+void mn_window_move(double x, double y) {
+    if (win.drive_name) return;
+    if (input.desktop_left && win.info) {
+        fflush(stdout);
+        fputs("midnight: window: pointer inside\n", stderr);
+    }
+    input.desktop_left = false;
+    input_happened(HAPPENED_MOVE, 0, x, y);
+}
+
+void mn_window_leave(void) {
+    if (win.drive_name) return;
+    input.desktop_left = true;
+    input_happened(HAPPENED_LEAVE, 0, 0.0, 0.0);
+}
+
+void mn_window_wheel(double x, double y) {
+    if (win.drive_name) return;
+    input_happened(HAPPENED_WHEEL, 0, x, y);
+}
+
+void mn_window_focus(bool gained) {
+    if (win.drive_name) return;
+    if (gained && win.info) {
+        fflush(stdout);
+        fputs("midnight: window: focused\n", stderr);
+    }
+    input_happened(gained ? HAPPENED_FOCUS : HAPPENED_BLUR, 0, 0.0, 0.0);
+}
+#endif
+
+/* ---- Commands of the keyboard and the mouse ---- */
+
+/* A number of a command: an optional `-`, one or more digits, and
+ * optionally a point and one to eight digits, from -most to most. Sets
+ * `out` to the Float nearest to it and returns true, or returns false. */
+static bool drive_number(const char *word, int64_t most, double *out) {
+    static const int64_t tens[9] = {1,      10,      100,      1000,     10000,
+                                    100000, 1000000, 10000000, 100000000};
+    bool negative = *word == '-';
+    if (negative) word++;
+    int64_t digits = 0;
+    int places = -1;
+    int count = 0;
+    for (const char *c = word; *c != '\0'; c++) {
+        if (*c == '.' && places < 0 && count > 0) {
+            places = 0;
+            continue;
+        }
+        if (*c < '0' || *c > '9') return false;
+        if (places >= 0 && ++places > 8) return false;
+        count++;
+        digits = digits * 10 + (*c - '0');
+        if (digits > most * tens[8]) return false;
+    }
+    if (count == 0 || places == 0) return false;
+    if (places < 0) places = 0;
+    if (digits > most * tens[places]) return false;
+    double value = (double)digits / (double)tens[places];
+    *out = negative && digits != 0 ? -value : value;
+    return true;
+}
+
+/* Carries out `key …`, `mouse …`, `scroll …`, `blur` and `focus`, given
+ * as words; returns false for any other command. */
+static bool drive_input(const char *text, char **words, int count) {
+    InputHeld *held = &input.commands;
+    const char *name = words[0];
+    if (strcmp(name, "key") == 0) {
+        int mode = 0; /* 1 down, 2 up, 3 both */
+        const char *key_name = NULL;
+        if (count == 3 && strcmp(words[1], "down") == 0) {
+            mode = 1;
+        } else if (count == 3 && strcmp(words[1], "up") == 0) {
+            mode = 2;
+        } else if (count == 2) {
+            mode = 3;
+        }
+        if (mode == 0) {
+            drive_fail("`key` takes `down` or `up` and a key, or a key");
+        }
+        key_name = words[count - 1];
+        int key = input_named(key_names, MN_KEY_COUNT, key_name);
+        if (key < 0) drive_fail("`%s` is not a key", key_name);
+        if (!held->focused) {
+            drive_fail("`%s` while the window does not have the focus", text);
+        }
+        if (mode != 2 && held->keys[key]) drive_fail("`%s` is already down", key_name);
+        if (mode == 2 && !held->keys[key]) drive_fail("`%s` is already up", key_name);
+        if (mode != 2) input_happened(HAPPENED_KEY_DOWN, (uint32_t)key, 0.0, 0.0);
+        if (mode != 1) input_happened(HAPPENED_KEY_UP, (uint32_t)key, 0.0, 0.0);
+        held->keys[key] = mode == 1;
+    } else if (strcmp(name, "mouse") == 0) {
+        bool over = !held->left && input_within(held->x, held->y);
+        if (count >= 2 && strcmp(words[1], "move") == 0) {
+            double x;
+            double y;
+            if (count != 4 || !drive_number(words[2], MN_WINDOW_LARGEST, &x) ||
+                !drive_number(words[3], MN_WINDOW_LARGEST, &y)) {
+                drive_fail("`mouse move` takes a position in points, each a number "
+                           "from -%d to %d",
+                           MN_WINDOW_LARGEST, MN_WINDOW_LARGEST);
+            }
+            if (!input_within(x, y) && !input_any_button(held)) {
+                drive_fail("`%s` is outside the window of %lldx%lld points while no "
+                           "button is held; a pointer that leaves is `mouse leave`",
+                           text, (long long)win.width, (long long)win.height);
+            }
+            held->x = x;
+            held->y = y;
+            held->left = false;
+            input_happened(HAPPENED_MOVE, 0, x, y);
+        } else if (count == 2 && strcmp(words[1], "leave") == 0) {
+            if (!over) drive_fail("`mouse leave` while the pointer is not over the window");
+            held->left = true;
+            input_happened(HAPPENED_LEAVE, 0, 0.0, 0.0);
+        } else {
+            int mode = 0; /* 1 down, 2 up, 3 both */
+            if (count == 3 && strcmp(words[1], "down") == 0) {
+                mode = 1;
+            } else if (count == 3 && strcmp(words[1], "up") == 0) {
+                mode = 2;
+            } else if (count == 2) {
+                mode = 3;
+            }
+            if (mode == 0) {
+                drive_fail("`mouse` takes `move` and a position, `down` or `up` and a "
+                           "button, `leave`, or a button");
+            }
+            const char *button_name = words[count - 1];
+            int button = input_named(button_names, MN_MOUSE_BUTTON_COUNT, button_name);
+            if (button < 0) drive_fail("`%s` is not a mouse button", button_name);
+            if (mode != 2 && held->buttons[button]) {
+                drive_fail("`%s` is already down", button_name);
+            }
+            if (mode == 2 && !held->buttons[button]) {
+                drive_fail("`%s` is already up", button_name);
+            }
+            if (mode != 2 && !over && !input_any_button(held)) {
+                drive_fail("`%s` while the pointer is not over the window and no "
+                           "button is held",
+                           text);
+            }
+            if (mode != 2) {
+                input_happened(HAPPENED_BUTTON_DOWN, (uint32_t)button, held->x, held->y);
+            }
+            if (mode != 1) {
+                input_happened(HAPPENED_BUTTON_UP, (uint32_t)button, held->x, held->y);
+            }
+            held->buttons[button] = mode == 1;
+        }
+    } else if (strcmp(name, "scroll") == 0) {
+        double x;
+        double y;
+        if (count != 3 || !drive_number(words[1], 1000, &x) ||
+            !drive_number(words[2], 1000, &y)) {
+            drive_fail("`scroll` takes two numbers of notches, each from -1000 to 1000");
+        }
+        input_happened(HAPPENED_WHEEL, 0, x, y);
+    } else if (strcmp(name, "blur") == 0 || strcmp(name, "focus") == 0) {
+        bool focus = name[0] == 'f';
+        if (count != 1) drive_fail("`%s` takes nothing", name);
+        if (focus && held->focused) {
+            drive_fail("`focus` while the window has the focus");
+        }
+        if (!focus && !held->focused) {
+            drive_fail("`blur` while the window does not have the focus");
+        }
+        if (!focus) {
+            memset(held->keys, 0, sizeof held->keys);
+            memset(held->buttons, 0, sizeof held->buttons);
+        }
+        held->focused = focus;
+        input_happened(focus ? HAPPENED_FOCUS : HAPPENED_BLUR, 0, 0.0, 0.0);
+    } else {
+        return false;
+    }
+    drive_answer("%s", text);
+    return true;
+}
+
 static void gpu_read_options(void);
 
 #ifdef MN_FRAMES
@@ -1111,8 +1548,8 @@ static bool drive_command(char *text) {
     }
     char *copy = mn_malloc(strlen(text) + 1);
     strcpy(copy, text);
-    char *words[4];
-    int count = drive_words(copy, words, 3);
+    char *words[5];
+    int count = drive_words(copy, words, 4);
     const char *name = words[0];
     bool runs = false;
     if (strcmp(name, "tick") == 0) {
@@ -1179,8 +1616,16 @@ static bool drive_command(char *text) {
         drive_answer("%s", text);
     } else if (strcmp(name, "close") == 0) {
         if (count != 1) drive_fail("`close` takes nothing");
-        if (win.open) win.closing = true;
+        if (win.open) {
+            win.closing = true;
+            input_happened(HAPPENED_CLOSE, 0, 0.0, 0.0);
+        }
+        input.commands.focused = false;
+        input.commands.left = true;
+        memset(input.commands.keys, 0, sizeof input.commands.keys);
+        memset(input.commands.buttons, 0, sizeof input.commands.buttons);
         drive_answer("%s", text);
+    } else if (drive_input(text, words, count)) {
     } else {
         drive_fail("unknown command `%s`", name);
     }
@@ -1328,6 +1773,14 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     win.open = true;
     win.closing = false;
     win.paced = false;
+    input.count = 0;
+    input_opened(&input.now);
+    input_opened(&input.commands);
+    input.desktop_left = true;
+    if (win.headless || win.drive_name) {
+        input.commands.focused = true;
+        input_happened(HAPPENED_FOCUS, 0, 0.0, 0.0);
+    }
     MnWindow *window = mn_window_program->window;
     window->width = win.width;
     window->height = win.height;
@@ -1344,6 +1797,7 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
                 "midnight: window: %lldx%lld points, %lldx%lld pixels, %s\n",
                 (long long)win.width, (long long)win.height,
                 (long long)win.pixel_width, (long long)win.pixel_height, how);
+        if (win.drive_name) fputs("midnight: window: input from commands\n", stderr);
     }
 }
 
@@ -1375,6 +1829,7 @@ static void window_pace(void) {
 
 /* What happens before the first system of a tick runs. */
 static void window_tick_begin(void) {
+    input_clear();
     if (win.open && win.drive_name && win.ticks_left == 0 &&
         !drive_until_tick()) {
         win.closing = true;
@@ -1383,7 +1838,11 @@ static void window_tick_begin(void) {
         win.ticks_left--;
         win.ticks_run++;
     }
-    if (!win.open) return;
+    if (!win.open) {
+        input.count = 0;
+        input_assign();
+        return;
+    }
     if (win.drive_done) win.closing = true;
 #ifdef MN_FRAMES
     if (win.shown) {
@@ -1411,6 +1870,12 @@ static void window_tick_begin(void) {
         event->pixel_width = win.pixel_width;
         event->pixel_height = win.pixel_height;
     }
+    input_apply();
+    if (win.closing) {
+        input_close();
+        input_opened(&input.commands);
+    }
+    input_assign();
     if (win.closing) {
         win.open = false;
         win.closing = false;
@@ -1661,6 +2126,10 @@ static void window_finish(void) {
     win.tick_text = NULL;
     free(win.line);
     win.line = NULL;
+    free(input.list);
+    input.list = NULL;
+    input.count = 0;
+    input.capacity = 0;
     if (win.drive) fclose(win.drive);
     win.drive = NULL;
     win.drive_done = true;

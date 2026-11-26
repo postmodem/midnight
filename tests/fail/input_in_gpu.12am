@@ -1,0 +1,20 @@
+# expect: the queries are not allowed in a GPU system, directly or through
+# a function; the fields of `Mouse` are
+# at: line 17, `Keyboard.down?` in the block; line 7, `Mouse.pressed?` in
+# `clicked` called from it
+
+def clicked() -> Bool
+  Mouse.pressed?(MouseButton::Left)
+end
+
+component Spot
+  x: Float32 = 0
+end
+
+gpu system place
+  each Spot do |spot|
+    spot.x = Mouse.x
+    spot.x = 0.0 if Keyboard.down?(Key::Space)
+    spot.x = 1.0 if clicked
+  end
+end

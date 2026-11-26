@@ -1307,6 +1307,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             | ExprKind::Despawn(_)
             | ExprKind::Has { .. }
             | ExprKind::Alive(_)
+            | ExprKind::Input { .. }
             | ExprKind::ListPush { .. }
             | ExprKind::ListPop { .. }
             | ExprKind::ListDeleteAt { .. }

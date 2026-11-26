@@ -1,0 +1,12 @@
+# expect: `Mouse.inside` and `Window.focused` are written with `?`, and an
+# unknown member of `Keyboard` or `Mouse` is reported with the closest
+# name; `inside?` and `focused?` take no arguments
+# at: line 7, `inside`; line 8, `focused`; line 9, `down`; line 10,
+# `wheel`; line 11, `inside?`; line 12, `focused?`
+
+puts Mouse.inside
+puts Window.focused
+puts Keyboard.down(Key::A)
+puts Mouse.wheel
+puts Mouse.inside?()
+puts Window.focused?()

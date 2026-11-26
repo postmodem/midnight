@@ -1,0 +1,22 @@
+# The mouse's state and its events: the position in points, `inside?`, the
+# wheel summed since the last tick began, the buttons, and where the
+# pointer was at each press and release.
+
+system report
+  puts "tick #{Time.tick}: at #{Mouse.x}, #{Mouse.y}, inside #{Mouse.inside?}, wheel #{Mouse.wheel_x}, #{Mouse.wheel_y}"
+  left = MouseButton::Left
+  puts "  Left: down #{Mouse.down?(left)}, pressed #{Mouse.pressed?(left)}, released #{Mouse.released?(left)}"
+  on MousePressed do |press|
+    puts "  pressed #{press.button} at #{press.x}, #{press.y}"
+  end
+  on MouseReleased do |release|
+    puts "  released #{release.button} at #{release.x}, #{release.y}"
+  end
+  on WindowResized do |size|
+    puts "  resized to #{size.width}x#{size.height}"
+  end
+end
+
+Window.open("Mouse", 320, 200)
+World.run
+puts "after: at #{Mouse.x}, #{Mouse.y}, inside #{Mouse.inside?}"

@@ -1,0 +1,46 @@
+tick 0: at 0.0, 0.0, inside false, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+tick 1: at 10.0, 20.0, inside true, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+tick 2: at 319.99609375, 199.00390625, inside true, wheel 0.0, 0.0
+  Left: down false, pressed true, released true
+  pressed Left at 0.5, 1.25
+  released Left at 0.5, 1.25
+tick 3: at 319.99609375, 199.00390625, inside true, wheel 0.0, 0.0
+  Left: down false, pressed true, released true
+  pressed Right at 319.99609375, 199.00390625
+  pressed Left at 319.99609375, 199.00390625
+  pressed Middle at 319.99609375, 199.00390625
+  released Right at 319.99609375, 199.00390625
+  released Left at 319.99609375, 199.00390625
+  released Middle at 319.99609375, 199.00390625
+tick 4: at 330.0, -5.0, inside false, wheel 0.0, 0.0
+  Left: down true, pressed true, released false
+  pressed Left at 319.99609375, 199.00390625
+tick 5: at -12.5, 250.0, inside false, wheel 0.0, 0.0
+  Left: down false, pressed false, released true
+  released Left at -12.5, 250.0
+tick 6: at 100.0, 100.0, inside true, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+tick 7: at 100.0, 100.0, inside false, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+tick 8: at 300.0, 150.0, inside true, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+tick 9: at 300.0, 150.0, inside false, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+  resized to 200x100
+tick 10: at 50.0, 50.0, inside true, wheel 1.5, -1.75
+  Left: down false, pressed false, released false
+tick 11: at 50.0, 50.0, inside true, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+tick 12: at 50.0, 50.0, inside true, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+  pressed Back at 50.0, 50.0
+  pressed Forward at 50.0, 50.0
+  pressed Middle at 50.0, 50.0
+  released Back at 50.0, 50.0
+  released Forward at 50.0, 50.0
+tick 13: at 50.0, 50.0, inside false, wheel 0.0, 0.0
+  Left: down false, pressed false, released false
+  released Middle at 50.0, 50.0
+after: at 50.0, 50.0, inside false

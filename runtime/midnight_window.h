@@ -46,6 +46,23 @@ struct WGPUSurfaceImpl;
  * `info` line. Returns the device's name, or NULL when there is none. */
 const char *mn_window_device(struct WGPUSurfaceImpl *surface);
 
+/* What the desktop says of the keyboard, the mouse and the focus of the
+ * shown window, in the order it happened; mn_window_poll calls them. Each
+ * is something a command can say, and reaches the program when the next
+ * tick begins. A driven window takes its input from its commands, and
+ * these then drop what they are given.
+ *
+ * `key` is the number of a `Key` variant and `button` that of a
+ * `MouseButton` variant; positions are in points from the window's top
+ * left corner; the wheel is in notches, right and up positive. A move
+ * after a leave is the pointer coming back. */
+void mn_window_key(uint32_t key, bool down);
+void mn_window_button(uint32_t button, bool down, double x, double y);
+void mn_window_move(double x, double y);
+void mn_window_leave(void);
+void mn_window_wheel(double x, double y);
+void mn_window_focus(bool gained);
+
 /* ---- In midnight_window.c ------------------------------------------------ */
 
 /* Shows a window of `width` by `height` points titled `title`, with SDL's

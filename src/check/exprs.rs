@@ -672,6 +672,7 @@ impl Checker<'_> {
                 if BUILTIN_NAMES.contains(&name) {
                     let label = match name {
                         "World" | "Time" | "Math" => format!("use its members, like `{name}.…`"),
+                        "Keyboard" => "use its members, like `Keyboard.down?(Key::A)`".to_string(),
                         _ => "a type is not a value".to_string(),
                     };
                     self.err_label(format!("`{name}` is not a value"), span, label);
@@ -699,6 +700,10 @@ impl Checker<'_> {
                     Some(variant) => format!("write a variant, like `{name}::{variant}`"),
                     None => "write one of its variants".to_string(),
                 },
+            ),
+            Global::Resource(_) if name == "Mouse" => (
+                "`Mouse` is not a value".to_string(),
+                "use its members, like `Mouse.x`".to_string(),
             ),
             Global::Tag(_) => (
                 format!("`{name}` is a tag and has no value"),

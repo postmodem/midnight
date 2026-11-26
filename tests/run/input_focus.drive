@@ -1,0 +1,28 @@
+# The first tick begins with the focus.
+tick
+key down A
+key down B
+mouse move 10 10
+mouse down Left
+mouse down Right
+tick
+# The loss of focus releases the keys, then the buttons.
+blur
+tick
+# The pointer and the buttons go on without the focus.
+mouse move 20 20
+mouse Right
+tick
+# A is not held now, and is pressed again after the focus comes back.
+focus
+tick
+key down A
+mouse down Left
+tick
+# The close releases A and Left.
+close
+tick
+# The window opened again.
+tick
+key A
+tick

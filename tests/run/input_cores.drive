@@ -1,0 +1,9 @@
+tick
+key down Space
+tick
+key Enter
+mouse move 10 10
+mouse Left
+tick
+key up Space
+tick

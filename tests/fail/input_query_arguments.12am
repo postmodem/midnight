@@ -1,0 +1,12 @@
+# expect: each query takes one `Key` or `MouseButton` by position; the
+# label names the type
+# at: line 7, `Keyboard.down?` without its argument; line 8, two keys;
+# line 9, a `MouseButton` for the keyboard; line 10, an `Int` for the
+# mouse; line 11, `Mouse.released?` with no arguments; line 12, a keyword
+
+puts Keyboard.down?
+puts Keyboard.pressed?(Key::A, Key::B)
+puts Keyboard.released?(MouseButton::Left)
+puts Mouse.down?(1)
+puts Mouse.released?()
+puts Mouse.pressed?(button: MouseButton::Left)

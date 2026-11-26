@@ -427,7 +427,8 @@ impl<'p> Scan<'_, 'p> {
             ExprKind::Unary { expr: inner, .. }
             | ExprKind::IntToFloat(inner)
             | ExprKind::Has { entity: inner, .. }
-            | ExprKind::Alive(inner) => self.expr(inner, depth),
+            | ExprKind::Alive(inner)
+            | ExprKind::Input { arg: inner, .. } => self.expr(inner, depth),
             ExprKind::Binary { lhs, rhs, .. }
             | ExprKind::And { lhs, rhs }
             | ExprKind::Or { lhs, rhs } => {
@@ -801,7 +802,8 @@ impl Weigher<'_> {
             ExprKind::IntToFloat(inner) => self.expr(inner, locals),
             ExprKind::Unary { expr: inner, .. }
             | ExprKind::Has { entity: inner, .. }
-            | ExprKind::Alive(inner) => self.expr(inner, locals).plus(1),
+            | ExprKind::Alive(inner)
+            | ExprKind::Input { arg: inner, .. } => self.expr(inner, locals).plus(1),
             ExprKind::Binary { op, lhs, rhs } => {
                 let mut total = self.expr(lhs, locals);
                 total.add(self.expr(rhs, locals));

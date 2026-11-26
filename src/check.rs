@@ -68,6 +68,16 @@ const BUILTIN_NAMES: &[&str] = &[
     "Color",
     "WindowResized",
     "WindowClosed",
+    "Key",
+    "MouseButton",
+    "Keyboard",
+    "Mouse",
+    "KeyPressed",
+    "KeyReleased",
+    "MousePressed",
+    "MouseReleased",
+    "WindowFocused",
+    "WindowUnfocused",
 ];
 
 /// The built-in names that are types.
@@ -232,6 +242,7 @@ enum ReadOnly {
     CountParam(String),
     TimeField(&'static str),
     WindowField(String),
+    MouseField(String),
 }
 
 impl ReadOnly {
@@ -264,6 +275,9 @@ impl ReadOnly {
             }
             ReadOnly::WindowField(name) => {
                 format!("`Window.{name}` is read-only; only `Window.background` can be assigned")
+            }
+            ReadOnly::MouseField(name) => {
+                format!("`Mouse.{name}` is read-only: the runtime sets it when a tick begins")
             }
         }
     }
@@ -521,17 +535,28 @@ impl<'a> Checker<'a> {
             tir::RecordKind::Event(id) => Some(id),
             _ => None,
         };
-        let Some((Global::Resource(resource), span)) = self.globals.get("Window") else {
-            return None;
+        let resource = |name: &str| match self.globals.get(name) {
+            Some((Global::Resource(id), span)) if self.is_builtin(*span) => Some(*id),
+            _ => None,
         };
-        if !self.is_builtin(*span) {
-            return None;
-        }
+        let enumeration = |name: &str| match self.globals.get(name) {
+            Some((Global::Enum(id), _)) => Some(*id),
+            _ => None,
+        };
         Some(tir::Window {
-            resource: *resource,
+            resource: resource("Window")?,
             color: record("Color")?,
             resized: event("WindowResized")?,
             closed: event("WindowClosed")?,
+            mouse: resource("Mouse")?,
+            key: enumeration("Key")?,
+            button: enumeration("MouseButton")?,
+            key_pressed: event("KeyPressed")?,
+            key_released: event("KeyReleased")?,
+            mouse_pressed: event("MousePressed")?,
+            mouse_released: event("MouseReleased")?,
+            focused: event("WindowFocused")?,
+            unfocused: event("WindowUnfocused")?,
         })
     }
 

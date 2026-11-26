@@ -1,0 +1,16 @@
+error: `Mouse.pressed?` is not allowed in a function called from a GPU system
+ --> tests/fail/input_in_gpu.12am:7:3
+  |
+7 |   Mouse.pressed?(MouseButton::Left)
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ answer it in an ordinary system and copy it into a resource field
+note: GPU system `place` calls `clicked` here
+  --> tests/fail/input_in_gpu.12am:18:21
+   |
+18 |     spot.x = 1.0 if clicked
+   |                     -------
+
+error: `Keyboard.down?` is not allowed in a GPU system
+  --> tests/fail/input_in_gpu.12am:17:21
+   |
+17 |     spot.x = 0.0 if Keyboard.down?(Key::Space)
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ answer it in an ordinary system and copy it into a resource field

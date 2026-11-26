@@ -121,6 +121,7 @@ fn visit_expr(e: &Expr, depth: usize, f: Visit<'_>) {
         | ExprKind::IntToFloat(inner)
         | ExprKind::Despawn(inner)
         | ExprKind::Alive(inner)
+        | ExprKind::Input { arg: inner, .. }
         | ExprKind::Remove { entity: inner, .. }
         | ExprKind::Has { entity: inner, .. } => visit_expr(inner, depth, f),
         ExprKind::Binary { lhs, rhs, .. }

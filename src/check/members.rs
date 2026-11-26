@@ -169,11 +169,17 @@ impl Checker<'_> {
                 "Time" => return self.time_member(name, args, span),
                 "Math" => return self.math_member(name, args, span).map(Resolved::Value),
                 "Entity" => return self.entity_namespace(name, args, span),
+                "Keyboard" if self.builtins.is_some() => {
+                    return self.keyboard_member(name, args, span);
+                }
                 _ => {}
             }
             match self.global(owner) {
                 Some(Global::Resource(id)) if owner == "Window" => {
                     return self.window_member(id, name, args, span);
+                }
+                Some(Global::Resource(id)) if owner == "Mouse" => {
+                    return self.mouse_member(id, name, args, span);
                 }
                 Some(Global::Resource(id)) => return self.resource_field(id, name, args, span),
                 Some(Global::Const(_)) | None => {}
@@ -764,15 +770,15 @@ impl Checker<'_> {
                 }
                 return None;
             }
-            "open?" => ast::Ident {
-                name: "open".to_string(),
+            "open?" | "focused?" => ast::Ident {
+                name: name.name.trim_end_matches('?').to_string(),
                 span: name.span,
             },
             other if FIELDS.contains(&other) => name.clone(),
             other => {
                 let candidates: Vec<String> = FIELDS
                     .iter()
-                    .chain(&["open?", "open"])
+                    .chain(&["open?", "focused?", "open"])
                     .map(|f| f.to_string())
                     .collect();
                 self.unknown(
@@ -784,9 +790,9 @@ impl Checker<'_> {
                 return None;
             }
         };
-        if name.name == "open?" && args.is_some() {
+        if name.name.ends_with('?') && args.is_some() {
             self.err_label(
-                "`Window.open?` takes no arguments",
+                format!("`Window.{}` takes no arguments", name.name),
                 name.span,
                 "read it without parentheses",
             );
@@ -799,6 +805,149 @@ impl Checker<'_> {
             place.readonly = Some(ReadOnly::WindowField(name.name.clone()));
         }
         Some(resolved)
+    }
+
+    /// A member of the built-in `Keyboard`: one of its three queries.
+    fn keyboard_member(
+        &mut self,
+        name: &ast::Ident,
+        args: Option<&[ast::Arg]>,
+        span: Span,
+    ) -> Option<Resolved> {
+        let query = match name.name.as_str() {
+            "down?" => tir::InputQuery::KeyDown,
+            "pressed?" => tir::InputQuery::KeyPressed,
+            "released?" => tir::InputQuery::KeyReleased,
+            other => {
+                let candidates = ["down?", "pressed?", "released?"].map(String::from);
+                self.unknown(
+                    format!("unknown member `{other}` for `Keyboard`"),
+                    name.span,
+                    other,
+                    &candidates,
+                );
+                for arg in args.unwrap_or(&[]) {
+                    self.probe(&arg.value);
+                }
+                return None;
+            }
+        };
+        self.input_query(query, "Key", args, span)
+    }
+
+    /// A member of the built-in `Mouse`: one of its fields, `inside?`, or
+    /// one of its three queries.
+    fn mouse_member(
+        &mut self,
+        id: ResourceId,
+        name: &ast::Ident,
+        args: Option<&[ast::Arg]>,
+        span: Span,
+    ) -> Option<Resolved> {
+        const FIELDS: [&str; 4] = ["x", "y", "wheel_x", "wheel_y"];
+        let query = match name.name.as_str() {
+            "down?" => Some(tir::InputQuery::ButtonDown),
+            "pressed?" => Some(tir::InputQuery::ButtonPressed),
+            "released?" => Some(tir::InputQuery::ButtonReleased),
+            _ => None,
+        };
+        if let Some(query) = query {
+            return self.input_query(query, "MouseButton", args, span);
+        }
+        let field = match name.name.as_str() {
+            "inside?" => ast::Ident {
+                name: "inside".to_string(),
+                span: name.span,
+            },
+            other if FIELDS.contains(&other) => name.clone(),
+            other => {
+                let candidates: Vec<String> = FIELDS
+                    .iter()
+                    .chain(&["inside?", "down?", "pressed?", "released?"])
+                    .map(|f| f.to_string())
+                    .collect();
+                self.unknown(
+                    format!("unknown member `{other}` for `Mouse`"),
+                    name.span,
+                    other,
+                    &candidates,
+                );
+                for arg in args.unwrap_or(&[]) {
+                    self.probe(&arg.value);
+                }
+                return None;
+            }
+        };
+        if name.name == "inside?" && args.is_some() {
+            self.err_label(
+                "`Mouse.inside?` takes no arguments",
+                name.span,
+                "read it without parentheses",
+            );
+            return None;
+        }
+        let mut resolved = self.resource_field(id, &field, args, span)?;
+        if let Resolved::Place(place) = &mut resolved {
+            place.readonly = Some(ReadOnly::MouseField(name.name.clone()));
+        }
+        Some(resolved)
+    }
+
+    /// `Keyboard.down?(key)` and the other queries: one argument by
+    /// position, of the enum `wanted`.
+    fn input_query(
+        &mut self,
+        query: tir::InputQuery,
+        wanted: &str,
+        args: Option<&[ast::Arg]>,
+        span: Span,
+    ) -> Option<Resolved> {
+        let method = query.name();
+        let example = if wanted == "Key" {
+            "Key::A"
+        } else {
+            "MouseButton::Left"
+        };
+        let Some(args) = args else {
+            self.err_label(
+                format!("`{method}` takes a `{wanted}`"),
+                span,
+                format!("write it in parentheses, like `{method}({example})`"),
+            );
+            return None;
+        };
+        let ty = match self.global(wanted) {
+            Some(Global::Enum(id)) => Type::Enum(id),
+            _ => unreachable!("the built-in enums are declared with `Keyboard` and `Mouse`"),
+        };
+        self.no_keywords(method, args);
+        if args.len() != 1 {
+            self.error(
+                Diagnostic::new(
+                    format!(
+                        "`{method}` takes 1 argument, but {}",
+                        util::were_given(args.len())
+                    ),
+                    span,
+                )
+                .label(format!("the argument is a `{wanted}`, like `{example}`")),
+            );
+            for arg in args {
+                self.probe(&arg.value);
+            }
+            return None;
+        }
+        let value = self.value(&args[0].value, Some(&ty))?;
+        let label = format!("`{method}` takes a `{wanted}`, like `{example}`");
+        let arg = self.convert(value, &ty, Some(label))?;
+        Some(Resolved::Value(mk(
+            ExprKind::Input {
+                query,
+                arg: Box::new(arg),
+            },
+            Type::Bool,
+            span,
+        )))
     }
 
     fn resource_field(

@@ -1,0 +1,40 @@
+# expect: the queries of the keyboard and the mouse give a loop no reason
+# to stay on one core, and their argument is judged as any expression: the
+# first two loops are independent, reading the queries, the fields of
+# `Mouse` and `Window.focused?`, with a key from the row; the third stays
+# on one core for the `puts` in the function that gives its argument.
+
+component Ship
+  x: Float = 0.0
+  speed: Float = 1.0
+end
+
+component Binding
+  key: Key = Key::Space
+  held: Int = 0
+end
+
+def chosen(n: Int) -> Key
+  puts n
+  Key::A
+end
+
+system steer
+  each Ship do |ship|
+    ship.x -= ship.speed if Keyboard.down?(Key::A)
+    ship.x += ship.speed if Keyboard.down?(Key::D) && Window.focused?
+    ship.x = Mouse.x if Mouse.pressed?(MouseButton::Left) && Mouse.inside?
+  end
+end
+
+system bindings
+  each Binding do |binding|
+    binding.held += 1 if Keyboard.down?(binding.key) || Keyboard.released?(binding.key)
+  end
+end
+
+system noisy
+  each Binding do |binding|
+    binding.held = 0 if Keyboard.pressed?(chosen(binding.held))
+  end
+end

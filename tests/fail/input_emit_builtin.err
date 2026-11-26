@@ -1,0 +1,17 @@
+error: `KeyPressed` is a built-in event and can't be emitted
+ --> tests/fail/input_emit_builtin.12am:7:8
+  |
+7 |   emit KeyPressed(Key::A)
+  |        ^^^^^^^^^^^^^^^^^^ the runtime emits it when a tick begins
+
+error: `MousePressed` is a built-in event and can't be emitted
+ --> tests/fail/input_emit_builtin.12am:8:8
+  |
+8 |   emit MousePressed(MouseButton::Left, 1.0, 2.0)
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the runtime emits it when a tick begins
+
+error: `WindowFocused` is a built-in event and can't be emitted
+ --> tests/fail/input_emit_builtin.12am:9:8
+  |
+9 |   emit WindowFocused
+  |        ^^^^^^^^^^^^^ the runtime emits it when a tick begins

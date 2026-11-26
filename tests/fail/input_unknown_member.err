@@ -1,0 +1,35 @@
+error: unknown member `inside` for `Mouse`
+ --> tests/fail/input_unknown_member.12am:7:12
+  |
+7 | puts Mouse.inside
+  |            ^^^^^^ did you mean `inside?`?
+
+error: unknown member `focused` for `Window`
+ --> tests/fail/input_unknown_member.12am:8:13
+  |
+8 | puts Window.focused
+  |             ^^^^^^^ did you mean `focused?`?
+
+error: unknown member `down` for `Keyboard`
+ --> tests/fail/input_unknown_member.12am:9:15
+  |
+9 | puts Keyboard.down(Key::A)
+  |               ^^^^ did you mean `down?`?
+
+error: unknown member `wheel` for `Mouse`
+  --> tests/fail/input_unknown_member.12am:10:12
+   |
+10 | puts Mouse.wheel
+   |            ^^^^^
+
+error: `Mouse.inside?` takes no arguments
+  --> tests/fail/input_unknown_member.12am:11:12
+   |
+11 | puts Mouse.inside?()
+   |            ^^^^^^^ read it without parentheses
+
+error: `Window.focused?` takes no arguments
+  --> tests/fail/input_unknown_member.12am:12:13
+   |
+12 | puts Window.focused?()
+   |             ^^^^^^^^ read it without parentheses

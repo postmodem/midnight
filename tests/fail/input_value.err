@@ -1,0 +1,11 @@
+error: `Keyboard` is not a value
+ --> tests/fail/input_value.12am:4:8
+  |
+4 | keys = Keyboard
+  |        ^^^^^^^^ use its members, like `Keyboard.down?(Key::A)`
+
+error: `Mouse` is not a value
+ --> tests/fail/input_value.12am:5:6
+  |
+5 | puts Mouse
+  |      ^^^^^ use its members, like `Mouse.x`

@@ -635,6 +635,44 @@ fn mixed_component_is_as_small_as_its_fields_allow() {
     assert!(compiled.status.success(), "{}", text(&compiled.stderr));
 }
 
+/// An enum variant spelled as a built-in name, declared or written after
+/// `::`, gives a program no built-in declarations: its generated C is that
+/// of the same program with other names for the variants.
+#[test]
+fn a_variant_named_like_a_built_in_gives_no_window() {
+    let dir = scratch("variant-names");
+    let program =
+        "enum Shape\n  Mouse, Keyboard, Window, Key\nend\n\nputs Shape::Mouse, Shape::Key\n";
+    let emit = |name: &str, body: &str| {
+        let source = dir.join(format!("{name}.12am"));
+        std::fs::write(&source, body).expect("write a test program");
+        let output = midnight()
+            .arg("emit-c")
+            .arg(&source)
+            .output()
+            .expect("run midnight");
+        assert!(output.status.success(), "{}", text(&output.stderr));
+        text(&output.stdout).replace(&format!("{name}.12am"), "PROGRAM")
+    };
+    let named = emit("named", program);
+    let renamed = emit(
+        "renamed",
+        &program
+            .replace("Keyboard", "Qwertyui")
+            .replace("Key", "Kay")
+            .replace("Mouse", "Moose")
+            .replace("Window", "Widget"),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(!named.contains("mn_window_program"), "{named}");
+    let back = renamed
+        .replace("Qwertyui", "Keyboard")
+        .replace("Kay", "Key")
+        .replace("Moose", "Mouse")
+        .replace("Widget", "Window");
+    assert_eq!(named, back);
+}
+
 /// Writes a line to standard error past the test harness's capture, so it
 /// shows when the test passes.
 fn note(line: &str) {
@@ -2754,6 +2792,156 @@ fn drive_errors() {
             "close\ntick\n",
             "3: can't capture: no window is open",
         ),
+        // The keyboard and the mouse: names and numbers first.
+        ("key Q2\n", "", "1: `Q2` is not a key"),
+        ("key a\n", "", "1: `a` is not a key"),
+        (
+            "key\n",
+            "",
+            "1: `key` takes `down` or `up` and a key, or a key",
+        ),
+        (
+            "key press A\n",
+            "",
+            "1: `key` takes `down` or `up` and a key, or a key",
+        ),
+        ("mouse Middle2\n", "", "1: `Middle2` is not a mouse button"),
+        ("mouse down left\n", "", "1: `left` is not a mouse button"),
+        (
+            "mouse\n",
+            "",
+            "1: `mouse` takes `move` and a position, `down` or `up` and a button, `leave`, or a button",
+        ),
+        (
+            "mouse move 1.123456789 3\n",
+            "",
+            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+        ),
+        (
+            "mouse move 1. 3\n",
+            "",
+            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+        ),
+        (
+            "mouse move 3 .5\n",
+            "",
+            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+        ),
+        (
+            "mouse move -8192.00000001 3\n",
+            "",
+            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+        ),
+        (
+            "mouse move 1e2 3\n",
+            "",
+            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+        ),
+        (
+            "mouse move 3\n",
+            "",
+            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+        ),
+        (
+            "scroll 1001 0\n",
+            "",
+            "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
+        ),
+        (
+            "scroll +1 0\n",
+            "",
+            "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
+        ),
+        (
+            "scroll 1\n",
+            "",
+            "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
+        ),
+        ("blur now\n", "", "1: `blur` takes nothing"),
+        ("focus now\n", "", "1: `focus` takes nothing"),
+        ("blur\nkey down Nope\n", "blur\n", "2: `Nope` is not a key"),
+        // Then the focus.
+        (
+            "blur\nkey A\n",
+            "blur\n",
+            "2: `key A` while the window does not have the focus",
+        ),
+        (
+            "blur\nkey up A\n",
+            "blur\n",
+            "2: `key up A` while the window does not have the focus",
+        ),
+        (
+            "close\nkey down A\n",
+            "close\n",
+            "2: `key down A` while the window does not have the focus",
+        ),
+        // Then what is held.
+        (
+            "key down A\nkey down A\n",
+            "key down A\n",
+            "2: `A` is already down",
+        ),
+        (
+            "key down A\nkey A\n",
+            "key down A\n",
+            "2: `A` is already down",
+        ),
+        ("key up A\n", "", "1: `A` is already up"),
+        (
+            "key down A\nblur\nfocus\nkey up A\n",
+            "key down A\nblur\nfocus\n",
+            "4: `A` is already up",
+        ),
+        (
+            "mouse move 3 3\nmouse down Left\nmouse Left\n",
+            "mouse move 3 3\nmouse down Left\n",
+            "3: `Left` is already down",
+        ),
+        ("mouse up Back\n", "", "1: `Back` is already up"),
+        // Then the pointer.
+        (
+            "mouse move 100 3\n",
+            "",
+            "1: `mouse move 100 3` is outside the window of 100x100 points while no button is held; a pointer that leaves is `mouse leave`",
+        ),
+        (
+            "mouse move 5 5\nmouse down Left\nmouse move 200 -3\nmouse up Left\nmouse move 300 3\n",
+            "mouse move 5 5\nmouse down Left\nmouse move 200 -3\nmouse up Left\n",
+            "5: `mouse move 300 3` is outside the window of 100x100 points while no button is held; a pointer that leaves is `mouse leave`",
+        ),
+        (
+            "mouse Left\n",
+            "",
+            "1: `mouse Left` while the pointer is not over the window and no button is held",
+        ),
+        (
+            "mouse move 3 3\nmouse leave\nmouse down Right\n",
+            "mouse move 3 3\nmouse leave\n",
+            "3: `mouse down Right` while the pointer is not over the window and no button is held",
+        ),
+        (
+            "mouse move 50 50\nresize 40 40\nmouse Left\n",
+            "mouse move 50 50\nresize 40 40\n",
+            "3: `mouse Left` while the pointer is not over the window and no button is held",
+        ),
+        (
+            "mouse leave\n",
+            "",
+            "1: `mouse leave` while the pointer is not over the window",
+        ),
+        (
+            "mouse move 3 3\nmouse leave\nmouse leave\n",
+            "mouse move 3 3\nmouse leave\n",
+            "3: `mouse leave` while the pointer is not over the window",
+        ),
+        // Then the focus commands.
+        ("focus\n", "", "1: `focus` while the window has the focus"),
+        (
+            "blur\nblur\n",
+            "blur\n",
+            "2: `blur` while the window does not have the focus",
+        ),
     ];
     let mut failures = Vec::new();
     for (index, (commands, answers, error)) in cases.iter().enumerate() {
@@ -2947,7 +3135,8 @@ fn only_programs_with_a_window_read_the_window_variables() {
     assert_eq!(
         run.stderr,
         "midnight: MIDNIGHT_WINDOW: unknown word `bogus`\n\
-         midnight: window: 100x100 points, 100x100 pixels, headless\n"
+         midnight: window: 100x100 points, 100x100 pixels, headless\n\
+         midnight: window: input from commands\n"
     );
     let hello = dir.join("hello");
     build(Path::new("examples/hello.12am"), &hello, Mode::Release)

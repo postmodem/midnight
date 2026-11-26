@@ -143,7 +143,8 @@ pub fn walk_expr<'a>(expr: &'a Expr, f: &mut dyn FnMut(Node<'a>)) {
         ExprKind::Remove { entity, .. }
         | ExprKind::Despawn(entity)
         | ExprKind::Has { entity, .. }
-        | ExprKind::Alive(entity) => walk_expr(entity, f),
+        | ExprKind::Alive(entity)
+        | ExprKind::Input { arg: entity, .. } => walk_expr(entity, f),
         ExprKind::ListPush { list, value } => {
             walk_place(list, Use::Modify, f);
             walk_expr(value, f);

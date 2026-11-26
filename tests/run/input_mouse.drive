@@ -1,0 +1,48 @@
+# The first tick: the pointer is outside, at 0, 0.
+tick
+mouse move 10 20
+tick
+# A click where the pointer is, and the position with fractions.
+mouse move 0.5 1.25
+mouse Left
+mouse move 319.99609375 199.00390625
+tick
+# Several buttons in one tick: each kind of event in the order they happened.
+mouse down Right
+mouse down Left
+mouse up Right
+mouse down Middle
+mouse up Left
+mouse up Middle
+tick
+# A drag past the edge: the position goes on outside the window.
+mouse down Left
+mouse move 330 -5
+tick
+mouse move -12.5 250
+mouse up Left
+tick
+# Back in, then a leave: the position is kept.
+mouse move 100 100
+tick
+mouse leave
+tick
+# A resize that leaves the pointer outside.
+mouse move 300 150
+tick
+resize 200 100
+tick
+# The wheel, summed over several commands and cleared the tick after.
+mouse move 50 50
+scroll 1 0
+scroll 0 -2
+scroll 0.5 0.25
+scroll 0 0
+tick
+tick
+# The other buttons.
+mouse Back
+mouse Forward
+mouse down Middle
+tick
+# The commands run out: the window closes and releases Middle.

@@ -311,6 +311,7 @@ impl Dump<'_> {
                 format!("(has {} {})", self.expr(entity), self.component(*component))
             }
             ExprKind::Alive(entity) => format!("(alive {})", self.expr(entity)),
+            ExprKind::Input { query, arg } => format!("({} {})", query.name(), self.expr(arg)),
             ExprKind::ListPush { list, value } => {
                 format!("(push {} {})", self.place(list), self.expr(value))
             }

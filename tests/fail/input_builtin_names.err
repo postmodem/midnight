@@ -1,0 +1,35 @@
+error: `Key` is a built-in name and can't be redefined
+ --> tests/fail/input_builtin_names.12am:6:6
+  |
+6 | enum Key
+  |      ^^^
+
+error: `Mouse` is a built-in name and can't be redefined
+ --> tests/fail/input_builtin_names.12am:9:11
+  |
+9 | component Mouse
+  |           ^^^^^
+
+error: `Keyboard` is a built-in name and can't be redefined
+  --> tests/fail/input_builtin_names.12am:13:10
+   |
+13 | resource Keyboard
+   |          ^^^^^^^^
+
+error: `KeyReleased` is a built-in name and can't be redefined
+  --> tests/fail/input_builtin_names.12am:16:7
+   |
+16 | event KeyReleased
+   |       ^^^^^^^^^^^
+
+error: `MouseButton` is a built-in name and can't be redefined
+  --> tests/fail/input_builtin_names.12am:19:8
+   |
+19 | struct MouseButton
+   |        ^^^^^^^^^^^
+
+error: `WindowUnfocused` is a built-in name and can't be redefined
+  --> tests/fail/input_builtin_names.12am:23:7
+   |
+23 | event WindowUnfocused
+   |       ^^^^^^^^^^^^^^^

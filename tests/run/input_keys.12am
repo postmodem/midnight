@@ -1,0 +1,26 @@
+# The keyboard's state and its events: `down?` is what was held when the
+# tick began, `pressed?` and `released?` what went down and came up since
+# the last tick began, and the events give each press and release, in the
+# order they happened.
+
+def show(key: Key)
+  "#{key}: down #{Keyboard.down?(key)}, pressed #{Keyboard.pressed?(key)}, released #{Keyboard.released?(key)}"
+end
+
+system report
+  puts "tick #{Time.tick}"
+  puts "  #{show(Key::W)}"
+  puts "  #{show(Key::ShiftLeft)}"
+  on KeyPressed do |press|
+    puts "  pressed #{press.key}"
+  end
+  on KeyReleased do |release|
+    puts "  released #{release.key}"
+  end
+end
+
+# Before a window opens nothing is held, pressed or released.
+World.tick
+Window.open("Keys", 320, 200)
+World.run
+puts "after: #{show(Key::W)}"

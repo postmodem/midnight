@@ -1,0 +1,27 @@
+# The fields of Mouse and Window.focused? are read in a GPU system as any
+# resource field is, with the values they have in the tick.
+
+component Spot
+  x: Float32 = 0
+  y: Float32 = 0
+  shown: Int32 = 0
+end
+
+gpu system follow
+  each Spot do |spot|
+    spot.x = Mouse.x
+    spot.y = Mouse.y + Mouse.wheel_y
+    spot.shown = 0
+    spot.shown = 1 if Mouse.inside? && Window.focused?
+  end
+end
+
+system report
+  each Spot do |spot|
+    puts "tick #{Time.tick}: #{spot.x}, #{spot.y}, shown #{spot.shown}"
+  end
+end
+
+spawn Spot
+Window.open("GPU", 320, 200)
+World.run

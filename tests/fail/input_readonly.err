@@ -1,0 +1,23 @@
+error: can't assign to `Mouse.x`
+ --> tests/fail/input_readonly.12am:5:1
+  |
+5 | Mouse.x = 1.0
+  | ^^^^^^^ `Mouse.x` is read-only: the runtime sets it when a tick begins
+
+error: can't assign to `Mouse.wheel_y`
+ --> tests/fail/input_readonly.12am:6:1
+  |
+6 | Mouse.wheel_y += 1.0
+  | ^^^^^^^^^^^^^ `Mouse.wheel_y` is read-only: the runtime sets it when a tick begins
+
+error: can't assign to `Mouse.inside?`
+ --> tests/fail/input_readonly.12am:7:1
+  |
+7 | Mouse.inside? = true
+  | ^^^^^^^^^^^^^ `Mouse.inside?` is read-only: the runtime sets it when a tick begins
+
+error: can't assign to `Window.focused?`
+ --> tests/fail/input_readonly.12am:8:1
+  |
+8 | Window.focused? = false
+  | ^^^^^^^^^^^^^^^ `Window.focused?` is read-only; only `Window.background` can be assigned

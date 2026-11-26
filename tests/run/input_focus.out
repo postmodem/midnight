@@ -1,0 +1,38 @@
+before: focused false, A down false, Left down false, inside false, at 0.0, 0.0
+opened: focused false, A down false, Left down false, inside false, at 0.0, 0.0
+tick 0: focused true, A down false, Left down false, inside false, at 0.0, 0.0
+  focused
+tick 1: focused true, A down true, Left down true, inside true, at 10.0, 10.0
+  pressed A
+  pressed B
+  pressed Left at 10.0, 10.0
+  pressed Right at 10.0, 10.0
+tick 2: focused false, A down false, Left down false, inside true, at 10.0, 10.0
+  unfocused
+  released A
+  released B
+  released Left at 10.0, 10.0
+  released Right at 10.0, 10.0
+tick 3: focused false, A down false, Left down false, inside true, at 20.0, 20.0
+  pressed Right at 20.0, 20.0
+  released Right at 20.0, 20.0
+tick 4: focused true, A down false, Left down false, inside true, at 20.0, 20.0
+  focused
+tick 5: focused true, A down true, Left down true, inside true, at 20.0, 20.0
+  pressed A
+  pressed Left at 20.0, 20.0
+tick 6: focused false, A down false, Left down false, inside false, at 20.0, 20.0
+  released A
+  released Left at 20.0, 20.0
+  closed
+closed: focused false, A down false, Left down false, inside false, at 20.0, 20.0
+tick 7: focused false, A down false, Left down false, inside false, at 20.0, 20.0
+tick 8: focused false, A down false, Left down false, inside false, at 20.0, 20.0
+opened again: focused false, A down false, Left down false, inside false, at 20.0, 20.0
+tick 9: focused true, A down false, Left down false, inside false, at 0.0, 0.0
+  focused
+tick 10: focused true, A down false, Left down false, inside false, at 0.0, 0.0
+  pressed A
+  released A
+tick 11: focused false, A down false, Left down false, inside false, at 0.0, 0.0
+  closed

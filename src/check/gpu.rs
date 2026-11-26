@@ -1037,6 +1037,14 @@ impl<'a, 'p> Walk<'a, 'p> {
                 );
                 self.expr(entity);
             }
+            ExprKind::Input { query, arg } => {
+                self.not_allowed(
+                    query.name(),
+                    span,
+                    "answer it in an ordinary system and copy it into a resource field",
+                );
+                self.expr(arg);
+            }
             ExprKind::ListPush { list, value } => {
                 self.place(list);
                 self.expr(value);

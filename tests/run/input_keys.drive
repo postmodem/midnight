@@ -1,0 +1,29 @@
+# The first tick: nothing held.
+tick
+# W held across ticks.
+key down W
+tick 2
+key up W
+tick
+# A tap between two ticks: pressed and released, and not down.
+key W
+tick
+# Two taps between two ticks: two of each event.
+key W
+key W
+tick
+# Several keys in one tick: each kind of event in the order they happened.
+key down ShiftLeft
+key down W
+key up ShiftLeft
+key down Digit1
+key up W
+key up Digit1
+tick
+# Held, then up and down again: down, pressed and released.
+key down W
+tick
+key up W
+key down W
+tick
+# The commands run out: the window closes and releases W.
