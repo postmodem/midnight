@@ -11,7 +11,7 @@ use crate::emit::gpu::{Plan, lower, wgsl};
 use crate::source::SourceMap;
 use crate::tir::Program;
 
-use super::{assert_has, assert_lacks, assert_seq, check, function_text};
+use super::{assert_has, assert_lacks, assert_seq, check, function_text, scratch};
 
 fn compile(text: &str) -> (Program, SourceMap) {
     let mut sources = SourceMap::new();
@@ -1197,3 +1197,110 @@ fn strict_c_flushes_subnormals_around_the_block() {
     assert!(!c.contains("static float s32_div"));
     assert!(c.contains("(b_0.f_x * b_0.f_y) + (1.0f * 2.0f)"));
 }
+
+/// The strict `/` and `sqrt` that shaders run, compiled as C, give the bits
+/// of the CPU's own `/` and `sqrt` with subnormals flushed: on the edge
+/// values, on quotients next to a midpoint and on random bit patterns.
+/// Runs when `MIDNIGHT_CC` names a C compiler.
+#[test]
+fn strict_division_and_root_match_the_cpu() {
+    let Ok(cc) = std::env::var("MIDNIGHT_CC") else {
+        return;
+    };
+    if !cfg!(target_arch = "x86_64") {
+        return;
+    }
+    let (program, sources) = compile(
+        "\
+component Body
+  x: Float32
+end
+strict gpu system exact
+  each Body do |b|
+    b.x = Math.sqrt(b.x) / b.x
+  end
+end
+",
+    );
+    let cx = Cx::new(&program, &sources);
+    let lowered = lower(&program, &cx.folded, cx.gpu.wide.clone());
+    let mut c = String::from(
+        "#include <math.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdio.h>\n\
+         #include <string.h>\n#include <xmmintrin.h>\n\
+         static float g32_float(uint32_t b) { float v; memcpy(&v, &b, 4); return v; }\n\
+         static uint32_t g32_bits(float v) { uint32_t b; memcpy(&b, &v, 4); return b; }\n",
+    );
+    for name in ["s32_div", "s32_sqrt"] {
+        c.push_str(&crate::emit::gpu::c::function(&lowered, name));
+    }
+    c.push_str(STRICT_CHECK);
+    let dir = scratch("strict_div_sqrt");
+    std::fs::write(dir.join("check.c"), &c).expect("write the check");
+    let exe = dir.join("check");
+    let build = std::process::Command::new(cc)
+        .args([
+            "-std=c11",
+            "-O2",
+            "-ffp-contract=off",
+            "-Wno-unused-variable",
+        ])
+        .arg("-Wno-unused-command-line-argument")
+        .arg(dir.join("check.c"))
+        .arg("-o")
+        .arg(&exe)
+        .arg("-lm")
+        .output()
+        .expect("run the C compiler");
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = std::process::Command::new(&exe)
+        .output()
+        .expect("run the check");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stdout)
+    );
+}
+
+const STRICT_CHECK: &str = r#"
+static bool same(float a, float b) { return isnan(a) ? isnan(b) : g32_bits(a) == g32_bits(b); }
+static uint64_t state = 0x9e3779b97f4a7c15u;
+static uint32_t next(void) { state ^= state << 13; state ^= state >> 7; state ^= state << 17; return (uint32_t)state; }
+static volatile float sink_a, sink_b;
+static long bad = 0;
+static void one(uint32_t ua, uint32_t ub) {
+    sink_a = g32_float(ua); sink_b = g32_float(ub);
+    unsigned saved = _mm_getcsr();
+    _mm_setcsr(saved | 0x8040u);
+    float q = sink_a / sink_b, r = sqrtf(sink_a);
+    _mm_setcsr(saved);
+    float sq = s32_div(g32_float(ua), g32_float(ub)), sr = s32_sqrt(g32_float(ua));
+    if (!same(q, sq)) { if (bad++ < 8) printf("div %08x %08x: cpu %08x helper %08x\n", ua, ub, g32_bits(q), g32_bits(sq)); }
+    if (!same(r, sr)) { if (bad++ < 8) printf("sqrt %08x: cpu %08x helper %08x\n", ua, g32_bits(r), g32_bits(sr)); }
+}
+int main(void) {
+    static const uint32_t edge[] = {
+        0, 0x80000000u, 1, 0x807fffffu, 0x7fffff, 0x800000, 0x80800000u, 0x800001, 0x3f800000, 0xbf800000u,
+        0x3f7fffff, 0x3f800001, 0x40000000, 0x3fffffff, 0x7f7fffff, 0xff7fffffu, 0x7f000000, 0x7e800000,
+        0x7f800000, 0xff800000u, 0x7fc00000, 0xffc00001u, 0x7f800001, 0x00ffffff, 0x01000000, 0x0c000000,
+        0x33800000, 0x4b000000, 0x4b7fffff, 0x5f000000, 0x20000000, 0x1f800000};
+    int n = sizeof edge / sizeof edge[0];
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) one(edge[i], edge[j]);
+    for (long k = 0; k < 2000000; k++) {
+        uint32_t a = next(), b = next();
+        one(a, b);
+        /* Divisors at and above 2^126, and quotients next to a midpoint:
+         * b's significand a little above or below a's. */
+        one(a, (b & 0x807fffffu) | 0x7e800000u);
+        one(a & 0x7fffffffu, (a & 0x7fffffffu) + (b & 3) - 1);
+    }
+    printf("%ld wrong\n", bad);
+    return bad != 0;
+}
+"#;

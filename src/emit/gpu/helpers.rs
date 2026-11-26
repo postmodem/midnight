@@ -920,20 +920,405 @@ fn define_strict(name: &str) -> Option<Func> {
                 ],
             )
         }
-        DIV_F => func(
-            name,
-            &[("a", Ty::F32), ("b", Ty::F32)],
-            Ty::F32,
-            vec![ret(binary(Div, var("a"), var("b")))],
-        ),
-        SQRT_F => func(
-            name,
-            &[("v", Ty::F32)],
-            Ty::F32,
-            vec![ret(math(MathFn::Sqrt, vec![v()]))],
-        ),
+        DIV_F => func(name, &[("a", Ty::F32), ("b", Ty::F32)], Ty::F32, divide()),
+        SQRT_F => func(name, &[("v", Ty::F32)], Ty::F32, square_root()),
         _ => return None,
     };
     func.strict = true;
     Some(func)
+}
+
+// `/` and `sqrt` of strict shaders: integer code on the significands. The
+// hardware's result is an estimate of the 25 bits wanted (24 and a round
+// bit); a first correction comes from the exact 64-bit residual, converted
+// to `F32`, a second from the residual after it, which then fits an `I32`,
+// and a last step of one either way leaves the exact quotient or root. The
+// remainder is the sticky bit. Exact whenever the estimate is within 2^-11.
+
+fn u(name: &str) -> Expr {
+    var(name)
+}
+
+fn hex(value: u32) -> Expr {
+    Expr::Hex(value)
+}
+
+fn as_i32(value: Expr) -> Expr {
+    cast(Ty::I32, value)
+}
+
+fn as_u32(value: Expr) -> Expr {
+    cast(Ty::U32, value)
+}
+
+/// `F32` from a `U32` or an `I32`: part of an estimate.
+fn as_f32(value: Expr) -> Expr {
+    cast(Ty::F32, value)
+}
+
+/// `floor(value)` as an `I32`.
+fn floor_i32(value: Expr) -> Expr {
+    as_i32(math(MathFn::Floor, vec![value]))
+}
+
+/// 1 when `cond`, else 0, as a `U32`.
+fn carry(cond: Expr) -> Expr {
+    select(cond, uint(1), uint(0))
+}
+
+/// `{out}_lo` and `{out}_hi` := the 64-bit product of two `U32`s below 2^25.
+fn mul64(out: &str, a: Expr, b: Expr) -> Vec<Stmt> {
+    use BinOp::*;
+    let n = |part: &str| format!("{out}_{part}");
+    let low = |value: Expr| binary(BitAnd, value, hex(0xffff));
+    let high = |value: Expr| binary(Shr, value, uint(16));
+    vec![
+        let_(&n("a0"), Ty::U32, low(a.clone())),
+        let_(&n("a1"), Ty::U32, high(a)),
+        let_(&n("b0"), Ty::U32, low(b.clone())),
+        let_(&n("b1"), Ty::U32, high(b)),
+        let_(&n("p00"), Ty::U32, binary(Mul, u(&n("a0")), u(&n("b0")))),
+        let_(
+            &n("p01"),
+            Ty::U32,
+            binary(
+                Add,
+                binary(Mul, u(&n("a0")), u(&n("b1"))),
+                binary(Mul, u(&n("a1")), u(&n("b0"))),
+            ),
+        ),
+        let_(
+            &n("lo"),
+            Ty::U32,
+            binary(Add, u(&n("p00")), binary(Shl, u(&n("p01")), uint(16))),
+        ),
+        let_(
+            &n("hi"),
+            Ty::U32,
+            binary(
+                Add,
+                binary(
+                    Add,
+                    binary(Mul, u(&n("a1")), u(&n("b1"))),
+                    binary(Shr, u(&n("p01")), uint(16)),
+                ),
+                carry(binary(Lt, u(&n("lo")), u(&n("p00")))),
+            ),
+        ),
+    ]
+}
+
+/// `{out}_lo` and `{out}_hi` := `{x}` - `{y}`, 64 bits each.
+fn sub64(out: &str, x: &str, y: &str) -> Vec<Stmt> {
+    use BinOp::*;
+    let (xl, xh) = (u(&format!("{x}_lo")), u(&format!("{x}_hi")));
+    let (yl, yh) = (u(&format!("{y}_lo")), u(&format!("{y}_hi")));
+    vec![
+        let_(
+            &format!("{out}_lo"),
+            Ty::U32,
+            binary(Sub, xl.clone(), yl.clone()),
+        ),
+        let_(
+            &format!("{out}_hi"),
+            Ty::U32,
+            binary(Sub, binary(Sub, xh, yh), carry(binary(Lt, xl, yl))),
+        ),
+    ]
+}
+
+/// A signed 64-bit value as an `F32`.
+fn wide(name: &str) -> Expr {
+    binary(
+        BinOp::Add,
+        binary(
+            BinOp::Mul,
+            as_f32(as_i32(u(&format!("{name}_hi")))),
+            Expr::F32(4_294_967_296.0),
+        ),
+        as_f32(u(&format!("{name}_lo"))),
+    )
+}
+
+/// Returns the `F32` with sign bit `sign`, biased exponent `e` before
+/// rounding, and significand `q` (24 bits and a round bit) rounded to
+/// nearest, ties to even, with `sticky` saying whether anything is left
+/// below the round bit. Infinity when the exponent overflows.
+fn pack(sign: Expr, sticky: Expr) -> Vec<Stmt> {
+    use BinOp::*;
+    vec![
+        let_("sig", Ty::U32, binary(Shr, u("q"), uint(1))),
+        if_(
+            binary(
+                And,
+                binary(Ne, binary(BitAnd, u("q"), uint(1)), uint(0)),
+                binary(
+                    Or,
+                    sticky,
+                    binary(Ne, binary(BitAnd, u("sig"), uint(1)), uint(0)),
+                ),
+            ),
+            vec![assign(u("sig"), binary(Add, u("sig"), uint(1)))],
+        ),
+        if_(
+            binary(Eq, u("sig"), hex(0x0100_0000)),
+            vec![
+                assign(u("sig"), hex(NORMAL_FROM_BITS)),
+                assign(u("e"), binary(Add, u("e"), int(1))),
+            ],
+        ),
+        if_(
+            binary(Ge, u("e"), int(255)),
+            vec![ret(bits(
+                Ty::F32,
+                binary(Add, sign.clone(), hex(INFINITY_BITS)),
+            ))],
+        ),
+        ret(bits(
+            Ty::F32,
+            binary(
+                Add,
+                binary(Add, sign, binary(Shl, as_u32(u("e")), uint(23))),
+                binary(BitAnd, u("sig"), hex(0x007f_ffff)),
+            ),
+        )),
+    ]
+}
+
+fn divide() -> Vec<Stmt> {
+    use BinOp::*;
+    let nan = || ret(Expr::F32Bits(NAN_BITS));
+    let field = |value: Expr, shift: u32, mask: u32| {
+        binary(BitAnd, binary(Shr, value, uint(shift)), hex(mask))
+    };
+    let is = |name: &str, value: u32| binary(Eq, u(name), uint(value));
+    let mut body = vec![
+        let_("ua", Ty::U32, bits(Ty::U32, var("a"))),
+        let_("ub", Ty::U32, bits(Ty::U32, var("b"))),
+        let_(
+            "sg",
+            Ty::U32,
+            binary(BitAnd, binary(BitXor, u("ua"), u("ub")), hex(SIGN_BIT)),
+        ),
+        let_("ea", Ty::U32, field(u("ua"), 23, 0xff)),
+        let_("eb", Ty::U32, field(u("ub"), 23, 0xff)),
+        let_("ma", Ty::U32, binary(BitAnd, u("ua"), hex(0x007f_ffff))),
+        let_("mb", Ty::U32, binary(BitAnd, u("ub"), hex(0x007f_ffff))),
+        // A NaN, 0 / 0 and infinity / infinity. A subnormal is zero.
+        if_(
+            binary(
+                Or,
+                binary(
+                    Or,
+                    binary(And, is("ea", 255), binary(Ne, u("ma"), uint(0))),
+                    binary(And, is("eb", 255), binary(Ne, u("mb"), uint(0))),
+                ),
+                binary(
+                    Or,
+                    binary(And, is("ea", 0), is("eb", 0)),
+                    binary(And, is("ea", 255), is("eb", 255)),
+                ),
+            ),
+            vec![nan()],
+        ),
+        if_(
+            binary(Or, is("ea", 255), is("eb", 0)),
+            vec![ret(bits(Ty::F32, binary(Add, u("sg"), hex(INFINITY_BITS))))],
+        ),
+        if_(
+            binary(Or, is("ea", 0), is("eb", 255)),
+            vec![ret(bits(Ty::F32, u("sg")))],
+        ),
+        // Significands A in [B, 2B), so that A / B is in [1, 2).
+        let_("sa", Ty::U32, binary(Add, u("ma"), hex(NORMAL_FROM_BITS))),
+        let_("sb", Ty::U32, binary(Add, u("mb"), hex(NORMAL_FROM_BITS))),
+        let_(
+            "e",
+            Ty::I32,
+            binary(Add, binary(Sub, as_i32(u("ea")), as_i32(u("eb"))), int(127)),
+        ),
+        if_(
+            binary(Lt, u("sa"), u("sb")),
+            vec![
+                assign(u("sa"), binary(Shl, u("sa"), uint(1))),
+                assign(u("e"), binary(Sub, u("e"), int(1))),
+            ],
+        ),
+        // Below 2^-126: no quotient of normal numbers rounds up to it.
+        if_(
+            binary(Le, u("e"), int(0)),
+            vec![ret(bits(Ty::F32, u("sg")))],
+        ),
+        // q = floor(sa * 2^24 / sb).
+        let_(
+            "q",
+            Ty::U32,
+            as_u32(as_i32(math(
+                MathFn::Trunc,
+                vec![binary(
+                    Mul,
+                    binary(Div, as_f32(u("sa")), as_f32(u("sb"))),
+                    Expr::F32(16_777_216.0),
+                )],
+            ))),
+        ),
+        let_("n_lo", Ty::U32, binary(Shl, u("sa"), uint(24))),
+        let_("n_hi", Ty::U32, binary(Shr, u("sa"), uint(8))),
+    ];
+    body.extend(mul64("p1", u("q"), u("sb")));
+    body.extend(sub64("d1", "n", "p1"));
+    body.push(assign(
+        u("q"),
+        as_u32(binary(
+            Add,
+            as_i32(u("q")),
+            floor_i32(binary(Div, wide("d1"), as_f32(u("sb")))),
+        )),
+    ));
+    body.extend(mul64("p2", u("q"), u("sb")));
+    body.extend(sub64("d2", "n", "p2"));
+    body.extend([
+        let_("r", Ty::I32, as_i32(u("d2_lo"))),
+        let_("bi", Ty::I32, as_i32(u("sb"))),
+        let_(
+            "dq",
+            Ty::I32,
+            floor_i32(binary(Div, as_f32(u("r")), as_f32(u("bi")))),
+        ),
+        assign(u("q"), as_u32(binary(Add, as_i32(u("q")), u("dq")))),
+        assign(u("r"), binary(Sub, u("r"), binary(Mul, u("dq"), u("bi")))),
+        if_(
+            binary(Lt, u("r"), int(0)),
+            vec![
+                assign(u("q"), binary(Sub, u("q"), uint(1))),
+                assign(u("r"), binary(Add, u("r"), u("bi"))),
+            ],
+        ),
+        if_(
+            binary(Ge, u("r"), u("bi")),
+            vec![
+                assign(u("q"), binary(Add, u("q"), uint(1))),
+                assign(u("r"), binary(Sub, u("r"), u("bi"))),
+            ],
+        ),
+    ]);
+    body.extend(pack(u("sg"), binary(Ne, u("r"), int(0))));
+    body
+}
+
+fn square_root() -> Vec<Stmt> {
+    use BinOp::*;
+    let nan = || ret(Expr::F32Bits(NAN_BITS));
+    let twice = || binary(Mul, uint(2), u("q"));
+    let mut body = vec![
+        let_("w", Ty::U32, bits(Ty::U32, var("v"))),
+        let_(
+            "ex",
+            Ty::U32,
+            binary(BitAnd, binary(Shr, u("w"), uint(23)), hex(0xff)),
+        ),
+        let_("m", Ty::U32, binary(BitAnd, u("w"), hex(0x007f_ffff))),
+        // Zeros and subnormals: zero with the sign.
+        if_(
+            binary(Eq, u("ex"), uint(0)),
+            vec![ret(bits(Ty::F32, binary(BitAnd, u("w"), hex(SIGN_BIT))))],
+        ),
+        if_(
+            binary(
+                Or,
+                binary(
+                    And,
+                    binary(Eq, u("ex"), uint(255)),
+                    binary(Ne, u("m"), uint(0)),
+                ),
+                binary(Ne, binary(BitAnd, u("w"), hex(SIGN_BIT)), uint(0)),
+            ),
+            vec![nan()],
+        ),
+        if_(binary(Eq, u("ex"), uint(255)), vec![ret(var("v"))]),
+        // M in [2^23, 2^25) and an even exponent.
+        let_("sm", Ty::U32, binary(Add, u("m"), hex(NORMAL_FROM_BITS))),
+        let_("e", Ty::I32, binary(Sub, as_i32(u("ex")), int(127))),
+        if_(
+            binary(Ne, binary(BitAnd, u("e"), int(1)), int(0)),
+            vec![
+                assign(u("sm"), binary(Shl, u("sm"), uint(1))),
+                assign(u("e"), binary(Sub, u("e"), int(1))),
+            ],
+        ),
+        // q = floor(sqrt(sm * 2^25)).
+        let_(
+            "q",
+            Ty::U32,
+            as_u32(as_i32(math(
+                MathFn::Trunc,
+                vec![binary(
+                    Mul,
+                    math(
+                        MathFn::Sqrt,
+                        vec![binary(Mul, as_f32(u("sm")), Expr::F32(2.0))],
+                    ),
+                    Expr::F32(4096.0),
+                )],
+            ))),
+        ),
+        let_("n_lo", Ty::U32, binary(Shl, u("sm"), uint(25))),
+        let_("n_hi", Ty::U32, binary(Shr, u("sm"), uint(7))),
+    ];
+    body.extend(mul64("p1", u("q"), u("q")));
+    body.extend(sub64("d1", "n", "p1"));
+    body.push(assign(
+        u("q"),
+        as_u32(binary(
+            Add,
+            as_i32(u("q")),
+            floor_i32(binary(Div, wide("d1"), as_f32(twice()))),
+        )),
+    ));
+    body.extend(mul64("p2", u("q"), u("q")));
+    body.extend(sub64("d2", "n", "p2"));
+    body.extend([
+        let_("r", Ty::I32, as_i32(u("d2_lo"))),
+        let_(
+            "dq",
+            Ty::I32,
+            floor_i32(binary(Div, as_f32(u("r")), as_f32(twice()))),
+        ),
+        assign(
+            u("r"),
+            binary(
+                Sub,
+                u("r"),
+                binary(
+                    Mul,
+                    u("dq"),
+                    binary(Add, binary(Mul, int(2), as_i32(u("q"))), u("dq")),
+                ),
+            ),
+        ),
+        assign(u("q"), as_u32(binary(Add, as_i32(u("q")), u("dq")))),
+        if_(
+            binary(Lt, u("r"), int(0)),
+            vec![
+                assign(u("q"), binary(Sub, u("q"), uint(1))),
+                assign(
+                    u("r"),
+                    binary(Add, u("r"), as_i32(binary(Add, twice(), uint(1)))),
+                ),
+            ],
+        ),
+        if_(
+            binary(Gt, u("r"), as_i32(twice())),
+            vec![
+                assign(
+                    u("r"),
+                    binary(Sub, u("r"), as_i32(binary(Add, twice(), uint(1)))),
+                ),
+                assign(u("q"), binary(Add, u("q"), uint(1))),
+            ],
+        ),
+        assign(u("e"), binary(Add, binary(Div, u("e"), int(2)), int(127))),
+    ]);
+    body.extend(pack(uint(0), binary(Ne, u("r"), int(0))));
+    body
 }

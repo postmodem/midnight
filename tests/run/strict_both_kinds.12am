@@ -1,7 +1,8 @@
+# tolerance: 0.00001
 # A function called from a strict GPU system and from one that is not means
 # the strict thing in the first and the ordinary thing in the second: here
-# its product is subnormal, which only the strict system makes zero. Without
-# a device both run on the CPU.
+# its product is subnormal, which only the strict system makes zero. A device
+# may flush it in the other system too. Without a device both run on the CPU.
 component Loose
   x: Float32
 end

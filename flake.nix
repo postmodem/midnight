@@ -121,6 +121,7 @@
             "gpu_stats_match_plan"
             "gpu_stats_match_expected"
             "gpu_driver_finds_its_parts"
+            "gpu_strict_div_sqrt"
           ];
           list = lib.concatStringsSep " " names;
           count = toString (builtins.length names);
@@ -294,6 +295,7 @@
               {
                 MIDNIGHT_BIN = lib.getExe midnight;
                 MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+                MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
                 MIDNIGHT_TEST_GPU = "software";
                 MIDNIGHT_TEST_SOFTWARE_ICD = softwareIcdFor pkgs;
               }

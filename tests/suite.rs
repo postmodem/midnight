@@ -22,12 +22,15 @@
 //!
 //! # GPU mode
 //!
-//! `gpu_programs`, `gpu_stats_match_plan` and `gpu_stats_match_expected` do nothing unless
-//! `MIDNIGHT_TEST_GPU` names where GPU systems are to run:
+//! The GPU tests (`gpu_programs`, `gpu_stats_match_plan`,
+//! `gpu_stats_match_expected`, `gpu_driver_finds_its_parts` and
+//! `gpu_strict_div_sqrt`) do nothing unless `MIDNIGHT_TEST_GPU` names where
+//! GPU systems are to run:
 //!
 //! - `software`: on Mesa's `llvmpipe`. `MIDNIGHT_TEST_SOFTWARE_ICD` is the
 //!   path of its Vulkan driver file.
-//! - `hardware`: on the machine's hardware device.
+//! - `hardware`: on the device the Vulkan loader finds, which a
+//!   `VK_DRIVER_FILES` the caller sets chooses.
 //!
 //! Either way every program runs as a release and as a debug build.
 //!
@@ -36,9 +39,14 @@
 //! `MIDNIGHT_GPU=rows`. Standard output must match
 //! `NAME.out`: exactly, or, when the program has a `# tolerance: T` line,
 //! with each `Float` within `T * max(1, |expected|)` of the expected one and
-//! everything else exact. A `tests/panic` program must exit 1 with exactly
+//! everything else exact. A program whose GPU systems are all strict may not
+//! have the line. A `tests/panic` program must exit 1 with exactly
 //! `NAME.err`. A run in which there is no device, or in which a GPU block
 //! runs on the CPU, fails.
+//!
+//! `gpu_strict_div_sqrt` runs the `/` and `sqrt` of strict shaders on the
+//! device through `tests/device/strict_div_sqrt.c`, built with
+//! `MIDNIGHT_GPU_FLAGS`, and compares every result with the CPU's.
 //!
 //! `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
 //! `MIDNIGHT_GPU=stats` and compares the uploads and downloads of every tick
@@ -469,10 +477,21 @@ fn note(line: &str) {
     let _ = writeln!(std::io::stderr(), "{line}");
 }
 
+/// The lines of a program that declare GPU systems.
+fn gpu_system_lines(program: &str) -> impl Iterator<Item = &str> {
+    program
+        .lines()
+        .filter(|line| line.starts_with("gpu system ") || line.starts_with("strict gpu system "))
+}
+
 /// Whether the program at `source` declares a GPU system.
 fn declares_gpu_system(source: &Path) -> bool {
-    std::fs::read_to_string(source)
-        .is_ok_and(|program| program.lines().any(|line| line.starts_with("gpu system ")))
+    std::fs::read_to_string(source).is_ok_and(|program| gpu_system_lines(&program).next().is_some())
+}
+
+/// Whether every GPU system of a program that has some is strict.
+fn all_strict(program: &str) -> bool {
+    gpu_system_lines(program).all(|line| line.starts_with("strict "))
 }
 
 /// The tolerance a program states in a `# tolerance: T` line, if it has
@@ -746,12 +765,18 @@ fn run_gpu_program(
     } else {
         (0, String::new())
     };
+    let program = read(source)?;
     let tolerance = if stops {
         None
     } else {
-        stated_tolerance(&read(source)?)
-            .map_err(|message| format!("{}: {message}", source.display()))?
+        stated_tolerance(&program).map_err(|message| format!("{}: {message}", source.display()))?
     };
+    if tolerance.is_some() && all_strict(&program) {
+        return Err(format!(
+            "{}: every GPU system is strict, so the output must be exact: remove `# tolerance:`",
+            source.display()
+        ));
+    }
     let out_path = source.with_extension("out");
     let expected = if stops {
         String::new()
@@ -848,6 +873,105 @@ fn gpu_programs() {
     for line in inexact.into_inner().unwrap() {
         note(&line);
     }
+}
+
+/// A strict block whose shader has `s32_div` and `s32_sqrt`.
+const STRICT_DIVISION: &str = "\
+component Body
+  x: Float32
+end
+
+strict gpu system exact
+  each Body do |b|
+    b.x = Math.sqrt(b.x) / b.x
+  end
+end
+";
+
+/// The functions `s32_div` and `s32_sqrt` of a shader.
+fn strict_helpers(wgsl: &str) -> String {
+    let mut out = String::new();
+    let mut inside = false;
+    for line in wgsl.lines() {
+        inside |= line.starts_with("fn s32_div(") || line.starts_with("fn s32_sqrt(");
+        if inside {
+            out.push_str(line);
+            out.push('\n');
+            inside = line != "}";
+        }
+    }
+    out
+}
+
+/// The `/` and `sqrt` of strict shaders give on the device exactly what the
+/// CPU's give with subnormals flushed: `tests/device/strict_div_sqrt.c` runs
+/// the functions `midnight emit-wgsl` prints. On hardware, `sqrt` of every
+/// bit pattern and `/` of 2^28 pairs; on llvmpipe 2^24 of each. Edge values
+/// and quotients next to a midpoint are among them either way.
+#[test]
+fn gpu_strict_div_sqrt() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let dir = scratch("gpu-strict-div-sqrt");
+    let program = dir.join("division.12am");
+    std::fs::write(&program, STRICT_DIVISION).expect("write a program");
+    let output = midnight()
+        .arg("emit-wgsl")
+        .arg(&program)
+        .output()
+        .expect("run midnight");
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let helpers = strict_helpers(&text(&output.stdout));
+    assert!(
+        helpers.contains("fn s32_div(") && helpers.contains("fn s32_sqrt("),
+        "the shader has no `s32_div` or `s32_sqrt`:\n{}",
+        text(&output.stdout)
+    );
+    let helpers_path = dir.join("helpers.wgsl");
+    std::fs::write(&helpers_path, helpers).expect("write the helpers");
+
+    let exe = dir.join("strict_div_sqrt");
+    let flags = std::env::var("MIDNIGHT_GPU_FLAGS")
+        .expect("GPU mode needs MIDNIGHT_GPU_FLAGS, which the dev shell and the flake set");
+    let mut args: Vec<OsString> = vec!["-std=c11".into(), "-O2".into()];
+    args.extend(STRICT_CFLAGS.split_whitespace().map(OsString::from));
+    args.extend(flags.split_whitespace().map(OsString::from));
+    args.extend([
+        "tests/device/strict_div_sqrt.c".into(),
+        "-o".into(),
+        exe.clone().into_os_string(),
+        "-lm".into(),
+    ]);
+    let args: Vec<&OsStr> = args.iter().map(OsString::as_os_str).collect();
+    cc(&args);
+
+    let (stride, pairs) = match device {
+        Device::Hardware => ("1", 1u64 << 28),
+        Device::Software => ("256", 1u64 << 24),
+    };
+    let mut command = Command::new(&exe);
+    command
+        .arg(&helpers_path)
+        .arg(stride)
+        .arg(pairs.to_string());
+    if device == Device::Software {
+        command
+            .env("VK_DRIVER_FILES", software_driver())
+            .env_remove("VK_ADD_DRIVER_FILES");
+    }
+    let output = command.output().expect("run the check");
+    let _ = std::fs::remove_dir_all(&dir);
+    let stdout = text(&output.stdout);
+    assert!(
+        output.status.success(),
+        "strict `/` and `sqrt` on the device:\n{stdout}{}",
+        text(&output.stderr)
+    );
+    note(&format!(
+        "gpu_strict_div_sqrt: {}",
+        stdout.lines().collect::<Vec<_>>().join("; ")
+    ));
 }
 
 #[test]
@@ -1210,9 +1334,20 @@ fn gpu_driver_finds_its_parts() {
                     .env("MIDNIGHT_GPU", "software");
             }
             Device::Hardware => {
-                command
-                    .env("VK_ADD_DRIVER_FILES", &manifest)
-                    .env_remove("MIDNIGHT_GPU");
+                // The loader ignores `VK_ADD_DRIVER_FILES` while
+                // `VK_DRIVER_FILES` is set.
+                match std::env::var_os("VK_DRIVER_FILES") {
+                    Some(chosen) => {
+                        let mut drivers = OsString::from(&manifest);
+                        drivers.push(":");
+                        drivers.push(chosen);
+                        command.env("VK_DRIVER_FILES", drivers);
+                    }
+                    None => {
+                        command.env("VK_ADD_DRIVER_FILES", &manifest);
+                    }
+                }
+                command.env_remove("MIDNIGHT_GPU");
             }
         }
         let output = command.output().expect("run program");

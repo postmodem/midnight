@@ -132,6 +132,8 @@ static struct {
     Buffer readback;
     /* Where a row passes when it moves inside a column. */
     Buffer scratch;
+    /* The two zero words a strict block reads. */
+    Buffer zeros;
     /* The round trip being put together. */
     uint64_t trip;
     /* The command encoder that records work until it is submitted, and
@@ -1006,8 +1008,8 @@ typedef struct Snapshot {
 typedef struct Block {
     WGPUBindGroupLayout layout;
     WGPUComputePipeline pipeline;
-    /* The uniform words, the outer columns, the inner columns and the
-     * error word. */
+    /* The uniform words, the outer columns, the inner columns, the error
+     * word and the zeros. */
     uint32_t binding_count;
     /* One per table of the outer query, in the query's order. */
     Target *targets;
@@ -1038,7 +1040,13 @@ static bool block_writes(const MnGpuBlock *block, uint32_t component) {
 }
 
 static uint32_t block_storage_buffers(const MnGpuBlock *block) {
-    return block->outer_count + block->inner_count + (block->fallible ? 1 : 0);
+    return block->outer_count + block->inner_count + (block->fallible ? 1 : 0) +
+           (block->strict ? 1 : 0);
+}
+
+/* The binding of the error word: after the uniform words and the columns. */
+static uint32_t error_binding(const MnGpuBlock *block) {
+    return 1 + block->outer_count + block->inner_count;
 }
 
 /* The distance in bytes from one table's uniform words to the next's. */
@@ -1192,7 +1200,7 @@ static Block *block_make(const MnGpuBlock *block) {
         }
     }
     if (block->fallible) {
-        entries[count - 1].buffer.type = WGPUBufferBindingType_Storage;
+        entries[error_binding(block)].buffer.type = WGPUBufferBindingType_Storage;
     }
     WGPUBindGroupLayoutDescriptor layout = {0};
     layout.label = view(name);
@@ -1233,6 +1241,7 @@ static Block *block_make(const MnGpuBlock *block) {
         buffer_make(&state->error, 4, COLUMN_USAGE);
         buffer_make(&state->error_read, 4, READBACK_USAGE);
     }
+    if (block->strict && !gpu.zeros.handle) buffer_make(&gpu.zeros, 8, COLUMN_USAGE);
     return state;
 }
 
@@ -1426,8 +1435,9 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
     if (block->fallible) {
         uint32_t none = UINT32_MAX;
         queue_write(&state->error, 0, &none, 4);
-        bound[state->binding_count - 1] = state->error;
+        bound[error_binding(block)] = state->error;
     }
+    if (block->strict) bound[state->binding_count - 1] = gpu.zeros;
 
     if (state->target_count < outer->table_count) {
         state->targets = mn_realloc(
@@ -1475,6 +1485,7 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
     wgpuComputePassEncoderSetPipeline(pass, state->pipeline);
     buffer_use(&state->uniforms);
     if (block->fallible) buffer_use(&state->error);
+    if (block->strict) buffer_use(&gpu.zeros);
     for (uint32_t i = 0; i < block->inner_count; i++) {
         const MnGpuColumn *named = &block->inner_columns[i];
         if (only && !block_writes(block, named->component)) {
@@ -1633,6 +1644,7 @@ void mn_gpu_device_finish(void) {
     }
     buffer_drop(&gpu.readback);
     buffer_drop(&gpu.scratch);
+    buffer_drop(&gpu.zeros);
     free(gpu.bytes);
     free(gpu.contents);
     free(gpu.fetches);

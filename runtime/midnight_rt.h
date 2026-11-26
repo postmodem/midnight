@@ -716,6 +716,8 @@ void mn_sleep(double seconds);
  *     each inner column          var<storage, read> array<u32>
  *     the error word             var<storage, read_write> atomic<u32>, only
  *                                when `fallible`
+ *     two zeros                  var<storage, read> array<u32, 2>, only
+ *                                when `strict`
  *
  * A column buffer holds the column's bytes exactly as CPU memory does,
  * padded with zeros to a whole number of words. The shader lowers the
@@ -774,6 +776,8 @@ typedef struct MnGpuBlock {
     bool fallible;
     /* The program's sites. NULL unless `fallible`. */
     const MnGpuSite *sites;
+    /* A block of a strict GPU system. */
+    bool strict;
     /* Runtime-private. Initialise to NULL. */
     void *state;
 } MnGpuBlock;

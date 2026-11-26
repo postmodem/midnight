@@ -251,6 +251,9 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
             "NULL"
         };
         let _ = writeln!(out, "    .sites = {sites},");
+        if block.strict {
+            out.push_str("    .strict = true,\n");
+        }
         out.push_str("    .state = NULL,\n};\n\n");
     }
     out.push_str(CLOSE);
@@ -880,4 +883,19 @@ impl Printer<'_, '_> {
         self.line("}");
         self.out.push('\n');
     }
+}
+
+/// A library function as C, the strict `/` and `sqrt` included.
+#[cfg(test)]
+pub fn function(gpu: &Lowered, name: &str) -> String {
+    let state = HashSet::new();
+    let mut printer = Printer {
+        gpu,
+        state: &state,
+        in_block: false,
+        out: String::new(),
+        indent: 0,
+    };
+    printer.function(gpu.library.get(name));
+    printer.out
 }
