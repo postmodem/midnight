@@ -1,9 +1,9 @@
 # Midnight
 
 Midnight is a compiled, statically typed language built around the
-entity-component-system pattern, with syntax borrowed from Ruby. Entities,
-components, systems, queries, resources and events are language constructs,
-not a library. Source files end in `.12am`.
+entity-component-system pattern, with syntax that started from Ruby's.
+Entities, components, systems, queries, resources and events are language
+constructs, not a library. Source files end in `.12am`.
 
 ```ruby
 component Position
@@ -76,6 +76,8 @@ CPU. The compiler finds those loops, and the program prints exactly what it
 prints on one thread. `midnight loops` says where each loop runs, and what
 keeps one on a single core.
 
+- [`docs/principles.md`](docs/principles.md) says what Midnight is for and
+  how it is built: mostly by AI agents, read by agents and people.
 - [`docs/language.md`](docs/language.md) is the language reference.
 - [`specs/`](specs/) holds one spec per change, with its acceptance criteria
   and outcome.

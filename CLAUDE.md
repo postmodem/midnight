@@ -12,6 +12,8 @@ commands. `README.md` has the overview.
 
 ## What defines what
 
+- `docs/principles.md` comes before any spec: a spec says how it serves
+  the principles, and a change that works against one says so and why.
 - `docs/language.md` is the definition of the language. Where the compiler
   and the reference disagree, one of them has a bug; decide which before
   changing either.
