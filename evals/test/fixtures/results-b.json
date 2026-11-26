@@ -1,0 +1,2489 @@
+{
+  "format": 1,
+  "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "version": "0.7.0",
+  "ruby": "3.4.12",
+  "claude_code": "2.1.327",
+  "date": "2026-11-26",
+  "label": "kit-cut",
+  "models": [
+    "sonnet",
+    "haiku"
+  ],
+  "trials": 1,
+  "effort": null,
+  "task_names": [
+    "league",
+    "thermostat",
+    "warren"
+  ],
+  "kit": {
+    "file": "evals/test/kit-cut",
+    "files": [
+      {
+        "dest": "language.md",
+        "source": "evals/test/language-cut.md",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "dest": "README.md",
+        "source": "README.md",
+        "sha256": "3aa2fcbc847be09d6f8e77f2e9538d4baa90ca3362bddf5d957bca3f042571da"
+      },
+      {
+        "dest": "examples/battle.12am",
+        "source": "examples/battle.12am",
+        "sha256": "b7628c2fc79e99d078c9e1dbb4ce347cf2fa13c812247db60b3e135d4ba03206"
+      },
+      {
+        "dest": "examples/battle.out",
+        "source": "examples/battle.out",
+        "sha256": "e61cf6d3ee973c95479b104a630a60b07a6e1c41e2eb47faedbd84d43dcbcf91"
+      },
+      {
+        "dest": "examples/bench.12am",
+        "source": "examples/bench.12am",
+        "sha256": "45d982b13b601831617b5bedddd9aac4665484e2a078356500c1119da3fd9782"
+      },
+      {
+        "dest": "examples/bounce.12am",
+        "source": "examples/bounce.12am",
+        "sha256": "c9a859451f8eb76dc6f83144b1549a04e48aa7c929216baba6e7ce95027cf4f7"
+      },
+      {
+        "dest": "examples/bounce.out",
+        "source": "examples/bounce.out",
+        "sha256": "f4f990ff8ca88db06fe33598444fd5eddff567f841bfab2c4f9a310e4ad35e3a"
+      },
+      {
+        "dest": "examples/hello.12am",
+        "source": "examples/hello.12am",
+        "sha256": "45637b2c36f48ab214412d095ee8060e0f5897cbc7434e7d9802f04d7893dc8e"
+      },
+      {
+        "dest": "examples/hello.out",
+        "source": "examples/hello.out",
+        "sha256": "d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5"
+      },
+      {
+        "dest": "examples/input.12am",
+        "source": "examples/input.12am",
+        "sha256": "31cf9ccb91a3ba1a896211ce86eabb3deebc1b4894fe4cf357bdfaa09e854d14"
+      },
+      {
+        "dest": "examples/input.drive",
+        "source": "examples/input.drive",
+        "sha256": "399a96abf52ccb9af87fdc728ae0da381390d9061031d20079dbbbe3fbae16b9"
+      },
+      {
+        "dest": "examples/input.out",
+        "source": "examples/input.out",
+        "sha256": "1cae9f27cd6bcff432d1339c443a6215b45629dad1cff3771e06bab6950b5d68"
+      },
+      {
+        "dest": "examples/life.12am",
+        "source": "examples/life.12am",
+        "sha256": "5505814cfd6fe21583fa3c6b33d9c194fb95b64b32a577fab47fe8f37636e23d"
+      },
+      {
+        "dest": "examples/life.out",
+        "source": "examples/life.out",
+        "sha256": "10769d19937b68aa5515ac8a6e525a1f84bc4a985fb625241be89695b1b64074"
+      },
+      {
+        "dest": "examples/life_rules.12am",
+        "source": "examples/life_rules.12am",
+        "sha256": "268afe3044121e468878985f408f3ac5f0ad80ae12e146277bb893ce80545a3a"
+      },
+      {
+        "dest": "examples/life_rules.out",
+        "source": "examples/life_rules.out",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "dest": "examples/move.12am",
+        "source": "examples/move.12am",
+        "sha256": "ba4ca27197bbc8617b6cf6edf42d3262a2c4fafe2565944052dc69fd59ca4d6f"
+      },
+      {
+        "dest": "examples/move.out",
+        "source": "examples/move.out",
+        "sha256": "eed2aa0dbec0f13f0fc00f257e3de666e113db91e07a083af9cb3807d92f12a0"
+      },
+      {
+        "dest": "examples/nbody.12am",
+        "source": "examples/nbody.12am",
+        "sha256": "6158862f5218fd773da8005da5a15afe578333545a4c79421fb420d98c0f028f"
+      },
+      {
+        "dest": "examples/nbody.out",
+        "source": "examples/nbody.out",
+        "sha256": "deecf226e42be730c657467146a8a39fcffff051a76f25d94de56505e19f3bb8"
+      },
+      {
+        "dest": "examples/window.12am",
+        "source": "examples/window.12am",
+        "sha256": "2ce4755a13a9fdfd00caad0e5a487f111ad9b91c58fd030085d297e004d5c984"
+      },
+      {
+        "dest": "examples/window.drive",
+        "source": "examples/window.drive",
+        "sha256": "61229ae96139f3a775a1d7aee931e1b1a2ef1d58d9f5b95a9ea100ec025164b0"
+      },
+      {
+        "dest": "examples/window.out",
+        "source": "examples/window.out",
+        "sha256": "78bf297d417ce4aae145876b4a9173ba5d7ed29925cbca944c812b4c8c6754d1"
+      }
+    ],
+    "sections": {
+      "language.md": [
+        [
+          23,
+          "A first program"
+        ],
+        [
+          63,
+          "The model"
+        ],
+        [
+          92,
+          "Lexical structure"
+        ],
+        [
+          142,
+          "Types"
+        ],
+        [
+          176,
+          "Compact field types"
+        ],
+        [
+          221,
+          "Variables and values"
+        ],
+        [
+          250,
+          "What can be modified"
+        ],
+        [
+          273,
+          "Expressions"
+        ],
+        [
+          328,
+          "Control flow"
+        ],
+        [
+          401,
+          "Functions"
+        ],
+        [
+          431,
+          "Declaring data"
+        ],
+        [
+          433,
+          "Structs"
+        ],
+        [
+          476,
+          "Enums"
+        ],
+        [
+          489,
+          "Components and tags"
+        ],
+        [
+          508,
+          "Resources"
+        ],
+        [
+          523,
+          "Events"
+        ],
+        [
+          536,
+          "Constants"
+        ],
+        [
+          547,
+          "Entities"
+        ],
+        [
+          582,
+          "Queries"
+        ],
+        [
+          623,
+          "Structural changes inside `each`"
+        ],
+        [
+          655,
+          "Systems and ticks"
+        ],
+        [
+          695,
+          "The window"
+        ],
+        [
+          849,
+          "Without a display"
+        ],
+        [
+          948,
+          "Keyboard and mouse"
+        ],
+        [
+          1172,
+          "Commands for the keyboard and the mouse"
+        ],
+        [
+          1235,
+          "GPU systems"
+        ],
+        [
+          1279,
+          "What a GPU block may contain"
+        ],
+        [
+          1311,
+          "What a GPU system may touch"
+        ],
+        [
+          1349,
+          "Snapshot semantics"
+        ],
+        [
+          1387,
+          "Arithmetic at 32 bits"
+        ],
+        [
+          1439,
+          "Runtime errors in a GPU system"
+        ],
+        [
+          1479,
+          "Random numbers in a GPU system"
+        ],
+        [
+          1513,
+          "Determinism"
+        ],
+        [
+          1553,
+          "Strict GPU systems"
+        ],
+        [
+          1660,
+          "Without a GPU"
+        ],
+        [
+          1674,
+          "The transfer plan"
+        ],
+        [
+          1852,
+          "Several cores"
+        ],
+        [
+          2055,
+          "Events"
+        ],
+        [
+          2091,
+          "Built-ins"
+        ],
+        [
+          2093,
+          "Output"
+        ],
+        [
+          2113,
+          "Numbers"
+        ],
+        [
+          2130,
+          "Strings"
+        ],
+        [
+          2143,
+          "Lists"
+        ],
+        [
+          2163,
+          "Random numbers, time and exit"
+        ],
+        [
+          2180,
+          "Programs and files"
+        ],
+        [
+          2200,
+          "What things cost"
+        ],
+        [
+          2254,
+          "What a GPU system costs"
+        ],
+        [
+          2360,
+          "What several cores cost"
+        ],
+        [
+          2451,
+          "Errors"
+        ],
+        [
+          2502,
+          "Grammar"
+        ],
+        [
+          2585,
+          "Not in 0.7"
+        ]
+      ],
+      "README.md": [
+        [
+          87,
+          "Try it"
+        ],
+        [
+          107,
+          "The compiler"
+        ],
+        [
+          158,
+          "GPU systems"
+        ],
+        [
+          217,
+          "Several cores"
+        ],
+        [
+          260,
+          "A window"
+        ],
+        [
+          304,
+          "Keyboard and mouse"
+        ],
+        [
+          353,
+          "Benchmarks"
+        ],
+        [
+          406,
+          "Working on it"
+        ],
+        [
+          541,
+          "Status"
+        ],
+        [
+          553,
+          "License"
+        ]
+      ],
+      "examples/battle.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/battle.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bench.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.out": [
+        [
+          1,
+          null
+        ]
+      ]
+    }
+  },
+  "tasks": {
+    "league": {
+      "sha256": "573d4436f0bb199360d6fd04a901f12230cbbbd6602179cad8b137a28b8e1ab4",
+      "control": false,
+      "areas": [
+        "events",
+        "structs",
+        "lists",
+        "strings"
+      ],
+      "ruby": "sort_by, <=>, insert, join"
+    },
+    "thermostat": {
+      "sha256": "5fde795d75457273a1d9d73f55cb39b3d09e08b20b81c61e400f92e138f63ce7",
+      "control": true,
+      "areas": [
+        "ecs",
+        "strings"
+      ],
+      "ruby": ""
+    },
+    "warren": {
+      "sha256": "a2b7228feaf00c923e4653ed25f31f96cf7a86332f427ad0ba11b94742b1848f",
+      "control": false,
+      "areas": [
+        "ecs",
+        "structural"
+      ],
+      "ruby": "changes that take effect at once (an eaten rabbit gone before the next fox looks, newborns counted at once)"
+    }
+  },
+  "runs": [
+    {
+      "task": "thermostat",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T19:06:05Z",
+      "dir": "evals/runs/2026-11-26-3ae9ba2-smoke/thermostat/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "761e38c4c9b41288c88faef3d10d3a1dbb098eddb11b2ce76c79448402b4635c",
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "run": 2
+        },
+        "failed": {
+          "compile": 1
+        },
+        "failed_total": 1
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": false,
+      "verified": true,
+      "denied": [
+        {
+          "tool": "Bash",
+          "input": "cd /tmp/eval.NJrN2uPG; cat > solution.12am <<'EOF'\ntemp = 10\nenergy = 0\nc_ticks = 0\n1.upto(15) do |t|\n  on = 0\n  if temp < 21\n    on = 2\n    energy += 5\n    if c_ticks < 4\n      c_ticks += 1\n      on += 1\n      energy += 4\n    end\n    temp += 5\n    temp += 4 if on == 3\n  end\n  temp -= (temp - 5) / 5\n  puts \"tick #{t}: #{temp} degrees, heaters on: #{on}, energy: #{energy}\"\nend\nEOF\nmidnight run solution.12am"
+        },
+        {
+          "tool": "Bash",
+          "input": "sed -i 's/\\bon\\b/n_on/g; s/heaters n_on:/heaters on:/' solution.12am && midnight run solution.12am"
+        }
+      ],
+      "slow_calls": 0,
+      "turns": 10,
+      "duration_ms": 15863,
+      "input_tokens": 18,
+      "output_tokens": 1880,
+      "cache_read_tokens": 106186,
+      "cache_creation_tokens": 11053,
+      "cost_usd": 0.0736666,
+      "partial": false,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            17
+          ],
+          [
+            19,
+            21
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            25,
+            29
+          ],
+          [
+            31,
+            34
+          ],
+          [
+            36,
+            36
+          ],
+          [
+            38,
+            43
+          ],
+          [
+            45,
+            49
+          ],
+          [
+            51,
+            52
+          ],
+          [
+            54,
+            58
+          ],
+          [
+            60,
+            61
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            65,
+            65
+          ],
+          [
+            67,
+            74
+          ],
+          [
+            76,
+            78
+          ],
+          [
+            80,
+            80
+          ],
+          [
+            82,
+            87
+          ],
+          [
+            89,
+            90
+          ],
+          [
+            92,
+            92
+          ],
+          [
+            94,
+            94
+          ],
+          [
+            96,
+            98
+          ],
+          [
+            100,
+            100
+          ],
+          [
+            102,
+            105
+          ],
+          [
+            107,
+            109
+          ],
+          [
+            111,
+            111
+          ],
+          [
+            113,
+            117
+          ],
+          [
+            119,
+            119
+          ],
+          [
+            121,
+            126
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            130,
+            136
+          ],
+          [
+            138,
+            140
+          ],
+          [
+            142,
+            142
+          ],
+          [
+            144,
+            155
+          ],
+          [
+            157,
+            158
+          ],
+          [
+            160,
+            163
+          ],
+          [
+            165,
+            169
+          ],
+          [
+            171,
+            171
+          ],
+          [
+            173,
+            174
+          ],
+          [
+            176,
+            176
+          ],
+          [
+            178,
+            179
+          ],
+          [
+            181,
+            189
+          ],
+          [
+            191,
+            195
+          ],
+          [
+            197,
+            200
+          ],
+          [
+            202,
+            208
+          ],
+          [
+            210,
+            210
+          ],
+          [
+            212,
+            216
+          ],
+          [
+            218,
+            219
+          ],
+          [
+            221,
+            221
+          ],
+          [
+            223,
+            223
+          ],
+          [
+            225,
+            230
+          ],
+          [
+            232,
+            235
+          ],
+          [
+            237,
+            238
+          ],
+          [
+            240,
+            245
+          ],
+          [
+            247,
+            248
+          ],
+          [
+            250,
+            250
+          ],
+          [
+            252,
+            252
+          ],
+          [
+            254,
+            258
+          ],
+          [
+            260,
+            262
+          ],
+          [
+            264,
+            265
+          ],
+          [
+            267,
+            271
+          ],
+          [
+            273,
+            273
+          ],
+          [
+            275,
+            275
+          ],
+          [
+            277,
+            289
+          ],
+          [
+            291,
+            294
+          ],
+          [
+            296,
+            298
+          ],
+          [
+            300,
+            300
+          ],
+          [
+            303,
+            303
+          ],
+          [
+            346,
+            346
+          ],
+          [
+            378,
+            378
+          ],
+          [
+            382,
+            382
+          ],
+          [
+            391,
+            391
+          ],
+          [
+            630,
+            630
+          ],
+          [
+            679,
+            679
+          ],
+          [
+            688,
+            688
+          ],
+          [
+            711,
+            711
+          ],
+          [
+            766,
+            766
+          ],
+          [
+            809,
+            809
+          ],
+          [
+            817,
+            817
+          ],
+          [
+            830,
+            830
+          ],
+          [
+            885,
+            885
+          ],
+          [
+            902,
+            903
+          ],
+          [
+            1068,
+            1068
+          ],
+          [
+            1119,
+            1119
+          ],
+          [
+            1220,
+            1220
+          ],
+          [
+            1223,
+            1223
+          ],
+          [
+            1225,
+            1225
+          ],
+          [
+            1227,
+            1227
+          ],
+          [
+            1256,
+            1256
+          ],
+          [
+            1288,
+            1288
+          ],
+          [
+            1347,
+            1347
+          ],
+          [
+            1389,
+            1389
+          ],
+          [
+            1425,
+            1425
+          ],
+          [
+            1428,
+            1428
+          ],
+          [
+            1432,
+            1432
+          ],
+          [
+            1436,
+            1436
+          ],
+          [
+            1497,
+            1497
+          ],
+          [
+            1526,
+            1526
+          ],
+          [
+            1568,
+            1568
+          ],
+          [
+            1787,
+            1787
+          ],
+          [
+            2020,
+            2020
+          ]
+        ],
+        "README.md": [
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ]
+        ]
+      }
+    },
+    {
+      "task": "league",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T19:06:05Z",
+      "dir": "evals/runs/2026-11-26-3ae9ba2-smoke/league/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "ae7633a9a6a0e7595233f695301dc2cf6ea95ede9a11cca178975e85226fb805",
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [
+        {
+          "tool": "Bash",
+          "input": "cd /tmp/eval.6LA2gDnM; cat > solution.12am <<'EOF'\nnames = [\"Bees\", \"Ants\", \"Cats\", \"Dogs\", \"Eels\", \"Fish\"]\npts: [Int] = [0, 0, 0, 0, 0, 0]\ngd: [Int] = [0, 0, 0, 0, 0, 0]\n\n# each match: home, away, hg, ag\nms: [[Int]] = [\n  [0, 1, 2, 1], [2, 3, 0, 0], [4, 5, 1, 3],\n  [0, 2, 1, 3], [1, 4, 2, 2], [3, 5, 1, 0],\n  [0, 3, 0, 1], [1, 5, 1, 0], [2, 4, 2, 2],\n  [0, 4, 1, 1], [1, 3, 0, 2], [2, 5, 1, 0],\n  [0, 5, 3, 0], [1, 2, 1, 1], [3, 4, 0, 1]\n]\n\ndef better(a: Int, b: Int, names: [String], pts: [Int], gd: [Int]) -> Bool\n  return pts[a] > pts[b] if pts[a] != pts[b]\n  return gd[a] > gd[b] if gd[a] != gd[b]\n  names[a] < names[b]\nend\n\n5.times do |r|\n  line = \"round #{r + 1}: \"\n  3.times do |k|\n    m = ms[r * 3 + k]\n    h = m[0]\n    a = m[1]\n    line += \", \" if k > 0\n    line += \"#{names[h]} #{m[2]}-#{m[3]} #{names[a]}\"\n    gd[h] += m[2] - m[3]\n    gd[a] += m[3] - m[2]\n    if m[2] > m[3]\n      pts[h] += 3\n    elsif m[2] < m[3]\n      pts[a] += 3\n    else\n      pts[h] += 1\n      pts[a] += 1\n    end\n  end\n  puts line\n  order: [Int] = [0, 1, 2, 3, 4, 5]\n  1.upto(5) do |i|\n    j = i\n    while j > 0 && better(order[j], order[j - 1], names, pts, gd)\n      t = order[j]\n      order[j] = order[j - 1]\n      order[j - 1] = t\n      j -= 1\n    end\n  end\n  6.times do |p|\n    t = order[p]\n    puts \"#{p + 1}. #{names[t]} #{pts[t]} #{gd[t]}\"\n  end\nend\nEOF\nmidnight run solution.12am | head -20; midnight run solution.12am | wc -l"
+        }
+      ],
+      "slow_calls": 0,
+      "turns": 10,
+      "duration_ms": 18061,
+      "input_tokens": 16,
+      "output_tokens": 2756,
+      "cache_read_tokens": 131849,
+      "cache_creation_tokens": 26115,
+      "cost_usd": 0.1452369,
+      "partial": false,
+      "read": {
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/battle.12am": [
+          [
+            1,
+            160
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            55,
+            55
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            92,
+            92
+          ],
+          [
+            142,
+            142
+          ],
+          [
+            144,
+            155
+          ],
+          [
+            157,
+            158
+          ],
+          [
+            160,
+            163
+          ],
+          [
+            165,
+            169
+          ],
+          [
+            171,
+            171
+          ],
+          [
+            173,
+            174
+          ],
+          [
+            176,
+            176
+          ],
+          [
+            221,
+            221
+          ],
+          [
+            223,
+            223
+          ],
+          [
+            225,
+            230
+          ],
+          [
+            232,
+            235
+          ],
+          [
+            237,
+            238
+          ],
+          [
+            240,
+            245
+          ],
+          [
+            247,
+            248
+          ],
+          [
+            250,
+            250
+          ],
+          [
+            252,
+            252
+          ],
+          [
+            254,
+            258
+          ],
+          [
+            260,
+            262
+          ],
+          [
+            264,
+            265
+          ],
+          [
+            267,
+            271
+          ],
+          [
+            273,
+            273
+          ],
+          [
+            275,
+            275
+          ],
+          [
+            277,
+            289
+          ],
+          [
+            291,
+            294
+          ],
+          [
+            296,
+            298
+          ],
+          [
+            300,
+            306
+          ],
+          [
+            308,
+            309
+          ],
+          [
+            311,
+            314
+          ],
+          [
+            316,
+            318
+          ],
+          [
+            320,
+            322
+          ],
+          [
+            324,
+            326
+          ],
+          [
+            328,
+            328
+          ],
+          [
+            330,
+            337
+          ],
+          [
+            339,
+            341
+          ],
+          [
+            343,
+            344
+          ],
+          [
+            346,
+            348
+          ],
+          [
+            350,
+            352
+          ],
+          [
+            354,
+            357
+          ],
+          [
+            359,
+            359
+          ],
+          [
+            361,
+            362
+          ],
+          [
+            364,
+            370
+          ],
+          [
+            372,
+            373
+          ],
+          [
+            375,
+            375
+          ],
+          [
+            377,
+            380
+          ],
+          [
+            382,
+            383
+          ],
+          [
+            385,
+            387
+          ],
+          [
+            389,
+            391
+          ],
+          [
+            393,
+            396
+          ],
+          [
+            398,
+            399
+          ],
+          [
+            401,
+            401
+          ],
+          [
+            403,
+            408
+          ],
+          [
+            410,
+            413
+          ],
+          [
+            415,
+            427
+          ],
+          [
+            429,
+            429
+          ],
+          [
+            431,
+            431
+          ],
+          [
+            433,
+            433
+          ],
+          [
+            435,
+            435
+          ],
+          [
+            437,
+            440
+          ],
+          [
+            442,
+            444
+          ],
+          [
+            446,
+            448
+          ],
+          [
+            450,
+            454
+          ],
+          [
+            456,
+            459
+          ],
+          [
+            461,
+            463
+          ],
+          [
+            465,
+            468
+          ],
+          [
+            470,
+            472
+          ],
+          [
+            474,
+            474
+          ],
+          [
+            476,
+            476
+          ],
+          [
+            489,
+            489
+          ],
+          [
+            508,
+            508
+          ],
+          [
+            523,
+            523
+          ],
+          [
+            536,
+            536
+          ],
+          [
+            547,
+            547
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            655,
+            655
+          ],
+          [
+            695,
+            695
+          ],
+          [
+            849,
+            849
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1172,
+            1172
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1787,
+            1787
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2091,
+            2091
+          ],
+          [
+            2093,
+            2093
+          ],
+          [
+            2095,
+            2096
+          ],
+          [
+            2098,
+            2098
+          ],
+          [
+            2100,
+            2109
+          ],
+          [
+            2111,
+            2111
+          ],
+          [
+            2113,
+            2113
+          ],
+          [
+            2115,
+            2124
+          ],
+          [
+            2126,
+            2128
+          ],
+          [
+            2130,
+            2130
+          ],
+          [
+            2132,
+            2141
+          ],
+          [
+            2143,
+            2143
+          ],
+          [
+            2145,
+            2156
+          ],
+          [
+            2158,
+            2161
+          ],
+          [
+            2163,
+            2163
+          ],
+          [
+            2165,
+            2173
+          ],
+          [
+            2175,
+            2178
+          ],
+          [
+            2180,
+            2180
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2583,
+            2583
+          ],
+          [
+            2585,
+            2585
+          ]
+        ]
+      }
+    },
+    {
+      "task": "thermostat",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T19:06:05Z",
+      "dir": "evals/runs/2026-11-26-3ae9ba2-smoke/thermostat/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "34f54c3320757040f2fa0768c6c2e4ff75221da1f4a857aa5c88a987be798531",
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "turns": 8,
+      "duration_ms": 20155,
+      "input_tokens": 14,
+      "output_tokens": 3775,
+      "cache_read_tokens": 74291,
+      "cache_creation_tokens": 12722,
+      "cost_usd": 0.00517621,
+      "partial": false,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            17
+          ],
+          [
+            19,
+            21
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            25,
+            29
+          ],
+          [
+            31,
+            34
+          ],
+          [
+            36,
+            36
+          ],
+          [
+            38,
+            43
+          ],
+          [
+            45,
+            49
+          ],
+          [
+            51,
+            52
+          ],
+          [
+            54,
+            58
+          ],
+          [
+            60,
+            61
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            65,
+            65
+          ],
+          [
+            67,
+            69
+          ]
+        ],
+        "README.md": [
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ]
+        ],
+        "examples/bounce.12am": [
+          [
+            34,
+            34
+          ],
+          [
+            36,
+            36
+          ]
+        ]
+      }
+    },
+    {
+      "task": "league",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T19:06:05Z",
+      "dir": "evals/runs/2026-11-26-3ae9ba2-smoke/league/haiku-1-1",
+      "outcome": "fail",
+      "checks": {
+        "build": true,
+        "output": false
+      },
+      "failed_checks": [
+        "output"
+      ],
+      "graded_sha256": "57a46ce20b278289c72878623a533e50eea3b94335238c61cf09b490b78eb01d",
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "unknown method `insert` for `[Row]`",
+          "template": "unknown method `…` for `…`",
+          "spans": [
+            "insert",
+            "[Row]"
+          ],
+          "file": "solution.12am",
+          "line": 80,
+          "call": 0,
+          "repeated": false
+        }
+      ],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [
+        {
+          "tool": "Bash",
+          "input": "cd /tmp/eval.EwT1VKDp && midnight check solution.12am; echo \"check exit $?\"; midnight run solution.12am; echo \"run exit $?\""
+        }
+      ],
+      "slow_calls": 0,
+      "turns": 11,
+      "duration_ms": 35409,
+      "input_tokens": 16,
+      "output_tokens": 7369,
+      "cache_read_tokens": 105742,
+      "cache_creation_tokens": 22214,
+      "cost_usd": 0.00918632,
+      "partial": false,
+      "read": {
+        "README.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            6
+          ],
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ],
+          [
+            43,
+            46
+          ],
+          [
+            48,
+            49
+          ],
+          [
+            51,
+            57
+          ],
+          [
+            59,
+            65
+          ],
+          [
+            67,
+            71
+          ]
+        ],
+        "language.md": [
+          [
+            25,
+            29
+          ],
+          [
+            31,
+            34
+          ],
+          [
+            36,
+            36
+          ],
+          [
+            38,
+            43
+          ],
+          [
+            45,
+            49
+          ],
+          [
+            51,
+            52
+          ],
+          [
+            54,
+            58
+          ],
+          [
+            1238,
+            1242
+          ]
+        ]
+      }
+    },
+    {
+      "task": "warren",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T19:06:22Z",
+      "dir": "evals/runs/2026-11-26-3ae9ba2-smoke/warren/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "8960fe34096674285fa37b2cf00420fc1e8e99ecb5ba5abac17a43eb5627ba8a",
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [
+        {
+          "tool": "Bash",
+          "input": "cd /tmp/eval.2BkEayrx; cat > solution.12am <<'EOF'\nrid = [8, 2, 9, 1, 10, 4, 6, 3, 7, 5]\nrp = [5, 0, 10, 5, 7, 10, 5, 6, 9, 11]\nra = [2, 1, 3, 3, 2, 0, 4, 0, 1, 2]\n# sort rabbits by id (selection sort)\nn0 = rid.length\nn0.times do |i|\n  m = i\n  (i + 1).upto(n0 - 1) do |j|\n    m = j if rid[j] < rid[m]\n  end\n  t = rid[i]\n  rid[i] = rid[m]\n  rid[m] = t\n  t = rp[i]\n  rp[i] = rp[m]\n  rp[m] = t\n  t = ra[i]\n  ra[i] = ra[m]\n  ra[m] = t\nend\nnext_r = 11\nfid = [1, 2, 3]\nfp = [5, 1, 8]\nfh = [0, 0, 0]\nfm = [0, 1, 0]\nnext_f = 4\n\n1.upto(15) do |tick|\n  # hunt\n  nf = fid.length\n  target = [-1] * nf\n  nf.times do |f|\n    found = false\n    rid.length.times do |r|\n      if !found && rp[r] == fp[f]\n        target[f] = rid[r]\n        found = true\n      end\n    end\n  end\n  ate = [false] * nf\n  eaten_ids = []\n  nf.times do |f|\n    if target[f] >= 0 && !eaten_ids.include?(target[f])\n      ate[f] = true\n      eaten_ids.push(target[f])\n    end\n  end\n  eaten = eaten_ids.length\n  nrid = []\n  nrp = []\n  nra = []\n  rid.length.times do |r|\n    unless eaten_ids.include?(rid[r])\n      nrid.push(rid[r])\n      nrp.push(rp[r])\n      nra.push(ra[r])\n    end\n  end\n  rid = nrid\n  rp = nrp\n  ra = nra\n\n  # foxes\n  cubs = 0\n  starved = 0\n  nid = []\n  np = []\n  nh = []\n  nm = []\n  cp = []\n  nf.times do |f|\n    if ate[f]\n      m = fm[f] + 1\n      if m == 2\n        m = 0\n        cp.push(fp[f])\n      end\n      nid.push(fid[f])\n      np.push(fp[f])\n      nh.push(0)\n      nm.push(m)\n    else\n      h = fh[f] + 1\n      if h == 3\n        starved += 1\n      else\n        p = fp[f]\n        if p == 10\n          p = 0\n        elsif p == 11\n          p = 1\n        else\n          p += 2\n        end\n        nid.push(fid[f])\n        np.push(p)\n        nh.push(h)\n        nm.push(fm[f])\n      end\n    end\n  end\n  cp.each do |p|\n    nid.push(next_f)\n    next_f += 1\n    np.push(p)\n    nh.push(0)\n    nm.push(0)\n    cubs += 1\n  end\n  fid = nid\n  fp = np\n  fh = nh\n  fm = nm\n\n  # rabbits\n  counts = [0] * 12\n  rid.each_with_index do |id, r|\n    counts[rp[r]] += 1\n  end\n  born = 0\n  old = rid.length\n  old.times do |r|\n    if ra[r] >= 2 && counts[rp[r]] <= 3\n      rid.push(next_r)\n      next_r += 1\n      rp.push(rp[r])\n      ra.push(0)\n      born += 1\n    end\n  end\n  old.times do |r|\n    ra[r] += 1\n  end\n\n  puts \"tick #{tick}: #{rid.length} rabbits, #{fid.length} foxes, #{eaten} eaten, #{born} born, #{cubs} cubs, #{starved} starved\"\nend\nEOF\nmidnight run solution.12am"
+        }
+      ],
+      "slow_calls": 0,
+      "turns": 11,
+      "duration_ms": 29023,
+      "input_tokens": 16,
+      "output_tokens": 4484,
+      "cache_read_tokens": 143221,
+      "cache_creation_tokens": 30826,
+      "cost_usd": 0.1824981,
+      "partial": false,
+      "read": {
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/life_rules.12am": [
+          [
+            1,
+            24
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            92,
+            571
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            655,
+            655
+          ],
+          [
+            695,
+            695
+          ],
+          [
+            849,
+            849
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1172,
+            1172
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2091,
+            2180
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2585,
+            2585
+          ]
+        ],
+        "examples/battle.12am": [
+          [
+            1,
+            4
+          ],
+          [
+            6,
+            9
+          ],
+          [
+            11,
+            15
+          ],
+          [
+            17,
+            19
+          ],
+          [
+            21,
+            22
+          ],
+          [
+            24,
+            28
+          ],
+          [
+            30,
+            35
+          ],
+          [
+            37,
+            45
+          ],
+          [
+            47,
+            53
+          ],
+          [
+            55,
+            61
+          ],
+          [
+            63,
+            65
+          ],
+          [
+            67,
+            69
+          ],
+          [
+            71,
+            81
+          ],
+          [
+            83,
+            90
+          ],
+          [
+            92,
+            93
+          ],
+          [
+            95,
+            105
+          ],
+          [
+            107,
+            114
+          ],
+          [
+            116,
+            121
+          ],
+          [
+            123,
+            131
+          ],
+          [
+            133,
+            137
+          ],
+          [
+            139,
+            140
+          ],
+          [
+            142,
+            147
+          ],
+          [
+            149,
+            153
+          ],
+          [
+            155,
+            155
+          ],
+          [
+            157,
+            160
+          ]
+        ]
+      }
+    },
+    {
+      "task": "warren",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T19:06:24Z",
+      "dir": "evals/runs/2026-11-26-3ae9ba2-smoke/warren/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "044c5f174c0ddf387878716a24f9ec7f13da2f9fb819b09b8f1ba42408087011",
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [
+        {
+          "tool": "Bash",
+          "input": "cd /tmp/eval.Q4TAEFNq/docs/examples && for f in hello.12am life.12am move.12am bounce.12am; do echo \"== $f\"; cat $f; done; echo; grep -n \"^#\" ../language.md | head -150"
+        }
+      ],
+      "slow_calls": 0,
+      "turns": 13,
+      "duration_ms": 50162,
+      "input_tokens": 20,
+      "output_tokens": 10893,
+      "cache_read_tokens": 148643,
+      "cache_creation_tokens": 28132,
+      "cost_usd": 0.01256133,
+      "partial": false,
+      "read": {
+        "README.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            6
+          ],
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ],
+          [
+            43,
+            46
+          ],
+          [
+            48,
+            49
+          ],
+          [
+            51,
+            57
+          ],
+          [
+            59,
+            65
+          ],
+          [
+            67,
+            71
+          ],
+          [
+            73,
+            76
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            25,
+            29
+          ],
+          [
+            31,
+            34
+          ],
+          [
+            36,
+            36
+          ],
+          [
+            38,
+            43
+          ],
+          [
+            45,
+            49
+          ],
+          [
+            51,
+            52
+          ],
+          [
+            54,
+            58
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            92,
+            511
+          ],
+          [
+            523,
+            523
+          ],
+          [
+            536,
+            536
+          ],
+          [
+            547,
+            547
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            655,
+            655
+          ],
+          [
+            695,
+            695
+          ],
+          [
+            849,
+            849
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1172,
+            1172
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1238,
+            1242
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2091,
+            2200
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2585,
+            2585
+          ]
+        ],
+        "examples/life.12am": [
+          [
+            1,
+            99
+          ]
+        ],
+        "examples/bounce.12am": [
+          [
+            1,
+            142
+          ]
+        ]
+      }
+    }
+  ]
+}

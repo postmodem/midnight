@@ -913,6 +913,555 @@ module Eval
     end
   end
 
+  # What an agent read of docs/: the lines each tool result showed.
+  module Reading
+    module_function
+
+    READERS = %w[grep egrep fgrep rg sed head tail cat].freeze
+    NUMBERED = /\A\s*(\d+)(?:\t|→)(.*)\z/
+    PREFIXED = /\A(?:(.+?):)?(\d+)[:-](.*)\z/
+
+    # { dest => [line numbers] } for the files of docs/ (docs is
+    # { dest => text }) whose lines the results of calls that ran showed.
+    def lines(calls, root:, docs:)
+      index = docs.transform_values { |text| Index.new(text) }
+      seen = Hash.new { |h, k| h[k] = [] }
+      calls.reject { |c| c["denied"] }.each do |c|
+        text = c["result"].to_s
+        next if text.empty?
+
+        targets = targets(c, root, index.keys)
+        next if targets.empty?
+
+        if c["tool"] == "Read"
+          dest = targets.first
+          text.each_line do |l|
+            m = l.chomp.match(NUMBERED)
+            n = m && m[1].to_i
+            seen[dest] << n if n && index[dest].line(n)
+          end
+        else
+          targets.each { |dest| seen[dest].concat(index[dest].shown(text, dest)) }
+        end
+      end
+      seen.transform_values { |v| v.uniq.sort }.reject { |_, v| v.empty? }
+    end
+
+    # The files of docs/ a call reads.
+    def targets(call, root, dests)
+      input = call["input"]
+      case call["tool"]
+      when "Read"
+        dest = dest_of(input["file_path"].to_s, root)
+        dests.include?(dest) ? [dest] : []
+      when "Grep"
+        return [] unless input["output_mode"] == "content"
+
+        under(input["path"] || ".", root, dests).select do |d|
+          !input["glob"] || File.fnmatch?(input["glob"], File.basename(d), File::FNM_EXTGLOB) ||
+            File.fnmatch?(input["glob"], d, File::FNM_PATHNAME | File::FNM_EXTGLOB)
+        end
+      when "Bash" then shell_targets(input["command"].to_s, root, dests)
+      else []
+      end
+    end
+
+    # The files of docs/ the reading commands of a shell command name,
+    # with `cd` followed. A directory stands for the files under it only
+    # for grep and rg.
+    def shell_targets(command, root, dests)
+      dir = root
+      found = []
+      Audit.segments(command).each do |seg|
+        words = begin
+          Shellwords.split(seg)
+        rescue ArgumentError
+          seg.split(/\s+/)
+        end
+        cmd = File.basename(words.first.to_s)
+        if cmd == "cd"
+          dir = File.expand_path(words[1] || root, dir)
+        elsif READERS.include?(cmd)
+          words.drop(1).each do |w|
+            found.concat(matching(w, dir, root, dests, recursive: %w[grep egrep fgrep rg].include?(cmd)))
+          end
+        end
+      end
+      found.uniq
+    end
+
+    # The docs/ path of an absolute or relative path, or nil.
+    def dest_of(path, root)
+      full = File.expand_path(path, root)
+      docs = File.join(root, "docs")
+      return nil unless full.start_with?("#{docs}/")
+
+      full.delete_prefix("#{docs}/")
+    end
+
+    def under(path, root, dests)
+      full = File.expand_path(path, root)
+      docs = File.join(root, "docs")
+      return dests if full == root || full == docs
+
+      prefix = dest_of(full, root) or return []
+      dests.select { |d| d == prefix || d.start_with?("#{prefix}/") }
+    end
+
+    # The files of docs/ a shell word, taken from dir, names, globs
+    # included.
+    def matching(word, dir, root, dests, recursive:)
+      return [] if word.start_with?("-")
+
+      full = File.expand_path(word, dir)
+      docs = File.join(root, "docs")
+      if full == docs || full == root
+        return recursive ? dests : []
+      end
+      return [] unless full.start_with?("#{docs}/")
+
+      rel = full.delete_prefix("#{docs}/")
+      if dests.any? { |d| d.start_with?("#{rel}/") }
+        return recursive ? under(full, root, dests) : []
+      end
+
+      dests.select { |d| File.fnmatch?(rel, d, File::FNM_PATHNAME | File::FNM_EXTGLOB) }
+    end
+
+    # The lines of one file, found by number or by text.
+    class Index
+      def initialize(text)
+        @lines = text.lines.map(&:chomp)
+        @at = Hash.new { |h, k| h[k] = [] }
+        @lines.each_with_index { |l, i| @at[l.rstrip] << (i + 1) unless l.strip.empty? }
+      end
+
+      def line(n) = n.between?(1, @lines.size) ? @lines[n - 1] : nil
+
+      # The lines of the file that text shows: lines prefixed by their
+      # number (and file) where the number's line has that text; and lines
+      # of text found in the file, each after the one before, in runs of
+      # two or more lines in a row, one of them at least 12 characters
+      # without spaces.
+      def shown(text, dest)
+        found = []
+        runs = [[]]
+        cursor = 0
+        text.each_line do |raw|
+          l = raw.chomp
+          m = l.match(PREFIXED)
+          if m && (m[1].nil? || m[1].end_with?(dest)) && line(m[2].to_i)&.rstrip == m[3].rstrip
+            found << m[2].to_i
+            next
+          end
+          next if l.strip.empty?
+
+          n = @at[l.rstrip].bsearch { |x| x > cursor }
+          unless n
+            runs << []
+            next
+          end
+          runs << [] unless runs.last.empty? || next_line?(runs.last.last, n)
+          runs.last << n
+          cursor = n
+        end
+        runs.each do |run|
+          next if run.size < 2 || run.none? { |n| @lines[n - 1].gsub(/\s/, "").size >= 12 }
+
+          found.concat(run)
+        end
+        found
+      end
+
+      # Whether line b follows line a with only blank lines between.
+      def next_line?(a, b)
+        b > a && (a + 1...b).all? { |k| @lines[k - 1].strip.empty? }
+      end
+    end
+
+    def ranges(numbers)
+      numbers.slice_when { |a, b| b != a + 1 }.map { |r| [r.first, r.last] }
+    end
+  end
+
+  # Names Ruby has where Midnight reported an unknown one.
+  module RubyShaped
+    KEYWORDS = %w[__ENCODING__ __LINE__ __FILE__ BEGIN END alias and begin break case class def
+                  defined? do else elsif end ensure false for if in module next nil not or redo
+                  rescue retry return self super then true undef unless until when while yield].freeze
+
+    SCRIPT = <<~'RUBY'
+      constants = Object.constants.select { |n| Object.const_get(n).is_a?(Module) rescue false }.map(&:to_s)
+      names = {
+        "Array" => Array.public_instance_methods.map(&:to_s),
+        "String" => String.public_instance_methods.map(&:to_s),
+        "Integer" => Integer.public_instance_methods.map(&:to_s),
+        "Float" => Float.public_instance_methods.map(&:to_s),
+        "Object" => Object.public_instance_methods.map(&:to_s),
+        "Kernel" => (Kernel.private_instance_methods + Kernel.public_instance_methods).map(&:to_s),
+        "Math" => Math.singleton_methods.map(&:to_s),
+        "Math::" => Math.constants.map(&:to_s),
+        "constants" => constants
+      }
+      require "json"
+      puts JSON.generate(names.transform_values { |v| v.uniq.sort })
+    RUBY
+
+    module_function
+
+    def names
+      @names ||= begin
+        out = IO.popen([Env.ruby, "--disable-gems", "-e", SCRIPT], &:read)
+        raise Failure, "ruby --disable-gems failed" unless $?.success?
+
+        JSON.parse(out)
+      end
+    end
+
+    def ruby_class(type)
+      if type.start_with?("[") then "Array"
+      elsif type == "String" then "String"
+      elsif type == "Int" then "Integer"
+      elsif type == "Float" then "Float"
+      else "Object"
+      end
+    end
+
+    # Whether a diagnostic (template and spans) names something Ruby has.
+    def ruby_shaped?(template, spans)
+      n = spans.first.to_s
+      case template
+      when "unknown method `…` for `…`", "unknown field or method `…` for `…`"
+        names[ruby_class(spans[1].to_s)].include?(n)
+      when "unknown function `…`", "unknown variable or function `…`"
+        if n.start_with?("Math.")
+          names["Math"].include?(n.delete_prefix("Math."))
+        else
+          names["Kernel"].include?(n) || KEYWORDS.include?(n)
+        end
+      when "unknown constant `…`", "unknown type `…`"
+        if n.start_with?("Math::")
+          names["Math::"].include?(n.delete_prefix("Math::"))
+        else
+          names["constants"].include?(n)
+        end
+      else false
+      end
+    end
+  end
+
+  module Stats
+    module_function
+
+    def mean(xs) = xs.empty? ? nil : xs.sum.to_f / xs.size
+
+    # The standard error of the mean.
+    def se(xs)
+      return nil if xs.size < 2
+
+      m = mean(xs)
+      Math.sqrt(xs.sum { |x| (x - m)**2 } / (xs.size - 1)) / Math.sqrt(xs.size)
+    end
+
+    def choose(n, k)
+      return 0 if k.negative? || k > n
+
+      (1..k).reduce(1) { |acc, i| acc * (n - k + i) / i }
+    end
+
+    # Fisher's exact test, two-sided, on the table [[a, b], [c, d]].
+    def fisher(a, b, c, d)
+      n1 = a + b
+      n2 = c + d
+      k = a + c
+      total = choose(n1 + n2, k)
+      prob = ->(x) { Rational(choose(n1, x) * choose(n2, k - x), total) }
+      observed = prob.(a)
+      ([0, k - n2].max..[k, n1].min).sum { |x| (p = prob.(x)) <= observed ? p : 0 }.to_f
+    end
+  end
+
+  # Grouping a results file's runs.
+  module Runs
+    module_function
+
+    def counted(results) = results["runs"].select { |r| r["counts"] }
+
+    def graded(runs) = runs.reject { |r| %w[infrastructure isolation].include?(r["outcome"]) }
+
+    # The final run of each trial: its graded attempt, or its last.
+    def trials(results)
+      counted(results).group_by { |r| [r["task"], r["model"], r["trial"]] }.transform_values do |rs|
+        rs.find { |r| !%w[infrastructure isolation].include?(r["outcome"]) } || rs.max_by { |r| r["attempt"] }
+      end
+    end
+
+    # { [task, model] => [graded runs] }
+    def cells(results)
+      out = Hash.new { |h, k| h[k] = [] }
+      trials(results).each_value { |r| out[[r["task"], r["model"]]] << r unless %w[infrastructure isolation].include?(r["outcome"]) }
+      out
+    end
+
+    def pass_rate(runs) = runs.empty? ? nil : runs.count { |r| r["outcome"] == "pass" }.to_f / runs.size
+
+    def tasks(results) = results["task_names"] || results["tasks"].keys
+  end
+
+  # The Markdown report of one results file.
+  module Report
+    module_function
+
+    def fmt(x, digits = 1)
+      return "–" if x.nil?
+
+      x.is_a?(Float) ? format("%.#{digits}f", x) : x.to_s
+    end
+
+    def table(header, rows)
+      out = +"| #{header.join(' | ')} |\n| #{header.map { '---' }.join(' | ')} |\n"
+      rows.each { |r| out << "| #{r.map { |c| c.to_s.gsub('|', '\|') }.join(' | ')} |\n" }
+      out
+    end
+
+    def models_reported(results)
+      results["runs"].flat_map { |r| r["models_reported"].to_a }.uniq.sort
+    end
+
+    def render(results)
+      out = +""
+      cells = Runs.cells(results)
+      tasks = Runs.tasks(results)
+      models = results["models"]
+      trials = results["trials"]
+      out << "# Eval results #{results['date']}, #{results['commit'][0, 7]}#{results['label'] ? " (#{results['label']})" : ''}\n\n"
+      out << "- Commit: `#{results['commit']}`, Midnight #{results['version']}\n"
+      out << "- Claude Code #{results['claude_code']}, Ruby #{results['ruby']}\n"
+      out << "- Kit: `#{results.dig('kit', 'file')}` (#{results.dig('kit', 'files').size} files)\n"
+      out << "- Models: #{models.join(', ')} (as reported: #{models_reported(results).join(', ')}); " \
+             "effort: #{results['effort'] || 'default'}; trials: #{trials}\n\n"
+
+      out << "## Pass rates\n\n"
+      rows = models.map do |m|
+        rates = tasks.filter_map { |t| Runs.pass_rate(cells[[t, m]]) }
+        every = tasks.count { |t| (rs = cells[[t, m]]).any? && rs.all? { |r| r["outcome"] == "pass" } }
+        se = Stats.se(rates)
+        ["`#{m}`", "#{fmt(Stats.mean(rates)&.*(100))}%#{se ? " ± #{fmt(se * 100)}" : ''}", "#{every} of #{tasks.size}"]
+      end
+      out << table(["Model", "pass@1 (± s.e. across tasks)", "Tasks passed every time"], rows)
+      short = tasks.product(models).select { |t, m| cells[[t, m]].size < trials }
+      out << "\nFewer graded runs than trials: #{short.map { |t, m| "#{t}/#{m} (#{cells[[t, m]].size})" }.join(', ')}.\n" unless short.empty?
+
+      out << "\n## Tasks\n\n"
+      rows = tasks.product(models).map do |t, m|
+        rs = cells[[t, m]]
+        passes = rs.count { |r| r["outcome"] == "pass" }
+        avg = ->(f) { Stats.mean(rs.filter_map { |r| f.(r) }) }
+        mark = rs.size < trials ? " *" : ""
+        ["`#{t}`", "`#{m}`", "#{passes}/#{rs.size}#{mark}", rs.any? && passes == rs.size ? "yes" : "no",
+         fmt(avg.(->(r) { r.dig("calls", "total") })), fmt(avg.(->(r) { r.dig("calls", "failed_total") })),
+         fmt(avg.(->(r) { r["turns"] })), fmt(avg.(->(r) { r["duration_ms"] && r["duration_ms"] / 1000.0 }), 0),
+         fmt(avg.(->(r) { r["output_tokens"] }), 0),
+         fmt(avg.(->(r) { r["input_tokens"].to_i + r["cache_read_tokens"].to_i + r["cache_creation_tokens"].to_i }), 0),
+         fmt(avg.(->(r) { r["cost_usd"] }), 3),
+         rs.count { |r| r["first_try"] }, rs.count { |r| r["verified"] }]
+      end
+      out << table(["Task", "Model", "Passed", "Every time", "Calls", "Failed calls", "Turns", "Seconds",
+                    "Output tokens", "Input tokens", "Cost (est. $)", "First try", "Verified"], rows)
+      out << "\nMeans over graded runs. Cost is Claude Code's estimate at API prices.\n"
+
+      out << "\n## Diagnostics and run-time errors\n\n"
+      graded = Runs.trials(results).values.reject { |r| %w[infrastructure isolation].include?(r["outcome"]) }
+      groups = Hash.new { |h, k| h[k] = [] }
+      graded.each { |r| r["diagnostics"].to_a.each { |d| groups[[d["kind"], d["template"]]] << [r, d] } }
+      if groups.empty?
+        out << "None.\n"
+      else
+        rows = groups.sort_by { |(kind, tmpl), v| [-v.size, kind, tmpl] }.map do |(kind, tmpl), v|
+          runs = v.map(&:first).uniq
+          spans = v.map { |_, d| d["spans"] }.reject(&:empty?).tally.sort_by { |s, c| [-c, s] }
+          [kind, "`#{tmpl}`", v.size, runs.size, runs.count { |r| r["outcome"] == "pass" },
+           v.count { |_, d| d["repeated"] }, ruby_mark(kind, v),
+           spans.first(6).map { |s, c| "#{s.join(' / ')} ×#{c}" }.join(", ")]
+        end
+        out << table(%w[Kind Template Count Runs Passed Repeated Ruby-shaped Spans], rows)
+      end
+
+      out << "\n## The reference as read\n\n"
+      sections = results.dig("kit", "sections") || {}
+      read_runs = graded.select { |r| r["read"] }
+      if read_runs.empty?
+        out << "Not recorded.\n"
+      else
+        rows = []
+        sections.each do |dest, secs|
+          secs.each_with_index do |(start, title), i|
+            first = title ? start + 1 : start
+            stop = secs[i + 1] ? secs[i + 1][0] - 1 : Float::INFINITY
+            n = read_runs.count do |r|
+              Array(r.dig("read", dest)).any? { |a, b| b >= first && a <= stop }
+            end
+            rows << ["`#{dest}`", title || "(whole file)", n]
+          end
+        end
+        out << table(%w[File Section Runs], rows)
+        out << "\nRuns of #{read_runs.size} graded that a tool result showed a line of the section to, " \
+               "below its heading.\n"
+      end
+
+      out << "\n## Exceptions\n\n"
+      all = Runs.counted(results)
+      lists = {
+        "Compiler bugs" => graded.select { |r| r["compiler_bug"] },
+        "Escaped runs" => graded.select { |r| r["outcome"] == "escaped" },
+        "Infrastructure errors" => results["runs"].select { |r| r["outcome"] == "infrastructure" },
+        "Timeouts" => graded.select { |r| r["outcome"] == "timeout" },
+        "No solution" => graded.select { |r| r["outcome"] == "no solution" },
+        "Calls stopped by the time limit under load" => graded.select { |r| r["slow_calls"].to_i.positive? }
+      }
+      lists.each do |name, rs|
+        next if rs.empty?
+
+        out << "- #{name}: #{rs.map { |r| "#{r['task']}/#{r['model']}/#{r['trial']}.#{r['attempt']}#{detail(r)}" }.join('; ')}\n"
+      end
+      denied = graded.flat_map { |r| r["denied"].to_a.map { |d| [r, d] } }
+      unless denied.empty?
+        out << "- Denied tool calls: #{denied.size} in #{denied.map(&:first).uniq.size} runs: " \
+               "#{denied.map { |_, d| "#{d['tool']} `#{d['input'].to_s.lines.first.to_s.chomp[0, 60]}`" }.tally.map { |s, c| c > 1 ? "#{s} ×#{c}" : s }.join(', ')}\n"
+      end
+      out << "None.\n" if lists.values.all?(&:empty?) && denied.empty?
+      out << "\n#{all.size} counted runs, #{graded.size} graded.\n"
+      out
+    end
+
+    # "yes" when every occurrence of a template is Ruby-shaped, "N of M"
+    # when some are.
+    def ruby_mark(kind, occurrences)
+      return "" unless kind == "error"
+
+      n = occurrences.count { |_, d| RubyShaped.ruby_shaped?(d["template"], d["spans"].to_a) }
+      if n.zero? then ""
+      elsif n == occurrences.size then "yes"
+      else "#{n} of #{occurrences.size}"
+      end
+    end
+
+    def detail(r)
+      case r["outcome"]
+      when "infrastructure" then " (#{r['infrastructure']})"
+      when "escaped" then " (#{r['escapes'].map { |e| e['path'] }.join(', ')})"
+      else ""
+      end
+    end
+  end
+
+  # Two results files side by side.
+  module Compare
+    module_function
+
+    def render(a, b)
+      out = +"# Comparison\n\n"
+      out << "- A: #{a['date']}, #{a['commit'][0, 7]}#{a['label'] ? " (#{a['label']})" : ''}\n"
+      out << "- B: #{b['date']}, #{b['commit'][0, 7]}#{b['label'] ? " (#{b['label']})" : ''}\n\n"
+      differences(a, b).each { |d| out << "- #{d}\n" }
+      out << "\n" unless differences(a, b).empty?
+      ca = Runs.cells(a)
+      cb = Runs.cells(b)
+      tasks = Runs.tasks(a) & Runs.tasks(b)
+      models = a["models"] & b["models"]
+
+      out << "## Pass rates\n\n"
+      rows = models.map do |m|
+        ra = tasks.filter_map { |t| Runs.pass_rate(ca[[t, m]]) }
+        rb = tasks.filter_map { |t| Runs.pass_rate(cb[[t, m]]) }
+        diffs = tasks.filter_map do |t|
+          x = Runs.pass_rate(ca[[t, m]])
+          y = Runs.pass_rate(cb[[t, m]])
+          y - x if x && y
+        end
+        pa = Stats.mean(Runs.tasks(a).filter_map { |t| Runs.pass_rate(ca[[t, m]]) })
+        pb = Stats.mean(Runs.tasks(b).filter_map { |t| Runs.pass_rate(cb[[t, m]]) })
+        se = Stats.se(diffs)
+        ["`#{m}`", pct(pa), pct(pb), "#{pct(Stats.mean(diffs), signed: true)}#{se ? " ± #{Report.fmt(se * 100)}" : ''}",
+         ra.size == rb.size ? "" : "#{ra.size}/#{rb.size}"]
+      end
+      out << Report.table(["Model", "pass@1 A", "pass@1 B", "Difference (tasks in both, ± s.e.)", ""], rows)
+
+      out << "\n## Tasks\n\n"
+      marks = 0
+      rows = tasks.product(models).map do |t, m|
+        x = ca[[t, m]]
+        y = cb[[t, m]]
+        pa = x.count { |r| r["outcome"] == "pass" }
+        pb = y.count { |r| r["outcome"] == "pass" }
+        p = x.empty? || y.empty? ? nil : Stats.fisher(pa, x.size - pa, pb, y.size - pb)
+        mark = p && p < 0.1
+        marks += 1 if mark
+        ["`#{t}`", "`#{m}`", "#{pa}/#{x.size}", "#{pb}/#{y.size}", p ? format("%.3f", p) : "–", mark ? "**differs**" : ""]
+      end
+      out << Report.table(["Task", "Model", "A", "B", "Fisher p", ""], rows)
+      out << "\n#{marks} marked (p < 0.1). Chance alone would mark about #{Report.fmt(rows.size * 0.1)} of #{rows.size} rows.\n"
+
+      out << "\n## Templates whose count changed\n\n"
+      ta = template_counts(a)
+      tb = template_counts(b)
+      changed = (ta.keys | tb.keys).select { |k| ta[k] != tb[k] }.sort_by { |k| [-(tb[k] - ta[k]).abs, k] }
+      if changed.empty?
+        out << "None.\n"
+      else
+        out << Report.table(%w[Kind Template A B], changed.map { |k| [k[0], "`#{k[1]}`", ta[k], tb[k]] })
+      end
+      out
+    end
+
+    def pct(x, signed: false)
+      return "–" if x.nil?
+
+      format(signed ? "%+.1f%%" : "%.1f%%", x * 100)
+    end
+
+    def template_counts(results)
+      counts = Hash.new(0)
+      Runs.trials(results).each_value do |r|
+        r["diagnostics"].to_a.each { |d| counts[[d["kind"], d["template"]]] += 1 }
+      end
+      counts
+    end
+
+    # What differs between two runs besides the commit.
+    def differences(a, b)
+      out = []
+      changed = (a["tasks"].keys & b["tasks"].keys).reject { |t| a["tasks"][t]["sha256"] == b["tasks"][t]["sha256"] }
+      out << "Tasks that differ: #{changed.map { |t| "`#{t}`" }.join(', ')}" unless changed.empty?
+      only_a = a["tasks"].keys - b["tasks"].keys
+      only_b = b["tasks"].keys - a["tasks"].keys
+      out << "Tasks only in A: #{only_a.join(', ')}" unless only_a.empty?
+      out << "Tasks only in B: #{only_b.join(', ')}" unless only_b.empty?
+      ma = Report.models_reported(a)
+      mb = Report.models_reported(b)
+      out << "Models as reported: A #{ma.join(', ')}; B #{mb.join(', ')}" unless ma == mb
+      out << "Effort: A #{a['effort'] || 'default'}; B #{b['effort'] || 'default'}" unless a["effort"] == b["effort"]
+      out << "Trials: A #{a['trials']}; B #{b['trials']}" unless a["trials"] == b["trials"]
+      out << "Claude Code: A #{a['claude_code']}; B #{b['claude_code']}" unless a["claude_code"] == b["claude_code"]
+      kit = kit_difference(a["kit"], b["kit"])
+      out << kit if kit
+      out
+    end
+
+    def kit_difference(ka, kb)
+      fa = ka["files"].to_h { |f| [f["dest"], f] }
+      fb = kb["files"].to_h { |f| [f["dest"], f] }
+      parts = []
+      parts << "only in A: #{(fa.keys - fb.keys).join(', ')}" unless (fa.keys - fb.keys).empty?
+      parts << "only in B: #{(fb.keys - fa.keys).join(', ')}" unless (fb.keys - fa.keys).empty?
+      diff = (fa.keys & fb.keys).reject { |d| fa[d]["sha256"] == fb[d]["sha256"] }
+      parts << "changed: #{diff.map { |d| "#{d} (A `#{fa[d]['source']}`, B `#{fb[d]['source']}`)" }.join(', ')}" unless diff.empty?
+      return nil if parts.empty? && ka["file"] == kb["file"]
+
+      "Kit: A `#{ka['file']}`, B `#{kb['file']}`#{parts.empty? ? '' : "; #{parts.join('; ')}"}"
+    end
+  end
+
   # One agent session on one task, from the directories to the record.
   class Session
     attr_reader :record
@@ -1088,6 +1637,8 @@ module Eval
         { "tool" => c["tool"], "input" => c["input"]["command"] || c["input"]["file_path"] || c["input"]["path"] }
       end
       rec["slow_calls"] = calls.count { |c| c["timeout"] && c["load"].to_f > Etc.nprocessors }
+      read = Reading.lines(tool_calls, root: @root, docs: @runner.kit_texts)
+      rec["read"] = read.transform_values { |v| Reading.ranges(v) }
       rec.merge(transcript.usage)
     end
 
@@ -1133,6 +1684,10 @@ module Eval
       @mutex = Mutex.new
       @pids = []
       @stopping = false
+    end
+
+    def kit_texts
+      @kit_texts ||= @kit_files.transform_values { |path| File.read(path).scrub }
     end
 
     def stopping? = @mutex.synchronize { @stopping }
@@ -1292,7 +1847,7 @@ module Eval
         exit 3
       end
       report = File.join(File.dirname(@results_path), "#{File.basename(@results_path, '.json')}.md")
-      File.write(report, Report.render(@results)) if defined?(Report)
+      File.write(report, Report.render(@results))
       puts "eval: results in #{rel}"
     end
 

@@ -148,6 +148,30 @@ class ParseTest < Minitest::Test
     refute u["partial"]
   end
 
+  # A real run: Sonnet on thermostat, ids and the run's directory replaced.
+  def test_recorded_run
+    t = Eval::Transcript.new(fixture("thermostat-sonnet.jsonl"))
+    assert_nil Eval::Transcript.isolation_problem(t.init)
+    calls = t.tool_calls
+    assert_equal 2, calls.count { |c| c["denied"] }
+    assert(calls.select { |c| c["denied"] }.all? { |c| c["tool"] == "Bash" })
+    assert_equal ["claude-sonnet-5-5"], t.models_reported
+    assert_nil t.infrastructure
+    root = t.init["cwd"]
+    assert_empty Eval::Audit.escapes(calls, root: root, wrapper: "/tmp/eval.Wrap0000",
+                                            tool_results: Eval.tool_results_dir(root))
+
+    log = fixture("thermostat-sonnet-calls.jsonl").lines.map { |l| JSON.parse(l) }
+    s = Eval::CallLog.summary(log)
+    assert_equal({ "run" => 2 }, s["by_subcommand"])
+    assert_equal({ "compile" => 1 }, s["failed"])
+    d = Eval::CallLog.diagnostics(log)
+    assert_equal ["`…` is a keyword and can't be used as a name"], d.map { |x| x["template"] }
+    assert_equal [["on"]], d.map { |x| x["spans"] }
+    assert_equal false, Eval::CallLog.first_try(log, nil)
+    assert Eval::CallLog.verified(log, log.last["sha256"])
+  end
+
   def test_infrastructure
     api = Eval::Transcript.new(fixture("api-error.jsonl"))
     reason, limit = api.infrastructure
