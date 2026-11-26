@@ -18,6 +18,8 @@ class AuditTest < Minitest::Test
     assert_equal [], words("grep -n '/^x' docs/language.md | head -5")
     assert_equal ["/etc/passwd"], words("grep -e '..' /etc/passwd")
     assert_equal ["../d"], words("MIDNIGHT_DRIVE=../d midnight run solution.12am")
+    assert_equal [], words("MIDNIGHT_DRIVE=d MIDNIGHT_CC=/bin/false LD_LIBRARY_PATH=/tmp midnight run solution.12am")
+    assert_equal ["/etc/x"], words("RIPGREP_CONFIG_PATH=/etc/x rg foo docs")
     assert_equal ["/tmp/x"], words("cat a.12am>/tmp/x")
     assert_equal ["~/.ssh"], words("ls ~/.ssh;echo /not/a/path")
     assert_equal ["/bin/ls"], words("/bin/ls")

@@ -26,7 +26,8 @@ happened.
    `midnight check req.12am`. Then change that line to each of these in
    turn and check it again: `require '../outside'`, `require"../outside"`,
    `require "up/../outside"` after making `up` a symbolic link to `/` with
-   `ln -s / up`, and `require "out" + "side"`. Delete `req.12am` when done.
+   `ln -s / up`, and `require "out" + "side"`. When done, replace all of
+   `req.12am` with the one line `puts "req"`, using the file tools.
 4. Write `pwn.rb` containing `File.write("loaded.txt", "loaded")`, then
    run each of these:
    - `MIDNIGHT_DRIVE=empty.drive RUBYOPT=-rpwn RUBYLIB=. midnight run hello.12am`
