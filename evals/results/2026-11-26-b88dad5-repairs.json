@@ -1,0 +1,1470 @@
+{
+  "format": 1,
+  "commit": "b88dad580bf99cc3d6d2268bf84229b3c6ea7e80",
+  "version": "0.7.0",
+  "ruby": "3.4.12",
+  "claude_code": "2.1.327",
+  "date": "2026-11-26",
+  "label": "repairs",
+  "models": [
+    "sonnet",
+    "haiku"
+  ],
+  "trials": 1,
+  "effort": null,
+  "task_names": [
+    "fixup",
+    "mend"
+  ],
+  "preamble_sha256": "0a7f8ff0a107d36d2eda2a422116df16b984b6abc9b971a3d8a576f7a17f8a71",
+  "agent_tools": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin:/nix/store/9g53s4a9kv7k5xbfjhyaxjymgw62di6r-bash-interactive-5.3p9/bin:/nix/store/8kxpzdb09cbn252h8wl14zds9jgbw2q0-findutils-4.10.0/bin:/nix/store/hi1zxw2mg94cwrpbq1s8bbjm1k5y3vci-gnugrep-3.12/bin:/nix/store/r3fwyjb1k9v7y6qd5l2jq1sx3b46dx2y-gnused-4.10/bin:/nix/store/q7p8cvfxi5vplngni9a38n17ykhgcx1d-ripgrep-15.1.0/bin",
+  "coreutils": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin",
+  "kit": {
+    "file": "evals/kit",
+    "files": [
+      {
+        "dest": "language.md",
+        "source": "docs/language.md",
+        "sha256": "110c84529a5fdd3a46d853d1a7598c19d92570eb99e0c26f029cdce01a702661"
+      },
+      {
+        "dest": "README.md",
+        "source": "README.md",
+        "sha256": "3aa2fcbc847be09d6f8e77f2e9538d4baa90ca3362bddf5d957bca3f042571da"
+      },
+      {
+        "dest": "examples/battle.12am",
+        "source": "examples/battle.12am",
+        "sha256": "b7628c2fc79e99d078c9e1dbb4ce347cf2fa13c812247db60b3e135d4ba03206"
+      },
+      {
+        "dest": "examples/battle.out",
+        "source": "examples/battle.out",
+        "sha256": "e61cf6d3ee973c95479b104a630a60b07a6e1c41e2eb47faedbd84d43dcbcf91"
+      },
+      {
+        "dest": "examples/bench.12am",
+        "source": "examples/bench.12am",
+        "sha256": "45d982b13b601831617b5bedddd9aac4665484e2a078356500c1119da3fd9782"
+      },
+      {
+        "dest": "examples/bounce.12am",
+        "source": "examples/bounce.12am",
+        "sha256": "c9a859451f8eb76dc6f83144b1549a04e48aa7c929216baba6e7ce95027cf4f7"
+      },
+      {
+        "dest": "examples/bounce.out",
+        "source": "examples/bounce.out",
+        "sha256": "f4f990ff8ca88db06fe33598444fd5eddff567f841bfab2c4f9a310e4ad35e3a"
+      },
+      {
+        "dest": "examples/hello.12am",
+        "source": "examples/hello.12am",
+        "sha256": "45637b2c36f48ab214412d095ee8060e0f5897cbc7434e7d9802f04d7893dc8e"
+      },
+      {
+        "dest": "examples/hello.out",
+        "source": "examples/hello.out",
+        "sha256": "d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5"
+      },
+      {
+        "dest": "examples/input.12am",
+        "source": "examples/input.12am",
+        "sha256": "31cf9ccb91a3ba1a896211ce86eabb3deebc1b4894fe4cf357bdfaa09e854d14"
+      },
+      {
+        "dest": "examples/input.drive",
+        "source": "examples/input.drive",
+        "sha256": "399a96abf52ccb9af87fdc728ae0da381390d9061031d20079dbbbe3fbae16b9"
+      },
+      {
+        "dest": "examples/input.out",
+        "source": "examples/input.out",
+        "sha256": "1cae9f27cd6bcff432d1339c443a6215b45629dad1cff3771e06bab6950b5d68"
+      },
+      {
+        "dest": "examples/life.12am",
+        "source": "examples/life.12am",
+        "sha256": "5505814cfd6fe21583fa3c6b33d9c194fb95b64b32a577fab47fe8f37636e23d"
+      },
+      {
+        "dest": "examples/life.out",
+        "source": "examples/life.out",
+        "sha256": "10769d19937b68aa5515ac8a6e525a1f84bc4a985fb625241be89695b1b64074"
+      },
+      {
+        "dest": "examples/life_rules.12am",
+        "source": "examples/life_rules.12am",
+        "sha256": "268afe3044121e468878985f408f3ac5f0ad80ae12e146277bb893ce80545a3a"
+      },
+      {
+        "dest": "examples/life_rules.out",
+        "source": "examples/life_rules.out",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "dest": "examples/move.12am",
+        "source": "examples/move.12am",
+        "sha256": "ba4ca27197bbc8617b6cf6edf42d3262a2c4fafe2565944052dc69fd59ca4d6f"
+      },
+      {
+        "dest": "examples/move.out",
+        "source": "examples/move.out",
+        "sha256": "eed2aa0dbec0f13f0fc00f257e3de666e113db91e07a083af9cb3807d92f12a0"
+      },
+      {
+        "dest": "examples/nbody.12am",
+        "source": "examples/nbody.12am",
+        "sha256": "6158862f5218fd773da8005da5a15afe578333545a4c79421fb420d98c0f028f"
+      },
+      {
+        "dest": "examples/nbody.out",
+        "source": "examples/nbody.out",
+        "sha256": "deecf226e42be730c657467146a8a39fcffff051a76f25d94de56505e19f3bb8"
+      },
+      {
+        "dest": "examples/window.12am",
+        "source": "examples/window.12am",
+        "sha256": "2ce4755a13a9fdfd00caad0e5a487f111ad9b91c58fd030085d297e004d5c984"
+      },
+      {
+        "dest": "examples/window.drive",
+        "source": "examples/window.drive",
+        "sha256": "61229ae96139f3a775a1d7aee931e1b1a2ef1d58d9f5b95a9ea100ec025164b0"
+      },
+      {
+        "dest": "examples/window.out",
+        "source": "examples/window.out",
+        "sha256": "78bf297d417ce4aae145876b4a9173ba5d7ed29925cbca944c812b4c8c6754d1"
+      }
+    ],
+    "sections": {
+      "language.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          23,
+          "A first program"
+        ],
+        [
+          63,
+          "The model"
+        ],
+        [
+          92,
+          "Lexical structure"
+        ],
+        [
+          142,
+          "Types"
+        ],
+        [
+          176,
+          "Compact field types"
+        ],
+        [
+          221,
+          "Variables and values"
+        ],
+        [
+          250,
+          "What can be modified"
+        ],
+        [
+          273,
+          "Expressions"
+        ],
+        [
+          328,
+          "Control flow"
+        ],
+        [
+          401,
+          "Functions"
+        ],
+        [
+          431,
+          "Declaring data"
+        ],
+        [
+          433,
+          "Structs"
+        ],
+        [
+          476,
+          "Enums"
+        ],
+        [
+          489,
+          "Components and tags"
+        ],
+        [
+          508,
+          "Resources"
+        ],
+        [
+          523,
+          "Events"
+        ],
+        [
+          536,
+          "Constants"
+        ],
+        [
+          547,
+          "Entities"
+        ],
+        [
+          582,
+          "Queries"
+        ],
+        [
+          623,
+          "Structural changes inside `each`"
+        ],
+        [
+          655,
+          "Systems and ticks"
+        ],
+        [
+          695,
+          "The window"
+        ],
+        [
+          849,
+          "Without a display"
+        ],
+        [
+          948,
+          "Keyboard and mouse"
+        ],
+        [
+          1172,
+          "Commands for the keyboard and the mouse"
+        ],
+        [
+          1235,
+          "GPU systems"
+        ],
+        [
+          1279,
+          "What a GPU block may contain"
+        ],
+        [
+          1311,
+          "What a GPU system may touch"
+        ],
+        [
+          1349,
+          "Snapshot semantics"
+        ],
+        [
+          1387,
+          "Arithmetic at 32 bits"
+        ],
+        [
+          1439,
+          "Runtime errors in a GPU system"
+        ],
+        [
+          1479,
+          "Random numbers in a GPU system"
+        ],
+        [
+          1513,
+          "Determinism"
+        ],
+        [
+          1553,
+          "Strict GPU systems"
+        ],
+        [
+          1660,
+          "Without a GPU"
+        ],
+        [
+          1674,
+          "The transfer plan"
+        ],
+        [
+          1852,
+          "Several cores"
+        ],
+        [
+          2055,
+          "Events"
+        ],
+        [
+          2091,
+          "Built-ins"
+        ],
+        [
+          2093,
+          "Output"
+        ],
+        [
+          2113,
+          "Numbers"
+        ],
+        [
+          2130,
+          "Strings"
+        ],
+        [
+          2143,
+          "Lists"
+        ],
+        [
+          2163,
+          "Random numbers, time and exit"
+        ],
+        [
+          2180,
+          "Programs and files"
+        ],
+        [
+          2200,
+          "What things cost"
+        ],
+        [
+          2254,
+          "What a GPU system costs"
+        ],
+        [
+          2360,
+          "What several cores cost"
+        ],
+        [
+          2451,
+          "Errors"
+        ],
+        [
+          2502,
+          "Grammar"
+        ],
+        [
+          2585,
+          "Not in 0.7"
+        ]
+      ],
+      "README.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          87,
+          "Try it"
+        ],
+        [
+          107,
+          "The compiler"
+        ],
+        [
+          158,
+          "GPU systems"
+        ],
+        [
+          217,
+          "Several cores"
+        ],
+        [
+          260,
+          "A window"
+        ],
+        [
+          304,
+          "Keyboard and mouse"
+        ],
+        [
+          353,
+          "Benchmarks"
+        ],
+        [
+          406,
+          "Working on it"
+        ],
+        [
+          541,
+          "Status"
+        ],
+        [
+          553,
+          "License"
+        ]
+      ],
+      "examples/battle.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/battle.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bench.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.out": [
+        [
+          1,
+          null
+        ]
+      ]
+    }
+  },
+  "tasks": {
+    "fixup": {
+      "sha256": "a10b00160dcc646ce9a143b801cfc24a6b6097474f013c1651479818c3394e8e",
+      "control": false,
+      "areas": [
+        "repair",
+        "ecs",
+        "structural"
+      ],
+      "ruby": "the given program's own: systems called by name like methods and declared in another order than they are called, changes inside a loop expected to take effect at once, an index on a query's block, changing objects through a list of them"
+    },
+    "mend": {
+      "sha256": "f58ca5ee539780c85ad0540c086b3024a7f117e914944e25861b8f4d76e221c4",
+      "control": false,
+      "areas": [
+        "repair",
+        "lists",
+        "strings"
+      ],
+      "ruby": "the given program's own: `tally` (a Hash of counts), `sort_by` with a brace block and an array as the key, `each_slice`, `join`, `format`"
+    }
+  },
+  "runs": [
+    {
+      "task": "fixup",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:52:21Z",
+      "dir": "evals/runs/2026-11-26-b88dad5-repairs/fixup/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "af0a3f080943fa89d8c4e7362a744e4a9e1a691d650828be578548366c1d6702",
+      "graded_program_sha256": "ec479da3cb934d1ba8c9550a98dd9c2008b7378a0da8d9492c4930f0f59f013c",
+      "grading": {
+        "ms": 673,
+        "load": 30.88,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "README.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            6
+          ],
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ],
+          [
+            43,
+            46
+          ],
+          [
+            48,
+            49
+          ],
+          [
+            51,
+            57
+          ],
+          [
+            59,
+            65
+          ],
+          [
+            67,
+            71
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            17
+          ],
+          [
+            19,
+            21
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            25,
+            29
+          ],
+          [
+            31,
+            34
+          ],
+          [
+            36,
+            36
+          ],
+          [
+            38,
+            43
+          ],
+          [
+            45,
+            49
+          ],
+          [
+            51,
+            52
+          ],
+          [
+            54,
+            58
+          ],
+          [
+            60,
+            61
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            65,
+            65
+          ],
+          [
+            67,
+            69
+          ],
+          [
+            243,
+            243
+          ],
+          [
+            308,
+            308
+          ],
+          [
+            386,
+            386
+          ],
+          [
+            672,
+            672
+          ],
+          [
+            1238,
+            1242
+          ],
+          [
+            1590,
+            1590
+          ],
+          [
+            1920,
+            1920
+          ],
+          [
+            2113,
+            2113
+          ],
+          [
+            2124,
+            2124
+          ],
+          [
+            2140,
+            2141
+          ],
+          [
+            2143,
+            2143
+          ],
+          [
+            2145,
+            2156
+          ],
+          [
+            2158,
+            2161
+          ],
+          [
+            2163,
+            2163
+          ],
+          [
+            2165,
+            2173
+          ],
+          [
+            2175,
+            2178
+          ],
+          [
+            2180,
+            2180
+          ],
+          [
+            2182,
+            2183
+          ],
+          [
+            2185,
+            2192
+          ],
+          [
+            2194,
+            2198
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2348,
+            2348
+          ],
+          [
+            2375,
+            2375
+          ]
+        ]
+      },
+      "turns": 12,
+      "duration_ms": 53888,
+      "input_tokens": 22,
+      "output_tokens": 11253,
+      "cache_read_tokens": 287988,
+      "cache_creation_tokens": 46445,
+      "cost_usd": 0.017797580000000004,
+      "partial": false
+    },
+    {
+      "task": "fixup",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:52:21Z",
+      "dir": "evals/runs/2026-11-26-b88dad5-repairs/fixup/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "2ee2133146af4d89ab9e0abd70bc2efc5eee97788119dfa599c064e9195d5180",
+      "graded_program_sha256": "013a01879e3998483f65eff187afcafac189c5b1b5931190f7a9ec23a2ee42cc",
+      "grading": {
+        "ms": 677,
+        "load": 50.83,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "run": 2
+        },
+        "failed": {
+          "compile": 1
+        },
+        "failed_total": 1
+      },
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "can't assign to `p.patience`",
+          "template": "can't assign to `…`",
+          "spans": [
+            "p.patience"
+          ],
+          "file": "solution.12am",
+          "line": 96,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "this query has 1 term, but its block takes 2 parameters",
+          "template": "this query has 1 term, but its block takes 2 parameters",
+          "spans": [],
+          "file": "solution.12am",
+          "line": 114,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`arrive` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "arrive"
+          ],
+          "file": "solution.12am",
+          "line": 125,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`board` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "board"
+          ],
+          "file": "solution.12am",
+          "line": 126,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`sail` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "sail"
+          ],
+          "file": "solution.12am",
+          "line": 127,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`wait` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "wait"
+          ],
+          "file": "solution.12am",
+          "line": 128,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        },
+        {
+          "kind": "error",
+          "message": "`report` is a system and can't be called",
+          "template": "`…` is a system and can't be called",
+          "spans": [
+            "report"
+          ],
+          "file": "solution.12am",
+          "line": 129,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        }
+      ],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1259
+          ],
+          [
+            1920,
+            1920
+          ],
+          [
+            2196,
+            2196
+          ]
+        ]
+      },
+      "turns": 9,
+      "duration_ms": 24765,
+      "input_tokens": 12,
+      "output_tokens": 3527,
+      "cache_read_tokens": 98049,
+      "cache_creation_tokens": 31028,
+      "cost_usd": 0.1692109,
+      "partial": false
+    },
+    {
+      "task": "mend",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:52:21Z",
+      "dir": "evals/runs/2026-11-26-b88dad5-repairs/mend/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "81bf0c65f318602d3543396a6d1822988f9812c89b9d5a0a5d16afe6f73bbba8",
+      "graded_program_sha256": "d9fa3c6e21c957b0ae3c4a7ba9d1cfb9d8264d9974eb94fdabc3ab1c4f33fe35",
+      "grading": {
+        "ms": 517,
+        "load": 39.57,
+        "timeout": false
+      },
+      "calls": {
+        "total": 3,
+        "by_subcommand": {
+          "check": 2,
+          "run": 1
+        },
+        "failed": {
+          "compile": 1
+        },
+        "failed_total": 1
+      },
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "unexpected `{`",
+          "template": "unexpected `…`",
+          "spans": [
+            "{"
+          ],
+          "file": "/tmp/eval.ds6WsymO/solution.12am",
+          "line": 16,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        }
+      ],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1259
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1301,
+            1301
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1394,
+            1394
+          ],
+          [
+            1400,
+            1400
+          ],
+          [
+            1410,
+            1410
+          ],
+          [
+            1414,
+            1414
+          ],
+          [
+            1427,
+            1427
+          ],
+          [
+            1429,
+            1429
+          ],
+          [
+            1431,
+            1431
+          ],
+          [
+            1433,
+            1433
+          ],
+          [
+            1435,
+            1435
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1525,
+            1525
+          ],
+          [
+            1531,
+            1531
+          ],
+          [
+            1544,
+            1544
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1575,
+            1575
+          ],
+          [
+            1577,
+            1577
+          ],
+          [
+            1581,
+            1582
+          ],
+          [
+            1585,
+            1585
+          ],
+          [
+            1587,
+            1587
+          ],
+          [
+            1591,
+            1592
+          ],
+          [
+            1655,
+            1655
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1683,
+            1683
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            1900,
+            1900
+          ],
+          [
+            1906,
+            1906
+          ],
+          [
+            1912,
+            1912
+          ],
+          [
+            1935,
+            1936
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2091,
+            2185
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2213,
+            2213
+          ],
+          [
+            2215,
+            2215
+          ],
+          [
+            2225,
+            2225
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2375,
+            2375
+          ],
+          [
+            2378,
+            2378
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2585,
+            2618
+          ]
+        ]
+      },
+      "turns": 12,
+      "duration_ms": 39118,
+      "input_tokens": 20,
+      "output_tokens": 7702,
+      "cache_read_tokens": 272246,
+      "cache_creation_tokens": 40209,
+      "cost_usd": 0.014617260000000002,
+      "partial": false
+    },
+    {
+      "task": "mend",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:52:21Z",
+      "dir": "evals/runs/2026-11-26-b88dad5-repairs/mend/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "a2c1c4a2ed106e3cbcc47232688fff0c88766c9cc6183714dff70f4ca6e74469",
+      "graded_program_sha256": "2a8046b29008ba3222eae04f33ab8713cad2145ab1ceb6b3a16b30bb31d9c1e0",
+      "grading": {
+        "ms": 517,
+        "load": 55.25,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1259
+          ],
+          [
+            1308,
+            1308
+          ],
+          [
+            1328,
+            1328
+          ],
+          [
+            1357,
+            1357
+          ],
+          [
+            1394,
+            1394
+          ],
+          [
+            1400,
+            1400
+          ],
+          [
+            1410,
+            1410
+          ],
+          [
+            1414,
+            1414
+          ],
+          [
+            1427,
+            1427
+          ],
+          [
+            1429,
+            1429
+          ],
+          [
+            1431,
+            1431
+          ],
+          [
+            1433,
+            1433
+          ],
+          [
+            1435,
+            1435
+          ],
+          [
+            1495,
+            1495
+          ],
+          [
+            1507,
+            1508
+          ],
+          [
+            1525,
+            1525
+          ],
+          [
+            1531,
+            1531
+          ],
+          [
+            1544,
+            1544
+          ],
+          [
+            1575,
+            1575
+          ],
+          [
+            1577,
+            1577
+          ],
+          [
+            1581,
+            1582
+          ],
+          [
+            1585,
+            1585
+          ],
+          [
+            1587,
+            1587
+          ],
+          [
+            1591,
+            1592
+          ],
+          [
+            1655,
+            1655
+          ],
+          [
+            1671,
+            1671
+          ],
+          [
+            1735,
+            1735
+          ],
+          [
+            1900,
+            1900
+          ],
+          [
+            1906,
+            1906
+          ],
+          [
+            1912,
+            1914
+          ],
+          [
+            1920,
+            1920
+          ],
+          [
+            1928,
+            1928
+          ],
+          [
+            1935,
+            1935
+          ],
+          [
+            1939,
+            1939
+          ],
+          [
+            2095,
+            2184
+          ],
+          [
+            2196,
+            2196
+          ],
+          [
+            2215,
+            2215
+          ],
+          [
+            2375,
+            2375
+          ],
+          [
+            2475,
+            2475
+          ],
+          [
+            2577,
+            2577
+          ],
+          [
+            2588,
+            2588
+          ],
+          [
+            2594,
+            2594
+          ]
+        ],
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ]
+      },
+      "turns": 10,
+      "duration_ms": 18229,
+      "input_tokens": 14,
+      "output_tokens": 2207,
+      "cache_read_tokens": 163869,
+      "cache_creation_tokens": 43481,
+      "cost_usd": 0.2124089,
+      "partial": false
+    }
+  ]
+}
