@@ -88,6 +88,13 @@
 //! file with `midnight: threads: ` before each, one for each loop the
 //! first time it is split.
 //!
+//! `pieces_and_threads_follow_the_work` runs `tests/run/cores_emit.12am`
+//! with `16,info`, `4,info` and `1,info`, and requires the pieces and the
+//! threads its two loops get by their weight and their rows.
+//! `only_programs_that_split_read_the_threads_variable` requires a word
+//! the runtime does not know to be reported by a program with a loop that
+//! can be split, and by no other.
+//!
 //! `pool_stress` builds `tests/pool/stress.c` with
 //! `runtime/midnight_pool.c` and runs each of its modes.
 //!
@@ -1978,4 +1985,73 @@ fn tsan_programs() {
         jobs.len(),
         TSAN_SETTINGS.join(" and ")
     ));
+}
+
+/// Builds a program in release mode and runs it with no GPU device and
+/// `MIDNIGHT_THREADS` set to `threads`. Returns what it wrote to standard
+/// error; it must exit 0 and print `NAME.out`.
+fn threads_said(dir: &Path, source: &Path, threads: &str) -> String {
+    let exe = exe_path(dir, source, Mode::Release);
+    build(source, &exe, Mode::Release).unwrap_or_else(|message| panic!("{message}"));
+    let mut command = on_cpu(&exe);
+    command.env("MIDNIGHT_THREADS", threads);
+    let run = run_within(&mut command, RUN_LIMIT);
+    let expected = std::fs::read_to_string(source.with_extension("out")).expect("read .out");
+    assert_eq!(
+        (run.status, run.stdout.as_str()),
+        (Some(0), expected.as_str()),
+        "{} with MIDNIGHT_THREADS={threads}\n{}",
+        source.display(),
+        run.stderr
+    );
+    run.stderr
+}
+
+/// The size of a piece and the number of threads follow the work of a
+/// loop. The first loop of `tests/run/cores_emit.12am` has 30,000 rows of
+/// weight 59: pieces of 25,000 / 59 = 423 rows, so 71 of them, and one
+/// thread for every 200,000 of its 1,770,000 of work, so 8, or as many as
+/// there are. Its second loop, 15,993 rows of weight 19, has less than
+/// 800,000 of work and is not split.
+#[test]
+fn pieces_and_threads_follow_the_work() {
+    let dir = scratch("pieces");
+    let source = Path::new("tests/run/cores_emit.12am");
+    let split = "tests/run/cores_emit.12am:28: 30000 rows in 71 pieces on";
+    assert_eq!(
+        threads_said(&dir, source, "16,info"),
+        format!("{THREADS_SAID}16\n{THREADS_SAID}{split} 8 threads\n")
+    );
+    assert_eq!(
+        threads_said(&dir, source, "4,info"),
+        format!("{THREADS_SAID}4\n{THREADS_SAID}{split} 4 threads\n")
+    );
+    assert_eq!(
+        threads_said(&dir, source, "1,info"),
+        format!("{THREADS_SAID}1\n")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A program with a loop that can be split reports a word of
+/// `MIDNIGHT_THREADS` it does not know, and goes on. A program with no
+/// such loop does not read the variable.
+#[test]
+fn only_programs_that_split_read_the_threads_variable() {
+    let dir = scratch("threads-variable");
+    assert_eq!(
+        threads_said(
+            &dir,
+            Path::new("tests/run/cores_gpu_rand.12am"),
+            "2,bogus,0,300"
+        ),
+        "midnight: MIDNIGHT_THREADS: unknown word `bogus`\n\
+         midnight: MIDNIGHT_THREADS: unknown word `0`\n\
+         midnight: MIDNIGHT_THREADS: unknown word `300`\n"
+    );
+    assert_eq!(
+        threads_said(&dir, Path::new("examples/hello.12am"), "2,bogus,info"),
+        ""
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

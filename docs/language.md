@@ -1738,15 +1738,18 @@ Measured on an RTX 5090 beside a Ryzen 9 9950X3D:
 - Moving entities (`pos.x += vel.dx * Time.dt`, on two pairs of `Float32`)
   is faster on the GPU than on one CPU thread from roughly 200,000 entities
   when the data stays there: a million take 0.10 ms per tick on one CPU
-  thread and 0.03 ms on the GPU. When an ordinary system reads the result
-  in every tick the GPU is slower at every number of entities measured, up
-  to four million: a million then take 0.82 ms per tick, against 0.51 ms
-  for the same two systems on one CPU thread.
+  thread and 0.03 ms on the GPU. On the sixteen cores a million take
+  0.02 ms, which is as fast as the GPU. When an ordinary system reads the
+  result in every tick the GPU is slower at every number of entities
+  measured, up to four million: a million then take 0.82 ms per tick,
+  against 0.51 ms for the same two systems on one CPU thread and 0.44 ms
+  on the sixteen cores, where the system that reads adds up a `Float` and
+  stays on one.
 - Gravity among 16,384 bodies, every body against every other, takes 0.84 ms
   per tick on the GPU, 354 ms on one CPU thread and 24 ms on the sixteen
   cores; among 65,536 bodies, 3.7 ms on the GPU.
 - The same gravity as a strict GPU system takes 7.2 ms per tick on the GPU,
-  571 ms on one CPU thread and 40 ms on the sixteen cores.
+  573 ms on one CPU thread and 40 ms on the sixteen cores.
 
 `nix run .#bench-gpu` measures these, and the other costs it lists, on the
 machine it runs on; with `MIDNIGHT_THREADS=1` its CPU timings are those of
@@ -1858,11 +1861,15 @@ Measured on a Ryzen 9 9950X3D, sixteen cores, per tick:
 
 | Loop                                                           | One thread | Sixteen cores |
 | -------------------------------------------------------------- | ---------- | ------------- |
-| Gravity among 16,384 bodies, a GPU block on the CPU            | 353.9 ms   | 23.9 ms       |
-| The same as a strict GPU system                                | 571.5 ms   | 40.0 ms       |
-| `move`, an ordinary `each` over a million entities             | 0.284 ms   | 0.031 ms      |
+| Gravity among 16,384 bodies, a GPU block on the CPU            | 354 ms     | 23.9 ms       |
+| The same as a strict GPU system                                | 573 ms     | 39.9 ms       |
+| 100,000 entities that each look at 64 others, a nested `each`  | 1.25 ms    | 0.085 ms      |
+| `move`, an ordinary `each` over a million entities             | 0.287 ms   | 0.030 ms      |
+| The same `move` as a GPU block on the CPU                      | 0.103 ms   | 0.019 ms      |
+| A million entities age and a thousand of them are despawned    | 0.25 ms    | 0.066 ms      |
+| `move` over 6,400 entities in 64 tables, which is not split    | 0.0020 ms  | 0.0020 ms     |
 
-An RTX 5090 takes 0.83 ms for the gravity of the first row.
+An RTX 5090 takes 0.84 ms for the gravity of the first row.
 `nix run .#bench-cores` measures these on the machine it runs on.
 
 What follows from this:
@@ -1880,6 +1887,12 @@ What follows from this:
   `Position` and assigns its own `Velocity` is independent. One that reads
   and assigns `Position` is not: split the component, or compute into a
   second component and copy.
+- **Queued changes are applied by one thread.** What a split loop queues
+  is applied when it ends, one change after another. The loop over a
+  million entities in the table above takes 0.023 ms on sixteen cores when
+  nothing expires; despawning a thousand adds about 0.04 ms, so the tick
+  is 4 times as fast as on one thread, not 10. With a hundred it is 7
+  times as fast.
 - **Cores do not help a loop that waits for memory.** A light loop over
   arrays larger than the processor's cache runs at the speed of memory on
   one core, and on sixteen.

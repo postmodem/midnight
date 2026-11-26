@@ -136,8 +136,16 @@ command that needs it.
     with enough work to be split at `MIDNIGHT_THREADS=4` where pieces of
     several rows matter, and shows the order of what it queues or emits in
     its output. Its `.out` is what it prints on one thread.
+  - `pieces_and_threads_follow_the_work` holds the two loops of
+    `tests/run/cores_emit.12am` to the pieces and threads their weight and
+    rows give: change it together with a weight or with one of the
+    numbers in "What several cores cost".
+  - `only_programs_that_split_read_the_threads_variable` requires an
+    unknown word of `MIDNIGHT_THREADS` to be reported by a program with a
+    loop that can be split, and by no other.
   - `pool_stress` builds `tests/pool/stress.c` with
-    `runtime/midnight_pool.c` and runs each of its modes.
+    `runtime/midnight_pool.c` and runs each of its modes. Run it under
+    load when the pool changes: its races need many threads to show.
   - With `MIDNIGHT_TEST_TSAN=1`, `tsan_pool_stress` does the same with
     ThreadSanitizer, and `tsan_programs` builds every program
     `thread_programs` runs in release mode with `-fsanitize=thread` and

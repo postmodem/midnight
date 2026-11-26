@@ -18,7 +18,7 @@ thread, read against its source; every run on several threads must give
 the same.
 
 Counts: 277 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-344 in `tests/fail`, 86 in `tests/panic`, 16 in `tests/plan`, 37 in
+344 in `tests/fail`, 87 in `tests/panic`, 16 in `tests/plan`, 37 in
 `tests/loops`.
 
 ## A first program, The model
@@ -518,7 +518,7 @@ pieces do.
 | No two threads touch the same memory unordered | `tsan_programs` and `tsan_pool_stress` with `MIDNIGHT_TEST_TSAN=1`; `checks.tsan` of the flake |
 | With a device in use, the output and the `stats` counts are what they are without threads | in GPU mode, `gpu_programs`, `gpu_stats_match_plan` and `gpu_stats_match_expected` run again with `MIDNIGHT_THREADS=4,small`. `gpu_batch`, `gpu_overwrite_cpu`, `gpu_overwrite_gpu`, `gpu_queue_order`, `gpu_rare_assign`, `gpu_rows_add_remove`, `gpu_rows_despawn` and `gpu_transfers` have independent loops over components that GPU blocks name |
 | An independent `each` over a component some GPU block names hands its terms to the runtime and calls nothing for the GPU copies itself | the unit test `an_independent_loop_lists_what_gpu_blocks_name` in `src/emit/tests/gpu.rs` |
-| A program with no GPU system and no independent `each` has no threads | not covered by a test |
+| A program with no GPU system and no independent `each` does not read `MIDNIGHT_THREADS` | `only_programs_that_split_read_the_threads_variable` in `tests/suite.rs`, on `examples/hello.12am`. That such a program is built without `midnight_pool.c` is not covered by a test |
 
 ### GPU blocks on the CPU
 
@@ -588,7 +588,7 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 | Every row fails, each with a message of its own: the first row's | `panic/cores_every_row_fails` |
 | A row fails and a later row, in another piece, never ends: the program still stops with the error, within ten seconds | `panic/cores_failure_before_endless` |
 | A function the loop calls holds `World.tick`: the loop stays on one core, and the call is the runtime error it is on one thread | `panic/cores_tick_in_function`, `loops/does_world_tick` |
-| An error in a nested `each` or a called function of a piece | not covered by a program of its own |
+| An error in a function the loop calls, raised in the block of an `each` nested there | `panic/cores_failure_in_function` |
 
 ### Threads
 
@@ -596,8 +596,8 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 | --- | --- |
 | The words of `MIDNIGHT_THREADS`: a number, `small`, `reverse`, `jitter`, `awake` | the settings of `thread_programs` |
 | `info`: the thread count, and one line for each loop the first time it is split | `splits_match_expected` |
-| An unknown word is reported | not covered |
-| The pool on its own: a million loops of a few pieces one after another, loops after pauses, four threads for every processor, one processor (where the pool chooses one thread), started and stopped a thousand times, a loop in which pieces fail, and one with a failing piece and a later piece that never ends; plain and with `reverse`, `jitter` and `awake` | `pool_stress`, and `tsan_pool_stress` with ThreadSanitizer, both over `tests/pool/stress.c` |
+| An unknown word, and a number outside 1 to 256, is reported and ignored | `only_programs_that_split_read_the_threads_variable` |
+| The pool on its own: a million loops of a few pieces one after another, loops after pauses, four threads for every processor, one processor (where the pool chooses one thread), started and stopped a thousand times, a loop in which pieces fail, one with a failing piece and a later piece that never ends, and one in which every thread is in the loop when two pieces fail; plain and with `reverse`, `jitter` and `awake` | `pool_stress`, and `tsan_pool_stress` with ThreadSanitizer, both over `tests/pool/stress.c` |
 | One thread for each core the process may run on, on a machine with several | not covered: the tests give the count |
 
 ## Events
@@ -717,8 +717,8 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 | A component a GPU block writes is rounded up to a multiple of 4 bytes; one that GPU blocks only read keeps its size | `gpu_odd_row_size`, `gpu_field_types` (the generated C asserts the size and every offset of each component a GPU block names); the unit tests `a_written_component_is_whole_words` and `a_read_only_column_can_have_rows_of_any_size` in `src/emit/tests/gpu.rs` |
 | What a GPU system costs: the fixed cost of a block, the cost of a transfer, the copy a nested `each` reads | not observable from a program's output; `nix run .#bench-gpu` measures the first two |
 | What moves, row by row, and how often the program waits for the GPU | see [What moves](#what-moves) |
-| What several cores cost: the weight of a run | the unit tests `the_weight_of_a_run_counts_its_operations`, `the_weight_of_a_run_is_never_less_than_one`, `a_branch_weighs_its_condition_and_its_heaviest_arm`, `a_loop_that_is_not_a_query_weighs_eight_rounds`, `a_nested_each_weighs_its_block_times_its_rows_wherever_it_stands`, `a_call_weighs_what_its_function_weighs`, `factors_stop_at_the_limit` and `a_summary_has_the_weight_of_a_call` in `src/check/tests/effects.rs`. The weight of a GPU block has no test of its own |
-| What several cores cost: the size of a piece, the work from which a loop is split, the number of threads | not observable from a program's output; `nix run .#bench-cores` measures the result. `cores_gpu_tables`, `cores_queued`, `cores_emit`, `cores_sums` and `cores_reads` have enough work to be split with `MIDNIGHT_THREADS=4`, into pieces of several rows that cross from one table into the next |
+| What several cores cost: the weight of a run | the unit tests `the_weight_of_a_run_counts_its_operations`, `the_weight_of_a_run_is_never_less_than_one`, `a_branch_weighs_its_condition_and_its_heaviest_arm`, `a_loop_that_is_not_a_query_weighs_eight_rounds`, `a_nested_each_weighs_its_block_times_its_rows_wherever_it_stands`, `a_call_weighs_what_its_function_weighs`, `factors_stop_at_the_limit` and `a_summary_has_the_weight_of_a_call` in `src/check/tests/effects.rs`. The weight of a GPU block: the unit test `a_block_has_a_weight_and_runs_the_rows_it_is_given` in `src/emit/tests/gpu.rs` |
+| What several cores cost: the size of a piece, the work from which a loop is split, the number of threads | `pieces_and_threads_follow_the_work` in `tests/suite.rs`, on the two loops of `cores_emit` with `MIDNIGHT_THREADS` set to `16,info`, `4,info` and `1,info`; `nix run .#bench-cores` measures the result. `cores_gpu_tables`, `cores_queued`, `cores_emit`, `cores_sums` and `cores_reads` have enough work to be split with `MIDNIGHT_THREADS=4`, into pieces of several rows that cross from one table into the next |
 | A store of a value the compiler can bound within the field is not an operation that can fail: each rule, and the nearest case that does not fit | the unit test `a_store_whose_range_fits_is_not_checked` in `src/emit/tests/gpu.rs`; `gpu_narrow_ranges` (values at the ends of each range, no check left in the shader), `panic/gpu_store_clamp_too_wide`, `panic/gpu_store_mod_too_wide` |
 | The other layout and cost facts (tables, 20 bytes per entity, tags take no space, costs of operations) | not observable from a program's output; not covered |
 
@@ -730,7 +730,7 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 | Several independent errors are all reported | `fail/three_errors` |
 | At most 20 errors are reported | `fail/error_cap` |
 | Runtime errors print `FILE:LINE: runtime error: MESSAGE` and exit with status 1 | every `tests/panic` program |
-| A loop on several cores stops with the error of the earliest failing row | `panic/cores_two_failures`, `panic/cores_every_row_fails`, `panic/cores_failure_before_endless`; see [Several cores](#several-cores) |
+| A loop on several cores stops with the error of the earliest failing row | `panic/cores_two_failures`, `panic/cores_every_row_fails`, `panic/cores_failure_before_endless`, `panic/cores_failure_in_function`; see [Several cores](#several-cores) |
 
 ## Grammar
 
@@ -900,6 +900,7 @@ the rule for where a column lives.
 | A failure in a loop on several cores (the error of the earliest failing row) | two rows fail, the later row on the earlier line | `panic/cores_two_failures` | `division by zero` |
 | | every row fails | `panic/cores_every_row_fails` | `Entity(0v1) has no Extra` |
 | | a later row never ends | `panic/cores_failure_before_endless` | `modulo by zero` |
+| | in a function the loop calls | `panic/cores_failure_in_function` | `Entity(19v1) has no Shield` |
 | | `World.tick` through a function, in a loop that keeps every other rule | `panic/cores_tick_in_function` | `World.tick called inside an `each`` |
 | | a GPU block in pieces, two failing operations in rows of different tables | `panic/cores_gpu_two_failures` | `division by zero` |
 
