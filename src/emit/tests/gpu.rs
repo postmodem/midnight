@@ -548,6 +548,54 @@ fn an_independent_loop_lists_what_gpu_blocks_name() {
     assert_lacks(settle, "mn_defer_enter");
 }
 
+/// A GPU block's weight counts the work of one run: 1 for each field it
+/// loads or stores and for each operation, 8 for a `/`, and what its
+/// nested `each` does once for every row of the snapshot. The C
+/// implementation runs the rows it is given, and the block says where its
+/// `each` is.
+#[test]
+fn a_block_has_a_weight_and_runs_the_rows_it_is_given() {
+    let c = emit_c(
+        "gpu_weight",
+        "component Body\n  x: Float32\n  vx: Float32\nend\n\n\
+         gpu system pull\n  each Body do |a|\n    ax = 0.0\n    each Body do |b|\n      \
+         d = b.x - a.x\n      ax += d / (d * d + 1.0)\n    end\n    a.vx += ax * Time.dt\n  end\n  \
+         each Body do |a|\n    a.x += a.vx\n  end\nend\n\n\
+         spawn Body(1.0, 2.0)\nWorld.tick\n",
+    );
+    // Two loads, `+`, `*` and a store around the nested `each`; in it a
+    // load, `-`, `+`, `/`, `*` and `+`.
+    assert_seq(
+        &c,
+        &[
+            ".cpu = Gb0_cpu,",
+            ".weight = 5,",
+            ".inner_weight = 13,",
+            ".loc = {src0, 7},",
+        ],
+    );
+    // Two loads, `+` and a store.
+    assert_seq(
+        &c,
+        &[
+            ".cpu = Gb1_cpu,",
+            ".weight = 4,",
+            ".inner_weight = 0,",
+            ".loc = {src0, 15},",
+        ],
+    );
+    let cpu = function_text(&c, "static void Gb0_cpu(const MnGpuRun *run)");
+    assert_seq(
+        cpu,
+        &[
+            "const uint32_t end = run->end;",
+            "const uint32_t u1 = run->uniform[1];",
+        ],
+    );
+    assert_has(cpu, "for (uint32_t row = run->first; row < end; row++) {");
+    assert_lacks(cpu, "run->uniform[0]");
+}
+
 /// Ordinary code brings the CPU copy of a component up to date before it
 /// uses it, when some GPU block names the component, and says whether it
 /// writes. Other components are reached as in a program without GPU

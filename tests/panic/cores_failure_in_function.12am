@@ -1,0 +1,50 @@
+# A run of an independent loop fails deep inside it: in a function the
+# block calls, from the block of an `each` nested in that function. In a
+# piece on another thread as on one thread, the program stops with that
+# error, for the earliest row that fails.
+# Expected: `Entity(19v1) has no Shield`, on the line of the `e[Shield]`
+component Unit
+  power: Int
+  strongest: Int
+end
+
+component Shield
+  strength: Int
+end
+
+tag Guard
+tag Rear
+
+# The strength of the strongest shield that is weaker than `power`. Every
+# guard has a shield but one.
+def strongest_below(power: Int) -> Int
+  best = 0
+  each Entity, with: Guard do |e|
+    strength = e[Shield].strength
+    best = strength if strength < power && strength > best
+  end
+  best
+end
+
+4.times do |i|
+  spawn Shield(10 * i), Guard
+end
+6.times do |i|
+  spawn Unit(5 + i, 0)
+end
+9.times do |i|
+  spawn Unit(50 + i, 0), Rear
+end
+puts World.count(Unit)
+each Unit do |unit|
+  unit.strongest = strongest_below(unit.power)
+end
+each Unit do |unit|
+  print unit.strongest, " "
+end
+puts
+spawn Guard
+each Unit do |unit|
+  unit.strongest = strongest_below(unit.power + 1)
+end
+puts "not reached"
