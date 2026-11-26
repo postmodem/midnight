@@ -1832,7 +1832,8 @@ module Eval
     def command
       cmd = [@runner.claude, "-p", "--safe-mode", "--restricted", "--strict-mcp-config",
              "--disable-slash-commands", "--tools", TOOLS.join(","),
-             "--allowedTools", "Bash(midnight *)", "Bash(MIDNIGHT_* midnight *)", *TOOLS.drop(1),
+             "--allowedTools", "Bash(midnight *)", "Bash(MIDNIGHT_DRIVE=* midnight *)",
+             "Bash(MIDNIGHT_THREADS=* midnight *)", *TOOLS.drop(1),
              "--permission-prompts", "none", "--no-session-persistence",
              "--output-format", "stream-json", "--verbose", "--model", @model]
       cmd += ["--effort", @runner.effort] if @runner.effort

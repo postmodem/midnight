@@ -128,7 +128,8 @@ The agent is Claude Code, started in the run's directory as
 claude -p --safe-mode --restricted --strict-mcp-config
   --disable-slash-commands
   --tools Bash,Read,Edit,Write,Glob,Grep
-  --allowedTools "Bash(midnight *)" "Bash(MIDNIGHT_* midnight *)"
+  --allowedTools "Bash(midnight *)" "Bash(MIDNIGHT_DRIVE=* midnight *)"
+                 "Bash(MIDNIGHT_THREADS=* midnight *)"
                  Read Edit Write Glob Grep
   --permission-prompts none --no-session-persistence
   --output-format stream-json --verbose
@@ -204,8 +205,8 @@ for compiler calls: a command the agent believes ran may have been
 refused.
 
 These guards are in the wrapper because permission patterns match more
-than they appear to: `Bash(MIDNIGHT_* midnight *)` also allows a command
-that sets two variables, or `RUBYOPT` after a `MIDNIGHT_` one. A program
+than they appear to: `Bash(MIDNIGHT_DRIVE=* midnight *)` also allows a
+command that sets another variable after it, `RUBYOPT` among them. A program
 the wrapper accepts reads only files of the run's directory, its sources
 and its file of commands; it reaches no network and no C library, and
 with `MIDNIGHT_GPU=off` it captures no frame, so it writes nothing but its
