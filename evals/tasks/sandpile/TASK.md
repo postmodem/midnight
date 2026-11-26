@@ -32,8 +32,9 @@ the number of grains lost since the start. The words are always as shown,
 whatever the numbers.
 
 After the last of these lines the program prints the grid: one line per
-row, from row 0 to row 6, each with the number of grains in the row's
-cells, from column 0 to column 6, separated by single spaces.
+row, from row 0 to row 6. Each line has seven numbers, one for each cell
+of the row from column 0 to column 6, separated by single spaces: the
+number of grains that cell holds.
 
 The program prints exactly 15 lines and nothing else. The first three are:
 
