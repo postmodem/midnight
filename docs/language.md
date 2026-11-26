@@ -1,6 +1,6 @@
 # The Midnight language
 
-This document describes Midnight 0.6: the language core specified by
+This document describes Midnight 0.7: the language core specified by
 [`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
 systems specified by
 [`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), what moves
@@ -9,8 +9,10 @@ between CPU and GPU memory, specified by
 systems, specified by
 [`specs/0004-strict-gpu-systems.md`](../specs/0004-strict-gpu-systems.md),
 loops on several cores, specified by
-[`specs/0005-several-cores.md`](../specs/0005-several-cores.md), and a
-window, specified by [`specs/0006-a-window.md`](../specs/0006-a-window.md).
+[`specs/0005-several-cores.md`](../specs/0005-several-cores.md), a
+window, specified by [`specs/0006-a-window.md`](../specs/0006-a-window.md),
+and the keyboard and the mouse, specified by
+[`specs/0007-keyboard-and-mouse.md`](../specs/0007-keyboard-and-mouse.md).
 It is the reference for what a program means. Where the compiler and this
 document disagree, one of them has a bug.
 
@@ -117,8 +119,10 @@ system tag then true unless until when while
 `gpu` is used in one place, before `system`: see [GPU systems](#gpu-systems).
 
 The names `Int`, `Float`, `Bool`, `String`, `Entity`, `World`, `Time`,
-`Math`, `Window`, `Color`, `WindowResized` and `WindowClosed`, and the
-compact type names (`Float32`, `Int8`, `Int16`, `Int32`, `UInt8`,
+`Math`, `Window`, `Color`, `WindowResized`, `WindowClosed`, `Key`,
+`MouseButton`, `Keyboard`, `Mouse`, `KeyPressed`, `KeyReleased`,
+`MousePressed`, `MouseReleased`, `WindowFocused` and `WindowUnfocused`,
+and the compact type names (`Float32`, `Int8`, `Int16`, `Int32`, `UInt8`,
 `UInt16`, `UInt32`), are built in and can't be redefined.
 
 **Literals.**
@@ -391,7 +395,7 @@ iteration. This holds for every loop form, including `each` and `on`. The
 one exception is the `each` of a [GPU system](#gpu-systems), which `break`
 cannot leave.
 
-Blocks are not values in 0.6. `do |…| … end` is accepted only by the loop
+Blocks are not values in 0.7. `do |…| … end` is accepted only by the loop
 forms in this document.
 
 ## Functions
@@ -709,9 +713,13 @@ it was resized or closed, and show a frame at the end of every tick. A
 frame is the window's background colour and nothing more.
 
 The names `Window`, `Color`, `WindowResized` and `WindowClosed` are built
-in and can't be declared by a program. A program that names `Window` or
-one of the two events **has a window**. `Color` alone is a struct like any
-other.
+in and can't be declared by a program. A program that names `Window`, one
+of the two events, or something of the
+[keyboard and the mouse](#keyboard-and-mouse) other than the enums `Key`
+and `MouseButton` **has a window**. `Color` alone is a struct like any
+other. A name counts where it stands for the built-in: an enum variant
+spelled the same, declared in an `enum` or written after `::`, does not
+count.
 
 **`Color`** is a struct, as if declared
 
@@ -740,6 +748,7 @@ component. A component out of range is the error it is for any `UInt8`.
 | `Window.pixel_width`   | `Int`   | Width of a frame in pixels. Read-only.          |
 | `Window.pixel_height`  | `Int`   | Height of a frame in pixels. Read-only.         |
 | `Window.background`    | `Color` | What a frame is filled with. Starts as `Color(0, 0, 0)`. Its `a` is ignored: a window is opaque. |
+| `Window.focused?`      | `Bool`  | Keys go to the window. Read-only. See [Keyboard and mouse](#keyboard-and-mouse). |
 
 A **point** is the unit a desktop measures windows in. On most displays a
 point is a pixel; on a display with a scale of 2 a window of 800 by 600
@@ -749,7 +758,7 @@ reads the pixel size where it needs the exact grid.
 
 Before a window is opened the four sizes are 0. After one is closed they
 keep their last values. The fields are read wherever a resource field is,
-in a GPU system too. Assigning to any field but `background` is a compile
+in a GPU system too. Assigning to any member but `background` is a compile
 error.
 
 **`Window.open`** follows the rule of `World.tick`: it is called from
@@ -820,17 +829,20 @@ can.
 
 **A frame for each tick.** When a tick ends while a window is open, the
 window shows a new **frame**: the picture of the world after that tick, of
-`Window.pixel_width` by `Window.pixel_height` pixels. In 0.6 the picture is
+`Window.pixel_width` by `Window.pixel_height` pixels. In 0.7 the picture is
 `Window.background`. Showing a frame never waits for the display, so the
 display's rate changes neither the pace nor the output of a program, and a
 window that is hidden, minimized or on another workspace costs the program
 nothing: its ticks go on. The frames are drawn on the device that GPU
 systems use; a window needs one (see [Without a display](#without-a-display)).
 
-**Determinism.** A window brings two things from outside into a program:
-its sizes and the moment it is closed. Both enter only when a tick begins.
-A headless run takes them from its commands alone, so it prints the same
-output on every machine and for every run. A frame of 0.6 is the same
+**Determinism.** A window brings its sizes, its closing, its focus and the
+keyboard and the mouse into a program from outside, and all of them enter
+only when a tick begins. A headless run takes all of them from its
+commands alone, so it prints the same output on every machine and for
+every run; a driven window on the desktop takes its focus, the keyboard
+and the mouse from its commands too. Everything the desktop can tell a program of the keyboard and
+the mouse is something a command can say. A frame of 0.7 is the same
 picture, pixel for pixel, on every device: each byte of the background is
 cleared as the linear value whose sRGB encoding it is.
 
@@ -842,7 +854,7 @@ program starts, by programs with a window only:
 | Word       | Meaning                                                       |
 | ---------- | ------------------------------------------------------------- |
 | `headless` | Show no window. `Window.open` gives a window of exactly the size asked for, at a scale of 1, that exists in the program only. Ticks are not held to real time. |
-| `info`     | Print one line to standard error when a window opens: its sizes, and where it is shown (`wayland`, `x11` or `cocoa`) and how frames reach it (`mailbox`, `immediate` or `fifo`), or `headless`. |
+| `info`     | Print one line to standard error when a window opens: its sizes, and where it is shown (`wayland`, `x11` or `cocoa`) and how frames reach it (`mailbox`, `immediate` or `fifo`), or `headless`. A driven window adds `midnight: window: input from commands`. A shown window that is not driven prints `midnight: window: focused` each time it gains the focus and `midnight: window: pointer inside` each time the pointer enters it. |
 
 A word that is not in the table is reported once, when the program starts.
 A headless window touches no desktop, and no device until a frame is
@@ -869,8 +881,11 @@ before X11.
 to a line, read from a file or a named pipe. A line that is empty or
 begins with `#` is skipped, and the spaces around a command are. With
 commands a program is **driven**: its ticks are not held to real time,
-headless or not, and before each tick begins, while a window is open, the
-runtime carries out commands until one lets the tick run.
+headless or not, it takes its keyboard, mouse and focus from its commands
+alone, and before each tick begins, while a window is open, the runtime
+carries out commands until one lets the tick run. The table below has the
+commands of the window; those of the keyboard and the mouse are in
+[Commands for the keyboard and the mouse](#commands-for-the-keyboard-and-the-mouse).
 
 | Command        | Meaning                                                    |
 | -------------- | ---------------------------------------------------------- |
@@ -881,7 +896,9 @@ runtime carries out commands until one lets the tick run.
 | `capture FILE` | Write the last frame to `FILE` as a PNG.                   |
 
 - `resize`, `scale` and `close` take effect in the tick that begins next,
-  through the events above. A `tick N` counts every tick of the program
+  through the events above. `close` is carried out in its place among the
+  commands of the keyboard and the mouse: in the tick it closes, what
+  those commands do after it reaches no window. A `tick N` counts every tick of the program
   while it is carried out, window open or not.
 - The last frame is the frame of the last tick that ended while the window
   was open, or, before such a tick, the one `Window.open` showed.
@@ -927,6 +944,293 @@ opens the device at its first `capture`. A failure of the window or its
 surface after `Window.open` has returned prints `midnight: window error:
 …` and ends the program with status 70, as an error from the device does;
 so does a window the desktop makes larger than 8192 pixels on a side.
+
+## Keyboard and mouse
+
+```ruby
+Window.open("Steer", 640, 480)
+
+resource Ship
+  x: Float = 320
+end
+
+system steer
+  Ship.x -= 4 if Keyboard.down?(Key::A)
+  Ship.x += 4 if Keyboard.down?(Key::D)
+  World.stop if Keyboard.pressed?(Key::Escape)
+end
+
+system aim
+  on MousePressed do |click|
+    puts "#{click.button} at #{click.x}, #{click.y}" if click.button == MouseButton::Left
+  end
+end
+
+World.run
+```
+
+A program with a window reads the state of the keyboard and the mouse
+from two built-in resources, `Keyboard` and `Mouse`, and receives what a
+person did as events. What happens at the desktop enters a program only
+when a tick begins, as the window's sizes do, so a tick sees one fixed
+state of the keyboard and the mouse. Keys are named by where they are on
+the keyboard, not by what the layout prints on them.
+
+The names `Key`, `MouseButton`, `Keyboard`, `Mouse`, `KeyPressed`,
+`KeyReleased`, `MousePressed`, `MouseReleased`, `WindowFocused` and
+`WindowUnfocused` are built in and can't be declared by a program. A
+program that names any of them but `Key` and `MouseButton` has a window,
+with everything this section and [The window](#the-window) declare. A
+program that names `Key` or `MouseButton` alone has those two enums and
+nothing else, as `Color` alone gives the struct.
+
+**`Key`** is an enum with a variant for each key below. A variant names a
+**position** on the keyboard: the key that is there on a US keyboard,
+spelled as the W3C's `KeyboardEvent.code` spells it, without the `Key`
+before a letter. `Key::W` is the key above `Key::S`, whatever the layout
+prints on it: on a French keyboard it is the key that types Z, and WASD
+lies under the same fingers on every layout.
+
+| Group | Variants |
+| ----- | -------- |
+| Letters | `A` to `Z` |
+| Digits | `Digit0` to `Digit9` |
+| Punctuation | `Backquote`, `Minus`, `Equal`, `BracketLeft`, `BracketRight`, `Backslash`, `Semicolon`, `Quote`, `Comma`, `Period`, `Slash`, `IntlBackslash` |
+| Whitespace and editing | `Space`, `Enter`, `Tab`, `Backspace`, `Escape`, `Insert`, `Delete` |
+| Modifiers and locks | `ShiftLeft`, `ShiftRight`, `ControlLeft`, `ControlRight`, `AltLeft`, `AltRight`, `MetaLeft`, `MetaRight`, `CapsLock`, `NumLock`, `ScrollLock` |
+| Navigation | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, `PageUp`, `PageDown` |
+| Function | `F1` to `F12`, `PrintScreen`, `Pause`, `ContextMenu` |
+| Numeric keypad | `Numpad0` to `Numpad9`, `NumpadAdd`, `NumpadSubtract`, `NumpadMultiply`, `NumpadDivide`, `NumpadDecimal`, `NumpadEnter` |
+
+That is 105 keys, those of a full-size ISO keyboard. The enum declares
+them in the order of their USB usage numbers, as if written
+
+```ruby
+enum Key
+  A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+  Digit1, Digit2, Digit3, Digit4, Digit5, Digit6, Digit7, Digit8, Digit9, Digit0
+  Enter, Escape, Backspace, Tab, Space, Minus, Equal, BracketLeft, BracketRight
+  Backslash, Semicolon, Quote, Backquote, Comma, Period, Slash, CapsLock
+  F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12
+  PrintScreen, ScrollLock, Pause, Insert, Home, PageUp, Delete, End, PageDown
+  ArrowRight, ArrowLeft, ArrowDown, ArrowUp
+  NumLock, NumpadDivide, NumpadMultiply, NumpadSubtract, NumpadAdd, NumpadEnter
+  Numpad1, Numpad2, Numpad3, Numpad4, Numpad5, Numpad6, Numpad7, Numpad8, Numpad9
+  Numpad0, NumpadDecimal, IntlBackslash, ContextMenu
+  ControlLeft, ShiftLeft, AltLeft, MetaLeft
+  ControlRight, ShiftRight, AltRight, MetaRight
+end
+```
+
+A key the table does not have never reaches a program. Modifiers are keys
+like any other: Shift held is
+`Keyboard.down?(Key::ShiftLeft) || Keyboard.down?(Key::ShiftRight)`.
+
+**`MouseButton`** is an enum: `Left`, `Middle`, `Right`, `Back`, `Forward`,
+in that order.
+
+**`Keyboard`** is a resource with one instance and no fields. Its members
+are three queries:
+
+| Member | Type | Meaning |
+| ------ | ---- | ------- |
+| `Keyboard.down?(key)` | `Bool` | The key was held when the tick began. |
+| `Keyboard.pressed?(key)` | `Bool` | The key went down at least once between the last tick's beginning and this one's. |
+| `Keyboard.released?(key)` | `Bool` | The key came up at least once between the last tick's beginning and this one's. |
+
+**`Mouse`** is a resource with one instance:
+
+| Member | Type | Meaning |
+| ------ | ---- | ------- |
+| `Mouse.x` | `Float` | Points from the left edge of the window. Read-only. |
+| `Mouse.y` | `Float` | Points from the top edge of the window. Read-only. |
+| `Mouse.inside?` | `Bool` | The pointer is over the window. Read-only. |
+| `Mouse.wheel_x` | `Float` | Notches scrolled to the right between the last tick's beginning and this one's. Read-only. |
+| `Mouse.wheel_y` | `Float` | Notches scrolled up between the last tick's beginning and this one's. Read-only. |
+| `Mouse.down?(button)` | `Bool` | The button was held when the tick began. |
+| `Mouse.pressed?(button)` | `Bool` | The button went down at least once between the last tick's beginning and this one's. |
+| `Mouse.released?(button)` | `Bool` | The button came up at least once between the last tick's beginning and this one's. |
+
+The argument of a query is any expression of type `Key` or `MouseButton`.
+A query is written with its parentheses; `Mouse.inside?` and
+`Window.focused?` are written without them. `Keyboard` and `Mouse` are not
+values, and assigning to a field of `Mouse` or to `Window.focused?` is a
+compile error.
+
+- The position is in the units of `Window.width` and `Window.height`, with
+  a fraction where the desktop gives one: on a display with a scale of 1.5
+  a point is a pixel and a half, and the pointer can be between two
+  points.
+- `Mouse.inside?` is true when the last thing the pointer did was move,
+  not leave, and its position is within the window's size as it is when
+  the tick begins: `0 <= x < width` and `0 <= y < height`.
+- When the pointer leaves the window, the position keeps the last value
+  the desktop gave, at the window's edge. While a button is held the
+  desktop goes on reporting the pointer outside the window, so the
+  position can be negative or larger than the window, and `inside?` is
+  false.
+- The wheel's notches are those of a wheel that clicks; a smooth wheel or
+  a touchpad gives fractions of one. The sign is the one the desktop gives
+  after the person's own setting: `wheel_y` is positive when the person
+  asks to see what is above, whichever movement of the hand their setting
+  makes that.
+
+**Events.** What a person did between the last tick's beginning and this
+one's reaches the program when the tick begins, before the first system
+runs:
+
+```ruby
+event KeyPressed
+  key: Key
+end
+
+event KeyReleased
+  key: Key
+end
+
+event MousePressed
+  button: MouseButton
+  x: Float
+  y: Float
+end
+
+event MouseReleased
+  button: MouseButton
+  x: Float
+  y: Float
+end
+
+event WindowFocused
+end
+
+event WindowUnfocused
+end
+```
+
+- The events of one type are in the order they happened. Events of
+  different types are received by different `on` blocks, so their order
+  relative to each other is that of the program's `on` blocks.
+- A key or a button pressed and released between two ticks gives both
+  events, and in that tick `pressed?` and `released?` are true and `down?`
+  is false. Nothing a person does is lost, however short.
+- The position of `MousePressed` and `MouseReleased` is where the pointer
+  was at that moment; `Mouse.x` and `Mouse.y` are where it was last.
+- A key held down gives one `KeyPressed`, however long it is held. The
+  presses a desktop repeats while a key is held do not reach a program.
+- **Focus.** When the window loses keyboard focus every key and button
+  that is held is released, keys in the order of `Key`, then buttons in
+  the order of `MouseButton`: their `KeyReleased` and `MouseReleased` are
+  among the tick's events, `released?` is true for them, `WindowUnfocused`
+  arrives and `focused?` is false. When the focus comes back,
+  `WindowFocused` arrives; a key that is still held is not down until it
+  is pressed again, except that the desktop may report a held Shift,
+  Control, Alt or Meta key as pressed at that moment. The pointer goes on
+  moving over a window without focus.
+- **Opening.** A window opens without the focus, with the pointer outside
+  it at 0, 0 and nothing held: until a tick begins, `Window.focused?` and
+  `Mouse.inside?` are false. A headless or driven window is given the
+  focus as the first thing that happens to it, so its first tick begins
+  with `WindowFocused` and `focused?` true. A window on the desktop that
+  is not driven gets the focus when the desktop gives it. The click that
+  gives it the focus reaches the program.
+- **Closing.** In the tick that begins with `WindowClosed`, everything
+  held is released, as on a loss of focus, and `focused?` and `inside?`
+  are false; no `WindowUnfocused` is emitted. `Mouse.x` and `Mouse.y` keep
+  their last values until a window opens again.
+- At the beginning of every tick, whether a window is open or not, what
+  was pressed and released and the wheel are cleared. Before a window is
+  opened, and in the ticks after the one that begins with `WindowClosed`,
+  nothing is held, pressed or released, and the wheel is 0.
+- The fields and the queries change when a tick begins and at no other
+  time: during a tick they do not change.
+- Emitting one of these events is a compile error.
+
+**Where they can be read.** The queries and the fields are read wherever a
+resource field is, in an independent `each` on
+[several cores](#several-cores) too: they give a loop no reason to stay on
+one core, and their argument is judged as any expression. The fields of
+`Mouse` and `Window.focused?` are read in a GPU system; a query there, or
+in a function a GPU system calls, is a compile error. Answer it in an
+ordinary system and copy it into a resource field:
+
+```ruby
+resource Held
+  boost: Bool = false
+end
+
+system keys
+  Held.boost = Keyboard.down?(Key::Space)
+end
+
+gpu system move
+  each Ship do |ship|
+    ship.x += Held.boost ? 8.0 : 4.0
+  end
+end
+```
+
+### Commands for the keyboard and the mouse
+
+A driven program, with a window on the desktop or headless, takes its
+keyboard, mouse and focus from the commands of `MIDNIGHT_DRIVE` alone:
+keys, buttons, motion, the wheel and changes of focus at the desktop do
+not reach it. Resizes and closes at the desktop still reach a driven
+window that is shown. A headless program without commands has no input.
+
+| Command | Meaning |
+| ------- | ------- |
+| `key down K` | The key `K` goes down. |
+| `key up K` | The key `K` comes up. |
+| `key K` | The key `K` goes down and comes up. |
+| `mouse move X Y` | The pointer moves to `X`, `Y` in points. |
+| `mouse down B` | The button `B` goes down where the pointer is. |
+| `mouse up B` | The button `B` comes up where the pointer is. |
+| `mouse B` | The button `B` goes down and comes up where the pointer is. |
+| `mouse leave` | The pointer leaves the window and keeps its position. Buttons stay as they are. |
+| `scroll DX DY` | The wheel turns `DX` notches to the right and `DY` up. |
+| `blur` | The window loses keyboard focus. |
+| `focus` | The window gets keyboard focus. |
+
+- `K` is the name of a `Key` variant and `B` that of a `MouseButton`
+  variant, as the source writes them after `::`.
+- A number is an optional `-`, one or more digits, and optionally a point
+  followed by one to eight digits. It is read as its digits, as a whole
+  number, divided by the power of ten of its places, which gives the
+  `Float` nearest to it on every machine; `-0` and its like are 0.0. `X`
+  and `Y` are from -8192 to 8192, `DX` and `DY` from -1000 to 1000.
+  `scroll 0 0` is allowed and changes nothing.
+- A command is carried out, and answered with `midnight: drive: ` and the
+  command as it was written, when it is read, as `resize` is; what it
+  does reaches the program when the next tick begins, in the order of the
+  file.
+- A command is judged against the state the commands before it leave, in
+  the order of the file: after `key down A`, `key up A` is right before
+  the same tick. A headless or driven window begins as "Opening" says,
+  with the focus already given; `blur` and `close` leave nothing held for
+  the commands after them, and after `close` the window has no focus and
+  the pointer is not over it. The commands carried out after the program
+  ends are judged the same way.
+
+These stop the program with status 1 and a line that names the file and
+the line number, as a wrong command of the window does, and in this order
+when more than one applies:
+
+1. a name that is not a key or a button, or a number that is not as
+   above or out of range;
+2. a `key` command while the window does not have the focus;
+3. `key down` of a key that is down, `key up` of a key that is up, and
+   the same for buttons;
+4. `mouse move` outside the window while no button is held: the desktop
+   reports such a pointer as having left, so the line names `mouse leave`;
+5. `mouse down` or `mouse B` while the pointer is not over the window and
+   no button is held;
+6. `mouse leave` while the pointer is not over the window;
+7. `blur` without the focus and `focus` with it.
+
+```
+midnight: drive: steer.drive:3: `key A` while the window does not have the focus
+midnight: drive: steer.drive:7: `mouse move 700 20` is outside the window of 640x480 points while no button is held; a pointer that leaves is `mouse leave`
+```
 
 ## GPU systems
 
@@ -1628,8 +1932,9 @@ through other functions, keeps to all of these:
    `e[C]` of it and no nested `each` that uses it through a parameter.
 
 An independent `each` may read its parameters, constants, `Time`, resource
-fields, variables of the code around it, `e[C]`, `has?`, `alive?`,
-`World.count`, and the parameters of nested `each`es, to any depth; it may
+fields, the queries of `Keyboard` and `Mouse`, variables of the code around
+it, `e[C]`, `has?`, `alive?`, `World.count`, and the parameters of nested
+`each`es, to any depth; it may
 use `next`, loops and branches, and call functions, recursive ones
 included.
 
@@ -2180,7 +2485,8 @@ The runtime errors are:
   resource field or a constant.
 
 The commands of `MIDNIGHT_DRIVE` stop a program with errors of their own;
-see [Without a display](#without-a-display).
+see [Without a display](#without-a-display) and
+[Commands for the keyboard and the mouse](#commands-for-the-keyboard-and-the-mouse).
 
 In a GPU system an error is reported when the `each` it happened in ends,
 and its message names no value; the last error in the list is reported
@@ -2191,7 +2497,7 @@ A loop that runs on several cores stops with the error it stops with on
 one thread: that of the earliest failing row in visiting order. See
 [Several cores](#several-cores).
 
-There are no exceptions to catch in 0.6.
+There are no exceptions to catch in 0.7.
 
 ## Grammar
 
@@ -2276,7 +2582,7 @@ document. The `NL` after `do |…|`, and the one after the last statement of a
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.6
+## Not in 0.7
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
@@ -2285,13 +2591,21 @@ files, command-line arguments), arithmetic at 32 bits outside GPU systems,
 system ordering constraints, running several systems at the same time,
 relationships between entities, and calling C libraries.
 
-A window leaves these out: drawing anything but the background; keyboard,
-mouse, controllers, text input and the clipboard; sound; more than one
-window at a time; closing, resizing, moving or renaming the window from
-the program, full screen, the cursor and an icon; refusing a close the
+A window leaves these out: drawing anything but the background; sound;
+more than one window at a time; closing, resizing, moving or renaming the
+window from the program, full screen and an icon; refusing a close the
 user asked for; running faster or slower than real time while a window is
 open; and reading entities, components or resources over the commands'
 pipe.
+
+The keyboard and the mouse leave these out: text input (characters, the
+layout's names for keys, dead keys, input methods), key repeat and the
+clipboard; lock states other than as keys going down and up; hiding or
+changing the cursor, locking the pointer, motion that is not a change of
+position, and grabbing the keyboard; double clicks as such, which a
+program counts in ticks; touch, pens and controllers, and touch and pens
+acting as a mouse; queries of the keyboard and the mouse in a GPU system;
+and recording what a person does at the desktop as a file of commands.
 
 A loop on several cores leaves these out: `Float` sums, strings and lists,
 `spawn`, `rand` and output. A loop that has one of them runs on one core.

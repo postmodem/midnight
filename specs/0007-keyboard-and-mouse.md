@@ -1,6 +1,6 @@
 # 0007 — Keyboard and mouse
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0006
 
 ## Goal
@@ -614,3 +614,60 @@ All run on x86_64-linux, on the development machine.
   fields and go to a shader as they are; a query would need a set of keys
   in the shader's uniforms, for an answer an ordinary system gives in one
   line.
+
+## Outcome
+
+Implemented, with the differences listed under "Differences from the
+design". Eight of the nine criteria pass on x86_64-linux: a Ryzen 9
+9950X3D beside an RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10,
+`wgpu-native` 27.0.4.0, sway 1.12, clang 21.1.8. Criterion 8 is a run
+by hand at the development machine's desktop and has not been made yet.
+
+### Acceptance criteria
+
+| # | Result |
+| - | ------ |
+| 1 | `nix flake check` passes, with `checks.window` (the smoke program and the seven window tests in the sandbox, `window_input` among them) and `checks.tsan`. `nix run .#gpu-test` and `nix run .#window-test` pass on the RTX 5090. |
+| 2 | Against `65bd4ec` (0.6.1) no `.out`, `.err`, `.plan`, `.loops`, `.split`, `.stats` or `.frames` file has changed; the new ones are added. The 447 programs of `tests/`, `examples/` and `bench/` that 0.6.1 has without a window give the same `emit-c` bytes, shaders included. |
+| 3 | The seven programs that read input (`input_keys`, `input_mouse`, `input_focus`, `input_gpu`, `input_cores`, `input_events`, `examples/input`) print their expected output headless in both build modes with `MIDNIGHT_GPU=off`, no display variable and an empty runtime directory: in the suite, and 10 runs of each in each mode, all the same. `input_gpu` and `input_cores` run in `thread_programs` under the six thread settings. |
+| 4 | Every command, diagnostic and command error has a test: the `tests/run` programs above, seven `tests/fail/input_*` programs, `drive_errors` (37 cases of the keyboard and the mouse), `loops/cores_input`, `a_variant_named_like_a_built_in_gives_no_window`. `tests/COVERAGE.md` lists them under "Keyboard and mouse". |
+| 5 | No sanitizer report from any debug run of a program that reads input, in the suite, in the runs of criterion 3 and in `window_input`. |
+| 6 | Every window test runs inside `tests/window/compositor.sh`. `tests/window/input.c` opens only the socket it is given and sends nothing to a compositor with an output not named `HEADLESS-`; `input_client_refuses_a_desktop` holds it to that. |
+| 7 | `window_input` passes 20 runs in each build mode in the sandbox (sway with pixman, `llvmpipe`) and on the 5090. |
+| 8 | Not yet run: `examples/input.12am` at the desktop, release and debug. |
+| 9 | The reference says 0.7 and `midnight --version` prints `midnight 0.7.0`. The README's commands were run as written: those that write files in a scratch copy, the two windows inside `tests/window/compositor.sh`, closed through sway. `tests/COVERAGE.md` has "Keyboard and mouse". |
+
+### Differences from the design
+
+- **Choices the design left open.** A query is an expression kind of its
+  own in the typed program (`ExprKind::Input`), and generated C calls
+  `mn_key_down`, `mn_key_pressed` and the like, which answer false for a
+  number out of range. `midnight_rt.h` lists the keys and buttons as
+  X-macros (`MN_KEYS`, `MN_MOUSE_BUTTONS`) with their USB usage and SDL
+  numbers.
+- **A driven window drops the desktop's input in `midnight_rt.c`**, in
+  the functions `mn_window_poll` calls for each happening, not in
+  `midnight_window.c`. The `info` lines `focused` and `pointer inside` are
+  printed there too, for a shown window that is not driven.
+- **`close` is a happening.** It takes its place among the happenings of
+  the tick, and nothing after it in that tick reaches the program. A close
+  from the desktop, and the one when the commands run out, come after all
+  the tick's happenings.
+- **A button's happening carries its position**, and sets the pointer's
+  position when it is applied.
+- **SDL hints.** `SDL_HINT_TOUCH_MOUSE_EVENTS` and
+  `SDL_HINT_PEN_MOUSE_EVENTS` are 0, `SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH`
+  is 1, and events with the touch or pen mouse id are dropped as well.
+- **`key down` with no key** is read as a tap of a key named `down`, and
+  reported as `` `down` is not a key ``.
+- **Two more tests of the input client.** `input_client_takes_its_commands`
+  (window mode: a command for every key and button, turns of the wheel,
+  and the commands it refuses) and `input_client_needs_an_absolute_socket`
+  (whenever `MIDNIGHT_TEST_INPUT_CLIENT` is set).
+- **`window_input` sends no `mouse leave`**: the compositor makes the
+  leave when the window goes to another workspace. Its program prints
+  only events and the wheel, so moves and leaves print nothing and which
+  tick an input falls into cannot change its output. A fresh sway's cursor
+  is at 100, 100, so `input_events.drive` begins with a move there.
+- **`examples/input.12am` also prints keys and the focus**, so a key
+  released by a loss of focus can be seen when it is run by hand.

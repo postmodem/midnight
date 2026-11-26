@@ -1,0 +1,26 @@
+# The first tick: the window has the focus, the pointer is outside.
+tick
+# The pointer to the middle of the window, and a capture of the frame.
+mouse move 320 240
+tick
+capture input-middle.png
+# A click near the top left corner.
+mouse move 64 48.5
+mouse Left
+tick
+# Two notches of the wheel up: greener.
+scroll 0 2
+tick
+capture input-green.png
+# W held while the focus moves to another window: it comes up.
+key down W
+tick
+blur
+mouse leave
+tick
+focus
+mouse move 600 400
+tick
+# Escape ends the program.
+key Escape
+tick

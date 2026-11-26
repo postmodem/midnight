@@ -19,8 +19,8 @@ The expected output of the `cores_*` programs is what each prints on one
 thread, read against its source; every run on several threads must give
 the same.
 
-Counts: 286 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-354 in `tests/fail`, 92 in `tests/panic`, 16 in `tests/plan`, 38 in
+Counts: 292 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+361 in `tests/fail`, 92 in `tests/panic`, 16 in `tests/plan`, 39 in
 `tests/loops`.
 
 ## A first program, The model
@@ -44,7 +44,7 @@ Counts: 286 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `a!=b` is `a != b` | `lex_names` |
 | Conditional operator written with spaces after a `?` name | `lex_names`, `fn_question_bang_names`, `fn_mutual_recursion` |
 | Keywords are reserved, `gpu` and `strict` included | `fail/syntax_keyword_as_variable`, `fail/syntax_gpu_reserved`, `fail/syntax_strict_reserved` |
-| Built-in names can't be redefined | `fail/builtin_type_redefined`, `fail/builtin_compact_type_redefined`, `fail/builtin_name_redefined_constant`, `fail/window_builtin_window`, `fail/window_builtin_color`, `fail/window_builtin_event` |
+| Built-in names can't be redefined | `fail/builtin_type_redefined`, `fail/builtin_compact_type_redefined`, `fail/builtin_name_redefined_constant`, `fail/window_builtin_window`, `fail/window_builtin_color`, `fail/window_builtin_event`, `fail/input_builtin_names` |
 | `Int` literals: `42`, `1_000_000`, `0xff`, `0b1010` | `lex_int_literals`, `tos_int`, `const_expressions` |
 | `Float` literals: `3.14`, `1_000.5`, `1e-3`, `2.5e6` | `lex_float_literals`, `tos_float` |
 | `Bool` literals | `types_basic`, `ops_logic` |
@@ -364,6 +364,47 @@ run inside `tests/window/compositor.sh`.
 | Commands from a named pipe, with a window shown | `window_shown` |
 | Without `MIDNIGHT_GPU_FLAGS` or `MIDNIGHT_WINDOW_FLAGS`: one line from `midnight`, the program runs headless and captures nothing | `a_window_built_without_the_flags_runs_headless` |
 
+## Keyboard and mouse
+
+Every program here runs headless with the commands of its `.drive` file,
+and on several threads as `thread_programs` runs it where it has a loop
+that can be split. The window-mode tests run inside
+`tests/window/compositor.sh`, with input from `tests/window/input.c`.
+
+| Construct | Files |
+| --- | --- |
+| The ten names are built in and can't be declared | `fail/input_builtin_names` |
+| A program that names `Keyboard`, `Mouse` or one of the six events has a window; `Key` or `MouseButton` alone gives the enums; an enum variant spelled like a built-in name does not count | `source::tests::names_that_give_the_built_ins` (unit); `a_variant_named_like_a_built_in_gives_no_window` |
+| `Key` has 105 variants in the order of USB usage numbers, `MouseButton` five, the same as the runtime's | `source::tests::keys_and_buttons_match_the_runtime` (unit); the layouts and counts asserted by every generated program with a window |
+| `Keyboard.down?`, `pressed?` and `released?` across ticks; a tap between two ticks; two taps between two ticks; held, then up and down again | `input_keys` |
+| `KeyPressed` and `KeyReleased` across several keys in one tick, each in the order they happened | `input_keys` |
+| `Mouse.down?`, `pressed?`, `released?`; `MousePressed` and `MouseReleased` across several buttons in one tick; every button | `input_mouse` |
+| The position in points, with fractions, in the events and in the fields; where the pointer was at each press and release | `input_mouse` |
+| `Mouse.inside?` after a move, after `mouse leave` (the position kept), during a drag past the edge (negative and too large), and after a `resize` that leaves the pointer outside | `input_mouse` |
+| The wheel summed over several commands, with fractions, and cleared the tick after; `scroll 0 0` | `input_mouse` |
+| Before a window opens nothing is held, pressed or released, and the wheel is 0 | `input_keys` (its first tick) |
+| Opening: the first tick begins with `WindowFocused` and `focused?` true, the pointer outside at 0, 0 | `input_focus`, `input_mouse`, `input_events` |
+| A loss of focus releases every key, then every button, in the order of the enums, with their events and `released?`; `WindowUnfocused`; the pointer and buttons go on without the focus | `input_focus` |
+| A gain of focus: `WindowFocused`; a key held across the loss is not down until pressed again | `input_focus` |
+| A close releases what is held without `WindowUnfocused`; `focused?` and `inside?` false; nothing held in the ticks after it; the position kept until a window opens again | `input_focus`, and the end of `input_keys` and `input_mouse` (the commands run out) |
+| A window opened again begins as the first did | `input_focus` |
+| The fields and the queries do not change during a tick | `input_keys`, `input_mouse` (each reads them in a system after the events) |
+| The fields of `Mouse` and `Window.focused?` read in a GPU system | `input_gpu` (also with `MIDNIGHT_GPU=rows` and on a device in GPU mode) |
+| The queries in an independent `each` that runs in pieces, with rows in three tables | `input_cores` (with `input_cores.split`) |
+| A query gives a loop no reason to stay on one core; its argument is judged as any expression | `loops/cores_input` |
+| A query with the wrong number or type of arguments, without its arguments, with a keyword argument | `fail/input_query_arguments` |
+| `Mouse.inside`, `Window.focused`, an unknown member of `Keyboard` and of `Mouse`, `inside?` and `focused?` with parentheses | `fail/input_unknown_member` |
+| `Keyboard` or `Mouse` used as a value | `fail/input_value` |
+| Assigning to a field of `Mouse` or to `Window.focused?` | `fail/input_readonly` |
+| A query in a GPU system, and in a function a GPU system calls | `fail/input_in_gpu` |
+| Emitting a built-in event of the keyboard, the mouse or the focus | `fail/input_emit_builtin` |
+| `key down`, `key up`, `key`, `mouse move`, `mouse down`, `mouse up`, `mouse B`, `mouse leave`, `scroll`, `blur`, `focus`, each answered as written | `input_keys`, `input_mouse`, `input_focus`, `input_events`, `examples/input` |
+| Each command error, and their order when more than one applies: a name that is not a key or a button, a malformed or out-of-range number (too many places, a point with no digits, a `+`, an exponent, a missing number); a `key` command without the focus, after `blur` and after `close`; a key or button already down or up, also after a loss of focus; `mouse move` outside with no button held, also after a drag ends; `mouse down` or `mouse B` with the pointer not over the window, after `mouse leave` and after a `resize`; `mouse leave` twice; `blur` and `focus` twice | `drive_errors` |
+| A driven window prints `input from commands` with `info`, headless and shown | `only_programs_with_a_window_read_the_window_variables`, `window_shown` |
+| Keys, buttons, moves at multiples of 1/256 point at a scale of 1.5, the wheel, and a loss and a gain of focus from a real compositor reach a program as the commands do headless; `info` says `focused` and `pointer inside` | `window_input` (20 runs in each build mode) |
+| A driven program takes no keyboard, mouse or focus from the desktop | `window_shown` (driven, inside a compositor whose seat has no devices) and criterion 8 of spec 0007, by hand; not covered by a test with input devices |
+| `tests/window/input.c`: an absolute socket path only; refuses a compositor whose output is not headless; carries out every key and button and the wheel, and refuses a command it does not know | `input_client_needs_an_absolute_socket`, `input_client_refuses_a_desktop`, `input_client_takes_its_commands` |
+
 ## GPU systems
 
 The rules a `gpu system` must follow are in "What a GPU block may contain"
@@ -554,8 +595,8 @@ pieces do.
 
 | Rule | Files |
 | --- | --- |
-| Output, exit status and runtime error do not depend on the number of threads | `thread_programs`: every program of `tests/run`, `examples` and `tests/panic` for which `midnight loops` prints a `gpu` or a `cores` line (118 programs), as a release and as a debug build, with `MIDNIGHT_THREADS` set to `1`, `4`, `3,small`, `7,small,reverse`, `64,small,jitter` and `2,small,awake`. A program that stops with an error must also print the same to standard output every time |
-| A loop that can be split is split | `splits_match_expected`: the `NAME.split` files of `cores_gpu_tables`, `cores_gpu_rand`, `cores_queued`, `cores_emit`, `cores_sums`, `cores_reads`, `cores_function` and `cores_captures`, against the lines `MIDNIGHT_THREADS=4,small,info` prints |
+| Output, exit status and runtime error do not depend on the number of threads | `thread_programs`: every program of `tests/run`, `examples` and `tests/panic` for which `midnight loops` prints a `gpu` or a `cores` line (123 programs), as a release and as a debug build, with `MIDNIGHT_THREADS` set to `1`, `4`, `3,small`, `7,small,reverse`, `64,small,jitter` and `2,small,awake`. A program that stops with an error must also print the same to standard output every time |
+| A loop that can be split is split | `splits_match_expected`: the `NAME.split` files of `cores_gpu_tables`, `cores_gpu_rand`, `cores_queued`, `cores_emit`, `cores_sums`, `cores_reads`, `cores_function`, `cores_captures` and `input_cores`, against the lines `MIDNIGHT_THREADS=4,small,info` prints |
 | Pieces of several rows, and pieces that cross from one table into the next | `cores_gpu_tables`, `cores_queued`, `cores_emit`, `cores_sums` and `cores_reads`, which are split with `MIDNIGHT_THREADS=4` and have rows in three or four tables of uneven size |
 | No two threads touch the same memory unordered | `tsan_programs` and `tsan_pool_stress` with `MIDNIGHT_TEST_TSAN=1`; `checks.tsan` of the flake |
 | With a device in use, the output and the `stats` counts are what they are without threads | in GPU mode, `gpu_programs`, `gpu_stats_match_plan` and `gpu_stats_match_expected` run again with `MIDNIGHT_THREADS=4,small`. `gpu_batch`, `gpu_overwrite_cpu`, `gpu_overwrite_gpu`, `gpu_queue_order`, `gpu_rare_assign`, `gpu_rows_add_remove`, `gpu_rows_despawn` and `gpu_transfers` have independent loops over components that GPU blocks name |
@@ -604,7 +645,7 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 | Rule 6: `` `break` `` that leaves the `each`; one that leaves a loop inside the block is fine | `loops/does_break`; `rule_6_a_break_counts_only_when_it_leaves_the_each` |
 | Rule 6: `` `return` `` in the block, in a loop inside it, in a nested `each`; one in a called function is fine | `loops/does_return`, `loops/swarm`; `rule_6_a_return_in_the_block_counts_and_one_in_a_called_function_does_not` |
 | Rule 7: ``reads `C`, which the GPU system `name` uses, by `e[C]` `` and ``… in the nested `each` ``, in the block and in a called function; the loop's own parameter, and a nested `each` that never uses its parameter, are fine | `loops/reads_gpu`; `rule_7_a_component_of_a_gpu_block_is_reached_only_through_own_parameters` |
-| What an independent loop may read: a constant, `Time`, a resource field, a variable and a parameter of the code around it, `e[C]`, `has?`, `alive?`, `World.count`, a nested `each`, one inside another | `loops/cores_reads` |
+| What an independent loop may read: a constant, `Time`, a resource field, a variable and a parameter of the code around it, `e[C]`, `has?`, `alive?`, `World.count`, a nested `each`, one inside another; the queries of `Keyboard` and `Mouse` | `loops/cores_reads`, `loops/cores_input` |
 | `next`, branches, loops, calls of functions, of methods and of functions that recurse | `loops/cores_control` |
 | The first thing in source order is the reason | `loops/called_function` (`first_wins`, `in_order`), `loops/does_puts`, `loops/uses_list` (`stored`); `the_first_thing_in_source_order_is_the_reason` |
 | A reason in a function names the function it is written in, its line, and the call in the block, through any number of calls, recursion, a method and an operator method | `loops/called_function`; `at_a_call_the_first_effect_of_the_function_is_the_reason` |
@@ -1237,6 +1278,13 @@ against that header.
 | can't assign to an element of `xs`: a function parameter is read-only | `index_assign_readonly_param.12am` | 5 | What can be modified; Lists |
 | type mismatch: `e[Health]` is a `Health`, found an `Armor` | `index_component_wrong_value.12am` | 13 | Entities |
 | an entity is indexed by a component type; `Vec2` is a struct | `index_non_component.12am` | 10 | Entities |
+| `Key`, `Mouse`, `Keyboard`, `KeyReleased`, `MouseButton` and `WindowUnfocused` are built-in names and can't be redefined | `input_builtin_names.12am` | 6, 9, 13, 16, 19, 23 | Lexical structure: built-in names; Keyboard and mouse |
+| `KeyPressed`, `MousePressed` and `WindowFocused` are built-in events and can't be emitted | `input_emit_builtin.12am` | 7, 8, 9 | Keyboard and mouse: events |
+| `Keyboard.down?` and `Mouse.pressed?` are not allowed in a GPU system, directly and in a function called from one, with the note naming the system and the call | `input_in_gpu.12am` | 17, 7 | Keyboard and mouse: where they can be read |
+| a query without its argument, with two, with none in parentheses, with a keyword argument; a `MouseButton` for a `Key` and an `Int` for a `MouseButton` | `input_query_arguments.12am` | 7, 8, 9, 10, 11, 12 | Keyboard and mouse |
+| can't assign to `Mouse.x`, `Mouse.wheel_y` (by `+=`), `Mouse.inside?` and `Window.focused?` | `input_readonly.12am` | 5, 6, 7, 8 | Keyboard and mouse; The window |
+| unknown member `inside` for `Mouse` and `focused` for `Window`, suggesting the `?` spelling; `down` for `Keyboard`, suggesting `down?`; `wheel` for `Mouse`, with no suggestion; `Mouse.inside?` and `Window.focused?` take no arguments | `input_unknown_member.12am` | 7, 8, 9, 10, 11, 12 | Keyboard and mouse |
+| `Keyboard` and `Mouse` are not values | `input_value.12am` | 4, 5 | Keyboard and mouse |
 | type mismatch: the argument `xs` of `total` is a `[Float]`, found a `[Float32]` (the two list types do not convert to each other) | `list_float32_argument.12am` | 17 | Compact field types |
 | type mismatch: `plain` is declared `[Float]`, found a `[Float32]` (the two list types do not convert to each other) | `list_float32_to_float.12am` | 9 | Compact field types |
 | type mismatch: the field `heights` of `Mesh` is a `[Float32]`, found a `[Float]` (the two list types do not convert to each other) | `list_float_to_float32.12am` | 10 | Compact field types |

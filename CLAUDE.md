@@ -6,8 +6,9 @@ together with a C runtime. For each `each` of a `gpu system` it also emits a
 WGSL shader, which the runtime runs through `wgpu-native`. A GPU block that
 runs on the CPU, and an ordinary `each` the compiler finds independent, run
 in pieces on several threads, with the output of one. A program with a
-window shows it through SDL 3 and draws its frames on the same device, or
-runs headless, driven by commands. `README.md` has the overview.
+window shows it through SDL 3, takes the keyboard and the mouse from it,
+and draws its frames on the same device, or runs headless, driven by
+commands. `README.md` has the overview.
 
 ## What defines what
 
@@ -69,7 +70,11 @@ nix run .#window-test                                  # the same with the packa
 Nothing opens a window on the desktop it is run from: a program with a
 window runs headless, or inside `tests/window/compositor.sh`, which starts
 a sway of its own that shows nothing and has no input devices, and a
-session bus of its own.
+session bus of its own. Nothing sends input to the desktop either: that
+sway gets a keyboard and a pointer from `tests/window/input.c` while
+`window_input` and `input_client_takes_its_commands` run, and from
+nothing else, and `input.c` refuses any compositor whose outputs are not
+all headless.
 
 Flakes see only files known to git: `git add` a new file before a `nix`
 command that needs it.
@@ -101,7 +106,8 @@ command that needs it.
   `midnight_gpu.c`, output may depend on the device only as "Determinism"
   in the reference allows. A window's pace waits for the clock and changes
   nothing a program computes; what the desktop does enters only when a
-  tick begins, and a headless run takes it from its commands alone.
+  tick begins, a headless run takes it from its commands alone, and a
+  driven one takes its keyboard, mouse and focus from its commands.
 - Nothing may make a program's output, exit status or run-time error depend
   on the number of threads, on which thread runs a piece, or on the order
   pieces finish in. A loop is split only when the result is exactly the
@@ -243,15 +249,27 @@ command that needs it.
     the software mode passes to programs as `VK_DRIVER_FILES`.
 - Window mode: with `MIDNIGHT_TEST_WINDOW=1`, inside
   `tests/window/compositor.sh` (the tests fail outside it), `window_shown`,
-  `window_keeps_time`, `window_closes` and `window_resized` run, one at a
-  time, in release and debug builds, on the device `MIDNIGHT_TEST_GPU`
-  names or the hardware one. `tests/window/test.sh` runs the smoke program
-  and then these; `checks.window` runs it in the build sandbox (sway with
-  pixman, llvmpipe) and `apps.window-test` on this machine's GPU. The
-  compositor floats every window at the top left at the size it asks for,
-  and sends one titled `midnight hidden` to a workspace that is not shown.
-  The tests act on windows only through `swaymsg` and take pictures with
-  `grim`; nothing types or clicks.
+  `window_keeps_time`, `window_closes`, `window_resized`, `window_input`,
+  `input_client_refuses_a_desktop` and `input_client_takes_its_commands`
+  run, one at a time, in release and debug builds where they build a
+  program, on the device `MIDNIGHT_TEST_GPU` names or the hardware one.
+  `tests/window/test.sh` runs the smoke program and then these;
+  `checks.window` runs it in the build sandbox (sway with pixman,
+  llvmpipe) and `apps.window-test` on this machine's GPU. The compositor
+  floats every window at the top left at the size it asks for, and sends
+  one titled `midnight hidden` to a workspace that is not shown. The tests
+  act on windows only through `swaymsg` and take pictures with `grim`;
+  only `tests/window/input.c` types or clicks, as below.
+  - `tests/window/input.c` is a Wayland client that gives the compositor a
+    virtual keyboard and pointer and carries out key, button and wheel
+    commands from its standard input. It connects only to the socket whose
+    absolute path is its one argument, reads no display variable, and
+    stops with status 1, having sent nothing, unless every output of the
+    compositor is named `HEADLESS-` and a number. The flake builds it, and
+    the dev shell, `checks.window` and `apps.window-test` name it in
+    `MIDNIGHT_TEST_INPUT_CLIENT`. While it is connected every window in
+    the compositor gets the focus and the pointer, so it runs only for the
+    two tests that need it and is stopped after each.
   - `window_shown` runs the `.frames` programs whose commands have no
     `resize` or `scale` with a window, the commands from a named pipe: the
     answers and output must be the headless ones, `info` must name
@@ -261,6 +279,30 @@ command that needs it.
     60 Hz, at 144 Hz, and with the window on a workspace that is not shown.
   - `window_closes` and `window_resized`: a close and a resize by the
     compositor reach the program as the events.
+  - `window_input` runs `tests/run/input_events.12am` with a window, not
+    driven, at a scale of 1.5, 20 times in each build mode. Once `info`
+    says the window has the focus and the pointer, it sends the input of
+    the program's `.drive` file one group (up to a `tick`) at a time, each
+    once the program has printed what the group before gave: keys and
+    buttons through `input.c`, `mouse move` through sway's cursor
+    commands, `blur` and `focus` as moves to an empty workspace and back,
+    `mouse leave` not at all. The output must be that of the headless run
+    of the `.drive` file. The table from `Key` names to evdev codes is in
+    the suite, beside the test.
+  - `input_client_refuses_a_desktop` starts a second sway with the Wayland
+    backend inside the compositor, whose output is `WL-1`: `input.c`
+    pointed at it must stop with status 1 and its line, and that sway must
+    list no virtual device.
+  - `input_client_takes_its_commands`: `input.c` carries out a command for
+    every `Key` and `MouseButton` and turns of the wheel, and stops with
+    status 1 at a command it does not know or a number out of range.
+- `input_client_needs_an_absolute_socket` runs whenever
+  `MIDNIGHT_TEST_INPUT_CLIENT` is set, outside window mode too: with no
+  argument, two, a relative path, or a path with no socket, `input.c` must
+  stop with status 1 and say why.
+- A program that reads the keyboard or the mouse takes its input from its
+  `.drive` file in every mode but `window_input`; `drive_errors` holds
+  every command error, in the order they are reported.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
   diagnostic and run-time error has a test; keep it that way when the
   language changes.

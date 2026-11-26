@@ -79,8 +79,8 @@ keeps one on a single core.
 - [`docs/language.md`](docs/language.md) is the language reference.
 - [`specs/`](specs/) holds one spec per change, with its acceptance criteria
   and outcome.
-- [`examples/`](examples/) has seven programs, from `hello.12am` to a
-  million-entity benchmark.
+- [`examples/`](examples/) has ten programs, from `hello.12am` to a
+  million-entity benchmark and a window that follows the mouse.
 
 ## Try it
 
@@ -99,6 +99,7 @@ nix run . -- emit-wgsl examples/nbody.12am
 nix run . -- plan tests/plan/reader.12am
 nix run . -- loops examples/bounce.12am
 nix run . -- run examples/window.12am
+nix run . -- run examples/input.12am
 ```
 
 ## The compiler
@@ -289,7 +290,7 @@ MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/window.drive nix run . -- run e
 | Word       | Meaning                                                         |
 | ---------- | --------------------------------------------------------------- |
 | `headless` | Show no window: the window exists in the program only, at exactly the size asked for and a scale of 1, and ticks run as fast as they can. |
-| `info`     | Print one line to standard error when a window opens: its sizes in points and pixels, and `headless` or where it is shown and how frames reach it, such as `wayland, mailbox`. |
+| `info`     | Print one line to standard error when a window opens: its sizes in points and pixels, and `headless` or where it is shown and how frames reach it, such as `wayland, mailbox`; `input from commands` when it is driven; and, for a shown window that is not driven, a line each time it gains the focus and each time the pointer enters it. |
 
 `MIDNIGHT_DRIVE` names a file or a named pipe of commands, one to a line:
 `tick`, `tick N`, `resize W H`, `scale S`, `close` and `capture FILE`, which
@@ -297,6 +298,47 @@ writes the last frame as a PNG. Each command is answered on standard error
 with a line that begins `midnight: drive: `; the reference has the rest.
 The run above writes `drift.png` and `drift-2x.png` to the working
 directory.
+
+### Keyboard and mouse
+
+A program with a window reads the keyboard and the mouse as they were
+when the tick began, through the built-in resources `Keyboard` and
+`Mouse`, and receives each press and release as an event:
+
+```ruby
+system steer
+  Ship.x -= 4 if Keyboard.down?(Key::A)
+  World.stop if Keyboard.pressed?(Key::Escape)
+  on MousePressed do |click|
+    puts "#{click.button} at #{click.x}, #{click.y}"
+  end
+end
+```
+
+Keys are named by their place on the keyboard, as the W3C's
+`KeyboardEvent.code` names them: `Key::W` is the key above `Key::S` on
+every layout. Positions are in points, with fractions. Losing the focus
+releases everything held.
+
+```sh
+nix run . -- run examples/input.12am
+```
+
+shows a window whose colour follows the pointer; a click prints where it
+was, and Escape ends it. A driven program takes its keyboard, mouse and
+focus from its commands alone, headless or not, so it prints the same on
+every machine:
+
+```sh
+MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/input.drive nix run . -- run examples/input.12am
+```
+
+The commands are `key down K`, `key up K`, `key K`, `mouse move X Y`,
+`mouse down B`, `mouse up B`, `mouse B`, `mouse leave`, `scroll DX DY`,
+`blur` and `focus`. A command that a desktop could not give, such as a
+key while the window does not have the focus, stops the program with the
+file and line. The run above writes `input-middle.png` and
+`input-green.png`.
 
 A program with a window reads `MIDNIGHT_GPU` too: `off` means it shows no
 window and captures nothing, `software` lets it draw with an adapter that
@@ -437,7 +479,16 @@ reach. Inside it,
 window tests: the frame programs with a window and their commands from a
 pipe, against a picture of the compositor; 120 ticks timed at 60 Hz, at
 144 Hz and on a workspace that is not shown; a close and a resize by the
-compositor.
+compositor; and keys, buttons, moves, the wheel and focus from the
+compositor, which must reach a program as its commands do headless.
+
+The input comes from `tests/window/input.c`, a Wayland client that gives
+the compositor a virtual keyboard and pointer. It connects only to the
+socket whose absolute path it is given, and sends nothing unless every
+output of the compositor is a headless one, so it cannot type into a
+desktop; a test starts a second sway with a Wayland output inside the
+compositor and checks that the client refuses it. The flake builds it,
+and the dev shell names it in `MIDNIGHT_TEST_INPUT_CLIENT`.
 
 ```sh
 bash tests/window/test.sh OUT            # in the dev shell, on the machine's GPU
@@ -471,8 +522,9 @@ tests/plan/     programs whose transfer plan must be exactly NAME.plan
 tests/loops/    programs for which `midnight loops` must print exactly
                 NAME.loops
 tests/pool/     stress.c, which exercises the thread pool on its own
-tests/window/   compositor.sh, test.sh, and smoke.c, a window from SDL 3
-                and wgpu-native on its own
+tests/window/   compositor.sh, test.sh; smoke.c, a window from SDL 3 and
+                wgpu-native on its own; input.c, a keyboard and a pointer
+                for a headless compositor
 bench/          baseline.c, churn.12am, bench.sh; gpu_*.12am, bench-gpu.sh;
                 cores_*.12am, cores.sh
 specs/          one spec per change
@@ -486,14 +538,14 @@ and `.frames` files, the only expected files that come from a device.
 
 ## Status
 
-Midnight 0.6 is the language core, GPU systems, the rules that move only
+Midnight 0.7 is the language core, GPU systems, the rules that move only
 what is needed between CPU and GPU memory, strict GPU systems, loops on
-several cores, and a window. It is
+several cores, a window, and the keyboard and the mouse. It is
 tested on `x86_64-linux`, GPU systems on an NVIDIA device, on an AMD iGPU
 through Mesa's RADV, and on Mesa's software Vulkan, and the window on
 Wayland; the flake also offers
 `aarch64-linux`, `x86_64-darwin` and `aarch64-darwin`, which evaluate but
-have not been run. What 0.6 leaves out
+have not been run. What 0.7 leaves out
 is listed at the end of the reference.
 
 ## License

@@ -1,0 +1,51 @@
+# A window whose background follows the pointer: red grows to the right,
+# blue grows downward, and the wheel turns green up and down. A click
+# prints where it was, every key prints when it goes down and comes up,
+# and Escape ends the program.
+#
+#   nix run . -- run examples/input.12am
+#
+# Run it headless, with its commands, to see what it does without a
+# display or a person:
+#
+#   MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/input.drive \
+#     nix run . -- run examples/input.12am
+
+resource Shade
+  green: Int = 0
+end
+
+# 0 at one edge of the window, 255 at the other.
+def byte(at: Float, size: Int) -> Int
+  (at * 255.0 / size.to_f).round.clamp(0, 255)
+end
+
+system paint
+  Shade.green = (Shade.green + (Mouse.wheel_y * 16.0).round).clamp(0, 255)
+  if Mouse.inside?
+    Window.background = Color(byte(Mouse.x, Window.width), Shade.green, byte(Mouse.y, Window.height))
+  end
+end
+
+system report
+  on WindowFocused do
+    puts "focused"
+  end
+  on WindowUnfocused do
+    puts "unfocused"
+  end
+  on KeyPressed do |press|
+    puts "#{press.key} down"
+  end
+  on KeyReleased do |release|
+    puts "#{release.key} up"
+  end
+  on MousePressed do |click|
+    puts "#{click.button} at #{click.x}, #{click.y}"
+  end
+  World.stop if Keyboard.pressed?(Key::Escape)
+end
+
+Window.open("Input", 640, 480)
+World.run
+puts "ended after #{Time.tick} ticks, background #{Window.background}"

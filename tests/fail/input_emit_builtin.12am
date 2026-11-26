@@ -1,6 +1,6 @@
 # expect: a built-in event of the keyboard, the mouse or the focus can't be
 # emitted by the program
-# at: line 6, the `KeyPressed(…)`; line 7, the `MousePressed(…)`; line 8,
+# at: line 7, the `KeyPressed(…)`; line 8, the `MousePressed(…)`; line 9,
 # `WindowFocused`
 
 system send
