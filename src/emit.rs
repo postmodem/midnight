@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 
 use crate::source::{SourceMap, Span};
-use crate::tir::{ComponentId, Program, Query, Term, Type};
+use crate::tir::{ComponentId, Cores, Program, Query, QueryId, Run, StmtKind, Term, Type};
 
 use analysis::Folded;
 use body::FnCx;
@@ -85,6 +85,54 @@ struct Cx<'a> {
     func_used: Vec<bool>,
     /// What GPU systems require of the code of everything else.
     gpu: gpu::Plan,
+    /// The name of the `MnQuery` of each query generated so far, by query
+    /// id.
+    query_names: HashMap<usize, String>,
+    /// The functions of the independent `each`es, with the types of what
+    /// they are given.
+    loop_defs: String,
+    /// The independent `each`es, in the order their functions were
+    /// generated.
+    loops: Vec<LoopDesc<'a>>,
+}
+
+/// One independent `each`: what its `MnLoop` is made from once every query
+/// of the program has its name.
+struct LoopDesc<'a> {
+    /// What its names end in: the number of its `MnQuery`.
+    number: String,
+    cores: &'a Cores,
+    span: Span,
+    /// The `MnUse` of each term whose component some GPU block names.
+    uses: Vec<String>,
+    /// The components of the terms its function flags assignments of.
+    wrote: Vec<usize>,
+}
+
+/// Whether a program has a loop that can be split across threads: a GPU
+/// block or an independent `each`.
+pub fn has_split_loops(program: &Program) -> bool {
+    if program.systems.iter().any(|system| system.gpu) {
+        return true;
+    }
+    let mut found = false;
+    let mut look = |node: analysis::Node| {
+        if let analysis::Node::Stmt(stmt) = node
+            && let StmtKind::Each {
+                run: Run::Cores(_), ..
+            } = &stmt.kind
+        {
+            found = true;
+        }
+    };
+    for func in &program.funcs {
+        analysis::walk_block(&func.body.block, &mut look);
+    }
+    for system in &program.systems {
+        analysis::walk_block(&system.body.block, &mut look);
+    }
+    analysis::walk_block(&program.main.block, &mut look);
+    found
 }
 
 impl<'a> Cx<'a> {
@@ -116,6 +164,9 @@ impl<'a> Cx<'a> {
             static_count: 0,
             func_used: vec![false; prog.funcs.len()],
             gpu: gpu::Plan::new(prog),
+            query_names: HashMap::new(),
+            loop_defs: String::new(),
+            loops: Vec::new(),
         }
     }
 
@@ -206,7 +257,92 @@ impl<'a> Cx<'a> {
             self.statics,
             "static MnQuery {name} = {{{with}, {with_count}, {without}, {without_count}, NULL, 0, 0, 0}};"
         );
+        self.query_names.insert(query.id.0, name.clone());
         name
+    }
+
+    /// The `MnQuery` of a query whose code has been generated.
+    fn query_name(&self, id: QueryId) -> &str {
+        self.query_names
+            .get(&id.0)
+            .expect("every query an independent `each` reaches has been generated")
+    }
+
+    /// The weight function, the lists and the `MnLoop` of every
+    /// independent `each`.
+    fn loop_descs(&mut self) -> String {
+        let mut out = String::new();
+        for index in 0..self.loops.len() {
+            let number = self.loops[index].number.clone();
+            let cores = self.loops[index].cores;
+            let _ = writeln!(out, "static uint64_t loop{number}_weight(void) {{");
+            out.push_str("    uint64_t weight = 0;\n");
+            for term in &cores.weight.terms {
+                let mut product = format!("UINT64_C({})", term.factor);
+                for query in &term.rows {
+                    product = format!(
+                        "mn_work_mul({product}, mn_query_rows(&{}))",
+                        self.query_name(*query)
+                    );
+                }
+                let _ = writeln!(out, "    weight = mn_work_add(weight, {product});");
+            }
+            out.push_str("    return weight;\n}\n");
+
+            let queries = if cores.queries.is_empty() {
+                "NULL".to_string()
+            } else {
+                let list: Vec<String> = cores
+                    .queries
+                    .iter()
+                    .map(|query| format!("&{}", self.query_name(*query)))
+                    .collect();
+                let _ = writeln!(
+                    out,
+                    "static MnQuery *const loop{number}_queries[] = {{{}}};",
+                    list.join(", ")
+                );
+                format!("loop{number}_queries")
+            };
+            let uses = if self.loops[index].uses.is_empty() {
+                "NULL".to_string()
+            } else {
+                let _ = writeln!(
+                    out,
+                    "static const MnUse loop{number}_uses[] = {{{}}};",
+                    self.loops[index].uses.join(", ")
+                );
+                format!("loop{number}_uses")
+            };
+            let wrote = if self.loops[index].wrote.is_empty() {
+                "NULL".to_string()
+            } else {
+                let list: Vec<String> = self.loops[index]
+                    .wrote
+                    .iter()
+                    .map(|component| component.to_string())
+                    .collect();
+                let _ = writeln!(
+                    out,
+                    "static const uint32_t loop{number}_wrote[] = {{{}}};",
+                    list.join(", ")
+                );
+                format!("loop{number}_wrote")
+            };
+            let loc = self.loc(self.loops[index].span);
+            let desc = &self.loops[index];
+            let _ = writeln!(
+                out,
+                "static MnLoop loop{number} = {{L{number}, &q{number}, loop{number}_weight, {}, \
+                 {queries}, {}, {uses}, {}, {wrote}, {}, {}, false}};\n",
+                cores.sums.len(),
+                cores.queries.len(),
+                desc.uses.len(),
+                desc.wrote.len(),
+                loc.trim_start_matches("(MnLoc)"),
+            );
+        }
+        out
     }
 
     /// Defines the static `MnBundle` of one `spawn` or `add`.
@@ -282,6 +418,7 @@ impl<'a> Cx<'a> {
         let _ = writeln!(defs, "static void drop_globals(void) {{\n{drop}}}\n");
         let tables = self.tables();
         let gpu_section = gpu::c::section(&lowered, &mut self);
+        let loop_descs = self.loop_descs();
         let check = if lowered.check {
             format!("    mn_gpu_check = &{};\n", gpu::c::CHECK_NAME)
         } else {
@@ -320,6 +457,11 @@ impl<'a> Cx<'a> {
         out.push_str("static void run_main(void);\n\n");
         out.push_str(&self.helper_defs);
         out.push_str(&gpu_section);
+        if !self.loops.is_empty() {
+            out.push_str(&self.loop_defs);
+            let _ = writeln!(out, "{RESET_LINE}");
+            out.push_str(&loop_descs);
+        }
         out.push_str(&defs);
         out.push_str(&tables);
         out.push_str("int main(void) {\n");

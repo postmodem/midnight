@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 use crate::source::Span;
-use crate::tir::{Body, Expr, Local, LocalId, LocalKind, Type};
+use crate::tir::{Body, Expr, Local, LocalId, LocalKind, Target, Type};
 
 use super::Cx;
 use super::analysis::{self, HoistKey, LocalUse};
@@ -214,6 +214,9 @@ pub(super) struct FnCx<'a, 'c> {
     /// Values loaded before the loops of the enclosing `each`es.
     pub hoists: Vec<HashMap<HoistKey, String>>,
     pub each_depth: usize,
+    /// While the function of an independent `each` is generated: its
+    /// sums, each with the variable that collects it.
+    pub sums: Vec<(Target, String)>,
     pub ret: Type,
 }
 
@@ -248,6 +251,7 @@ impl<'a, 'c> FnCx<'a, 'c> {
             whole_store: false,
             hoists: Vec::new(),
             each_depth: 0,
+            sums: Vec::new(),
             ret,
         }
     }
@@ -275,6 +279,7 @@ impl<'a, 'c> FnCx<'a, 'c> {
             whole_store: false,
             hoists: Vec::new(),
             each_depth: 0,
+            sums: Vec::new(),
             ret: Type::Void,
         }
     }

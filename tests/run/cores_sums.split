@@ -1,0 +1,4 @@
+tests/run/cores_sums.12am:25: 45000 rows in 45000 pieces on 4 threads
+tests/run/cores_sums.12am:37: 45000 rows in 45000 pieces on 4 threads
+tests/run/cores_sums.12am:50: 9 rows in 9 pieces on 4 threads
+tests/run/cores_sums.12am:85: 26991 rows in 26991 pieces on 4 threads

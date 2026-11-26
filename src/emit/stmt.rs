@@ -1,17 +1,32 @@
 //! Statements.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 use crate::source::Span;
 use crate::tir::{
-    Block, CompoundOp, EventId, Expr, LocalId, Place, Query, Stmt, StmtKind, Term, Type,
+    BinOp, Block, CompoundOp, Cores, EventId, Expr, LocalId, Place, PlaceKind, Query, Run, Stmt,
+    StmtKind, Target, Term, Type,
 };
 
-use super::analysis::{self, HoistKey};
+use super::analysis::{self, HoistKey, Node};
 use super::body::{ADD, Dep, FnCx, Mode, Own, ScopeKind, UNARY, Val};
 use super::expr::{Sink, Want, push_lit, text_parts};
 use super::names;
 use super::place::{Prepared, load};
+use super::{LoopDesc, RESET_LINE};
+
+/// The terms of an `each` whose component some GPU block names and whose
+/// parameter the block uses.
+struct GpuTerms {
+    /// The `MnUse` of each.
+    uses: Vec<String>,
+    /// For each one the block can assign through without assigning it
+    /// whole: the flag an assignment sets, and the component.
+    written: Vec<(String, usize)>,
+    /// Some term is assigned whole.
+    overwrites: bool,
+}
 
 impl<'a> FnCx<'a, '_> {
     pub(super) fn stmts(&mut self, stmts: &'a [Stmt]) {
@@ -55,8 +70,11 @@ impl<'a> FnCx<'a, '_> {
                 query,
                 params,
                 body,
-                ..
-            } => self.each(query, params, body),
+                run,
+            } => match run {
+                Run::Cores(cores) => self.each_cores(query, params, body, cores, stmt.span),
+                Run::Inside | Run::Gpu | Run::OneCore(_) => self.each(query, params, body),
+            },
             StmtKind::On { event, param, body } => self.on(*event, *param, body),
             StmtKind::Puts(args) => self.output(args, true),
             StmtKind::Print(args) => self.output(args, false),
@@ -118,6 +136,16 @@ impl<'a> FnCx<'a, '_> {
     /// whenever evaluating `value` could change it; it is then looked up
     /// again for the write.
     fn compound(&mut self, place: &'a Place, op: CompoundOp, value: &'a Expr, span: Span) {
+        // A sum of an independent `each` is collected by its function and
+        // added to the place when the loop has ended.
+        if let CompoundOp::Builtin(sign @ (BinOp::Add | BinOp::Sub)) = op
+            && let Some(collected) = self.sum_of(place)
+        {
+            let right = self.expr(value, Mode::Peek);
+            let sign = if sign == BinOp::Add { "+" } else { "-" };
+            self.line(&format!("{collected} {sign}= {};", right.c));
+            return;
+        }
         let value_type = place.ty.value_type();
         let managed = self.cx.managed(&value_type);
         let value_inert = analysis::inert(value);
@@ -431,49 +459,45 @@ impl<'a> FnCx<'a, '_> {
         self.loop_body(body);
     }
 
-    fn each(&mut self, query: &'a Query, params: &'a [LocalId], body: &'a Block) {
+    /// Loads the resource fields and `Time` fields a block reads and never
+    /// writes into constants, before its loop, and returns their names.
+    fn hoist(&mut self, body: &'a Block) -> HashMap<HoistKey, String> {
         let prog = self.cx.prog;
-        let q = self.cx.query(query);
-        let outer_view = |id: usize| self.views.contains_key(&id) && !params.contains(&LocalId(id));
-        let vector = analysis::vector_ok(body) && !analysis::touches_local(body, &outer_view);
-        let sfx = names::depth_suffix(self.each_depth);
-        self.line("{");
-        self.indent += 1;
-        self.line(&format!("mn_query_update(&{q});"));
-        self.line("mn_defer_enter();");
-
         let mut hoists = HashMap::new();
-        if vector {
-            for key in analysis::hoistable(body) {
-                let fixed = |name: &str, cty: &str, source: &str| {
-                    (name.to_string(), cty.to_string(), source.to_string())
-                };
-                let (name, cty, source) = match key {
-                    HoistKey::Time(0) => fixed("time_tick", "int64_t", "mn_time.tick"),
-                    HoistKey::Time(1) => fixed("time_dt", "double", "mn_time.dt"),
-                    HoistKey::Time(_) => fixed("time_elapsed", "double", "mn_time.elapsed"),
-                    HoistKey::Resource(resource, field) => {
-                        let item = &prog.resources[resource];
-                        let member = names::field(&item.fields[field].name);
-                        (
-                            format!("R{resource}_{member}"),
-                            self.cx.cty(&item.fields[field].ty),
-                            format!("{}.{member}", names::resource(&item.name)),
-                        )
-                    }
-                };
-                self.line(&format!("const {cty} {name} = {source};"));
-                hoists.insert(key, name);
-            }
+        for key in analysis::hoistable(body) {
+            let fixed = |name: &str, cty: &str, source: &str| {
+                (name.to_string(), cty.to_string(), source.to_string())
+            };
+            let (name, cty, source) = match key {
+                HoistKey::Time(0) => fixed("time_tick", "int64_t", "mn_time.tick"),
+                HoistKey::Time(1) => fixed("time_dt", "double", "mn_time.dt"),
+                HoistKey::Time(_) => fixed("time_elapsed", "double", "mn_time.elapsed"),
+                HoistKey::Resource(resource, field) => {
+                    let item = &prog.resources[resource];
+                    let member = names::field(&item.fields[field].name);
+                    (
+                        format!("R{resource}_{member}"),
+                        self.cx.cty(&item.fields[field].ty),
+                        format!("{}.{member}", names::resource(&item.name)),
+                    )
+                }
+            };
+            self.line(&format!("const {cty} {name} = {source};"));
+            hoists.insert(key, name);
         }
-        self.hoists.push(hoists);
+        hoists
+    }
 
-        // The columns of components some GPU block names are brought back
-        // before the tables are visited, and a table in which the body
-        // assigned through a parameter is reported after its rows.
-        let mut uses = Vec::new();
-        let mut written = Vec::new();
-        let mut overwrites = false;
+    /// The terms of an `each` whose component some GPU block names and
+    /// whose parameter the block uses. Declares a flag for each one the
+    /// block can assign through without assigning it whole, which an
+    /// assignment sets.
+    fn gpu_terms(&mut self, query: &Query, params: &[LocalId], sfx: &str) -> GpuTerms {
+        let mut terms = GpuTerms {
+            uses: Vec::new(),
+            written: Vec::new(),
+            overwrites: false,
+        };
         for (index, (term, &param)) in query.terms.iter().zip(params).enumerate() {
             if let Term::Component {
                 component,
@@ -490,44 +514,30 @@ impl<'a> FnCx<'a, '_> {
                 } else {
                     "MN_USE_READ"
                 };
-                uses.push(format!("{{{}, {usage}}}", component.0));
-                overwrites |= *overwritten;
+                terms.uses.push(format!("{{{}, {usage}}}", component.0));
+                terms.overwrites |= *overwritten;
                 if *write && !*overwritten {
                     let flag = format!("w{sfx}_{index}");
                     self.line(&format!("bool {flag} = false;"));
                     self.flags.insert(param.0, flag.clone());
-                    written.push((flag, component.0));
+                    terms.written.push((flag, component.0));
                 }
             }
         }
-        if !uses.is_empty() {
-            let list = self.fresh("uses");
-            self.line(&format!(
-                "static const MnUse {list}[] = {{{}}};",
-                uses.join(", ")
-            ));
-            let guard = if overwrites {
-                "mn_gpu_active"
-            } else {
-                "mn_gpu_only"
-            };
-            self.line(&format!(
-                "if ({guard}) mn_gpu_use(&{q}, {list}, {});",
-                uses.len()
-            ));
-        }
-        let report = |flag: &str, component: usize| {
-            format!("if ({flag}) mn_wrote(table{sfx}, {component});")
-        };
-        let early: Vec<String> = written.iter().map(|(flag, c)| report(flag, *c)).collect();
+        terms
+    }
 
-        self.line(&format!(
-            "for (uint32_t t{sfx} = 0; t{sfx} < {q}.table_count; t{sfx}++) {{"
-        ));
-        self.indent += 1;
-        self.line(&format!("MnTable *table{sfx} = {q}.tables[t{sfx}];"));
-        self.line(&format!("uint32_t n{sfx} = table{sfx}->count;"));
-        self.line(&format!("if (n{sfx} == 0) continue;"));
+    /// Declares, for the table an `each` is at, the column of each term
+    /// the block uses, and the handles when it reads an `Entity`
+    /// parameter. Returns those parameters.
+    fn columns(
+        &mut self,
+        query: &Query,
+        params: &[LocalId],
+        vector: bool,
+        sfx: &str,
+    ) -> Vec<LocalId> {
+        let prog = self.cx.prog;
         let restrict = if vector { "restrict " } else { "" };
         let mut entities = Vec::new();
         for (index, (term, &param)) in query.terms.iter().zip(params).enumerate() {
@@ -564,6 +574,63 @@ impl<'a> FnCx<'a, '_> {
                 "const MnEntity *ents{sfx} = table{sfx}->entities;"
             ));
         }
+        entities
+    }
+
+    fn each(&mut self, query: &'a Query, params: &'a [LocalId], body: &'a Block) {
+        let q = self.cx.query(query);
+        let outer_view = |id: usize| self.views.contains_key(&id) && !params.contains(&LocalId(id));
+        let vector = analysis::vector_ok(body) && !analysis::touches_local(body, &outer_view);
+        let sfx = names::depth_suffix(self.each_depth);
+        self.line("{");
+        self.indent += 1;
+        self.line(&format!("mn_query_update(&{q});"));
+        self.line("mn_defer_enter();");
+
+        let hoists = if vector {
+            self.hoist(body)
+        } else {
+            HashMap::new()
+        };
+        self.hoists.push(hoists);
+
+        // The columns of components some GPU block names are brought back
+        // before the tables are visited, and a table in which the body
+        // assigned through a parameter is reported after its rows.
+        let GpuTerms {
+            uses,
+            written,
+            overwrites,
+        } = self.gpu_terms(query, params, &sfx);
+        if !uses.is_empty() {
+            let list = self.fresh("uses");
+            self.line(&format!(
+                "static const MnUse {list}[] = {{{}}};",
+                uses.join(", ")
+            ));
+            let guard = if overwrites {
+                "mn_gpu_active"
+            } else {
+                "mn_gpu_only"
+            };
+            self.line(&format!(
+                "if ({guard}) mn_gpu_use(&{q}, {list}, {});",
+                uses.len()
+            ));
+        }
+        let report = |flag: &str, component: usize| {
+            format!("if ({flag}) mn_wrote(table{sfx}, {component});")
+        };
+        let early: Vec<String> = written.iter().map(|(flag, c)| report(flag, *c)).collect();
+
+        self.line(&format!(
+            "for (uint32_t t{sfx} = 0; t{sfx} < {q}.table_count; t{sfx}++) {{"
+        ));
+        self.indent += 1;
+        self.line(&format!("MnTable *table{sfx} = {q}.tables[t{sfx}];"));
+        self.line(&format!("uint32_t n{sfx} = table{sfx}->count;"));
+        self.line(&format!("if (n{sfx} == 0) continue;"));
+        let entities = self.columns(query, params, vector, &sfx);
         self.line(&format!(
             "for (uint32_t i{sfx} = 0; i{sfx} < n{sfx}; i{sfx}++) {{"
         ));
@@ -600,6 +667,224 @@ impl<'a> FnCx<'a, '_> {
             self.out.push_str(&format!("{label}:\n"));
         }
         self.line("mn_defer_leave();");
+        self.indent -= 1;
+        self.line("}");
+    }
+
+    /// The variable that collects the sum a place is, in the function of
+    /// an independent `each`.
+    fn sum_of(&self, place: &Place) -> Option<String> {
+        let target = match place.kind {
+            PlaceKind::Local(local) => Target::Local(local),
+            PlaceKind::ResourceField(resource, field) => Target::Field(resource, field),
+            _ => return None,
+        };
+        self.sums
+            .iter()
+            .find(|(sum, _)| *sum == target)
+            .map(|(_, collected)| collected.clone())
+    }
+
+    /// The locals of the code around an `each` that its block reads:
+    /// those it names and neither creates nor adds to as a sum.
+    fn captured(&self, params: &[LocalId], body: &Block, cores: &Cores) -> Vec<LocalId> {
+        let mut inside = vec![false; self.locals.len()];
+        let mut named = vec![false; self.locals.len()];
+        for param in params {
+            inside[param.0] = true;
+        }
+        analysis::walk_block(body, &mut |node| match node {
+            Node::Stmt(stmt) => match &stmt.kind {
+                StmtKind::Let { local, .. } => inside[local.0] = true,
+                StmtKind::Count { var: Some(var), .. } => inside[var.0] = true,
+                StmtKind::ListEach { elem, index, .. } => {
+                    for local in elem.iter().chain(index) {
+                        inside[local.0] = true;
+                    }
+                }
+                StmtKind::Each { params, .. } => {
+                    for param in params {
+                        inside[param.0] = true;
+                    }
+                }
+                StmtKind::On {
+                    param: Some(param), ..
+                } => inside[param.0] = true,
+                _ => {}
+            },
+            Node::Place(place, _) => {
+                if let PlaceKind::Local(local) = analysis::root(place).kind {
+                    named[local.0] = true;
+                }
+            }
+            Node::Expr(_) => {}
+        });
+        (0..self.locals.len())
+            .map(LocalId)
+            .filter(|local| {
+                named[local.0] && !inside[local.0] && !cores.sums.contains(&Target::Local(*local))
+            })
+            .collect()
+    }
+
+    /// An independent `each`. Its rows are run by a function of its own,
+    /// which `mn_loop` calls once for the whole loop or once for each
+    /// piece of it. What the block reads of the code around it travels in
+    /// a struct, and its sums come back as totals.
+    fn each_cores(
+        &mut self,
+        query: &'a Query,
+        params: &'a [LocalId],
+        body: &'a Block,
+        cores: &'a Cores,
+        span: Span,
+    ) {
+        assert!(
+            self.each_depth == 0,
+            "an independent `each` is not inside another"
+        );
+        let prog = self.cx.prog;
+        let q = self.cx.query(query);
+        let number = q[1..].to_string();
+        let captured = self.captured(params, body, cores);
+        let env_type = format!("Env{number}");
+
+        let outer_indent = std::mem::replace(&mut self.indent, 1);
+        let (text, (uses, wrote)) = self.capture(|cx| {
+            if !captured.is_empty() {
+                cx.line(&format!("const {env_type} *env = env_;"));
+                let locals = cx.locals;
+                for local in &captured {
+                    let cty = cx.cx.cty(&locals[local.0].ty);
+                    let name = cx.names[local.0].clone();
+                    cx.line(&format!("{cty} {name} = env->{name};"));
+                }
+            }
+            let hoists = if analysis::vector_ok(body) {
+                cx.hoist(body)
+            } else {
+                HashMap::new()
+            };
+            cx.hoists.push(hoists);
+            let mut sums = Vec::new();
+            for target in &cores.sums {
+                let collected = cx.fresh("sum");
+                cx.line(&format!("int64_t {collected} = 0;"));
+                sums.push((*target, collected));
+            }
+            cx.sums = sums;
+            let terms = cx.gpu_terms(query, params, "");
+
+            cx.line("for (uint32_t t = 0; t < piece->table_count; t++) {");
+            cx.indent += 1;
+            cx.line("MnTable *table = piece->tables[t];");
+            cx.line("const uint32_t first = t == 0 ? piece->first : 0;");
+            cx.line(
+                "const uint32_t n = t + 1 == piece->table_count ? piece->end : table->count;",
+            );
+            cx.line("if (first >= n) continue;");
+            let entities = cx.columns(query, params, analysis::vector_ok(body), "");
+            cx.line("for (uint32_t i = first; i < n; i++) {");
+            cx.push_scope(ScopeKind::Each {
+                label: String::new(),
+                used: false,
+                written: Vec::new(),
+            });
+            cx.indent += 1;
+            cx.each_depth += 1;
+            for id in entities {
+                let name = cx.names[id.0].clone();
+                cx.line(&format!("MnEntity {name} = ents[i];"));
+            }
+            cx.block_in_scope(body, None);
+            cx.pop_scope(analysis::block_leaves(body));
+            cx.each_depth -= 1;
+            cx.indent -= 1;
+            cx.line("}");
+            let flags = terms.written.len();
+            for (index, (flag, _)) in terms.written.iter().enumerate() {
+                cx.line(&format!(
+                    "if ({flag}) {{ if (piece->wrote) piece->wrote[(size_t)t * {flags} + {index}] = true; {flag} = false; }}"
+                ));
+            }
+            cx.indent -= 1;
+            cx.line("}");
+            cx.hoists.pop();
+            for (index, (_, collected)) in std::mem::take(&mut cx.sums).iter().enumerate() {
+                cx.line(&format!("piece->sums[{index}] += {collected};"));
+            }
+            let wrote: Vec<usize> = terms.written.iter().map(|(_, c)| *c).collect();
+            (terms.uses, wrote)
+        });
+        self.indent = outer_indent;
+
+        let mut def = String::new();
+        let _ = writeln!(def, "{RESET_LINE}");
+        let env_param = if captured.is_empty() {
+            "const void *env_ __attribute__((unused))"
+        } else {
+            let _ = writeln!(def, "typedef struct {env_type} {{");
+            for local in &captured {
+                let _ = writeln!(
+                    def,
+                    "    {} {};",
+                    self.cx.cty(&self.locals[local.0].ty),
+                    self.names[local.0]
+                );
+            }
+            let _ = writeln!(def, "}} {env_type};\n");
+            "const void *env_"
+        };
+        let _ = writeln!(def, "{}", self.cx.line_directive(span));
+        let _ = writeln!(
+            def,
+            "static void L{number}(MnPiece *piece, {env_param}) {{\n{text}}}\n"
+        );
+        self.cx.loop_defs.push_str(&def);
+        self.cx.loops.push(LoopDesc {
+            number: number.clone(),
+            cores,
+            span,
+            uses,
+            wrote,
+        });
+
+        self.line("{");
+        self.indent += 1;
+        let env = if captured.is_empty() {
+            "NULL".to_string()
+        } else {
+            let values: Vec<String> = captured
+                .iter()
+                .map(|local| self.names[local.0].clone())
+                .collect();
+            self.line(&format!(
+                "{env_type} env{number} = {{{}}};",
+                values.join(", ")
+            ));
+            format!("&env{number}")
+        };
+        let sums = if cores.sums.is_empty() {
+            "NULL".to_string()
+        } else {
+            self.line(&format!("int64_t sums{number}[{}];", cores.sums.len()));
+            format!("sums{number}")
+        };
+        self.line(&format!("mn_loop(&loop{number}, {env}, {sums});"));
+        for (index, target) in cores.sums.iter().enumerate() {
+            let place = match *target {
+                Target::Local(local) => self.names[local.0].clone(),
+                Target::Field(resource, field) => {
+                    let item = &prog.resources[resource.0];
+                    format!(
+                        "{}.{}",
+                        names::resource(&item.name),
+                        names::field(&item.fields[field].name)
+                    )
+                }
+            };
+            self.line(&format!("{place} = {place} + sums{number}[{index}];"));
+        }
         self.indent -= 1;
         self.line("}");
     }

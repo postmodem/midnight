@@ -1,0 +1,34 @@
+# A row of an independent loop fails, and a later row, in another piece,
+# never ends. On one thread the loop stops at the failing row and never
+# reaches the other. On several threads a thread may be caught in the row
+# that never ends: the program still stops with the error, as soon as every
+# row before the failing one has finished.
+# Expected: modulo by zero, on the line of the `%`
+component Step
+  n: Int
+  by: Int
+  spin: Bool
+end
+
+tag Far
+
+system advance
+  each Step do |step|
+    while step.spin
+      step.n += 1
+    end
+    step.n = step.n % step.by
+  end
+end
+
+3.times do |i|
+  spawn Step(10 + i, 3, false)
+end
+spawn Step(5, 0, false)
+4.times do |i|
+  spawn Step(i, 2, false), Far
+end
+spawn Step(0, 2, true), Far
+spawn Step(1, 2, false), Far
+World.tick
+puts "not reached"

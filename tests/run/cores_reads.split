@@ -1,0 +1,3 @@
+tests/run/cores_reads.12am:25: 3000 rows in 3000 pieces on 4 threads
+tests/run/cores_reads.12am:37: 3000 rows in 3000 pieces on 4 threads
+tests/run/cores_reads.12am:48: 3000 rows in 3000 pieces on 4 threads

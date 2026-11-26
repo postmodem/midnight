@@ -1,0 +1,1 @@
+tests/panic/cores_two_failures.12am:20: runtime error: division by zero

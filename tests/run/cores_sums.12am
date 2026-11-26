@@ -1,0 +1,89 @@
+# Whole-number sums of an independent loop whose rows run in pieces on
+# several threads: into fields of a resource and into variables of the code
+# around the loop, with `+=` and `-=`, several sums into one total, a sum
+# inside a loop of the block and inside a nested `each`, and a total that
+# wraps. `Int` addition wraps, so the totals are the same in any order. The
+# 45,000 entities are in three tables.
+component Unit
+  id: Int
+end
+
+component Weight
+  grams: Int
+end
+
+tag Heavy
+tag Light
+
+resource Tally
+  total: Int = 0
+  count: Int = 0
+  huge: Int = 9223372036854775000
+end
+
+system add_up
+  each Unit do |unit|
+    Tally.total += unit.id
+    Tally.total -= 1 if unit.id % 2 == 0
+    Tally.count += 1
+    Tally.huge += unit.id * 1000003
+  end
+end
+
+# Sums into variables of a function, one of them taken away from.
+def spread(limit: Int) -> Int
+  below = 0
+  above = 0
+  each Unit do |unit|
+    if unit.id < limit
+      below += 1
+    else
+      above -= unit.id % 1000
+    end
+  end
+  below * 1000003 + above
+end
+
+# A sum inside a counting loop of the block and inside a nested `each`.
+def pairs -> Int
+  found = 0
+  each Unit, with: Light do |unit|
+    3.times do |k|
+      found += k
+    end
+    each Weight do |weight|
+      found += 1 if weight.grams % 7 == unit.id % 7
+    end
+  end
+  found
+end
+
+18000.times do |i|
+  spawn Unit(i)
+end
+9.times do |i|
+  spawn Unit(18000 + i), Light, Weight(i * 3)
+end
+26991.times do |i|
+  spawn Unit(18009 + i), Heavy
+end
+40.times do |i|
+  spawn Weight(i)
+end
+
+3.times do
+  World.tick
+  puts "#{Tally.total} #{Tally.count} #{Tally.huge}"
+end
+puts spread(100)
+puts spread(22000)
+puts pairs
+
+# A sum into a variable of the top level, inside a counting loop.
+seen = 0
+4.times do |round|
+  each Unit, with: Heavy do |unit|
+    seen += unit.id % (round + 2)
+  end
+end
+puts seen

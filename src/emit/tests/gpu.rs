@@ -464,6 +464,10 @@ component Other
   n: Int
 end
 
+resource Seen
+  total: Float = 0.0
+end
+
 gpu system drift
   each Body do |body|
     body.x += 1.0
@@ -473,9 +477,11 @@ end
 system report
   each Body, Other do |body, other|
     other.n += 1 if body.x > 0.0
+    Seen.total += 1.0
   end
   each Body do |body|
     body.x = 0.0
+    Seen.total += 1.0
   end
 end
 
@@ -483,6 +489,60 @@ first = spawn Body(1.0), Other(0)
 first[Body].x = 2.0
 puts first[Body].x, first[Other].n
 ";
+
+/// An independent `each` over a component some GPU block names hands its
+/// terms to `mn_loop`, which brings the columns up to date and reports
+/// the tables the loop assigned in. Its function sets a flag where it
+/// assigns, and calls nothing for the GPU copies itself.
+#[test]
+fn an_independent_loop_lists_what_gpu_blocks_name() {
+    let c = emit_c(
+        "gpu_loop",
+        "component Body\n  x: Float32\n  y: Float32\nend\n\n\
+         component Other\n  n: Int\nend\n\n\
+         gpu system drift\n  each Body do |body|\n    body.x += 1.0\n  end\nend\n\n\
+         system settle\n  each Body, Other do |body, other|\n    body.y = 1.0 if other.n > 0\n  end\nend\n\n\
+         spawn Body(1.0, 2.0), Other(0)\nWorld.tick\n",
+    );
+    let function = function_text(
+        &c,
+        "static void L0(MnPiece *piece, const void *env_ __attribute__((unused)))",
+    );
+    assert_seq(
+        function,
+        &[
+            "bool w_0 = false;",
+            "for (uint32_t t = 0; t < piece->table_count; t++) {",
+        ],
+    );
+    assert_seq(
+        function,
+        &[
+            "T_Body *restrict c0 = mn_column(table, 0);",
+            "const T_Other *restrict c1 = mn_column(table, 1);",
+            "for (uint32_t i = first; i < n; i++) {",
+        ],
+    );
+    assert_has(function, "w_0 = true;");
+    assert_has(
+        function,
+        "if (w_0) { if (piece->wrote) piece->wrote[(size_t)t * 1 + 0] = true; w_0 = false; }",
+    );
+    assert_lacks(function, "mn_gpu_use");
+    assert_lacks(function, "mn_wrote");
+    assert_has(
+        &c,
+        "static const MnUse loop0_uses[] = {{0, MN_USE_ASSIGN}};",
+    );
+    assert_has(&c, "static const uint32_t loop0_wrote[] = {0};");
+    assert_has(
+        &c,
+        "static MnLoop loop0 = {L0, &q0, loop0_weight, 0, NULL, 0, loop0_uses, 1, loop0_wrote, 1, ",
+    );
+    let settle = function_text(&c, "static void S_settle(void)");
+    assert_has(settle, "mn_loop(&loop0, NULL, NULL);");
+    assert_lacks(settle, "mn_defer_enter");
+}
 
 /// Ordinary code brings the CPU copy of a component up to date before it
 /// uses it, when some GPU block names the component, and says whether it
@@ -520,6 +580,7 @@ fn ordinary_code_syncs_what_gpu_blocks_name() {
         &[
             "for (uint32_t i = 0; i < n; i++) {",
             "c0[i].x = (float)0.0;",
+            "R_Seen.total = R_Seen.total + 1.0;",
             "}",
             "}",
             "mn_defer_leave();",

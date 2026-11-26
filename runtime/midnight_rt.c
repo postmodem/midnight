@@ -19,6 +19,9 @@
  * midnight_pool.c is then compiled with it. */
 #ifdef MN_THREADS
 #include "midnight_pool.h"
+
+#include <pthread.h>
+#include <setjmp.h>
 #endif
 
 #include <errno.h>
@@ -45,10 +48,51 @@ _Noreturn void mn_leave(int status) {
     _Exit(status);
 }
 
+_Noreturn void mn_out_of_memory(void);
+
+#ifdef MN_THREADS
+_Thread_local struct MnLoopThread *mn_loop_thread;
+
+/* Keeps the error of the piece the thread is running, when no earlier
+ * piece has failed, and leaves the piece. `text` is the whole line, which
+ * it takes over. */
+static _Noreturn void piece_fail(struct MnLoopThread *thread, char *text);
+
+/* Makes room for `need` bytes of what the thread's piece queues (`kind`
+ * 0) or emits (`kind` 1 + the event's id), counts one record more, and
+ * returns where the bytes start. */
+static unsigned char *piece_bytes(struct MnLoopThread *thread, uint32_t kind,
+                                  size_t need);
+#endif
+
 _Noreturn void mn_panic(MnLoc loc, const char *format, ...) {
+    va_list args;
+#ifdef MN_THREADS
+    /* In a piece the error is kept, and reported if no earlier row
+     * fails. */
+    struct MnLoopThread *thread = mn_loop_thread;
+    if (thread) {
+        va_start(args, format);
+        int said = vsnprintf(NULL, 0, format, args);
+        va_end(args);
+        int head = snprintf(NULL, 0, "%s:%d: runtime error: ", loc.file,
+                            (int)loc.line);
+        size_t size = (size_t)(head < 0 ? 0 : head) +
+                      (size_t)(said < 0 ? 0 : said) + 2;
+        char *text = malloc(size);
+        if (!text) mn_out_of_memory();
+        int at = snprintf(text, size, "%s:%d: runtime error: ", loc.file,
+                          (int)loc.line);
+        va_start(args, format);
+        at += vsnprintf(text + at, size - (size_t)at, format, args);
+        va_end(args);
+        text[at] = '\n';
+        text[at + 1] = '\0';
+        piece_fail(thread, text);
+    }
+#endif
     fflush(stdout);
     fprintf(stderr, "%s:%d: runtime error: ", loc.file, (int)loc.line);
-    va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
@@ -563,12 +607,10 @@ typedef struct MnCommand {
 
 static size_t round8(size_t size) { return (size + 7) & ~(size_t)7; }
 
-/* Appends a record with `payload` bytes after its start and returns the
- * address of the payload. */
-static unsigned char *command_push(uint32_t kind, uint32_t count, MnEntity e,
-                                   size_t payload) {
+/* Makes the world's queue `need` bytes longer and returns where they
+ * start. */
+static unsigned char *commands_extend(size_t need) {
     MnWorld *w = &mn_world;
-    size_t need = sizeof(MnCommand) + payload;
     if (w->command_capacity - w->command_len < need) {
         size_t capacity = w->command_capacity ? w->command_capacity : 1024;
         while (capacity - w->command_len < need) {
@@ -579,10 +621,27 @@ static unsigned char *command_push(uint32_t kind, uint32_t count, MnEntity e,
         w->command_capacity = capacity;
     }
     unsigned char *at = w->commands + w->command_len;
+    w->command_len += need;
+    return at;
+}
+
+/* Appends a record with `payload` bytes after its start and returns the
+ * address of the payload. In a piece the record is kept with the piece. */
+static unsigned char *command_push(uint32_t kind, uint32_t count, MnEntity e,
+                                   size_t payload) {
+    size_t need = sizeof(MnCommand) + payload;
+    unsigned char *at;
+#ifdef MN_THREADS
+    if (mn_loop_thread) {
+        at = piece_bytes(mn_loop_thread, 0, need);
+    } else
+#endif
+    {
+        at = commands_extend(need);
+        mn_world.deferred_count++;
+    }
     MnCommand command = {kind, count, e};
     memcpy(at, &command, sizeof command);
-    w->command_len += need;
-    w->deferred_count++;
     return at + sizeof command;
 }
 
@@ -816,19 +875,38 @@ typedef struct MnEventBuf {
     uint64_t capacity; /* in events */
 } MnEventBuf;
 
-void *mn_emit(uint32_t event) {
+/* Makes room for `more` events of one type after the newest and returns
+ * where the first goes. The caller fills them in. */
+static void *events_extend(uint32_t event, uint64_t more) {
     MnEventBuf *buf = &mn_world.events[event];
     size_t size = mn_world.program->events[event].size;
     uint64_t count = buf->end - buf->base;
-    if (count == buf->capacity) {
-        if (buf->capacity > SIZE_MAX / 2) mn_out_of_memory();
-        uint64_t capacity = buf->capacity ? buf->capacity * 2 : 16;
+    if (buf->capacity - count < more) {
+        uint64_t capacity = buf->capacity ? buf->capacity : 16;
+        while (capacity - count < more) {
+            if (capacity > SIZE_MAX / 2) mn_out_of_memory();
+            capacity *= 2;
+        }
         buf->data = mn_realloc(buf->data, mn_mul((size_t)capacity, size));
         buf->capacity = capacity;
     }
-    void *slot = buf->data + count * size;
+    buf->end += more;
+    return buf->data + count * size;
+}
+
+void *mn_emit(uint32_t event) {
+    size_t size = mn_world.program->events[event].size;
+    void *slot;
+#ifdef MN_THREADS
+    /* In a piece the event is kept with the piece. */
+    if (mn_loop_thread) {
+        slot = piece_bytes(mn_loop_thread, 1 + event, size);
+    } else
+#endif
+    {
+        slot = events_extend(event, 1);
+    }
     memset(slot, 0, size);
-    buf->end++;
     return slot;
 }
 
@@ -1857,6 +1935,407 @@ static void threads_start(void) {
 }
 #endif
 
+/* ---- Independent loops ---------------------------------------------------- */
+
+/* Makes the CPU copies of a loop's terms current, as the code of an
+ * ordinary `each` does before its tables. */
+static void loop_use(const MnLoop *loop) {
+    if (loop->use_count == 0 || !mn_gpu_active) return;
+    bool overwrites = false;
+    for (uint32_t i = 0; i < loop->use_count; i++) {
+        if (loop->uses[i].use == MN_USE_OVERWRITE) overwrites = true;
+    }
+    if (overwrites || mn_gpu_only) {
+        mn_gpu_use(loop->query, loop->uses, loop->use_count);
+    }
+}
+
+/* Reports the tables a loop assigned in: `flags` has wrote_count flags for
+ * each of the tables, table after table. */
+static void loop_wrote(const MnLoop *loop, MnTable *const *tables,
+                       uint32_t table_count, const bool *flags) {
+    for (uint32_t t = 0; t < table_count; t++) {
+        for (uint32_t i = 0; i < loop->wrote_count; i++) {
+            if (flags[(size_t)t * loop->wrote_count + i]) {
+                mn_wrote(tables[t], loop->wrote[i]);
+            }
+        }
+    }
+}
+
+/* Runs every row of a loop as one piece on the calling thread. Inside a
+ * piece it leaves the world's state alone: the loop is part of that
+ * piece. */
+static void loop_whole(MnLoop *loop, const void *env, int64_t *sums) {
+    MnQuery *query = loop->query;
+    bool in_piece = MN_IN_PIECE;
+    bool *wrote = NULL;
+    if (!in_piece) {
+        mn_world.defer_depth++;
+        loop_use(loop);
+        if (loop->wrote_count != 0 && mn_gpu_active) {
+            wrote = mn_calloc(mn_mul(query->table_count, loop->wrote_count),
+                              sizeof(bool));
+        }
+    }
+    uint32_t last = query->table_count - 1;
+    MnPiece piece = {query->tables, query->table_count, 0,
+                     query->tables[last]->count, sums, wrote};
+    loop->run(&piece, env);
+    if (wrote) {
+        loop_wrote(loop, query->tables, query->table_count, wrote);
+        free(wrote);
+    }
+    mn_defer_leave();
+}
+
+#ifdef MN_THREADS
+/* Bytes one thread collects while it runs pieces. */
+typedef struct MnBytes {
+    unsigned char *data;
+    size_t len;
+    size_t capacity;
+} MnBytes;
+
+/* What one piece queued, or emitted of one event type: `count` records in
+ * the bytes `begin` up to `end` of the buffer of that kind of the thread
+ * that ran it. Kind 0 is queued changes; kind 1 + e is events of type e. */
+typedef struct MnStretch {
+    uint64_t piece;
+    uint32_t kind;
+    uint32_t thread;
+    size_t begin;
+    size_t end;
+    uint64_t count;
+} MnStretch;
+
+/* What a thread keeps for the pieces it runs of one loop. */
+struct MnLoopThread {
+    /* The piece it is running. */
+    _Alignas(64) uint64_t piece;
+    uint32_t index;
+    /* Where a piece that fails goes on. */
+    sigjmp_buf jump;
+    /* One per kind. */
+    MnBytes *buffers;
+    /* Per kind: which of `stretches` is the newest of that kind, or
+     * SIZE_MAX. */
+    size_t *last;
+    MnStretch *stretches;
+    size_t stretch_count;
+    size_t stretch_capacity;
+    /* The totals of its pieces. */
+    int64_t *sums;
+    uint32_t sum_capacity;
+    /* For each table with rows, the loop's wrote_count flags. */
+    bool *wrote;
+    size_t wrote_capacity;
+};
+
+/* What split loops share. One runs at a time. */
+static struct {
+    struct MnLoopThread *threads;
+    uint32_t thread_count;
+    /* The tables of the loop that have rows; `starts` has the number of
+     * each one's first row, the rows being numbered through the tables in
+     * order, and then the number of rows in all. */
+    MnTable **tables;
+    uint64_t *starts;
+    uint32_t table_capacity;
+    /* Working space for joining the pieces. */
+    MnStretch *joined;
+    size_t joined_capacity;
+    /* The earliest piece that has failed, and its error. */
+    pthread_mutex_t lock;
+    uint64_t failed_piece;
+    char *failed_text;
+} loops = {.lock = PTHREAD_MUTEX_INITIALIZER};
+
+static unsigned char *piece_bytes(struct MnLoopThread *thread, uint32_t kind,
+                                  size_t need) {
+    MnBytes *bytes = &thread->buffers[kind];
+    if (bytes->capacity - bytes->len < need) {
+        size_t capacity = bytes->capacity ? bytes->capacity : 1024;
+        while (capacity - bytes->len < need) {
+            if (capacity > SIZE_MAX / 2) mn_out_of_memory();
+            capacity *= 2;
+        }
+        bytes->data = mn_realloc(bytes->data, capacity);
+        bytes->capacity = capacity;
+    }
+    size_t newest = thread->last[kind];
+    if (newest == SIZE_MAX || thread->stretches[newest].piece != thread->piece) {
+        if (thread->stretch_count == thread->stretch_capacity) {
+            size_t capacity =
+                thread->stretch_capacity ? thread->stretch_capacity * 2 : 16;
+            thread->stretches = mn_realloc(thread->stretches,
+                                           mn_mul(capacity, sizeof(MnStretch)));
+            thread->stretch_capacity = capacity;
+        }
+        newest = thread->stretch_count++;
+        thread->stretches[newest] = (MnStretch){
+            thread->piece, kind, thread->index, bytes->len, bytes->len, 0};
+        thread->last[kind] = newest;
+    }
+    unsigned char *at = bytes->data + bytes->len;
+    bytes->len += need;
+    thread->stretches[newest].end = bytes->len;
+    thread->stretches[newest].count++;
+    return at;
+}
+
+static _Noreturn void piece_fail(struct MnLoopThread *thread, char *text) {
+    pthread_mutex_lock(&loops.lock);
+    if (thread->piece < loops.failed_piece) {
+        free(loops.failed_text);
+        loops.failed_text = text;
+        loops.failed_piece = thread->piece;
+    } else {
+        free(text);
+    }
+    pthread_mutex_unlock(&loops.lock);
+    mn_pool_fail(thread->piece);
+    siglongjmp(thread->jump, 1);
+}
+
+/* Every piece before the earliest failed one has finished: reports its
+ * error, which is the one the loop stops with on one thread. */
+static void loop_failed(void *context, uint64_t piece) {
+    (void)context;
+    (void)piece;
+    pthread_mutex_lock(&loops.lock);
+    fflush(stdout);
+    fputs(loops.failed_text, stderr);
+    mn_leave(1);
+}
+
+/* One run of a split loop. */
+typedef struct LoopRun {
+    const MnLoop *loop;
+    const void *env;
+    uint64_t rows;
+    uint64_t piece_rows;
+    /* How many tables have rows. */
+    uint32_t table_count;
+    /* The pieces record the tables they assign in. */
+    bool flags;
+} LoopRun;
+
+static void loop_piece(void *context, uint64_t piece, uint32_t index) {
+    const LoopRun *run = context;
+    const MnLoop *loop = run->loop;
+    struct MnLoopThread *thread = &loops.threads[index];
+    uint64_t from = piece * run->piece_rows;
+    uint64_t to = run->rows - from < run->piece_rows ? run->rows
+                                                      : from + run->piece_rows;
+    uint32_t first = table_of_row(loops.starts, run->table_count, from);
+    uint32_t last = table_of_row(loops.starts, run->table_count, to - 1);
+    MnPiece rows = {
+        loops.tables + first,
+        last - first + 1,
+        (uint32_t)(from - loops.starts[first]),
+        (uint32_t)(to - loops.starts[last]),
+        thread->sums,
+        run->flags ? thread->wrote + (size_t)first * loop->wrote_count : NULL,
+    };
+    thread->piece = piece;
+    mn_loop_thread = thread;
+    if (sigsetjmp(thread->jump, 0) == 0) loop->run(&rows, run->env);
+    mn_loop_thread = NULL;
+}
+
+static int stretch_order(const void *a, const void *b) {
+    const MnStretch *x = a;
+    const MnStretch *y = b;
+    if (x->piece != y->piece) return x->piece < y->piece ? -1 : 1;
+    return x->kind < y->kind ? -1 : x->kind > y->kind;
+}
+
+/* Appends what the pieces queued to the world's queue and what they
+ * emitted to the event buffers, piece after piece: the order in which one
+ * thread queues and emits. */
+static void loop_join(uint32_t threads) {
+    size_t total = 0;
+    for (uint32_t t = 0; t < threads; t++) {
+        total += loops.threads[t].stretch_count;
+    }
+    if (total == 0) return;
+    if (total > loops.joined_capacity) {
+        loops.joined = mn_realloc(loops.joined, mn_mul(total, sizeof(MnStretch)));
+        loops.joined_capacity = total;
+    }
+    size_t at = 0;
+    for (uint32_t t = 0; t < threads; t++) {
+        const struct MnLoopThread *thread = &loops.threads[t];
+        if (thread->stretch_count == 0) continue;
+        memcpy(loops.joined + at, thread->stretches,
+               thread->stretch_count * sizeof(MnStretch));
+        at += thread->stretch_count;
+    }
+    qsort(loops.joined, total, sizeof(MnStretch), stretch_order);
+    for (size_t i = 0; i < total; i++) {
+        const MnStretch *stretch = &loops.joined[i];
+        const MnBytes *bytes =
+            &loops.threads[stretch->thread].buffers[stretch->kind];
+        size_t size = stretch->end - stretch->begin;
+        if (stretch->kind == 0) {
+            memcpy(commands_extend(size), bytes->data + stretch->begin, size);
+            mn_world.deferred_count += (uint32_t)stretch->count;
+        } else {
+            memcpy(events_extend(stretch->kind - 1, stretch->count),
+                   bytes->data + stretch->begin, size);
+        }
+    }
+}
+
+/* Runs the rows of a loop in pieces on several threads. */
+static void loop_split(MnLoop *loop, const void *env, int64_t *sums,
+                       uint64_t rows, const MnSplit *split) {
+    MnWorld *w = &mn_world;
+    MnQuery *query = loop->query;
+    w->defer_depth++;
+    loop_use(loop);
+
+    if (query->table_count > loops.table_capacity) {
+        uint32_t capacity = query->table_capacity;
+        loops.tables =
+            mn_realloc(loops.tables, mn_mul(capacity, sizeof(MnTable *)));
+        loops.starts = mn_realloc(loops.starts,
+                                  mn_mul((size_t)capacity + 1, sizeof(uint64_t)));
+        loops.table_capacity = capacity;
+    }
+    uint32_t tables = 0;
+    uint64_t numbered = 0;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        loops.tables[tables] = table;
+        loops.starts[tables++] = numbered;
+        numbered += table->count;
+    }
+    loops.starts[tables] = numbered;
+
+    if (!loops.threads) {
+        loops.thread_count = mn_pool_threads();
+        size_t size = mn_mul(loops.thread_count, sizeof(struct MnLoopThread));
+        loops.threads = aligned_alloc(_Alignof(struct MnLoopThread), size);
+        if (!loops.threads) mn_out_of_memory();
+        memset(loops.threads, 0, size);
+    }
+    uint32_t kinds = 1 + w->program->event_count;
+    bool flags = loop->wrote_count != 0 && mn_gpu_active;
+    size_t flag_count = flags ? mn_mul(tables, loop->wrote_count) : 0;
+    for (uint32_t t = 0; t < split->threads; t++) {
+        struct MnLoopThread *thread = &loops.threads[t];
+        thread->index = t;
+        if (!thread->buffers) {
+            thread->buffers = mn_calloc(kinds, sizeof(MnBytes));
+            thread->last = mn_calloc(kinds, sizeof(size_t));
+        }
+        for (uint32_t kind = 0; kind < kinds; kind++) {
+            thread->buffers[kind].len = 0;
+            thread->last[kind] = SIZE_MAX;
+        }
+        thread->stretch_count = 0;
+        if (loop->sum_count > thread->sum_capacity) {
+            thread->sums = mn_realloc(
+                thread->sums, mn_mul(loop->sum_count, sizeof(int64_t)));
+            thread->sum_capacity = loop->sum_count;
+        }
+        for (uint32_t i = 0; i < loop->sum_count; i++) thread->sums[i] = 0;
+        if (flag_count > thread->wrote_capacity) {
+            thread->wrote = mn_realloc(thread->wrote, flag_count);
+            thread->wrote_capacity = flag_count;
+        }
+        for (size_t i = 0; i < flag_count; i++) thread->wrote[i] = false;
+    }
+    loops.failed_piece = UINT64_MAX;
+    if (!loop->reported) {
+        loop->reported = true;
+        split_report(loop->loc, rows, split);
+    }
+
+    LoopRun run = {loop, env, rows, split->piece_rows, tables, flags};
+    MnPoolLoop pieces = {loop_piece, loop_failed, &run, split->pieces,
+                         split->threads};
+    mn_pool_loop(&pieces);
+
+    loop_join(split->threads);
+    for (uint32_t t = 0; t < split->threads; t++) {
+        const struct MnLoopThread *thread = &loops.threads[t];
+        for (uint32_t i = 0; i < loop->sum_count; i++) {
+            sums[i] = (int64_t)((uint64_t)sums[i] + (uint64_t)thread->sums[i]);
+        }
+    }
+    if (flags) {
+        /* The flags of thread 0 become those of every thread. */
+        bool *all = loops.threads[0].wrote;
+        for (uint32_t t = 1; t < split->threads; t++) {
+            for (size_t i = 0; i < flag_count; i++) {
+                all[i] |= loops.threads[t].wrote[i];
+            }
+        }
+        loop_wrote(loop, loops.tables, tables, all);
+    }
+    if (--w->defer_depth == 0 && w->deferred_count != 0) mn_flush();
+}
+
+/* Releases what split loops kept. */
+static void loops_finish(void) {
+    for (uint32_t t = 0; t < loops.thread_count; t++) {
+        struct MnLoopThread *thread = &loops.threads[t];
+        if (thread->buffers) {
+            uint32_t kinds = 1 + mn_world.program->event_count;
+            for (uint32_t kind = 0; kind < kinds; kind++) {
+                free(thread->buffers[kind].data);
+            }
+        }
+        free(thread->buffers);
+        free(thread->last);
+        free(thread->stretches);
+        free(thread->sums);
+        free(thread->wrote);
+    }
+    free(loops.threads);
+    free(loops.tables);
+    free(loops.starts);
+    free(loops.joined);
+    free(loops.failed_text);
+    loops.threads = NULL;
+    loops.thread_count = 0;
+    loops.tables = NULL;
+    loops.starts = NULL;
+    loops.table_capacity = 0;
+    loops.joined = NULL;
+    loops.joined_capacity = 0;
+    loops.failed_text = NULL;
+}
+#endif
+
+void mn_loop(MnLoop *loop, const void *env, int64_t *sums) {
+    for (uint32_t i = 0; i < loop->sum_count; i++) sums[i] = 0;
+    MnQuery *query = loop->query;
+    bool in_piece = MN_IN_PIECE;
+    /* Inside a piece the query is up to date: the loop that is split
+     * lists it. */
+    if (!in_piece) mn_query_update(query);
+    if (query->table_count == 0) return;
+#ifdef MN_THREADS
+    if (!in_piece && mn_world.defer_depth == 0 && mn_pool_threads() > 1) {
+        for (uint32_t i = 0; i < loop->query_count; i++) {
+            mn_query_update(loop->queries[i]);
+        }
+        uint64_t rows = mn_query_rows(query);
+        MnSplit split = split_of(rows, loop->weight());
+        if (split.threads > 1) {
+            loop_split(loop, env, sums, rows, &split);
+            return;
+        }
+    }
+#endif
+    loop_whole(loop, env, sums);
+}
+
 /* ---- GPU systems --------------------------------------------------------- */
 
 bool mn_gpu_active = false;
@@ -2385,6 +2864,7 @@ void mn_finish(void) {
     gpu_finish();
 #ifdef MN_THREADS
     mn_pool_finish();
+    loops_finish();
 #endif
 #ifdef MN_DEBUG
     world_destroy();

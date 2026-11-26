@@ -1,0 +1,82 @@
+# An independent loop that emits events of two types while its rows run in
+# pieces on several threads. The events of each type are in the order of
+# the rows, which is the order one thread emits them in: the `on` blocks
+# print the first of them and a number that depends on the order of all of
+# them. The 30,000 entities are in three tables.
+component Unit
+  id: Int
+end
+
+tag Loud
+tag Quiet
+
+event Seen
+  id: Int
+  by: Entity
+end
+
+event Shout
+  volume: Int
+end
+
+resource Heard
+  seen: Int = 0
+  shouts: Int = 0
+end
+
+system look
+  each Entity, Unit do |e, unit|
+    emit Seen(unit.id, e) if unit.id % 5 != 0
+    emit Shout(unit.id * 2) if unit.id % 7 == 0
+    # A second event of one type from one row comes after the first.
+    emit Seen(0 - unit.id, e) if unit.id % 11 == 0
+  end
+end
+
+def report(id: Int)
+  emit Shout(id)
+end
+
+system look_again
+  each Unit, with: Loud do |unit|
+    report(unit.id) if unit.id % 1000 == 1
+  end
+end
+
+system listen
+  order = 0
+  shown = 0
+  on Seen do |seen|
+    order = (order * 31 + seen.id) % 1000000007
+    Heard.seen += 1
+    if shown < 6
+      puts "seen #{seen.id} by #{seen.by}"
+      shown += 1
+    end
+  end
+  puts "seen #{Heard.seen} #{order}"
+  order = 0
+  shown = 0
+  on Shout do |shout|
+    order = (order * 31 + shout.volume) % 1000000007
+    Heard.shouts += 1
+    if shown < 6
+      puts "shout #{shout.volume}"
+      shown += 1
+    end
+  end
+  puts "shouts #{Heard.shouts} #{order}"
+end
+
+14000.times do |i|
+  spawn Unit(i)
+end
+7.times do |i|
+  spawn Unit(14000 + i), Quiet
+end
+15993.times do |i|
+  spawn Unit(14007 + i), Loud
+end
+2.times do
+  World.tick
+end

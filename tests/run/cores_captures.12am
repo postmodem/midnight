@@ -1,0 +1,121 @@
+# What an independent loop reads of the code around it, when its rows run
+# in pieces on several threads: variables, the parameters of its function,
+# `self` and the fields of a method's receiver, the variable of a counting
+# loop, the parameter of an `on`, a constant and a field of a resource. The
+# entities are in three tables.
+component Position
+  x: Float
+  y: Float
+end
+
+tag Left
+tag Right
+
+event Shove
+  from: Float
+  by: Float
+end
+
+resource Wind
+  push: Float = 0.25
+end
+
+STEP = 0.5
+
+struct Zone
+  lo: Float
+  hi: Float
+
+  # Reads fields of the receiver by name and through `self`.
+  def inside -> Int
+    found = 0
+    each Position do |pos|
+      found += 1 if pos.x >= lo && pos.x < self.hi
+    end
+    found
+  end
+
+  def lift(by: Float, times: Int)
+    each Position do |pos|
+      pos.y += by * times + STEP if pos.x >= lo && pos.x < hi
+    end
+  end
+end
+
+system shoves
+  on Shove do |shove|
+    each Position do |pos|
+      pos.x += shove.by + Wind.push if pos.x > shove.from
+    end
+  end
+end
+
+def widen(zone: Zone, margin: Float) -> Int
+  wide = Zone(zone.lo - margin, zone.hi + margin)
+  inside = 0
+  each Position do |pos|
+    inside += 1 if pos.x >= wide.lo && pos.x < wide.hi
+  end
+  inside
+end
+
+struct Named
+  name: String
+  limit: Float
+end
+
+# The loop reads a number out of a value that also holds a string, and
+# leaves the string alone.
+def below(named: Named) -> Int
+  found = 0
+  each Position do |pos|
+    found += 1 if pos.x < named.limit
+  end
+  found
+end
+
+def show
+  total_x = 0.0
+  total_y = 0.0
+  each Position do |pos|
+    total_x += pos.x
+    total_y += pos.y
+  end
+  puts "#{total_x} #{total_y}"
+end
+
+3000.times do |i|
+  spawn Position((i * 37 % 401).to_f * 0.5, 0.0)
+end
+6.times do |i|
+  spawn Position(i.to_f * 30.0, 1.0), Left
+end
+2994.times do |i|
+  spawn Position((i * 53 % 397).to_f * 0.5, 2.0), Right
+end
+
+zone = Zone(20.0, 90.0)
+puts zone.inside
+zone.lift(1.5, 3)
+show
+puts widen(zone, 12.5)
+edge = Named("edge of " + "the map", 60.0)
+puts "#{below(edge)} below the #{edge.name}"
+
+emit Shove(100.0, 2.0)
+emit Shove(150.0, -1.0)
+World.tick
+show
+
+# Variables of the top level and of the counting loops around the `each`.
+scale = 0.125
+3.times do |round|
+  offset = scale * round
+  2.times do |turn|
+    each Position do |pos|
+      pos.y += offset + turn if pos.x < 50.0 * (round + 1)
+    end
+  end
+end
+show
+puts zone.inside

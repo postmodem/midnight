@@ -1,0 +1,80 @@
+# An independent loop that queues `despawn`, `add` and `remove`, on its own
+# entity and on others, while its rows run in pieces on several threads.
+# The changes are applied when the loop ends, in the order of the rows,
+# which is the order one thread makes them in. That order decides whose
+# `Mark` an entity keeps when several rows add one, which table an entity
+# ends in and where in it, and which handle the next `spawn` reuses: the
+# lines below show all three. The 24,000 entities are in four tables.
+component Unit
+  id: Int
+  partner: Entity
+end
+
+component Mark
+  by: Int
+end
+
+tag Odd
+tag Late
+tag Paired
+
+system pair_up
+  each Entity, Unit do |e, unit|
+    kind = unit.id % 4
+    if kind == 0
+      e.despawn
+    elsif kind == 1
+      # Several rows mark the same partner: the last row's mark stays.
+      unit.partner.add(Mark(unit.id), Paired)
+    elsif kind == 2
+      unit.partner.remove(Paired)
+      e.add(Mark(0 - unit.id))
+    else
+      unit.partner.despawn if unit.id % 12 == 3
+      e.remove(Odd, Late)
+    end
+  end
+end
+
+def show
+  order = 0
+  each Unit do |unit|
+    order = (order * 31 + unit.id) % 1000000007
+  end
+  marks = 0
+  each Mark do |mark|
+    marks = (marks * 31 + mark.by) % 1000000007
+  end
+  print World.count, " ", World.count(Mark), " ", World.count(Unit, with: Paired), " "
+  print World.count(Unit, with: Odd), " ", World.count(Unit, with: Late), " "
+  puts "#{order} #{marks}"
+end
+
+units: [Entity] = []
+24000.times do |i|
+  if i >= 23000 && i % 2 == 1
+    units.push(spawn(Unit(i, Entity.none), Odd, Late))
+  elsif i >= 23000
+    units.push(spawn(Unit(i, Entity.none), Late))
+  elsif i % 2 == 1
+    units.push(spawn(Unit(i, Entity.none), Odd))
+  else
+    units.push(spawn(Unit(i, Entity.none)))
+  end
+end
+24000.times do |i|
+  units[i][Unit].partner = units[(i * 5 + i / 7) % 6000]
+end
+
+show
+3.times do
+  World.tick
+  show
+  # The handles of the entities despawned last are reused first.
+  fresh = spawn Unit(1, Entity.none)
+  again = spawn Unit(5, fresh)
+  puts "#{fresh} #{again}"
+end
+each Entity, Unit, Mark, with: Late do |e, unit, mark|
+  puts "#{e} #{unit.id} #{mark.by}" if unit.id % 97 == 5
+end

@@ -984,7 +984,7 @@ fn gpu_programs() {
     report("runs on a device", jobs.len(), failures);
     let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
     note(&format!(
-        "gpu_programs: {} builds of {} programs, each run as it is and with rows, and strict ones with strict-cpu, on {}",
+        "gpu_programs: {} builds of {} programs, each run as it is, with rows and with MIDNIGHT_THREADS={DEVICE_THREADS}, and strict ones with strict-cpu, on {}",
         jobs.len(),
         jobs.len() / MODES.len(),
         devices.join(" and ")
@@ -1731,9 +1731,18 @@ const PANIC_LIMIT: Duration = Duration::from_secs(10);
 /// How long any other run of a test program may take.
 const RUN_LIMIT: Duration = Duration::from_secs(300);
 
-/// Whether a program has a loop that can be split across threads.
+/// Whether a program has a loop that can be split across threads:
+/// `midnight loops` says `gpu` or `cores` of one.
 fn can_split(source: &Path) -> bool {
-    declares_gpu_system(source)
+    let output = midnight()
+        .arg("loops")
+        .arg(source)
+        .output()
+        .expect("run midnight");
+    output.status.success()
+        && text(&output.stdout)
+            .lines()
+            .any(|line| line.ends_with("  gpu") || line.ends_with("  cores"))
 }
 
 /// The programs of `tests/run`, `examples` and `tests/panic` that have a

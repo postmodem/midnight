@@ -1,0 +1,25 @@
+# Every row of an independent loop fails, each with a message of its own.
+# In pieces on several threads, taken in any order, the program stops with
+# the error of the first row, as it does on one thread.
+# Expected: `Entity(0v1) has no Extra`, on the line of the `e[Extra]`
+component Cell
+  n: Int
+end
+
+component Extra
+  n: Int
+end
+
+tag Second
+
+8.times do |i|
+  spawn Cell(i)
+end
+8.times do |i|
+  spawn Cell(8 + i), Second
+end
+
+each Entity, Cell do |e, cell|
+  cell.n = e[Extra].n
+end
+puts "not reached"

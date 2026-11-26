@@ -1,0 +1,6 @@
+tests/run/cores_captures.12am:32: 6000 rows in 6000 pieces on 4 threads
+tests/run/cores_captures.12am:39: 6000 rows in 6000 pieces on 4 threads
+tests/run/cores_captures.12am:56: 6000 rows in 6000 pieces on 4 threads
+tests/run/cores_captures.12am:71: 6000 rows in 6000 pieces on 4 threads
+tests/run/cores_captures.12am:47: 6000 rows in 6000 pieces on 4 threads
+tests/run/cores_captures.12am:115: 6000 rows in 6000 pieces on 4 threads

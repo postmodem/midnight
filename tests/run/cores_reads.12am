@@ -1,0 +1,87 @@
+# Independent loops that read other entities while their rows run in pieces
+# on several threads: through a nested `each`, by `e[C]`, with `has?`,
+# `alive?` and `World.count`. Each run assigns its own `Velocity` and reads
+# `Position`, which no run assigns, so every run sees what one thread would
+# show it. The prey are in three tables.
+component Position
+  x: Float
+  y: Float
+end
+
+component Velocity
+  dx: Float
+  dy: Float
+end
+
+component Follows
+  leader: Entity
+end
+
+tag Hunter
+tag Tired
+tag Fast
+
+system flee
+  each Position, Velocity, without: Hunter do |pos, vel|
+    each Position, with: Hunter do |hunter|
+      away_x = pos.x - hunter.x
+      away_y = pos.y - hunter.y
+      near = 1.0 / (1.0 + away_x * away_x + away_y * away_y)
+      vel.dx += away_x * near
+      vel.dy += away_y * near
+    end
+  end
+end
+
+system follow
+  each Entity, Velocity, Follows do |e, vel, follows|
+    leader = follows.leader
+    next unless leader.alive? && leader.has?(Position)
+    vel.dx += leader[Position].x * 0.001
+    vel.dy += e[Position].y * 0.001 if e.has?(Position)
+    vel.dx += 0.5 if leader.has?(Hunter)
+    vel.dy += World.count(Position, with: Hunter) * 0.125
+  end
+end
+
+system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+def place(i: Int) -> Float
+  (i * 37 % 211).to_f * 0.25
+end
+
+hunters: [Entity] = []
+40.times do |i|
+  hunters.push(spawn(Position(place(i), place(i + 9)), Hunter))
+end
+gone = spawn Position(0.0, 0.0)
+1500.times do |i|
+  spawn Position(place(i + 40), place(i * 3)), Velocity(0.0, 0.0), Follows(hunters[i % 40])
+end
+11.times do |i|
+  spawn Position(place(i + 5), place(i)), Velocity(0.0, 0.0), Follows(gone), Tired
+end
+1489.times do |i|
+  spawn Position(place(i * 5), place(i + 77)), Velocity(0.0, 0.0), Follows(Entity.none), Fast
+end
+gone.despawn
+
+3.times do
+  World.tick
+end
+total_x = 0.0
+total_y = 0.0
+each Position, Velocity do |pos, vel|
+  total_x += pos.x + vel.dx
+  total_y += pos.y + vel.dy
+end
+puts total_x
+puts total_y
+each Position, Velocity, with: Tired do |pos, vel|
+  puts "#{pos.x} #{pos.y} #{vel.dx} #{vel.dy}"
+end

@@ -1,0 +1,2 @@
+tests/run/cores_emit.12am:28: 30000 rows in 30000 pieces on 4 threads
+tests/run/cores_emit.12am:41: 15993 rows in 15993 pieces on 4 threads

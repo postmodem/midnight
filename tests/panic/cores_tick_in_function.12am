@@ -1,0 +1,32 @@
+# A loop that keeps every rule of an independent `each` but one: a function
+# it calls reaches `World.tick`. That keeps it on one core, where the call
+# is the run-time error it always was. The loop before it is independent
+# and runs in pieces.
+# Expected: `World.tick called inside an `each``, on the line of the call
+component Level
+  n: Int
+end
+
+resource Seen
+  ticks: Int = 0
+end
+
+system count
+  Seen.ticks += 1
+end
+
+def step(n: Int) -> Int
+  World.tick if n > 2
+  n
+end
+
+6.times do |i|
+  spawn Level(i)
+end
+each Level do |level|
+  level.n += 1
+end
+each Level do |level|
+  level.n = step(level.n)
+end
+puts Seen.ticks

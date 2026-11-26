@@ -1,0 +1,35 @@
+# Two rows of an independent loop fail, with different errors. The row that
+# comes first divides by zero on the later line; a row far behind it, in
+# another table and another piece, stores a value that does not fit on the
+# earlier line. Whichever thread fails first, the program stops with the
+# error of the earliest row, as it does on one thread, and with what it had
+# printed before the loop.
+# Expected: division by zero, on the line of the `/`
+component Gauge
+  reading: UInt8
+  value: Int
+  scale: Int
+end
+
+tag Spare
+tag Worn
+
+system adjust
+  each Gauge do |gauge|
+    gauge.reading = gauge.value
+    gauge.value = 1000 / gauge.scale
+  end
+end
+
+5.times do |i|
+  spawn Gauge(0, i, 1 + i)
+end
+spawn Gauge(0, 7, 0)
+40.times do |i|
+  spawn Gauge(0, i, 2), Spare
+end
+spawn Gauge(0, 300, 3), Worn
+spawn Gauge(0, 9, 0), Worn
+puts "before"
+World.tick
+puts "not reached"

@@ -1,0 +1,89 @@
+# Independent loops in functions. A loop is split across threads when its
+# function is called from outside any `each`. Called from inside an `each`
+# it runs where it is reached: as part of a piece when that loop is split,
+# and what it queues then travels with the piece. Either way the function
+# gives what it gives on one thread. The entities are in three tables.
+component Level
+  n: Int
+end
+
+component Probe
+  limit: Int
+  above: Int
+end
+
+tag Old
+tag New
+
+# Reads only: may be called from an independent loop.
+def count_above(limit: Int) -> Int
+  found = 0
+  each Level do |level|
+    found += 1 if level.n > limit
+  end
+  found
+end
+
+# Queues changes on the entities it visits.
+def retire(limit: Int) -> Int
+  retired = 0
+  each Entity, Level do |e, level|
+    if level.n > limit
+      e.add(Old)
+      e.remove(New)
+      retired += 1
+    end
+  end
+  retired
+end
+
+# Assigns: a loop that calls it stays on one core.
+def raise_all(by: Int)
+  each Level do |level|
+    level.n += by
+  end
+end
+
+# Independent, and it calls a function with a loop of its own.
+system probe
+  each Probe do |probe|
+    probe.above = count_above(probe.limit)
+  end
+end
+
+def show
+  each Probe do |probe|
+    print probe.above, " "
+  end
+  puts "#{World.count(Level, with: Old)} #{World.count(Level, with: New)}"
+end
+
+2000.times do |i|
+  spawn Level(i * 7 % 1000)
+end
+5.times do |i|
+  spawn Level(i * 300), New
+end
+1995.times do |i|
+  spawn Level(i * 13 % 1000), New
+end
+30.times do |i|
+  spawn Probe(i * 35, 0)
+end
+
+# From outside any `each`.
+puts count_above(500)
+World.tick
+show
+puts retire(900)
+show
+
+# From inside an `each` that stays on one core.
+each Probe do |probe|
+  if probe.limit % 350 == 0
+    raise_all(1)
+    puts "#{probe.limit}: #{count_above(probe.limit)} #{retire(990 - probe.limit / 10)}"
+  end
+end
+World.tick
+show

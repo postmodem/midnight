@@ -202,6 +202,16 @@ typedef struct MnWorld {
 
 extern MnWorld mn_world;
 
+/* MN_IN_PIECE is true exactly while the calling thread runs a piece of a
+ * loop that is split across threads (see "Several threads"). Always false
+ * in a program built without MN_THREADS. */
+#ifdef MN_THREADS
+extern _Thread_local struct MnLoopThread *mn_loop_thread;
+#define MN_IN_PIECE (mn_loop_thread != NULL)
+#else
+#define MN_IN_PIECE false
+#endif
+
 /* `e.alive?` */
 static inline bool mn_alive(MnEntity e) {
     return e.index < mn_world.slot_count &&
@@ -285,12 +295,18 @@ int64_t mn_entity_count(void);
  * mn_despawn queue their work (taking ownership of the values at once) and
  * the world does not change. mn_defer_leave applies the queue, in order,
  * when the depth returns to zero. Generated code calls mn_defer_enter
- * before the loops of an `each` and mn_defer_leave on every way out. */
+ * before the loops of an `each` and mn_defer_leave on every way out.
+ *
+ * Inside a piece the two do nothing: mn_loop keeps the depth raised until
+ * the pieces are joined, and what a piece queues is kept with the piece. */
 void mn_flush(void);
 
-static inline void mn_defer_enter(void) { mn_world.defer_depth++; }
+static inline void mn_defer_enter(void) {
+    if (!MN_IN_PIECE) mn_world.defer_depth++;
+}
 
 static inline void mn_defer_leave(void) {
+    if (MN_IN_PIECE) return;
     if (--mn_world.defer_depth == 0 && mn_world.deferred_count != 0) mn_flush();
 }
 
@@ -968,6 +984,110 @@ static inline void *mn_get_synced(MnEntity e, uint32_t component, size_t size,
  *
  * - The C implementation of a GPU block. It calls nothing here but
  *   mn_strict_enter and mn_strict_leave.
+ * - The function of an independent `each` (MnLoop.run), and through it any
+ *   function of the program. While pieces run, no other code of the
+ *   program does, and the world's tables, slots and queries do not change.
+ *   A piece may read anything; it writes only its own rows of the columns
+ *   it is given, the sums and flags of its MnPiece, and what it creates
+ *   itself. It may call:
+ *
+ *       mn_alive, mn_has, mn_get, mn_get_failed, mn_column
+ *       mn_query_update, mn_query_count, mn_query_rows, mn_entity_count,
+ *           for queries listed in the MnLoop, which are up to date
+ *       mn_add, mn_remove, mn_despawn and mn_emit, which keep what they
+ *           are given with the piece
+ *       mn_defer_enter, mn_defer_leave
+ *       mn_loop, which then runs the loop as part of the piece
+ *       the functions under "Numbers", and mn_panic
+ *
+ *   and nothing else: no mn_spawn, no string or list function, no output,
+ *   no random number, no tick, no mn_gpu_use, mn_get_synced or mn_wrote.
+ *   A run-time error in a piece ends the piece; the program stops with the
+ *   error of the earliest row that fails, as soon as every piece before
+ *   that row's has finished.
  */
+
+/* a + b and a * b for weights and row counts: the result, or 2^62 when it
+ * would be more. No argument is above 2^62. */
+static inline uint64_t mn_work_add(uint64_t a, uint64_t b) {
+    uint64_t most = UINT64_C(1) << 62;
+    return a + b > most ? most : a + b;
+}
+
+static inline uint64_t mn_work_mul(uint64_t a, uint64_t b) {
+    uint64_t most = UINT64_C(1) << 62;
+    if (a != 0 && b > most / a) return most;
+    return a * b > most ? most : a * b;
+}
+
+/* The rows of a query that is up to date. */
+static inline uint64_t mn_query_rows(const MnQuery *query) {
+    uint64_t rows = 0;
+    for (uint32_t i = 0; i < query->table_count; i++) {
+        rows += query->tables[i]->count;
+    }
+    return rows;
+}
+
+/* The rows the function of an independent `each` is to run: of
+ * `table_count` tables in order, from row `first` of the first one up to
+ * row `end`, not included, of the last one, and every row of the tables
+ * between. A table may have no rows. */
+typedef struct MnPiece {
+    MnTable *const *tables;
+    uint32_t table_count;
+    uint32_t first;
+    uint32_t end;
+    /* One per sum of the loop: the function adds what its rows add. */
+    int64_t *sums;
+    /* NULL, or MnLoop.wrote_count flags for each of the tables, table
+     * after table: the function sets the flag of a term in the tables in
+     * which it assigned through the term's parameter. */
+    bool *wrote;
+} MnPiece;
+
+/* One independent `each`: a query loop no run of which can see what
+ * another run does, as the reference defines it. Generated code keeps one
+ * static MnLoop per such loop and runs it with mn_loop. */
+typedef struct MnLoop {
+    /* Runs the rows of a piece, in order. `env` is what mn_loop was
+     * given. */
+    void (*run)(MnPiece *piece, const void *env);
+    MnQuery *query;
+    /* An estimate of the work of one run, in operations, from the rows
+     * the loop's other queries have now: at least 1, at most 2^62. */
+    uint64_t (*weight)(void);
+    uint32_t sum_count;
+    /* Every other query the function can reach, through nested `each`es,
+     * `World.count` and the functions it calls. */
+    MnQuery *const *queries;
+    uint32_t query_count;
+    /* As for mn_gpu_use: the terms whose component some GPU block names
+     * and whose parameter the function uses. */
+    const MnUse *uses;
+    uint32_t use_count;
+    /* The components of the MN_USE_ASSIGN terms among them, in the order
+     * of their flags in MnPiece.wrote. */
+    const uint32_t *wrote;
+    uint32_t wrote_count;
+    /* Where the `each` is, for messages. */
+    MnLoc loc;
+    /* Runtime-private. Initialise to false. */
+    bool reported;
+} MnLoop;
+
+/* Runs an independent `each`: brings its queries up to date, makes the
+ * CPU copies of its terms current as mn_gpu_use does, runs every row of
+ * the query, sets sums[i] to the total of sum i, reports the tables it
+ * assigned in as mn_wrote does, and applies the queued changes when no
+ * other `each` is running. What the loop queues and emits is in the order
+ * of its rows.
+ *
+ * The rows run in one piece on the calling thread when the thread count is
+ * 1, when the loop has little work, and when it is reached inside another
+ * `each` or inside a piece. Otherwise they are divided into pieces that
+ * several threads run at once. `env` must stay as it is until mn_loop
+ * returns. `sums` may be NULL when the loop has no sum. */
+void mn_loop(MnLoop *loop, const void *env, int64_t *sums);
 
 #endif

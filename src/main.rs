@@ -170,7 +170,10 @@ fn compile(path: &Path, check_only: bool) -> Option<(String, driver::Parts)> {
         return Some((String::new(), driver::Parts::default()));
     }
     let gpu = program.systems.iter().any(|system| system.gpu);
-    let parts = driver::Parts { gpu, threads: gpu };
+    let parts = driver::Parts {
+        gpu,
+        threads: emit::has_split_loops(&program),
+    };
     Some((emit::emit(&program, &sources), parts))
 }
 
