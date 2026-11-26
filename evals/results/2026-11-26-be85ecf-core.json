@@ -1,0 +1,2738 @@
+{
+  "format": 1,
+  "commit": "be85ecfcc8c7d2a9b29a70e5ee3e1b6721cb45c0",
+  "version": "0.7.0",
+  "ruby": "3.4.12",
+  "claude_code": "2.1.327",
+  "date": "2026-11-26",
+  "label": "core",
+  "models": [
+    "sonnet",
+    "haiku"
+  ],
+  "trials": 1,
+  "effort": null,
+  "task_names": [
+    "countdown",
+    "orbits",
+    "pantry",
+    "sandpile"
+  ],
+  "preamble_sha256": "0a7f8ff0a107d36d2eda2a422116df16b984b6abc9b971a3d8a576f7a17f8a71",
+  "agent_tools": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin:/nix/store/9g53s4a9kv7k5xbfjhyaxjymgw62di6r-bash-interactive-5.3p9/bin:/nix/store/8kxpzdb09cbn252h8wl14zds9jgbw2q0-findutils-4.10.0/bin:/nix/store/hi1zxw2mg94cwrpbq1s8bbjm1k5y3vci-gnugrep-3.12/bin:/nix/store/r3fwyjb1k9v7y6qd5l2jq1sx3b46dx2y-gnused-4.10/bin:/nix/store/q7p8cvfxi5vplngni9a38n17ykhgcx1d-ripgrep-15.1.0/bin",
+  "coreutils": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin",
+  "kit": {
+    "file": "evals/kit",
+    "files": [
+      {
+        "dest": "language.md",
+        "source": "docs/language.md",
+        "sha256": "110c84529a5fdd3a46d853d1a7598c19d92570eb99e0c26f029cdce01a702661"
+      },
+      {
+        "dest": "README.md",
+        "source": "README.md",
+        "sha256": "3aa2fcbc847be09d6f8e77f2e9538d4baa90ca3362bddf5d957bca3f042571da"
+      },
+      {
+        "dest": "examples/battle.12am",
+        "source": "examples/battle.12am",
+        "sha256": "b7628c2fc79e99d078c9e1dbb4ce347cf2fa13c812247db60b3e135d4ba03206"
+      },
+      {
+        "dest": "examples/battle.out",
+        "source": "examples/battle.out",
+        "sha256": "e61cf6d3ee973c95479b104a630a60b07a6e1c41e2eb47faedbd84d43dcbcf91"
+      },
+      {
+        "dest": "examples/bench.12am",
+        "source": "examples/bench.12am",
+        "sha256": "45d982b13b601831617b5bedddd9aac4665484e2a078356500c1119da3fd9782"
+      },
+      {
+        "dest": "examples/bounce.12am",
+        "source": "examples/bounce.12am",
+        "sha256": "c9a859451f8eb76dc6f83144b1549a04e48aa7c929216baba6e7ce95027cf4f7"
+      },
+      {
+        "dest": "examples/bounce.out",
+        "source": "examples/bounce.out",
+        "sha256": "f4f990ff8ca88db06fe33598444fd5eddff567f841bfab2c4f9a310e4ad35e3a"
+      },
+      {
+        "dest": "examples/hello.12am",
+        "source": "examples/hello.12am",
+        "sha256": "45637b2c36f48ab214412d095ee8060e0f5897cbc7434e7d9802f04d7893dc8e"
+      },
+      {
+        "dest": "examples/hello.out",
+        "source": "examples/hello.out",
+        "sha256": "d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5"
+      },
+      {
+        "dest": "examples/input.12am",
+        "source": "examples/input.12am",
+        "sha256": "31cf9ccb91a3ba1a896211ce86eabb3deebc1b4894fe4cf357bdfaa09e854d14"
+      },
+      {
+        "dest": "examples/input.drive",
+        "source": "examples/input.drive",
+        "sha256": "399a96abf52ccb9af87fdc728ae0da381390d9061031d20079dbbbe3fbae16b9"
+      },
+      {
+        "dest": "examples/input.out",
+        "source": "examples/input.out",
+        "sha256": "1cae9f27cd6bcff432d1339c443a6215b45629dad1cff3771e06bab6950b5d68"
+      },
+      {
+        "dest": "examples/life.12am",
+        "source": "examples/life.12am",
+        "sha256": "5505814cfd6fe21583fa3c6b33d9c194fb95b64b32a577fab47fe8f37636e23d"
+      },
+      {
+        "dest": "examples/life.out",
+        "source": "examples/life.out",
+        "sha256": "10769d19937b68aa5515ac8a6e525a1f84bc4a985fb625241be89695b1b64074"
+      },
+      {
+        "dest": "examples/life_rules.12am",
+        "source": "examples/life_rules.12am",
+        "sha256": "268afe3044121e468878985f408f3ac5f0ad80ae12e146277bb893ce80545a3a"
+      },
+      {
+        "dest": "examples/life_rules.out",
+        "source": "examples/life_rules.out",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "dest": "examples/move.12am",
+        "source": "examples/move.12am",
+        "sha256": "ba4ca27197bbc8617b6cf6edf42d3262a2c4fafe2565944052dc69fd59ca4d6f"
+      },
+      {
+        "dest": "examples/move.out",
+        "source": "examples/move.out",
+        "sha256": "eed2aa0dbec0f13f0fc00f257e3de666e113db91e07a083af9cb3807d92f12a0"
+      },
+      {
+        "dest": "examples/nbody.12am",
+        "source": "examples/nbody.12am",
+        "sha256": "6158862f5218fd773da8005da5a15afe578333545a4c79421fb420d98c0f028f"
+      },
+      {
+        "dest": "examples/nbody.out",
+        "source": "examples/nbody.out",
+        "sha256": "deecf226e42be730c657467146a8a39fcffff051a76f25d94de56505e19f3bb8"
+      },
+      {
+        "dest": "examples/window.12am",
+        "source": "examples/window.12am",
+        "sha256": "2ce4755a13a9fdfd00caad0e5a487f111ad9b91c58fd030085d297e004d5c984"
+      },
+      {
+        "dest": "examples/window.drive",
+        "source": "examples/window.drive",
+        "sha256": "61229ae96139f3a775a1d7aee931e1b1a2ef1d58d9f5b95a9ea100ec025164b0"
+      },
+      {
+        "dest": "examples/window.out",
+        "source": "examples/window.out",
+        "sha256": "78bf297d417ce4aae145876b4a9173ba5d7ed29925cbca944c812b4c8c6754d1"
+      }
+    ],
+    "sections": {
+      "language.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          23,
+          "A first program"
+        ],
+        [
+          63,
+          "The model"
+        ],
+        [
+          92,
+          "Lexical structure"
+        ],
+        [
+          142,
+          "Types"
+        ],
+        [
+          176,
+          "Compact field types"
+        ],
+        [
+          221,
+          "Variables and values"
+        ],
+        [
+          250,
+          "What can be modified"
+        ],
+        [
+          273,
+          "Expressions"
+        ],
+        [
+          328,
+          "Control flow"
+        ],
+        [
+          401,
+          "Functions"
+        ],
+        [
+          431,
+          "Declaring data"
+        ],
+        [
+          433,
+          "Structs"
+        ],
+        [
+          476,
+          "Enums"
+        ],
+        [
+          489,
+          "Components and tags"
+        ],
+        [
+          508,
+          "Resources"
+        ],
+        [
+          523,
+          "Events"
+        ],
+        [
+          536,
+          "Constants"
+        ],
+        [
+          547,
+          "Entities"
+        ],
+        [
+          582,
+          "Queries"
+        ],
+        [
+          623,
+          "Structural changes inside `each`"
+        ],
+        [
+          655,
+          "Systems and ticks"
+        ],
+        [
+          695,
+          "The window"
+        ],
+        [
+          849,
+          "Without a display"
+        ],
+        [
+          948,
+          "Keyboard and mouse"
+        ],
+        [
+          1172,
+          "Commands for the keyboard and the mouse"
+        ],
+        [
+          1235,
+          "GPU systems"
+        ],
+        [
+          1279,
+          "What a GPU block may contain"
+        ],
+        [
+          1311,
+          "What a GPU system may touch"
+        ],
+        [
+          1349,
+          "Snapshot semantics"
+        ],
+        [
+          1387,
+          "Arithmetic at 32 bits"
+        ],
+        [
+          1439,
+          "Runtime errors in a GPU system"
+        ],
+        [
+          1479,
+          "Random numbers in a GPU system"
+        ],
+        [
+          1513,
+          "Determinism"
+        ],
+        [
+          1553,
+          "Strict GPU systems"
+        ],
+        [
+          1660,
+          "Without a GPU"
+        ],
+        [
+          1674,
+          "The transfer plan"
+        ],
+        [
+          1852,
+          "Several cores"
+        ],
+        [
+          2055,
+          "Events"
+        ],
+        [
+          2091,
+          "Built-ins"
+        ],
+        [
+          2093,
+          "Output"
+        ],
+        [
+          2113,
+          "Numbers"
+        ],
+        [
+          2130,
+          "Strings"
+        ],
+        [
+          2143,
+          "Lists"
+        ],
+        [
+          2163,
+          "Random numbers, time and exit"
+        ],
+        [
+          2180,
+          "Programs and files"
+        ],
+        [
+          2200,
+          "What things cost"
+        ],
+        [
+          2254,
+          "What a GPU system costs"
+        ],
+        [
+          2360,
+          "What several cores cost"
+        ],
+        [
+          2451,
+          "Errors"
+        ],
+        [
+          2502,
+          "Grammar"
+        ],
+        [
+          2585,
+          "Not in 0.7"
+        ]
+      ],
+      "README.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          87,
+          "Try it"
+        ],
+        [
+          107,
+          "The compiler"
+        ],
+        [
+          158,
+          "GPU systems"
+        ],
+        [
+          217,
+          "Several cores"
+        ],
+        [
+          260,
+          "A window"
+        ],
+        [
+          304,
+          "Keyboard and mouse"
+        ],
+        [
+          353,
+          "Benchmarks"
+        ],
+        [
+          406,
+          "Working on it"
+        ],
+        [
+          541,
+          "Status"
+        ],
+        [
+          553,
+          "License"
+        ]
+      ],
+      "examples/battle.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/battle.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bench.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.out": [
+        [
+          1,
+          null
+        ]
+      ]
+    }
+  },
+  "tasks": {
+    "countdown": {
+      "sha256": "a8e3f5fc1246d706595d628d44bc56bf837b083c6945048160a98199ec2ef94a",
+      "control": true,
+      "areas": [
+        "ecs",
+        "strings"
+      ],
+      "ruby": ""
+    },
+    "orbits": {
+      "sha256": "dd791094ca931ace8e321729f012d539f9d120c32db173340759f057a04471c6",
+      "control": false,
+      "areas": [
+        "float",
+        "structs"
+      ],
+      "ruby": "format and \"%.3f\" % x for three decimals, round(3) printed as it is"
+    },
+    "pantry": {
+      "sha256": "efd63276b64a34849680252d49f1b7200a60dcb1861e79b5c624aa694cd93803",
+      "control": false,
+      "areas": [
+        "enums",
+        "events",
+        "strings"
+      ],
+      "ruby": "Hash, group_by, tally, symbols, sort_by, join"
+    },
+    "sandpile": {
+      "sha256": "544987d6d2b0d800b32f727e912720645ac8b5197c9a47b4e47da5f521217c26",
+      "control": false,
+      "areas": [
+        "lists"
+      ],
+      "ruby": "Array.new with a block, ranges, each_slice, join"
+    }
+  },
+  "runs": [
+    {
+      "task": "countdown",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:59:44Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/countdown/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "d5d3bbd11b5256bc0428fc460d1b418286a30cd8b4bffa5dff80d4991ff43b14",
+      "graded_program_sha256": "5e2d4d21ae38b67c2e34630ff31c01610872f4a0ac3ecf3f6894806a0ad0d27d",
+      "grading": {
+        "ms": 490,
+        "load": 71.42,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [
+        {
+          "tool": "Bash",
+          "input": "ls -la /tmp/eval.rfsJnaXR/docs/examples; head -c 0 /dev/null"
+        }
+      ],
+      "slow_calls": 0,
+      "read": {
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            401
+          ],
+          [
+            431,
+            431
+          ],
+          [
+            433,
+            433
+          ],
+          [
+            476,
+            476
+          ],
+          [
+            489,
+            489
+          ],
+          [
+            508,
+            508
+          ],
+          [
+            523,
+            523
+          ],
+          [
+            536,
+            536
+          ],
+          [
+            547,
+            547
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            655,
+            655
+          ],
+          [
+            695,
+            695
+          ],
+          [
+            849,
+            849
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1172,
+            1172
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2091,
+            2190
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2585,
+            2585
+          ]
+        ]
+      },
+      "turns": 11,
+      "duration_ms": 33330,
+      "input_tokens": 18,
+      "output_tokens": 6422,
+      "cache_read_tokens": 180422,
+      "cache_creation_tokens": 29525,
+      "cost_usd": 0.01092202,
+      "partial": false
+    },
+    {
+      "task": "countdown",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:59:44Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/countdown/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "4cded23cbdc6b9a015e7995bfa1c1853b80dc6ae01976e7c1df3e2a2a791543d",
+      "graded_program_sha256": "fffd88cd89ec4120d626070daea48d732075f6715277e5e7c015168f058c7ff1",
+      "grading": {
+        "ms": 388,
+        "load": 99.3,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            17
+          ],
+          [
+            19,
+            21
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            25,
+            29
+          ],
+          [
+            31,
+            34
+          ],
+          [
+            36,
+            36
+          ],
+          [
+            38,
+            43
+          ],
+          [
+            45,
+            49
+          ],
+          [
+            51,
+            52
+          ],
+          [
+            54,
+            58
+          ],
+          [
+            60,
+            61
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            65,
+            65
+          ],
+          [
+            67,
+            74
+          ],
+          [
+            76,
+            78
+          ],
+          [
+            80,
+            80
+          ],
+          [
+            82,
+            87
+          ],
+          [
+            89,
+            90
+          ],
+          [
+            92,
+            92
+          ],
+          [
+            94,
+            94
+          ],
+          [
+            96,
+            98
+          ],
+          [
+            100,
+            100
+          ],
+          [
+            102,
+            105
+          ],
+          [
+            107,
+            109
+          ],
+          [
+            111,
+            111
+          ],
+          [
+            113,
+            117
+          ],
+          [
+            119,
+            119
+          ],
+          [
+            121,
+            126
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            130,
+            136
+          ],
+          [
+            138,
+            140
+          ],
+          [
+            142,
+            142
+          ],
+          [
+            144,
+            155
+          ],
+          [
+            157,
+            158
+          ],
+          [
+            160,
+            163
+          ],
+          [
+            165,
+            169
+          ],
+          [
+            171,
+            171
+          ],
+          [
+            173,
+            174
+          ],
+          [
+            176,
+            176
+          ],
+          [
+            178,
+            179
+          ],
+          [
+            181,
+            189
+          ],
+          [
+            191,
+            195
+          ],
+          [
+            197,
+            200
+          ],
+          [
+            202,
+            208
+          ],
+          [
+            210,
+            210
+          ],
+          [
+            212,
+            216
+          ],
+          [
+            218,
+            219
+          ],
+          [
+            221,
+            221
+          ],
+          [
+            223,
+            223
+          ],
+          [
+            225,
+            230
+          ],
+          [
+            232,
+            235
+          ],
+          [
+            237,
+            238
+          ],
+          [
+            240,
+            245
+          ],
+          [
+            247,
+            248
+          ],
+          [
+            250,
+            250
+          ],
+          [
+            252,
+            252
+          ],
+          [
+            254,
+            258
+          ],
+          [
+            260,
+            262
+          ],
+          [
+            264,
+            265
+          ],
+          [
+            267,
+            271
+          ],
+          [
+            273,
+            273
+          ],
+          [
+            275,
+            275
+          ],
+          [
+            277,
+            289
+          ],
+          [
+            291,
+            294
+          ],
+          [
+            296,
+            298
+          ],
+          [
+            300,
+            306
+          ],
+          [
+            308,
+            309
+          ],
+          [
+            311,
+            314
+          ],
+          [
+            316,
+            318
+          ],
+          [
+            320,
+            322
+          ],
+          [
+            324,
+            326
+          ],
+          [
+            328,
+            328
+          ],
+          [
+            330,
+            337
+          ],
+          [
+            339,
+            341
+          ],
+          [
+            343,
+            344
+          ],
+          [
+            346,
+            348
+          ],
+          [
+            350,
+            352
+          ],
+          [
+            354,
+            357
+          ],
+          [
+            359,
+            359
+          ],
+          [
+            361,
+            362
+          ],
+          [
+            364,
+            370
+          ],
+          [
+            372,
+            373
+          ],
+          [
+            375,
+            375
+          ],
+          [
+            377,
+            380
+          ],
+          [
+            382,
+            383
+          ],
+          [
+            385,
+            387
+          ],
+          [
+            389,
+            391
+          ],
+          [
+            393,
+            396
+          ],
+          [
+            398,
+            399
+          ]
+        ],
+        "README.md": [
+          [
+            8,
+            12
+          ],
+          [
+            14,
+            17
+          ],
+          [
+            19,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            28,
+            32
+          ],
+          [
+            34,
+            35
+          ],
+          [
+            37,
+            41
+          ]
+        ]
+      },
+      "turns": 5,
+      "duration_ms": 9807,
+      "input_tokens": 8,
+      "output_tokens": 1237,
+      "cache_read_tokens": 35856,
+      "cache_creation_tokens": 8877,
+      "cost_usd": 0.0514796,
+      "partial": false
+    },
+    {
+      "task": "orbits",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:59:44Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/orbits/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "62eb8b72c4e4d895217ae238a0eb4e38d4258846413b14eee8947b433b037c2d",
+      "graded_program_sha256": "288e2094caefa1402f82d28ecd243150c9bd2c18310f1d4c8baa8d557faf084a",
+      "grading": {
+        "ms": 486,
+        "load": 77.46,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1259
+          ],
+          [
+            1299,
+            1299
+          ],
+          [
+            1307,
+            1311
+          ],
+          [
+            1360,
+            1364
+          ],
+          [
+            1394,
+            1394
+          ],
+          [
+            1400,
+            1400
+          ],
+          [
+            1410,
+            1410
+          ],
+          [
+            1414,
+            1414
+          ],
+          [
+            1427,
+            1427
+          ],
+          [
+            1429,
+            1429
+          ],
+          [
+            1431,
+            1431
+          ],
+          [
+            1433,
+            1433
+          ],
+          [
+            1435,
+            1435
+          ],
+          [
+            1507,
+            1507
+          ],
+          [
+            1525,
+            1526
+          ],
+          [
+            1531,
+            1531
+          ],
+          [
+            1544,
+            1544
+          ],
+          [
+            1549,
+            1549
+          ],
+          [
+            1573,
+            1573
+          ],
+          [
+            1575,
+            1575
+          ],
+          [
+            1577,
+            1577
+          ],
+          [
+            1579,
+            1583
+          ],
+          [
+            1585,
+            1593
+          ],
+          [
+            1637,
+            1637
+          ],
+          [
+            1640,
+            1644
+          ],
+          [
+            1646,
+            1646
+          ],
+          [
+            1655,
+            1655
+          ],
+          [
+            1735,
+            1739
+          ],
+          [
+            1872,
+            1876
+          ],
+          [
+            1900,
+            1900
+          ],
+          [
+            1906,
+            1906
+          ],
+          [
+            1912,
+            1912
+          ],
+          [
+            1935,
+            1935
+          ],
+          [
+            2090,
+            2139
+          ],
+          [
+            2204,
+            2208
+          ],
+          [
+            2213,
+            2213
+          ],
+          [
+            2215,
+            2227
+          ],
+          [
+            2229,
+            2233
+          ],
+          [
+            2240,
+            2244
+          ],
+          [
+            2256,
+            2260
+          ],
+          [
+            2265,
+            2269
+          ],
+          [
+            2274,
+            2278
+          ],
+          [
+            2281,
+            2294
+          ],
+          [
+            2324,
+            2331
+          ],
+          [
+            2348,
+            2348
+          ],
+          [
+            2350,
+            2354
+          ],
+          [
+            2374,
+            2375
+          ],
+          [
+            2413,
+            2421
+          ],
+          [
+            2425,
+            2429
+          ],
+          [
+            2433,
+            2437
+          ],
+          [
+            2439,
+            2443
+          ],
+          [
+            2587,
+            2587
+          ],
+          [
+            2590,
+            2594
+          ],
+          [
+            2596,
+            2600
+          ],
+          [
+            2613,
+            2617
+          ]
+        ],
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/nbody.12am": [
+          [
+            1,
+            99
+          ]
+        ],
+        "examples/nbody.out": [
+          [
+            1,
+            17
+          ]
+        ]
+      },
+      "turns": 12,
+      "duration_ms": 28013,
+      "input_tokens": 18,
+      "output_tokens": 5178,
+      "cache_read_tokens": 288646,
+      "cache_creation_tokens": 51129,
+      "cost_usd": 0.01570306,
+      "partial": false
+    },
+    {
+      "task": "orbits",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:59:44Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/orbits/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "d1deeb44b91e3668693224eda9e8d83804cad76064ea9a2c220f8cbd9e90bfc6",
+      "graded_program_sha256": "1d9d950811f0fda5a79fd190022f66f60b2e3d533eb8424314e75a2869524d68",
+      "grading": {
+        "ms": 493,
+        "load": 91.35,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "run": 2
+        },
+        "failed": {
+          "compile": 1
+        },
+        "failed_total": 1
+      },
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "unexpected `while`",
+          "template": "unexpected `…`",
+          "spans": [
+            "while"
+          ],
+          "file": "solution.12am",
+          "line": 7,
+          "call": 0,
+          "repeated": false,
+          "ruby_shaped": false
+        }
+      ],
+      "compiler_bug": false,
+      "first_try": false,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "examples/nbody.12am": [
+          [
+            1,
+            99
+          ]
+        ],
+        "README.md": [
+          [
+            1,
+            250
+          ]
+        ],
+        "language.md": [
+          [
+            19,
+            19
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            92,
+            92
+          ],
+          [
+            114,
+            114
+          ],
+          [
+            116,
+            116
+          ],
+          [
+            142,
+            142
+          ],
+          [
+            144,
+            155
+          ],
+          [
+            157,
+            158
+          ],
+          [
+            160,
+            163
+          ],
+          [
+            165,
+            169
+          ],
+          [
+            171,
+            171
+          ],
+          [
+            173,
+            174
+          ],
+          [
+            176,
+            176
+          ],
+          [
+            178,
+            179
+          ],
+          [
+            181,
+            189
+          ],
+          [
+            191,
+            195
+          ],
+          [
+            197,
+            200
+          ],
+          [
+            202,
+            208
+          ],
+          [
+            210,
+            210
+          ],
+          [
+            212,
+            216
+          ],
+          [
+            218,
+            219
+          ],
+          [
+            221,
+            221
+          ],
+          [
+            273,
+            273
+          ],
+          [
+            301,
+            301
+          ],
+          [
+            328,
+            328
+          ],
+          [
+            346,
+            346
+          ],
+          [
+            401,
+            401
+          ],
+          [
+            404,
+            404
+          ],
+          [
+            410,
+            410
+          ],
+          [
+            431,
+            431
+          ],
+          [
+            442,
+            442
+          ],
+          [
+            446,
+            446
+          ],
+          [
+            450,
+            451
+          ],
+          [
+            547,
+            547
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            630,
+            630
+          ],
+          [
+            655,
+            655
+          ],
+          [
+            679,
+            679
+          ],
+          [
+            695,
+            695
+          ],
+          [
+            698,
+            698
+          ],
+          [
+            711,
+            711
+          ],
+          [
+            713,
+            713
+          ],
+          [
+            750,
+            750
+          ],
+          [
+            761,
+            761
+          ],
+          [
+            766,
+            766
+          ],
+          [
+            771,
+            771
+          ],
+          [
+            809,
+            809
+          ],
+          [
+            817,
+            817
+          ],
+          [
+            830,
+            830
+          ],
+          [
+            833,
+            833
+          ],
+          [
+            846,
+            846
+          ],
+          [
+            882,
+            882
+          ],
+          [
+            885,
+            885
+          ],
+          [
+            894,
+            894
+          ],
+          [
+            902,
+            903
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1068,
+            1068
+          ],
+          [
+            1119,
+            1119
+          ],
+          [
+            1220,
+            1220
+          ],
+          [
+            1223,
+            1223
+          ],
+          [
+            1225,
+            1225
+          ],
+          [
+            1227,
+            1227
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1256,
+            1256
+          ],
+          [
+            1288,
+            1288
+          ],
+          [
+            1347,
+            1347
+          ],
+          [
+            1389,
+            1389
+          ],
+          [
+            1394,
+            1394
+          ],
+          [
+            1400,
+            1400
+          ],
+          [
+            1410,
+            1410
+          ],
+          [
+            1414,
+            1414
+          ],
+          [
+            1427,
+            1427
+          ],
+          [
+            1429,
+            1429
+          ],
+          [
+            1431,
+            1431
+          ],
+          [
+            1433,
+            1433
+          ],
+          [
+            1435,
+            1435
+          ],
+          [
+            1525,
+            1526
+          ],
+          [
+            1531,
+            1531
+          ],
+          [
+            1544,
+            1544
+          ],
+          [
+            1549,
+            1549
+          ],
+          [
+            1568,
+            1568
+          ],
+          [
+            1573,
+            1573
+          ],
+          [
+            1575,
+            1575
+          ],
+          [
+            1577,
+            1577
+          ],
+          [
+            1581,
+            1582
+          ],
+          [
+            1585,
+            1585
+          ],
+          [
+            1587,
+            1587
+          ],
+          [
+            1591,
+            1592
+          ],
+          [
+            1637,
+            1637
+          ],
+          [
+            1646,
+            1646
+          ],
+          [
+            1655,
+            1655
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            1900,
+            1900
+          ],
+          [
+            1906,
+            1906
+          ],
+          [
+            1912,
+            1912
+          ],
+          [
+            1935,
+            1935
+          ],
+          [
+            1997,
+            1997
+          ],
+          [
+            2003,
+            2003
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2085,
+            2085
+          ],
+          [
+            2091,
+            2091
+          ],
+          [
+            2093,
+            2093
+          ],
+          [
+            2095,
+            2096
+          ],
+          [
+            2098,
+            2098
+          ],
+          [
+            2100,
+            2109
+          ],
+          [
+            2111,
+            2111
+          ],
+          [
+            2113,
+            2113
+          ],
+          [
+            2115,
+            2124
+          ],
+          [
+            2126,
+            2128
+          ],
+          [
+            2130,
+            2130
+          ],
+          [
+            2132,
+            2141
+          ],
+          [
+            2143,
+            2143
+          ],
+          [
+            2145,
+            2156
+          ],
+          [
+            2158,
+            2161
+          ],
+          [
+            2163,
+            2163
+          ],
+          [
+            2165,
+            2173
+          ],
+          [
+            2175,
+            2178
+          ],
+          [
+            2180,
+            2180
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2215,
+            2215
+          ],
+          [
+            2365,
+            2365
+          ],
+          [
+            2375,
+            2375
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2480,
+            2480
+          ],
+          [
+            2482,
+            2482
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2512,
+            2514
+          ],
+          [
+            2520,
+            2520
+          ],
+          [
+            2528,
+            2528
+          ],
+          [
+            2541,
+            2541
+          ],
+          [
+            2585,
+            2585
+          ],
+          [
+            2594,
+            2594
+          ],
+          [
+            2597,
+            2597
+          ],
+          [
+            2617,
+            2617
+          ]
+        ]
+      },
+      "turns": 11,
+      "duration_ms": 14955,
+      "input_tokens": 16,
+      "output_tokens": 1844,
+      "cache_read_tokens": 108392,
+      "cache_creation_tokens": 16881,
+      "cost_usd": 0.09683520000000001,
+      "partial": false
+    },
+    {
+      "task": "pantry",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T21:00:00Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/pantry/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "9e92e6f11559a213be15f6ae58b43a00b14f04c5e0f6fc6b9fc61805741dfcb1",
+      "graded_program_sha256": "f32230b3d42df43adc147c4ad7de0553481e5abee29481b0443fcbe7c1133c10",
+      "grading": {
+        "ms": 695,
+        "load": 36.69,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1259
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1299,
+            1300
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1507,
+            1507
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            1920,
+            1920
+          ],
+          [
+            2055,
+            2204
+          ],
+          [
+            2213,
+            2213
+          ],
+          [
+            2226,
+            2226
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2380,
+            2380
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2532,
+            2532
+          ],
+          [
+            2585,
+            2585
+          ]
+        ],
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ]
+      },
+      "turns": 10,
+      "duration_ms": 54487,
+      "input_tokens": 16,
+      "output_tokens": 11872,
+      "cache_read_tokens": 231913,
+      "cache_creation_tokens": 51067,
+      "cost_usd": 0.018470129999999998,
+      "partial": false
+    },
+    {
+      "task": "pantry",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T20:59:54Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/pantry/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true,
+        "systems": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "dbcf065d66d7333a2ff6fb881adb1a58b6e788f726df1fd2388f2c2de71efa5a",
+      "graded_program_sha256": "378a7013b776229e1a8eb382a6e85d7439fdede56212d404a21791383d21c55a",
+      "grading": {
+        "ms": 586,
+        "load": 71.42,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/battle.12am": [
+          [
+            1,
+            160
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            1
+          ],
+          [
+            23,
+            23
+          ],
+          [
+            63,
+            63
+          ],
+          [
+            92,
+            711
+          ],
+          [
+            849,
+            849
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1172,
+            1172
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            2055,
+            2204
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2585,
+            2585
+          ]
+        ]
+      },
+      "turns": 10,
+      "duration_ms": 22601,
+      "input_tokens": 14,
+      "output_tokens": 3077,
+      "cache_read_tokens": 110249,
+      "cache_creation_tokens": 31775,
+      "cost_usd": 0.16892290000000004,
+      "partial": false
+    },
+    {
+      "task": "sandpile",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T21:00:18Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/sandpile/haiku-1-1",
+      "outcome": "fail",
+      "checks": {
+        "build": true,
+        "output": false
+      },
+      "failed_checks": [
+        "output"
+      ],
+      "grade_notes": {
+        "output": "status 0, line 9: got \"13\", want \"0 2 1 2 3 3 2\""
+      },
+      "graded_sha256": "02c1c5b62dc2dbf3547754798e68f8b700c000e4aff02df1895bc0747f59643d",
+      "graded_program_sha256": "aa2dcbecf1e1edcfbeb12ebd492e188613c9ee153aa2c1b8a362718947ea2f4b",
+      "grading": {
+        "ms": 494,
+        "load": 51.15,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1259
+          ]
+        ],
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/life.12am": [
+          [
+            1,
+            99
+          ]
+        ]
+      },
+      "turns": 8,
+      "duration_ms": 18210,
+      "input_tokens": 10,
+      "output_tokens": 3488,
+      "cache_read_tokens": 77990,
+      "cache_creation_tokens": 39772,
+      "cost_usd": 0.0104793,
+      "partial": false
+    },
+    {
+      "task": "sandpile",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T21:00:13Z",
+      "dir": "evals/runs/2026-11-26-be85ecf-core/sandpile/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "d3741c4c0042d04426489a34f4a37bd4ac1aca1e4b76ae5d35690888dff5dffd",
+      "graded_program_sha256": "cb257b90e2aa8cce3dcc7b90728983cb624162014b82a1f60f889ed2dbbdbe88",
+      "grading": {
+        "ms": 498,
+        "load": 60.44,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/life.12am": [
+          [
+            1,
+            99
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            440
+          ],
+          [
+            476,
+            476
+          ],
+          [
+            489,
+            489
+          ],
+          [
+            508,
+            508
+          ],
+          [
+            523,
+            523
+          ],
+          [
+            536,
+            536
+          ],
+          [
+            547,
+            547
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            655,
+            655
+          ],
+          [
+            695,
+            695
+          ],
+          [
+            849,
+            849
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1172,
+            1172
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2091,
+            2180
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2585,
+            2585
+          ]
+        ]
+      },
+      "turns": 11,
+      "duration_ms": 13914,
+      "input_tokens": 16,
+      "output_tokens": 1700,
+      "cache_read_tokens": 131683,
+      "cache_creation_tokens": 25607,
+      "cost_usd": 0.13262829999999998,
+      "partial": false
+    }
+  ]
+}
