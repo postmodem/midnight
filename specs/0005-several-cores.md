@@ -1,7 +1,8 @@
 # 0005 — Several cores: loops split across CPU threads, with the output of one
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0004
+- **Tested on:** x86_64-linux, 2026-11-26
 
 ## Goal
 
@@ -770,3 +771,175 @@ All run on x86_64-linux, on the development machine.
 - **The pool in a file of its own**, built only into programs with a loop
   to split, as the GPU code is: `midnight_rt.c` stays C11 with libc and
   libm, and a program without such a loop is built and runs as today.
+
+## Outcome
+
+Implemented, with the differences listed under "Differences from the
+design". Eleven of the twelve criteria pass on x86_64-linux: a Ryzen 9
+9950X3D (sixteen cores) beside an RTX 5090, `llvmpipe` from Mesa 26.1.8,
+clang 21.1.8, glibc 2.42. Criterion 6 passes for two of its three programs:
+`cores_age` gains 3.6 to 4.0 times where it asks for six.
+
+### Acceptance criteria
+
+| #  | Result |
+| -- | ------ |
+| 1  | `nix flake check` passes: the package's suite in the sandbox, `checks.gpu` on `llvmpipe` and `checks.tsan` (`tsan_pool_stress` and `tsan_programs`). `nix run .#gpu-test` passes on the RTX 5090. |
+| 2  | Against `5287dcd` (0.4.0): none of its `.out`, `.err`, `.plan` and `.stats` files and none of its programs differs. `midnight emit-wgsl` prints the same bytes for all 394 programs of `tests/run`, `tests/panic`, `tests/plan`, `examples` and `bench` that 0.4.0 has, and `midnight emit-c` for the 257 of them with no GPU system and no independent `each`. |
+| 3  | `thread_programs`: 119 programs, release and debug, each of the six settings. `splits_match_expected`: the eight new run programs. `gpu_programs`, `gpu_stats_match_plan` and `gpu_stats_match_expected` pass with `MIDNIGHT_THREADS=4,small` on the 5090 and on `llvmpipe`. |
+| 4  | No report: the pool's stress test and 119 programs with `4,small` and `7,small,reverse`, on this machine and in the sandbox. |
+| 5  | `gpu_gravity` and `gpu_gravity_strict` with `MIDNIGHT_GPU=off` print 1074603.7585074664 for 1, 2, 16 and 32 threads. On sixteen threads a tick takes a 14.8th and a 14.4th of what it takes on one. |
+| 6  | The three programs print the same checksum on one thread and on sixteen. `cores_flee` runs 14.5 to 14.7 times as fast and `examples/bench.12am` 9.0 to 10.2 times. **`cores_age` runs 3.6 to 4.0 times as fast, not six**: see "Measured". |
+| 7  | With `MIDNIGHT_THREADS=1`, no row of `nix run .#bench-gpu` or `nix run .#bench` is more than 10 % slower than 0.4.0. Rows that differed by more in a single run were run again, the two versions in turn: see "Measured". |
+| 8  | `cores_small` and `gpu_read_tables` take the same time on sixteen threads as on one (0.0020 and 0.0038 ms). In `nix run .#bench`, `bench.12am` takes 0.03 ms against 0.29; `churn.12am` has no loop to split and no threads. |
+| 9  | `cores_two_failures`, `cores_every_row_fails`, `cores_failure_in_function` and `cores_gpu_two_failures` stop with the error of the earliest row for every setting, and `cores_failure_before_endless` within the ten seconds. The first two and the last were also run 640 times each with `64,small,jitter` and with `7,small,reverse` while 32 copies ran at once. |
+| 10 | 37 programs in `tests/loops`, one or more for every reason; `tests/COVERAGE.md` has the section. |
+| 11 | `nm` on the release build of `examples/hello.12am` shows no `pthread_create` and no `mn_pool_` symbol, and `ldd` lists `libm.so.6`, `libc.so.6` and the loader, as on 0.4.0. The program prints nothing for an unknown word in `MIDNIGHT_THREADS`. |
+| 12 | The reference says 0.5 and `midnight --version` prints `midnight 0.5.0`. Every command in the README was run as written, `./move` built into a scratch directory. |
+
+### Measured
+
+All with nothing else running. The numbers of "Pieces" are as designed:
+25,000 of work to a piece, a split from 800,000, a thread for every
+200,000.
+
+`nix run .#bench-cores`, fastest of 5, ms per tick, two runs:
+
+| Loop | 1 thread | 16 threads | Times |
+| ---- | -------- | ---------- | ----- |
+| `gpu_gravity`, a GPU block | 354.0, 354.3 | 23.89, 23.89 | 14.8 |
+| `gpu_gravity_strict` | 572.6, 574.6 | 39.86, 39.94 | 14.4 |
+| `gpu_move`, a GPU block over 1,000,000 | 0.104, 0.102 | 0.019, 0.020 | 5.1 to 5.5 |
+| `examples/bench.12am`, an `each` over 1,000,000 | 0.285, 0.289 | 0.028, 0.032 | 9.0 to 10.2 |
+| `cores_age` | 0.2535, 0.2444 | 0.0636, 0.0682 | 3.6 to 4.0 |
+| `cores_flee` | 1.256, 1.243 | 0.0854, 0.0858 | 14.5 to 14.7 |
+| `gpu_read_tables` | 0.0038 | 0.0038 | 1.00 |
+| `cores_small` | 0.0020 | 0.0020 | 1.01 |
+
+`gpu_gravity` with `MIDNIGHT_GPU=off` takes 177.3 ms on 2 threads and
+24.1 ms on 32; `gpu_gravity_strict` 287.5 and 30.7.
+
+**`cores_age`.** What a split loop queues is applied by one thread when
+the loop ends. With the number of entities that expire in a tick changed,
+fastest of 5, ms per tick:
+
+| Expire in a tick | 1 thread | 16 threads | Times |
+| ---------------- | -------- | ---------- | ----- |
+| none             | 0.2232   | 0.0229     | 9.7   |
+| 100              | 0.2243   | 0.0336     | 6.7   |
+| 1,000            | 0.2448   | 0.0706     | 3.5   |
+| 10,000           | 0.2997   | 0.2155     | 1.4   |
+
+On one thread a thousand despawns add 22 µs to the tick; after a loop on
+sixteen threads they add 48 µs, the rows they touch having last been
+written on other cores. That is a tenth of the one-thread tick: with the
+loop itself at 9.7 times, six times cannot be reached at a thousand a
+tick.
+
+`nix run .#bench-gpu`, fastest of 3, ms per tick: 0.4.0 built from
+`5287dcd`, then 0.5.0 with `MIDNIGHT_THREADS=1`, then 0.5.0 on its sixteen
+threads.
+
+| Row | 0.4.0 GPU | 0.5.0 GPU | 0.4.0 CPU | 0.5.0 CPU, 1 thread | 0.5.0 CPU, 16 |
+| --- | --------- | --------- | --------- | ------------------- | ------------- |
+| Gravity, 16,384 bodies | 0.842 | 0.842 | 355.3 | 355.4 | 23.8 |
+| Gravity, 16,384 bodies, strict | 7.149 | 7.122 | 574.6 | 576.5 | 40.2 |
+| Gravity, 65,536 bodies | 3.668 | 3.636 | | | |
+| Move 1,000,000, data stays | 0.028 | 0.029 | 0.102 | 0.105 | 0.019 |
+| Move 1,000,000, read each tick | 0.810 | 0.810 | 0.504 | 0.512 | 0.435 |
+| `gpu_block` | 0.0226 | 0.0227 | 0.0 | 0.0 | 0.0 |
+| `gpu_blocks8` | 0.0438 | 0.0487 | 0.0003 | 0.0003 | 0.0003 |
+| `gpu_fallible` | 0.0288 | 0.0288 | 0.0011 | 0.0011 | 0.0011 |
+| `gpu_read_tables` | 0.1630 | 0.1439 | 0.0038 | 0.0037 | 0.0037 |
+| `gpu_poke` | 0.0464 | 0.0466 | 0.1040 | 0.1020 | 0.0191 |
+| `gpu_spawn` | 0.0447 | 0.0306 | 0.0969 | 0.1063 | 0.0190 |
+| `gpu_despawn` | 0.0359 | 0.0345 | 0.1025 | 0.1008 | 0.0209 |
+| `gpu_tag` | 0.0598 | 0.0615 | 0.1060 | 0.0975 | 0.0205 |
+| `gpu_rare_write` | 0.5831 | 0.5849 | 0.2946 | 0.2993 | 0.1103 |
+| `gpu_overwrite` | 0.0661 | 0.0704 | 0.1537 | 0.1535 | 0.0753 |
+
+The GPU times of the small rows vary by a tenth or more from run to run.
+Forty runs of each version in turn, on the GPU, ms per tick as minimum and
+median: `gpu_blocks8` 0.0437 and 0.0480 on 0.4.0, 0.0438 and 0.0491 on
+0.5.0; `gpu_block` 0.0225 and 0.0240, 0.0225 and 0.0237; `gpu_tag` 0.0578
+and 0.0614, 0.0582 and 0.0636; `gpu_overwrite` 0.0690 and 0.0825, 0.0639
+and 0.0752. Twelve runs of `gpu_spawn` on the CPU: 0.0968 and 0.1031,
+0.0984 and 0.1055. On its sixteen threads 0.5.0 runs the ordinary loops of
+`gpu_overwrite` and `gpu_rare_write` in pieces, and their GPU rows take
+0.0285 and 0.5155 ms.
+
+`nix run .#bench`, two runs: `bench.12am` 0.291 and 0.281 ms per tick on
+0.4.0, 0.287 and 0.288 on 0.5.0 with one thread, 0.03 on sixteen;
+`baseline.c` 0.285 to 0.288. `churn.12am` compiles to the same C on both
+versions and its single runs vary by half; over twenty runs of each in
+turn the best and the median, in millions per second, are: `spawn` 96.3
+and 94.8 on 0.4.0, 96.4 and 92.9 on 0.5.0; `lookup` 465.9 and 200.4, 465.9
+and 201.0; `add` 39.9 and 24.2, 39.7 and 23.9; `remove` 58.9 and 57.0, 58.9
+and 57.4; `despawn` 133.9 and 128.6, 134.2 and 128.5.
+
+The pool's stress test: a million loops of 2 to 8 pieces, one after
+another on four threads, take 0.51 s, and 7.4 s under ThreadSanitizer.
+
+Two checks of the tests themselves. With the pieces joined in the reverse
+order, `cores_queued` and `cores_emit` fail with `4` and with `4,small`.
+With a pool whose waiting threads go on claiming, the stress test's
+`swarm` mode fails to end in 480 runs of 480 while 32 copies run at once;
+with the pool as it is, it ends in all 480.
+
+### Differences from the design
+
+- **A loop's function runs the tables of a piece itself.** `MnPiece` is
+  the tables to run, the first row of the first and the end of the last,
+  the sums and the flags; the function holds the loop over the tables and
+  counts the rows of each from 0, as the code of an `each` that is not
+  split does. So a loop that is not split is one call, and the C compiler
+  treats the rows of both kinds of loop alike.
+- **`env` holds locals only.** A loop's function reads the resource fields
+  and the fields of `Time` where they are: nothing assigns them while
+  pieces run. A local that holds a string is copied by its bits, and the
+  function uses its other fields.
+- **Sums** are collected in variables of the function and added to
+  `piece->sums` when it returns.
+- **Failure is the pool's.** `mn_pool_fail` lowers the piece no thread
+  starts at or after; a thread that has been through every region waits,
+  claiming nothing, until every piece before that one has finished, and
+  calls the loop's `failed`. `mn_panic` in a piece keeps the message with
+  the earliest piece under a mutex and leaves the piece with
+  `siglongjmp`.
+- **`midnight_rt.c` with `MN_THREADS`** uses a POSIX mutex, thread-local
+  storage (`mn_loop_thread`, which `mn_defer_enter` and `mn_defer_leave`
+  test) and `sigsetjmp`. Without it the file is C11 with libc and libm.
+- **What pieces queue and emit** is kept in buffers of the thread that
+  runs them, as stretches by piece, and handed to the world piece after
+  piece through a list for each piece; stretches for few of very many
+  pieces are sorted instead.
+- **The flags of assigned terms** are stored without a branch
+  (`piece->wrote[…] |= w`): a test of the flag after the row loop kept
+  the C compiler from unrolling it.
+- **With one thread taking part** the pieces run in order, whatever
+  `reverse` says.
+- **`MnGpuBlock`** gains `weight`, `inner_weight` and `loc`. A GPU block
+  has one nested `each`, so its weight is a number plus a number for each
+  row of the snapshot; the strict `/` and `sqrt` weigh what the hardware
+  operations do.
+- **The weight** counts nothing for a read of a variable, a constant, a
+  resource field or a field of `Time`, nor for assigning a whole
+  variable. The `move` of the design weighs 10 and `age` 15.
+- **`info`** prints `midnight: threads: N` and, for a loop that is split
+  for the first time, `midnight: threads: FILE:LINE: R rows in P pieces on
+  T threads`. A `.split` file holds those lines without the prefix.
+- **`midnight loops`** puts two spaces between its columns, and every
+  reason has its place: `at line N`, or ``in `f` (line N), called at line
+  K``. A loop in a method stands in `def Type.name`. A sum written with
+  `-=` is printed as `+= …`.
+- **Rules.** A variable of the code around the loop may hold a string
+  when the block reads its other fields. A nested `each` counts for rules
+  3 and 7 when its block uses the parameter of that component.
+- **Tests beyond the list:** `cores_failure_in_function`; the stress
+  test's `swarm` mode; `pieces_and_threads_follow_the_work` and
+  `only_programs_that_split_read_the_threads_variable` in the suite; unit
+  tests of the block weight and of what an independent loop generates. On
+  a device the runs with `4,small` are the plain run and, for a strict
+  program, the `strict-cpu` run.
+- **`nix run .#bench-gpu`** times its CPU rows on the program's own
+  threads; `MIDNIGHT_THREADS=1` gives one thread's.
