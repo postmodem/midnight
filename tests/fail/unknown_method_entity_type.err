@@ -1,0 +1,5 @@
+error: unknown method `new` for the type `Entity`
+ --> tests/fail/unknown_method_entity_type.12am:4:12
+  |
+4 | e = Entity.new
+  |            ^^^ the type has `Entity.none`; other operations need an entity value

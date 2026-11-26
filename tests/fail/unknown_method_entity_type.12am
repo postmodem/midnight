@@ -1,0 +1,5 @@
+# expect: unknown method `new` on the type `Entity`, whose one operation is `Entity.none`
+# at: line 4, the name `new`
+
+e = Entity.new
+puts e

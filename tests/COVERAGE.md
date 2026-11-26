@@ -1435,6 +1435,7 @@ against that header.
 | unknown method `upcas` on `String`, suggesting `upcase` | `unknown_method_string_suggest.12am` | 5 | Errors (suggestions); the section of the thing named |
 | unknown method `scale` on `Rect`, suggesting `scaled` | `unknown_method_suggest.12am` | 14 | Errors (suggestions); the section of the thing named |
 | unknown method `upcase` on `Int` (it exists on `String` only) | `unknown_method_wrong_type.12am` | 5 | Errors (suggestions); the section of the thing named |
+| unknown method `new` on the type `Entity`, whose one operation is `Entity.none` | `unknown_method_entity_type.12am` | 4 | Errors (suggestions); Entities |
 | unknown field `point` on the resource `Score`, suggesting `points` | `unknown_resource_field_suggest.12am` | 9 | Errors (suggestions); the section of the thing named |
 | unknown component or tag `Playr` in `with:`, suggesting `Player` | `unknown_tag_filter_suggest.12am` | 11 | Errors (suggestions); the section of the thing named |
 | unknown field `elapse` on `Time`, suggesting `elapsed` | `unknown_time_field_suggest.12am` | 4 | Errors (suggestions); the section of the thing named |
