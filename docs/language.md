@@ -1,13 +1,15 @@
 # The Midnight language
 
-This document describes Midnight 0.4: the language core specified by
+This document describes Midnight 0.5: the language core specified by
 [`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
 systems specified by
 [`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), what moves
 between CPU and GPU memory, specified by
-[`specs/0003-moving-less.md`](../specs/0003-moving-less.md), and strict GPU
+[`specs/0003-moving-less.md`](../specs/0003-moving-less.md), strict GPU
 systems, specified by
-[`specs/0004-strict-gpu-systems.md`](../specs/0004-strict-gpu-systems.md).
+[`specs/0004-strict-gpu-systems.md`](../specs/0004-strict-gpu-systems.md),
+and loops on several cores, specified by
+[`specs/0005-several-cores.md`](../specs/0005-several-cores.md).
 It is the reference for what a program means. Where the compiler and this
 document disagree, one of them has a bug.
 
@@ -387,7 +389,7 @@ iteration. This holds for every loop form, including `each` and `on`. The
 one exception is the `each` of a [GPU system](#gpu-systems), which `break`
 cannot leave.
 
-Blocks are not values in 0.4. `do |…| … end` is accepted only by the loop
+Blocks are not values in 0.5. `do |…| … end` is accepted only by the loop
 forms in this document.
 
 ## Functions
@@ -601,7 +603,9 @@ number of terms.
 
 The order in which entities are visited is not specified, but it is
 deterministic: the same program with the same input visits them in the same
-order.
+order. A loop that runs on [several cores](#several-cores) gives what
+visiting the entities in that order gives, and what it queues and emits is
+in that order.
 
 `each` can be used anywhere statements can: in systems, in functions and at
 the top level. Queries nest, which is how pairs of entities are compared.
@@ -638,6 +642,9 @@ end
 
 `break`, `next` and `return` inside `each` behave as usual; queued changes are
 applied when the outermost `each` is left, however it is left.
+
+The changes a loop on [several cores](#several-cores) queues are applied in
+the order one thread makes them in.
 
 ## Systems and ticks
 
@@ -959,7 +966,7 @@ unless `n` divides 4,294,967,296. A `rand(n)` that fails draws no number.
 ### Determinism
 
 - On the CPU a GPU system gives the same result on every run, in release
-  and in debug builds.
+  and in debug builds, and for every number of threads.
 - A GPU gives the same result from run to run on the same machine and
   driver.
 - A strict GPU system gives the same results on every device and on the
@@ -1106,9 +1113,10 @@ systems still use the device. See [Without a GPU](#without-a-gpu).
 ### Without a GPU
 
 A GPU system does not need a GPU. When the program finds no device it can
-use, every GPU block runs on the CPU instead, one entity after another on
-one thread, and means what this section says: the snapshot, the 32-bit
-arithmetic, the random numbers and the errors are the same. A single block
+use, every GPU block runs on the CPU instead, split across the cores (see
+[Several cores](#several-cores)), and means what this section says: the
+snapshot, the 32-bit arithmetic, the random numbers and the errors are the
+same. A single block
 also runs on the CPU when it does not fit the device, for example when one
 of its columns is larger than the largest buffer the device binds. The
 blocks of strict GPU systems run on the CPU when the device fails the
@@ -1294,6 +1302,207 @@ The plan has limits:
 - It describes a program that runs on a GPU. On the CPU nothing is
   transferred.
 
+## Several cores
+
+```ruby
+system age
+  each Entity, Life do |e, life|
+    life.left -= Time.dt
+    if life.left <= 0.0
+      Stats.expired += 1
+      e.despawn
+    end
+  end
+end
+```
+
+A program uses the cores of the machine for two kinds of loop: a GPU block
+that runs on the CPU, and an ordinary `each` whose runs cannot affect one
+another, such as the one above. The compiler decides which loops those are.
+Nothing in the source says so, and no construct changes its meaning.
+
+**The guarantee.** A program's output, its exit status and the runtime
+error it stops with, if any, do not depend on the number of threads. A loop
+that runs on several cores gives the result this document defines for it:
+for an ordinary `each`, what visiting the entities one after another gives;
+for a GPU block, what [Snapshot semantics](#snapshot-semantics) says. Which
+loops are split, into how many pieces, and on how many threads, are matters
+of cost, as the [transfer plan](#the-transfer-plan) is.
+
+**Words.** A loop is **split** when its rows are divided into **pieces**,
+runs of consecutive rows in visiting order, and the pieces are run by
+several threads at once. Only a loop that is not inside another loop's run
+is split: a GPU block, or an `each` reached when no other `each` is running.
+An `each` nested in a block, or in a function called from one, runs where it
+is reached, inside the piece.
+
+**GPU blocks.** When a GPU block runs on the CPU (see
+[Without a GPU](#without-a-gpu)), it is split. Its meaning already makes
+every run separate from every other: a run writes only its own entity's
+components, reads the snapshot, draws random numbers from a sequence of its
+own, and an error is the earliest in the source text whichever run meets it.
+
+**Independent loops.** An ordinary `each` is split when it is
+**independent**: when no run of its block can see what another run does.
+Exactly, the block, together with every function it calls, directly or
+through other functions, keeps to all of these:
+
+1. **Plain values.** It reads, builds and assigns only plain values, as
+   [GPU systems](#what-a-gpu-block-may-contain) defines them. A component
+   with a string or a list among its fields can be a term, and a variable
+   of the code around the loop can hold one; the block then uses their
+   other fields.
+2. **Its own rows.** It assigns to the component parameters of this `each`
+   and to variables created inside the block. It assigns nothing else,
+   apart from rules 4 and 5: no `e[C]`, no parameter of a nested `each`, in
+   the block or in a function it calls, no resource field, no `Time.dt`, no
+   variable of the code around the loop.
+3. **Nothing another run writes.** A component the block reads by `e[C]`,
+   or through a parameter of a nested `each`, is not one that this `each`
+   assigns through its own parameters.
+4. **Sums of whole numbers.** `R.f += x` and `R.f -= x`, where `f` is an
+   `Int` field of a resource, and `v += x` and `v -= x`, where `v` is an
+   `Int` variable of the code around the loop, are allowed when they stand
+   in the block itself, its loops and nested `each`es included, and nothing
+   the block reaches reads that field or variable, `x` included, or assigns
+   it in any other way. A sum is written with `+=` or `-=`:
+   `R.f = R.f + x` is an assignment under rule 2. Several sums into one
+   field are fine. `Int` addition wraps, so the total is the same in any
+   order.
+5. **Queued changes and events.** `despawn`, `add` and `remove`, on any
+   entity, and `emit`. They are collected per piece and joined in visiting
+   order when the loop ends, which is the order one thread makes them in.
+   A component that is added, and an event, are plain values under rule 1.
+6. **None of these:** `spawn`; `on`; `rand`, `rand(n)` and `srand`; `puts`
+   and `print`; `clock`, `sleep` and `exit`; `World.stop`; `World.tick`
+   and `World.run`, which a function may hold and which stop the program
+   when reached inside an `each`; a `break` that leaves this `each`; and a
+   `return` anywhere in the block, loops inside it included. A `return` in
+   a called function belongs to that function.
+7. **Device memory.** A component that some GPU block names as a term is
+   reached only through this `each`'s own parameters: the block has no
+   `e[C]` of it and no nested `each` that uses it through a parameter.
+
+An independent `each` may read its parameters, constants, `Time`, resource
+fields, variables of the code around it, `e[C]`, `has?`, `alive?`,
+`World.count`, and the parameters of nested `each`es, to any depth; it may
+use `next`, loops and branches, and call functions, recursive ones
+included.
+
+These are rules about cost. A program means the same whether or not a loop
+is independent, and a loop that is not independent runs on one core.
+
+```ruby
+resource Stats
+  expired: Int = 0
+  drift: Float = 0.0
+end
+
+system move                         # independent
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+system flee                         # independent: reads Position, writes Velocity
+  each Position, Velocity, with: Prey do |pos, vel|
+    each Position, with: Hunter do |hunter|
+      vel.dx += (pos.x - hunter.x) * 0.01
+      vel.dy += (pos.y - hunter.y) * 0.01
+    end
+  end
+end
+
+system drift                        # one core: a `Float` sum
+  each Velocity do |vel|
+    Stats.drift += vel.dx
+  end
+end
+
+system jitter                       # one core: `rand`
+  each Velocity do |vel|
+    vel.dx += rand - 0.5
+  end
+end
+```
+
+**When a loop is split.** Each time the loop runs, by the work it has: the
+number of rows, times the compiler's estimate of one run. A loop with
+little work runs on the thread that reached it, and so does every loop when
+the program has one thread. The numbers are fixed, not measured when the
+program runs, and the size of a piece depends on the loop and on its rows,
+never on the number of threads: a program makes the same pieces on every
+machine. [What several cores cost](#what-several-cores-cost) has the
+numbers.
+
+**`midnight loops FILE`** prints one line for each `each` that is not
+written inside another `each`, in source order:
+
+```
+swarm.12am:35  gpu system steer  each Boid                gpu
+swarm.12am:41  system age        each Entity, Life        cores
+swarm.12am:51  system flee       each Position, Velocity  cores
+swarm.12am:60  system drift      each Velocity            one core: `Stats.drift += …` at line 61 is a `Float` sum
+swarm.12am:66  system jitter     each Velocity            one core: `rand` at line 67
+swarm.12am:72  def nearest       each Position            one core: `return` at line 73
+swarm.12am:78  top level         each Entity, Position    one core: `puts` at line 79
+```
+
+A line gives the place of the `each`, what it stands in, its terms, and
+where it runs. What it stands in is `system name`, `gpu system name`,
+`strict gpu system name`, `def name`, `def Type.name` for a method, or
+`top level`. Where it runs is one of:
+
+- **`gpu`**: a GPU block. It runs on the device, and in pieces on the
+  cores when it runs on the CPU.
+- **`cores`**: independent. An `each` in a function is split when the
+  function is called from outside any `each`.
+- **`one core`**, with the first thing in the block, in source order, that
+  breaks a rule, and its line. Where that is in a function, the line names
+  the function it is written in and the call in the block that leads
+  there: ``one core: `rand` in `pick` (line 120), called at line 68``.
+
+The reasons, one for each way of breaking a rule. Each is printed with its
+place, `at line N` or ``in `f` (line N), called at line K``:
+
+| Reason | Rule |
+| --- | --- |
+| ``uses a `String` `` / ``uses a list`` | 1 |
+| ``assigns `e[C]` ``, with the `e[C]` as the source writes it, or `…[C]` when that is long | 2 |
+| ``assigns `C` through the nested `each` `` | 2 |
+| ``assigns `R.f` `` / ``assigns `Time.dt` `` / ``assigns `v` `` | 2 |
+| ``assigns `R.f` at line N; write `R.f += …` for a sum``, where an `Int` field or variable is assigned itself plus or minus something | 2 |
+| ``reads `C`, which this loop assigns, by `e[C]` `` / ``… in the nested `each` `` | 3 |
+| `` `R.f += …` at line N is a `Float` sum`` / ``… is a sum into a compact field`` | 4 |
+| `` `R.f` is summed and also read`` / ``… and also assigned`` | 4 |
+| `` `R.f += …` is in a called function: `f` (line N), called at line K`` | 4 |
+| `` `spawn` ``, `` `on` ``, `` `rand` ``, `` `srand` ``, `` `puts` ``, `` `print` ``, `` `clock` ``, `` `sleep` ``, `` `exit` ``, `` `World.stop` ``, `` `World.tick` ``, `` `World.run` ``, `` `break` ``, `` `return` `` | 6 |
+| ``reads `C`, which the GPU system `name` uses, by `e[C]` `` / ``… in the nested `each` `` | 7 |
+
+A sum written with `-=` is printed as `+= …` too. For a nested `each` the
+line is that of the nested `each`. The output is the same on every machine
+and for every number of threads.
+
+**Threads.** A program with a loop that can be split uses up to one thread
+for each processor core it is allowed to run on, the thread that runs the
+rest of the program among them. The other threads are created when a loop
+is first split. `MIDNIGHT_THREADS=N` sets the number; with 1 no thread is
+created and no loop is split. A program with no GPU system and no
+independent `each` has no threads and does not read the variable. The
+README describes the variable and its other words.
+
+**Runtime errors.** An independent block can fail as any ordinary code
+can: `e[C]` on a dead entity or one without the component, division by
+zero, a value that does not fit a compact field, a negative exponent. When
+a split loop fails, the program stops with the error of the earliest
+failing row in visiting order, with the message that row produces: the
+error the loop stops with on one thread. Rows after it may have run;
+nothing they did can be seen, since the program ends. Errors in a GPU
+block follow
+[Runtime errors in a GPU system](#runtime-errors-in-a-gpu-system), as
+on one thread.
+
 ## Events
 
 ```ruby
@@ -1311,7 +1520,9 @@ system damage
 end
 ```
 
-`emit` sends an event. It takes effect at once, inside `each` too.
+`emit` sends an event. It takes effect at once, inside `each` too. The
+events a loop on [several cores](#several-cores) emits are in the order one
+thread emits them in.
 
 `on` runs its block once for each event of that type that this `on` has not
 seen yet, oldest first. The parameter is a read-only copy.
@@ -1473,6 +1684,8 @@ read keeps its size.
 | A row moved on its own between CPU and GPU memory | About as much as 25,000 bytes of an array copied whole. |
 | Anything brought back from the GPU          | A wait for the GPU, about as much as 400,000 bytes of an array copied whole; everything one loop needs comes back behind one wait. |
 | An operation that can fail, in a GPU block  | One word read back from the GPU, and a wait, each time the block runs. |
+| An independent `each`, or a GPU block on the CPU, with enough work | Split across the cores. Handing the pieces out costs a few microseconds, more when the threads have been idle. |
+| The same, with little work                  | Runs on the thread that reached it, at no cost. |
 
 What follows from this:
 
@@ -1523,20 +1736,22 @@ Measured on an RTX 5090 beside a Ryzen 9 9950X3D:
   reads two components over 64 tables of 100 entities brings back all 128
   arrays behind one wait: 0.15 ms a tick.
 - Moving entities (`pos.x += vel.dx * Time.dt`, on two pairs of `Float32`)
-  is faster on the GPU from roughly 200,000 entities when the data stays
-  there: a million take 0.10 ms per tick on the CPU and 0.03 ms on the GPU.
-  When an ordinary system reads the result in every tick the GPU is slower
-  at every number of entities measured, up to four million: a million then
-  take 0.82 ms per tick, against 0.51 ms for the same two systems on the
-  CPU.
+  is faster on the GPU than on one CPU thread from roughly 200,000 entities
+  when the data stays there: a million take 0.10 ms per tick on one CPU
+  thread and 0.03 ms on the GPU. When an ordinary system reads the result
+  in every tick the GPU is slower at every number of entities measured, up
+  to four million: a million then take 0.82 ms per tick, against 0.51 ms
+  for the same two systems on one CPU thread.
 - Gravity among 16,384 bodies, every body against every other, takes 0.84 ms
-  per tick on the GPU and 354 ms on one CPU thread; among 65,536 bodies,
-  3.7 ms on the GPU.
-- The same gravity as a strict GPU system takes 7.2 ms per tick on the GPU
-  and 571 ms on one CPU thread.
+  per tick on the GPU, 354 ms on one CPU thread and 24 ms on the sixteen
+  cores; among 65,536 bodies, 3.7 ms on the GPU.
+- The same gravity as a strict GPU system takes 7.2 ms per tick on the GPU,
+  571 ms on one CPU thread and 40 ms on the sixteen cores.
 
 `nix run .#bench-gpu` measures these, and the other costs it lists, on the
-machine it runs on.
+machine it runs on; with `MIDNIGHT_THREADS=1` its CPU timings are those of
+one thread. [What several cores cost](#what-several-cores-cost) has more
+timings on all cores.
 
 **Rows or the array.** Between two blocks that use a column, ordinary code
 moves its rows one at a time until they would cost more than the array:
@@ -1590,6 +1805,87 @@ What follows from this:
   several tables and the component's size is not a multiple of 4 bytes, the
   copy is put together in CPU memory instead.
 
+### What several cores cost
+
+A loop that is split finishes sooner by about the number of cores it uses,
+as long as the work is arithmetic and not waiting for memory. Splitting has
+a price of its own: the pieces have to be handed to threads, which takes a
+few microseconds, and more when the threads have been idle for a while. So
+a loop is split only when it has enough work to pay for that.
+
+**How a loop is divided.** The compiler gives every independent `each` and
+every GPU block a **weight**, an estimate of the work of one run, in
+operations:
+
+- 1 for an arithmetic operation, a comparison, `&&`, `||`, `!`, a read of
+  a field of a component or a struct, a store into anything but a whole
+  variable, `has?`, `alive?`, and the simple methods of numbers (`abs`,
+  `min`, `max`, `clamp`, `floor`, `ceil`, `round`, `to_i`, `nan?`);
+- nothing for reading a variable, a constant, a resource field or a field
+  of `Time`, and nothing for assigning a whole variable;
+- 4 for `e[C]` and `World.count`;
+- 8 for `/`, `%`, `**` and a `Math` function, and for `despawn`, `add`,
+  `remove` and `emit`;
+- for a branch, its condition and the heaviest of its arms;
+- for a loop that is not a query, 8 times its body;
+- for a call, the weight of the function, and 64 for one that recurses;
+- for a nested `each`, the weight of its block times the rows its query
+  has when the loop begins, wherever in the block it stands. In a GPU block
+  those are the rows of the snapshot.
+
+A weight is never less than 1. A GPU block is weighed in the same way, on
+the form it is compiled to for the CPU, so its numbers differ a little:
+every field of its own row that it reads or assigns counts once for the
+run, and an `Int` `/` or `%` that can fail counts what its check costs. The
+**work** of a loop is its rows times its weight; sums and products stop at
+2 ** 62. Each time a loop runs:
+
+- A piece has as many rows as 25,000 divided by the weight, and at least
+  one. The rows of a query are numbered through its tables in visiting
+  order, and a piece may cross from one table into the next.
+- The loop is split when its work is at least 800,000, it has two rows or
+  more and the program has more than one thread.
+- One thread takes part for every 200,000 of work: at least two, and at
+  most the number of threads and the number of pieces.
+
+The `move` of [Several cores](#several-cores) has a weight of 10: its
+pieces are 2,500 rows, and it is split from 80,000 rows. A loop of
+thirty-one runs that each visit a million rows of a nested `each` is split
+too, into thirty-one pieces. These numbers are fixed, not measured when the
+program runs: a program makes the same pieces on every machine.
+
+Measured on a Ryzen 9 9950X3D, sixteen cores, per tick:
+
+| Loop                                                           | One thread | Sixteen cores |
+| -------------------------------------------------------------- | ---------- | ------------- |
+| Gravity among 16,384 bodies, a GPU block on the CPU            | 353.9 ms   | 23.9 ms       |
+| The same as a strict GPU system                                | 571.5 ms   | 40.0 ms       |
+| `move`, an ordinary `each` over a million entities             | 0.284 ms   | 0.031 ms      |
+
+An RTX 5090 takes 0.83 ms for the gravity of the first row.
+`nix run .#bench-cores` measures these on the machine it runs on.
+
+What follows from this:
+
+- **Read `midnight loops`.** A `one core` line on a loop over many
+  entities names the one thing to move out of it.
+- **Keep the loop that computes apart from the loop that reports.** A
+  `puts`, a `Float` total or a draw from `rand` keeps a whole loop on one
+  core; in a second, small loop it costs nothing.
+- **Count with `Int`.** A count or a whole-number total into a resource is
+  free on several cores; a `Float` total is not.
+- **Random numbers per entity belong in a GPU system**, whose `rand` is
+  made for runs that happen at once.
+- **Read what you do not write.** A loop that reads other entities'
+  `Position` and assigns its own `Velocity` is independent. One that reads
+  and assigns `Position` is not: split the component, or compute into a
+  second component and copy.
+- **Cores do not help a loop that waits for memory.** A light loop over
+  arrays larger than the processor's cache runs at the speed of memory on
+  one core, and on sixteen.
+- **A GPU is still far ahead where it applies.** Gravity among 16,384
+  bodies on sixteen cores takes about 30 times as long as on an RTX 5090.
+
 ## Errors
 
 **Compile-time errors** stop the build. Each one names the file, line and
@@ -1629,7 +1925,11 @@ and its message names no value; the last error in the list is reported
 when the `each` begins. See
 [Runtime errors in a GPU system](#runtime-errors-in-a-gpu-system).
 
-There are no exceptions to catch in 0.4.
+A loop that runs on several cores stops with the error it stops with on
+one thread: that of the earliest failing row in visiting order. See
+[Several cores](#several-cores).
+
+There are no exceptions to catch in 0.5.
 
 ## Grammar
 
@@ -1714,15 +2014,18 @@ document. The `NL` after `do |…|`, and the one after the last statement of a
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.4
+## Not in 0.5
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
 blocks as values, modules and namespaces, exceptions, input (standard input,
 files, command-line arguments), arithmetic at 32 bits outside GPU systems,
-system ordering constraints, running systems on several CPU threads,
+system ordering constraints, running several systems at the same time,
 windows, graphics and audio, relationships between entities, and calling C
 libraries.
+
+A loop on several cores leaves these out: `Float` sums, strings and lists,
+`spawn`, `rand` and output. A loop that has one of them runs on one core.
 
 GPU systems leave these out: structural changes, events, output, strings,
 lists, `e[C]`, `has?`, `alive?` and `World.count` inside one; collecting a

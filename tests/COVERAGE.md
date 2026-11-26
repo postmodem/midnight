@@ -5,15 +5,21 @@ This checklist maps each section and table row of
 it. Names without a directory are `tests/run/NAME.12am` (with `NAME.out`);
 `fail/NAME` is `tests/fail/NAME.12am` (with `NAME.err`); `panic/NAME` is
 `tests/panic/NAME.12am` (with `NAME.err`); `plan/NAME` is
-`tests/plan/NAME.12am` (with `NAME.plan`). A program of `tests/run` with a
-`NAME.stats` file has its `MIDNIGHT_GPU=stats` lines checked on a device.
+`tests/plan/NAME.12am` (with `NAME.plan`); `loops/NAME` is
+`tests/loops/NAME.12am` (with `NAME.loops`). A program of `tests/run` with a
+`NAME.stats` file has its `MIDNIGHT_GPU=stats` lines checked on a device,
+and one with a `NAME.split` file has the loops it splits checked.
 
 Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
 [Assumptions](#assumptions), and the test that isolates it is named there.
+The expected output of the `cores_*` programs is what each prints on one
+thread, read against its source; every run on several threads must give
+the same.
 
-Counts: 269 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-344 in `tests/fail`, 81 in `tests/panic`, 16 in `tests/plan`.
+Counts: 277 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+344 in `tests/fail`, 86 in `tests/panic`, 16 in `tests/plan`, 37 in
+`tests/loops`.
 
 ## A first program, The model
 
@@ -277,6 +283,7 @@ Counts: 269 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `with:` and `without:` together; components as filters | `query_filters` |
 | Compile-time checks | `fail/unknown_component_query_suggest`, `fail/unknown_tag_filter_suggest`, `fail/query_tag_as_term`, `fail/query_non_component`, `fail/query_resource_term`, `fail/query_filter_non_component`, `fail/query_unknown_filter`, `fail/query_repeated_type`, `fail/query_repeated_in_filter`, `fail/query_with_and_without_same`, `fail/query_param_count`, `fail/query_param_count_too_many`, `fail/query_param_count_none`, `fail/query_no_terms` |
 | Visit order is deterministic | `query_order_deterministic` |
+| A loop on several cores gives what visiting in that order gives | see [Several cores](#several-cores) |
 | Visit order for one component set spawned in sequence | `query_order_spawn` (assumption 2) |
 | Queries at the top level, in functions, in systems | `query_in_functions`, `query_terms`, `system_first_program` |
 | Nested queries | `query_nested`, `each_deferred_despawn`, `each_deferred_nested` |
@@ -298,6 +305,7 @@ Counts: 269 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | Includes code in functions called from the block | `each_deferred_nested`, `fn_world_access` |
 | Field writes are immediate | `each_field_writes_immediate`, `each_deferred_add_remove` |
 | `break`, `next`, `return` out of `each`: the queue is applied when the outermost `each` is left | `each_deferred_break_return`, `refcount` |
+| The changes a loop on several cores queues are applied in the order one thread makes them in | `cores_queued`, `cores_function` |
 
 ## Systems and ticks
 
@@ -492,11 +500,112 @@ tolerance.
 | A device that fails the start-up check runs strict blocks on the CPU | not covered: no device here fails it. `strict-cpu` takes the same path, and the unit tests of `src/emit/gpu/check.rs` show that each row of the check tells apart the rewrite it is there for |
 | `/` and `Math.sqrt` of strict shaders are correctly rounded on the device: `sqrt` of every bit pattern, `/` of 2^28 pairs with edges and quotients next to a midpoint | `gpu_strict_div_sqrt` |
 
+## Several cores
+
+Three things are tested: where the compiler says a loop runs
+(`tests/loops`, and the unit tests in `src/check/tests/effects.rs`), that a
+program gives its expected output whatever the number of threads and
+however the pieces are handed out, and that the loops meant to run in
+pieces do.
+
+### The guarantee
+
+| Rule | Files |
+| --- | --- |
+| Output, exit status and runtime error do not depend on the number of threads | `thread_programs`: every program of `tests/run`, `examples` and `tests/panic` for which `midnight loops` prints a `gpu` or a `cores` line (118 programs), as a release and as a debug build, with `MIDNIGHT_THREADS` set to `1`, `4`, `3,small`, `7,small,reverse`, `64,small,jitter` and `2,small,awake`. A program that stops with an error must also print the same to standard output every time |
+| A loop that can be split is split | `splits_match_expected`: the `NAME.split` files of `cores_gpu_tables`, `cores_gpu_rand`, `cores_queued`, `cores_emit`, `cores_sums`, `cores_reads`, `cores_function` and `cores_captures`, against the lines `MIDNIGHT_THREADS=4,small,info` prints |
+| Pieces of several rows, and pieces that cross from one table into the next | `cores_gpu_tables`, `cores_queued`, `cores_emit`, `cores_sums` and `cores_reads`, which are split with `MIDNIGHT_THREADS=4` and have rows in three or four tables of uneven size |
+| No two threads touch the same memory unordered | `tsan_programs` and `tsan_pool_stress` with `MIDNIGHT_TEST_TSAN=1`; `checks.tsan` of the flake |
+| With a device in use, the output and the `stats` counts are what they are without threads | in GPU mode, `gpu_programs`, `gpu_stats_match_plan` and `gpu_stats_match_expected` run again with `MIDNIGHT_THREADS=4,small`. `gpu_batch`, `gpu_overwrite_cpu`, `gpu_overwrite_gpu`, `gpu_queue_order`, `gpu_rare_assign`, `gpu_rows_add_remove`, `gpu_rows_despawn` and `gpu_transfers` have independent loops over components that GPU blocks name |
+| An independent `each` over a component some GPU block names hands its terms to the runtime and calls nothing for the GPU copies itself | the unit test `an_independent_loop_lists_what_gpu_blocks_name` in `src/emit/tests/gpu.rs` |
+| A program with no GPU system and no independent `each` has no threads | not covered by a test |
+
+### GPU blocks on the CPU
+
+| Rule | Files |
+| --- | --- |
+| A GPU block and a strict GPU block in pieces, with rows in three tables and a nested `each` that reads the snapshot of all of them | `cores_gpu_tables` |
+| `rand` in a block that runs in pieces: the numbers depend on the entity, not on the thread | `cores_gpu_rand` |
+| Two operations fail in different rows and pieces: the earliest in the source is reported | `panic/cores_gpu_two_failures` |
+| Every other GPU program, in pieces | `thread_programs`, over every `gpu_*` and `strict_*` program and `examples/nbody` |
+
+### Where a loop runs: `midnight loops`
+
+Each row is a rule of an independent loop, or a reason `midnight loops`
+prints, with the programs whose `.loops` file shows it and the unit test in
+`src/check/tests/effects.rs` (`check::tests::effects`).
+
+| Rule or reason | Files |
+| --- | --- |
+| One line for each `each` not written inside another, in source order, whatever it stands in: a system, a function, a method (`def Type.name`), a branch, a counting loop, an `on` block, the top level | `loops/where_loops_stand`, `loops/each_in_function`; `an_each_in_a_function_and_at_the_top_level_has_a_verdict` |
+| `gpu` for each block of a GPU system, strict ones too; no line for a nested `each` | `loops/gpu_blocks`, `loops/swarm`; `a_gpu_block_is_gpu_and_an_each_inside_another_has_no_verdict` |
+| The example of the reference | `loops/swarm` |
+| Rule 1: ``uses a `String` `` (a literal, `to_s`, a string field, a constant, a variable of the code around the loop, a whole component with a string field, an `add` whose default is a string, an `emit` of an event with a string field, in a called function) | `loops/uses_string`; `rule_1_a_string_or_a_list_keeps_a_loop_on_one_core` |
+| Rule 1: `uses a list` (an element read, a list variable indexed, pushed to and walked, a list built in the block, in a called function) | `loops/uses_list`; the same unit test |
+| Rule 1: a term whose component has a string field that the block leaves alone is fine | `loops/cores_own_rows` (`level_up`); `rule_1_a_term_with_a_string_field_is_fine_when_the_block_leaves_it_alone`. A variable of the code around the loop that holds a string beside the number read: `cores_captures` (`below`) |
+| Rule 2: ``assigns `e[C]` `` (whole, a field, a compound assignment, `…[C]` for a long entity expression, in a called function) | `loops/assigns_row`; `rule_2_assignments_outside_the_loops_own_rows` |
+| Rule 2: ``assigns `C` through the nested `each` ``, in the block and in a called function | `loops/assigns_nested`, `loops/each_in_function` (`settle`); the same unit test |
+| Rule 2: ``assigns `R.f` ``, ``assigns `Time.dt` ``, ``assigns `v` ``: a resource field, part of one, a compound assignment other than `+=` and `-=`, `Time.dt`, a variable of the code around the loop, a field of one, and in a called function | `loops/assigns_outside`, `loops/uses_list` (`stored`); the same unit test |
+| Rule 2: ``assigns `R.f`; write `R.f += …` for a sum`` for an `Int` field or variable assigned itself plus or minus something; not for a `Float`, not for something else plus one | `loops/assigns_spelled_out`; `rule_2_an_int_assigned_itself_plus_something_gets_the_hint` |
+| Rule 2: the loop's own parameters (a field, the whole component, an operator method) and variables created in the block can be assigned | `loops/cores_own_rows`, `loops/cores_sums` (`local_float`); `rule_2_variables_created_in_the_block_can_be_assigned` |
+| Rule 3: ``reads `C`, which this loop assigns, by `e[C]` `` and ``… in the nested `each` ``, in the block and in a called function; reading one component and assigning another is fine | `loops/reads_assigned`; `rule_3_a_component_the_loop_assigns_is_not_read_another_way` |
+| Rule 4: sums allowed: a resource field, two sums into one field, two fields, a variable of the code around the loop, in a branch, a counting loop and a nested `each`, with `+=` and `-=` | `loops/cores_sums`; `rule_4_whole_number_sums_are_collected_in_order` |
+| Rule 4: `` `R.f += …` is a `Float` sum`` (a `Float` field, `-=`, a `Float32` field, a `Float` variable, in a called function) | `loops/float_sum`, `loops/swarm`; `rule_4_a_float_or_compact_sum_keeps_a_loop_on_one_core` |
+| Rule 4: ``… is a sum into a compact field`` | `loops/compact_sum`; the same unit test |
+| Rule 4: `` `R.f` is summed and also read`` (after the sum, before it, on the sum's own right-hand side, in a called function, a variable) | `loops/summed_and_read`; `rule_4_a_total_is_not_read_or_assigned_otherwise` |
+| Rule 4: `` `R.f` is summed and also assigned`` (after, before, in a called function, a variable) | `loops/summed_and_assigned`; the same unit test |
+| Rule 4: `` `R.f += …` is in a called function``, reached directly and through another function | `loops/sum_in_function`; `rule_4_a_sum_stands_in_the_block_itself` |
+| Rule 5: `despawn` of the loop's own entity and of another, `add` of a tag and of a component with a value, `remove`, `emit`, and all of them in a called function | `loops/cores_queued`; `rule_5_queued_changes_and_events_are_fine` |
+| Rule 6: `` `spawn` ``, `` `on` ``, `` `rand` `` (also `rand(n)`), `` `srand` `` (with a seed and without), `` `puts` ``, `` `print` ``, `` `clock` ``, `` `sleep` ``, `` `exit` ``, `` `World.stop` ``, each in the block and in a called function | `loops/does_spawn`, `loops/does_on`, `loops/does_rand`, `loops/does_srand`, `loops/does_puts`, `loops/does_print`, `loops/does_clock`, `loops/does_sleep`, `loops/does_exit`, `loops/does_world_stop`; `rule_6_each_deed_keeps_a_loop_on_one_core` |
+| Rule 6: `` `World.tick` `` and `` `World.run` ``, held by a function | `loops/does_world_tick`, `loops/does_world_run`; `rule_6_tick_and_run_are_found_through_functions` |
+| Rule 6: `` `break` `` that leaves the `each`; one that leaves a loop inside the block is fine | `loops/does_break`; `rule_6_a_break_counts_only_when_it_leaves_the_each` |
+| Rule 6: `` `return` `` in the block, in a loop inside it, in a nested `each`; one in a called function is fine | `loops/does_return`, `loops/swarm`; `rule_6_a_return_in_the_block_counts_and_one_in_a_called_function_does_not` |
+| Rule 7: ``reads `C`, which the GPU system `name` uses, by `e[C]` `` and ``… in the nested `each` ``, in the block and in a called function; the loop's own parameter, and a nested `each` that never uses its parameter, are fine | `loops/reads_gpu`; `rule_7_a_component_of_a_gpu_block_is_reached_only_through_own_parameters` |
+| What an independent loop may read: a constant, `Time`, a resource field, a variable and a parameter of the code around it, `e[C]`, `has?`, `alive?`, `World.count`, a nested `each`, one inside another | `loops/cores_reads` |
+| `next`, branches, loops, calls of functions, of methods and of functions that recurse | `loops/cores_control` |
+| The first thing in source order is the reason | `loops/called_function` (`first_wins`, `in_order`), `loops/does_puts`, `loops/uses_list` (`stored`); `the_first_thing_in_source_order_is_the_reason` |
+| A reason in a function names the function it is written in, its line, and the call in the block, through any number of calls, recursion, a method and an operator method | `loops/called_function`; `at_a_call_the_first_effect_of_the_function_is_the_reason` |
+| An `each` in a function gets its verdict from its own block; a loop that calls a function whose loop only reads is independent, one whose loop assigns is not | `loops/each_in_function` |
+| What the checker hands the emitter: query numbers, the summary of each function, the queries a loop can reach | `queries_are_numbered_through_functions_systems_and_the_top_level`, the `a_summary_…` tests, `a_call_stands_for_everything_its_function_does`, `an_operator_method_of_a_compound_assignment_is_a_call`, `functions_that_call_each_other_share_their_effects`, `an_independent_loop_lists_the_queries_it_can_reach` |
+
+### What an independent loop does in pieces
+
+| Rule | Files |
+| --- | --- |
+| Queued `despawn`, `add` and `remove`, on the loop's own entity and on others, are applied in the order of the rows: whose mark stays when several rows add one, which table and row an entity ends in, which handle the next `spawn` reuses | `cores_queued` (24,000 entities in four tables) |
+| Events of two types are in the order of the rows; a second event of one type from one row follows the first; an `emit` in a called function | `cores_emit` (30,000 entities in three tables; the `on` blocks print the first events and a number that depends on the order of all) |
+| Sums into resource fields and into variables, with `+=` and `-=`, several into one total, in a counting loop of the block and in a nested `each`, a total that wraps, a variable of the top level inside a counting loop | `cores_sums` (45,000 entities in three tables) |
+| Reads of other entities: a nested `each`, `e[C]`, `has?`, `alive?`, `World.count`, a dead and a none handle skipped with `next` | `cores_reads` |
+| A loop in a function: split when called from outside any `each`; part of a piece when called from an independent loop; where it stands when called from a loop on one core, where what it queues waits for that loop to end | `cores_function` |
+| What a loop reads of the code around it: variables, the parameters of its function, `self` and the fields of a method's receiver, the variable of a counting loop, the parameter of an `on`, a constant, a resource field, a number out of a value that also holds a string | `cores_captures` |
+| Loops that only assign their own rows, across the existing programs | `thread_programs`, over the `examples` (`bench` is only compiled), `gpu_*` and other programs with a `cores` line |
+
+### Runtime errors on several cores
+
+| Rule | Files |
+| --- | --- |
+| Two rows fail with different errors, the later row on the earlier line: the error of the earliest row, and the output printed before the loop | `panic/cores_two_failures` |
+| Every row fails, each with a message of its own: the first row's | `panic/cores_every_row_fails` |
+| A row fails and a later row, in another piece, never ends: the program still stops with the error, within ten seconds | `panic/cores_failure_before_endless` |
+| A function the loop calls holds `World.tick`: the loop stays on one core, and the call is the runtime error it is on one thread | `panic/cores_tick_in_function`, `loops/does_world_tick` |
+| An error in a nested `each` or a called function of a piece | not covered by a program of its own |
+
+### Threads
+
+| Rule | Files |
+| --- | --- |
+| The words of `MIDNIGHT_THREADS`: a number, `small`, `reverse`, `jitter`, `awake` | the settings of `thread_programs` |
+| `info`: the thread count, and one line for each loop the first time it is split | `splits_match_expected` |
+| An unknown word is reported | not covered |
+| The pool on its own: a million loops of a few pieces one after another, loops after pauses, four threads for every processor, one processor (where the pool chooses one thread), started and stopped a thousand times, a loop in which pieces fail, and one with a failing piece and a later piece that never ends; plain and with `reverse`, `jitter` and `awake` | `pool_stress`, and `tsan_pool_stress` with ThreadSanitizer, both over `tests/pool/stress.c` |
+| One thread for each core the process may run on, on a machine with several | not covered: the tests give the count |
+
 ## Events
 
 | Rule | Files |
 | --- | --- |
 | `emit` takes effect at once, inside `each` too | `event_emit_in_each`, `event_combat` |
+| The events a loop on several cores emits are in the order one thread emits them in | `cores_emit` |
 | `on` runs once per unseen event, oldest first; the parameter is a read-only copy | `event_each_on_once`, `event_types_independent`, `break_on`, `fail/readonly_on_param` |
 | Every `on` keeps its own position | `event_each_on_once`, `break_on` |
 | An `on` after the `emit` sees it in the same tick; one before it sees it in the next tick | `event_same_tick_next_tick` |
@@ -608,6 +717,8 @@ tolerance.
 | A component a GPU block writes is rounded up to a multiple of 4 bytes; one that GPU blocks only read keeps its size | `gpu_odd_row_size`, `gpu_field_types` (the generated C asserts the size and every offset of each component a GPU block names); the unit tests `a_written_component_is_whole_words` and `a_read_only_column_can_have_rows_of_any_size` in `src/emit/tests/gpu.rs` |
 | What a GPU system costs: the fixed cost of a block, the cost of a transfer, the copy a nested `each` reads | not observable from a program's output; `nix run .#bench-gpu` measures the first two |
 | What moves, row by row, and how often the program waits for the GPU | see [What moves](#what-moves) |
+| What several cores cost: the weight of a run | the unit tests `the_weight_of_a_run_counts_its_operations`, `the_weight_of_a_run_is_never_less_than_one`, `a_branch_weighs_its_condition_and_its_heaviest_arm`, `a_loop_that_is_not_a_query_weighs_eight_rounds`, `a_nested_each_weighs_its_block_times_its_rows_wherever_it_stands`, `a_call_weighs_what_its_function_weighs`, `factors_stop_at_the_limit` and `a_summary_has_the_weight_of_a_call` in `src/check/tests/effects.rs`. The weight of a GPU block has no test of its own |
+| What several cores cost: the size of a piece, the work from which a loop is split, the number of threads | not observable from a program's output; `nix run .#bench-cores` measures the result. `cores_gpu_tables`, `cores_queued`, `cores_emit`, `cores_sums` and `cores_reads` have enough work to be split with `MIDNIGHT_THREADS=4`, into pieces of several rows that cross from one table into the next |
 | A store of a value the compiler can bound within the field is not an operation that can fail: each rule, and the nearest case that does not fit | the unit test `a_store_whose_range_fits_is_not_checked` in `src/emit/tests/gpu.rs`; `gpu_narrow_ranges` (values at the ends of each range, no check left in the shader), `panic/gpu_store_clamp_too_wide`, `panic/gpu_store_mod_too_wide` |
 | The other layout and cost facts (tables, 20 bytes per entity, tags take no space, costs of operations) | not observable from a program's output; not covered |
 
@@ -619,6 +730,7 @@ tolerance.
 | Several independent errors are all reported | `fail/three_errors` |
 | At most 20 errors are reported | `fail/error_cap` |
 | Runtime errors print `FILE:LINE: runtime error: MESSAGE` and exit with status 1 | every `tests/panic` program |
+| A loop on several cores stops with the error of the earliest failing row | `panic/cores_two_failures`, `panic/cores_every_row_fails`, `panic/cores_failure_before_endless`; see [Several cores](#several-cores) |
 
 ## Grammar
 
@@ -785,6 +897,11 @@ the rule for where a column lives.
 | | field of a struct in a resource field, one below the smallest; the block reads another field | `panic/gpu_resource_int_too_small` | `Board.grid.origin is -2147483649, which does not fit in the 32-bit Int of a GPU system` |
 | | field of a struct constant | `panic/gpu_constant_int_too_big` | `LIMITS.high is 5000000000, which does not fit in the 32-bit Int of a GPU system` |
 | | no entity matches, and the read is in a function behind a test | `panic/gpu_resource_int_too_big_unread` | `Budget.limit is 4294967296, which does not fit in the 32-bit Int of a GPU system` |
+| A failure in a loop on several cores (the error of the earliest failing row) | two rows fail, the later row on the earlier line | `panic/cores_two_failures` | `division by zero` |
+| | every row fails | `panic/cores_every_row_fails` | `Entity(0v1) has no Extra` |
+| | a later row never ends | `panic/cores_failure_before_endless` | `modulo by zero` |
+| | `World.tick` through a function, in a loop that keeps every other rule | `panic/cores_tick_in_function` | `World.tick called inside an `each`` |
+| | a GPU block in pieces, two failing operations in rows of different tables | `panic/cores_gpu_two_failures` | `division by zero` |
 
 ## Assumptions
 

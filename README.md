@@ -70,6 +70,12 @@ A GPU system agrees closely with its CPU run and with other GPUs, but not
 to the last bit. Declared `strict gpu system`, it gives the same bits on
 every device and on the CPU, at a cost in speed.
 
+A loop whose runs cannot affect one another, like `move` above, runs on
+every core of the machine, and so does a GPU system when it runs on the
+CPU. The compiler finds those loops, and the program prints exactly what it
+prints on one thread. `midnight loops` says where each loop runs, and what
+keeps one on a single core.
+
 - [`docs/language.md`](docs/language.md) is the language reference.
 - [`specs/`](specs/) holds one spec per change, with its acceptance criteria
   and outcome.
@@ -91,6 +97,7 @@ nix run . -- build examples/move.12am -o move && ./move
 nix run . -- run examples/nbody.12am
 nix run . -- emit-wgsl examples/nbody.12am
 nix run . -- plan tests/plan/reader.12am
+nix run . -- loops examples/bounce.12am
 ```
 
 ## The compiler
@@ -100,6 +107,7 @@ midnight build FILE [-o OUT] [--debug]   compile to an executable
 midnight run FILE [--debug]              compile to a temporary directory and run
 midnight check FILE                      report errors without generating code
 midnight plan FILE                       print the CPU-GPU transfers of one tick
+midnight loops FILE                      print where each loop runs
 midnight emit-c FILE                     print the generated C
 midnight emit-wgsl FILE                  print the shader of every GPU block
 midnight --version | --help
@@ -156,7 +164,8 @@ Only a program that declares a GPU system is linked against `wgpu-native`,
 with the flags in `MIDNIGHT_GPU_FLAGS`, which the packaged compiler and the
 dev shell set. Without that variable `midnight` says so in one line and
 builds the program with the C functions only. A program with no GPU system
-depends on libc and libm alone.
+depends on libc and libm alone, and on POSIX threads when it has a loop
+that can run on several cores (see [Several cores](#several-cores)).
 
 When it starts, a program with a GPU system picks the fastest hardware
 adapter. `MIDNIGHT_GPU` changes that. It is a comma-separated list of:
@@ -186,8 +195,9 @@ ends, so it counts what top-level code transfers after the tick, as
 that ticks.
 
 With no device, because none was found or `off` is set, every GPU system runs
-on the CPU. A single `each` also does when it needs more than the device
-offers, such as an array larger than the largest buffer the device binds.
+on the CPU, its rows divided among the cores. A single `each` also does when
+it needs more than the device offers, such as an array larger than the
+largest buffer the device binds.
 A program with a strict GPU system checks the device when it opens it: it
 runs a fixed piece of strict code on the device and on the CPU and compares
 the results bit for bit. When they differ, `info` prints `strict blocks run
@@ -198,6 +208,49 @@ they agree it prints `strict check passed`.
 An error from the device after start-up prints `midnight: GPU error: …` and
 ends the program with status 70. It is reported when the work is handed to
 the device, which can be later in the tick than the block that caused it.
+
+## Several cores
+
+Two kinds of loop run on several threads: an `each` of a GPU system when it
+runs on the CPU, and an ordinary `each` that the compiler finds
+independent, as the reference defines it. Each time such a loop runs, the
+runtime divides its rows into pieces and hands them to threads when the
+loop has enough work, and runs it where it stands when it has little. The
+program prints what it prints on one thread either way.
+
+```sh
+nix run . -- loops examples/bounce.12am
+```
+
+prints one line for each loop that is not inside another: where it is, what
+it stands in, its terms, and `gpu`, `cores` or `one core:` with the first
+thing in the loop that keeps it on one core.
+
+Only a program with a GPU system or an independent `each` is built for
+threads: `midnight` then adds `-DMN_THREADS -pthread` and compiles
+`runtime/midnight_pool.c` with it. Any other program is built as before,
+has no threads and reads none of what follows.
+
+Such a program uses one thread for each processor core it may run on, and
+creates the threads the first time a loop is split. `MIDNIGHT_THREADS`
+changes that. It is a comma-separated list of:
+
+| Word       | Meaning                                                         |
+| ---------- | --------------------------------------------------------------- |
+| `1` to `256` | The number of threads, the one that runs the rest of the program among them. With `1` no thread is created and no loop is split. |
+| `small`    | Make every piece one row, split every loop of two rows or more that can be split, and let a thread take part for each piece, up to the number of threads. For tests. |
+| `reverse`  | Have each thread run its share of the pieces from the last to the first. For tests. |
+| `jitter`   | Have each thread yield at random, from a fixed seed, before each piece. For tests. |
+| `awake`    | Never let a thread block: one with nothing to do keeps polling, and uses a core to do it. For a program whose split loops come more than a few milliseconds apart, where a thread that blocked returns on a slowed core. |
+| `info`     | Print `midnight: threads: N`, the number of threads, to standard error when the program starts, and one line for each loop the first time it is split: `midnight: threads: FILE:LINE: R rows in P pieces on T threads`. |
+
+```sh
+MIDNIGHT_GPU=off MIDNIGHT_THREADS=4,info nix run . -- run tests/run/cores_gpu_tables.12am
+```
+
+A word that is not in the table is reported once, when the program starts.
+No word changes what a program prints to standard output. A thread with
+nothing to do polls for 50 microseconds and then blocks.
 
 ## Benchmarks
 
@@ -228,13 +281,29 @@ one block, eight blocks, a block that can fail, a reader over 64 tables, one
 `e[C]` read and write, one `spawn`, one `despawn` and one `add` of a tag a
 tick, a loop that assigns only under a condition, and a component both
 sides assign whole. "On the CPU" is the same program with
-`MIDNIGHT_GPU=off`. Last, it prints the transfer plan of the two GPU cases
+`MIDNIGHT_GPU=off`, on as many threads as the program chooses;
+`MIDNIGHT_THREADS=1` in the environment gives the times of one thread.
+Last, it prints the transfer plan of the two GPU cases
 beside the transfers `MIDNIGHT_GPU=stats` counted, and checks what
 `MIDNIGHT_GPU=stats` counts in a tick for the move programs and the ten
 costs; it fails if any of that differs. On a machine with no
 hardware GPU it prints the CPU times only; `MIDNIGHT_GPU=software` in the
 environment lets the GPU runs use software Vulkan. The programs are in
 `bench/`.
+
+```sh
+nix run .#bench-cores
+```
+
+times loops on one thread and on the number of threads a program chooses,
+with `MIDNIGHT_GPU=off`, and prints the time per tick of each: gravity among
+16,384 bodies, also strict, and a move of one million entities, as GPU
+systems on the CPU; the ordinary `move` of `examples/bench.12am`; a GPU
+block over 64 tables of 100 entities (`gpu_read_tables`); `cores_age`, a
+loop over a million entities that counts and despawns the few that expire;
+`cores_flee`, a loop with a nested `each`; and `cores_small`, a loop over 64
+tables of 100 entities, which stays on one thread. The two runs of each
+program must print the same checksum.
 
 ## Working on it
 
@@ -251,6 +320,24 @@ under `tests/` and `examples/`, each in both build modes, with GPU systems
 on the CPU. `nix flake check` builds the package (which runs the same tests
 in the sandbox) and checks clippy, rustfmt and nixfmt.
 
+Every program with a loop that can be split also runs, in both build modes,
+with `MIDNIGHT_THREADS` set to `1`, `4`, `3,small`, `7,small,reverse`,
+`64,small,jitter` and `2,small,awake`, and must give its expected output
+each time. A program of `tests/run` with a `NAME.split` file must split
+exactly the loops the file lists when it runs with
+`MIDNIGHT_THREADS=4,small,info`. A program that must stop with an error
+fails when it is still running after ten seconds. `tests/pool/stress.c`
+exercises the thread pool on its own.
+
+```sh
+MIDNIGHT_TEST_TSAN=1 cargo test          # in the dev shell
+```
+
+also builds the pool's stress test and every program with a loop that can
+be split with ThreadSanitizer, runs the programs with `4,small` and with
+`7,small,reverse`, and fails on any report. On Linux, `nix flake check`
+includes `checks.tsan`, which does this inside the build sandbox.
+
 The programs with GPU systems are also run on a device, where a number may
 differ from the expected output by the tolerance the program states in its
 `# tolerance:` comment:
@@ -261,18 +348,19 @@ MIDNIGHT_TEST_GPU=software cargo test    # in the dev shell, on software Vulkan
 nix run .#gpu-test                       # the packaged compiler, on the machine's GPU
 ```
 
-Every program runs as a release and as a debug build, as it is and with
-`MIDNIGHT_GPU=rows`. A run that finds no device, or runs a GPU system on the
+Every program runs as a release and as a debug build, as it is, with
+`MIDNIGHT_GPU=rows` and with `MIDNIGHT_THREADS=4,small`. A run that finds
+no device, or runs a GPU system on the
 CPU, fails. A program whose GPU systems are all strict must print exactly
 its expected output and may not state a tolerance. A program with a strict
-GPU system must report that the device passed the strict check, and runs a
-third time with `MIDNIGHT_GPU=strict-cpu`. `gpu_strict_div_sqrt` runs the
+GPU system must report that the device passed the strict check, and runs
+again with `MIDNIGHT_GPU=strict-cpu`, with and without the threads. `gpu_strict_div_sqrt` runs the
 strict `/` and `Math.sqrt` of shaders on the device against the CPU's: on
 hardware `sqrt` of every 32-bit pattern and `/` of 2^28 pairs, on software
 Vulkan 2^24 of each. In hardware mode a `VK_DRIVER_FILES` set by the caller
 chooses the device. A program of `tests/run` with a `NAME.stats` file must also
-print exactly those `stats` lines, and with a `NAME.rows.stats` file, those
-lines with `rows` as well. The software mode points programs at the Vulkan driver file named in
+print exactly those `stats` lines, with `MIDNIGHT_THREADS=4,small` too, and
+with a `NAME.rows.stats` file, those lines with `rows` as well. The software mode points programs at the Vulkan driver file named in
 `MIDNIGHT_TEST_SOFTWARE_ICD`, which the dev shell sets to Mesa's `llvmpipe`.
 The suite tests the compiler cargo built, or the one `MIDNIGHT_BIN` names.
 
@@ -281,17 +369,23 @@ software Vulkan inside the build sandbox.
 
 ```
 src/            the compiler, one module per stage:
-                source, lexer, parser, check, plan, emit, driver
+                source, lexer, parser, check, plan, loops, emit, driver
 runtime/        midnight_rt.h, midnight_rt.c; midnight_gpu.h, midnight_gpu.c
-                for programs with a GPU system
+                for programs with a GPU system; midnight_pool.h,
+                midnight_pool.c for programs with a loop that can be split
 docs/           language.md
 examples/       programs with their expected output
-tests/run/      programs that must print exactly NAME.out, and on a device the
-                `stats` lines in NAME.stats when there is one
+tests/run/      programs that must print exactly NAME.out, on a device the
+                `stats` lines in NAME.stats when there is one, and with
+                MIDNIGHT_THREADS=4,small,info the lines in NAME.split
 tests/fail/     programs that must be rejected with exactly NAME.err
 tests/panic/    programs that must stop with the run-time error in NAME.err
 tests/plan/     programs whose transfer plan must be exactly NAME.plan
-bench/          baseline.c, churn.12am, bench.sh; gpu_*.12am, bench-gpu.sh
+tests/loops/    programs for which `midnight loops` must print exactly
+                NAME.loops
+tests/pool/     stress.c, which exercises the thread pool on its own
+bench/          baseline.c, churn.12am, bench.sh; gpu_*.12am, bench-gpu.sh;
+                cores_*.12am, cores.sh
 specs/          one spec per change
 ```
 
@@ -303,12 +397,13 @@ files, the only expected files that come from a device.
 
 ## Status
 
-Midnight 0.4 is the language core, GPU systems, the rules that move only
-what is needed between CPU and GPU memory, and strict GPU systems. It is
+Midnight 0.5 is the language core, GPU systems, the rules that move only
+what is needed between CPU and GPU memory, strict GPU systems, and loops
+on several cores. It is
 tested on `x86_64-linux`, GPU systems on an NVIDIA device, on an AMD iGPU
 through Mesa's RADV, and on Mesa's software Vulkan; the flake also offers
 `aarch64-linux`, `x86_64-darwin` and `aarch64-darwin`, which evaluate but
-have not been run. What 0.4 leaves out
+have not been run. What 0.5 leaves out
 is listed at the end of the reference.
 
 ## License
