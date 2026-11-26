@@ -131,9 +131,10 @@ through other functions, keeps to all of these:
    `Int` field of a resource, and `v += x` and `v -= x`, where `v` is an
    `Int` variable of the code around the loop, are allowed when they stand
    in the block itself and nothing the block reaches reads that field or
-   variable, `x` included, or assigns it in any other way. Several such
-   sums into one field are fine. `Int` addition wraps, so the total is the
-   same in any order.
+   variable, `x` included, or assigns it in any other way. `R.f = R.f + x`,
+   `R.f = x + R.f` and `R.f = R.f - x` are the same sums written out, and
+   count as such. Several sums into one field are fine. `Int` addition
+   wraps, so the total is the same in any order.
 5. **Queued changes and events.** `despawn`, `add` and `remove`, on any
    entity, and `emit`. They are collected per piece and joined in visiting
    order when the loop ends, which is the order one thread makes them in.
