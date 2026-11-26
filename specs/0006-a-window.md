@@ -304,7 +304,10 @@ programs with a window, with libc alone:
 - The pace: tick `k` of a row of ticks is due `Time.dt` after tick `k - 1`
   was due; a tick that begins late is due when it begins. The wait sleeps
   to the moment and does not spin.
-- PNG: 8-bit RGBA, no compression, written by the runtime itself.
+- PNG: 8-bit RGBA, written by the runtime itself as a deflate stream of
+  fixed codes in which a run of equal pixels, along a row or down from
+  the row above, is a few bytes. The same pixels always give the same
+  file.
 - A tick, when a window is open, in order: carry out commands until one
   lets the tick run, or wait for the tick's time; take what the desktop
   reports; update the resource and emit the events; run the systems;
@@ -428,6 +431,13 @@ window was inside a headless sway on a socket of its own.
   full screen and a close all arrived as SDL events, and on Wayland
   nothing but those events told the surface its size. A tiling compositor
   resized the window in its first 20 ms.
+- **On a compositor with `fifo-v1`**, SDL chose Wayland by itself and the
+  surface listed the same modes and 8-bit formats. The window had a size
+  the compositor chose when `SDL_CreateWindow` returned, and another
+  within its first frames. With the timer and mailbox the pace was the
+  timer's, as above. With FIFO the wait was in getting the next texture,
+  one refresh long. A capture of a whole window is megabytes as a PNG
+  without compression.
 - **`LD_LIBRARY_PATH`.** In a shell where another program's launcher had
   set it to a newer ALSA, a program linked with SDL 3 failed to link, and
   one built elsewhere did not start, headless or not.
