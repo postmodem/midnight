@@ -25,9 +25,9 @@
 //! # GPU mode
 //!
 //! The GPU tests (`gpu_programs`, `gpu_stats_match_plan`,
-//! `gpu_stats_match_expected`, `gpu_driver_finds_its_parts` and
-//! `gpu_strict_div_sqrt`) do nothing unless `MIDNIGHT_TEST_GPU` names where
-//! GPU systems are to run:
+//! `gpu_stats_match_expected`, `gpu_driver_finds_its_parts`,
+//! `gpu_strict_div_sqrt` and `window_frames`) do nothing unless
+//! `MIDNIGHT_TEST_GPU` names where GPU systems and frames are to run:
 //!
 //! - `software`: on Mesa's `llvmpipe`. `MIDNIGHT_TEST_SOFTWARE_ICD` is the
 //!   path of its Vulkan driver file.
@@ -61,9 +61,17 @@
 //! `gpu_stats_match_expected` runs every program of `tests/run` that has a
 //! `NAME.stats` file with `MIDNIGHT_GPU=stats`, and its `stats` lines must
 //! be exactly that file. When there is a `NAME.rows.stats` too, it runs the
-//! program again with `MIDNIGHT_GPU=stats,rows` against that file. With
-//! `UPDATE_EXPECT=1` the release run writes the files instead: `.stats`
-//! files are the only expected files GPU mode writes.
+//! program again with `MIDNIGHT_GPU=stats,rows` against that file.
+//!
+//! `window_frames` runs every program of `tests/run` that has a
+//! `NAME.frames` file headless on the device, with all the commands of its
+//! `NAME.drive`, `capture` included, in a directory of its own. It must
+//! print `NAME.out`, the answers to its commands must be exactly
+//! `NAME.frames`, and each file it captures must be a PNG of the size and
+//! the pixels its answer gives.
+//!
+//! With `UPDATE_EXPECT=1` the release runs write `.stats` and `.frames`
+//! files instead: those are the only expected files GPU mode writes.
 //!
 //! In GPU mode `gpu_programs`, `gpu_stats_match_plan` and
 //! `gpu_stats_match_expected` also run each program with
@@ -1336,6 +1344,524 @@ fn gpu_stats_match_expected() {
     ));
 }
 
+/// The programs of `tests/run` that have a `NAME.frames` file.
+fn frame_programs() -> Vec<PathBuf> {
+    programs("tests/run")
+        .into_iter()
+        .filter(|source| source.with_extension("frames").exists())
+        .collect()
+}
+
+/// The words of `MIDNIGHT_GPU` and the variables that run a program on
+/// `device`, with its `info` line.
+fn on_device(command: &mut Command, device: Device) {
+    if device == Device::Software {
+        command
+            .env("MIDNIGHT_GPU", "info,software")
+            .env("VK_DRIVER_FILES", software_driver())
+            .env_remove("VK_ADD_DRIVER_FILES");
+    } else {
+        command.env("MIDNIGHT_GPU", "info");
+    }
+}
+
+/// Takes the device's `info` line out of a run's standard error, and
+/// fails when there is no device or it is not the one asked for.
+fn device_said(run: &mut TimedRun, device: Device) -> Result<String, String> {
+    let mut said = None;
+    let mut rest = String::new();
+    for line in run.stderr.split_inclusive('\n') {
+        match line.strip_prefix("midnight: gpu: ") {
+            Some(name) if said.is_none() => said = Some(name.trim_end().to_string()),
+            _ => rest.push_str(line),
+        }
+    }
+    run.stderr = rest;
+    match said {
+        None => Err("no `info` line".to_string()),
+        Some(name) if name == "no device" => Err(format!("no {device:?} device").to_lowercase()),
+        Some(name) if device == Device::Software && !name.contains("llvmpipe") => {
+            Err(format!("the device is {name}, not llvmpipe"))
+        }
+        Some(name) => Ok(name),
+    }
+}
+
+/// The file, the size and the CRC-32 that the answer to a `capture`
+/// gives: `capture FILE: N ticks, WxH, crc XXXXXXXX`.
+fn capture_answer(line: &str) -> Option<(&str, u32, u32, u32)> {
+    let (head, crc) = line.rsplit_once(", crc ")?;
+    let (head, size) = head.rsplit_once(", ")?;
+    let (head, _ticks) = head.rsplit_once(": ")?;
+    let file = head.strip_prefix("capture")?.trim_start();
+    let (width, height) = size.split_once('x')?;
+    Some((
+        file,
+        width.parse().ok()?,
+        height.parse().ok()?,
+        u32::from_str_radix(crc, 16).ok()?,
+    ))
+}
+
+/// Requires the file of each capture answered in `answers`, in `dir`, to
+/// be a PNG of the size the answer gives whose pixels have its CRC-32.
+/// Returns how many there were.
+fn check_captures(answers: &str, dir: &Path) -> Result<usize, String> {
+    let mut count = 0;
+    for line in answers.lines().filter(|line| line.starts_with("capture")) {
+        let (file, width, height, crc) =
+            capture_answer(line).ok_or_else(|| format!("not the answer to a capture: {line}"))?;
+        let bytes = std::fs::read(dir.join(file)).map_err(|error| format!("{file}: {error}"))?;
+        let (png_width, png_height, pixels) =
+            png_pixels(&bytes).map_err(|message| format!("{file}: {message}"))?;
+        if (png_width, png_height) != (width, height) {
+            return Err(format!(
+                "{file}: {png_width}x{png_height} pixels, answered {width}x{height}"
+            ));
+        }
+        if crc32(&pixels) != crc {
+            return Err(format!(
+                "{file}: the pixels have the CRC-32 {:08x}, answered {crc:08x}",
+                crc32(&pixels)
+            ));
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+/// GPU mode: every program of `tests/run` with a `NAME.frames` file runs
+/// headless on the device with all its commands, in release and debug
+/// builds. It must print `NAME.out`, its answers must be exactly
+/// `NAME.frames`, and each file it captures must be a PNG of the size and
+/// pixels its answer gives. A capture to a file that can't be written
+/// stops the program.
+#[test]
+fn window_frames() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let sources = frame_programs();
+    assert!(
+        !sources.is_empty(),
+        "no program with a .frames file under tests/run of the working directory"
+    );
+    let dir = scratch("window-frames");
+    let jobs: Vec<(&PathBuf, Mode)> = sources
+        .iter()
+        .flat_map(|source| MODES.map(|mode| (source, mode)))
+        .collect();
+    let devices: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+    let captures = AtomicUsize::new(0);
+    let failures = for_each_parallel(&jobs, |(source, mode)| {
+        let label = format!("{} ({mode:?})", source.display());
+        let exe = std::path::absolute(exe_path(&dir, source, *mode)).expect("an absolute path");
+        build(source, &exe, *mode)?;
+        let files = dir.join(format!(
+            "{}-{mode:?}-files",
+            source.file_stem().unwrap().to_string_lossy()
+        ));
+        std::fs::create_dir_all(&files).expect("create a directory for captures");
+        let mut command = Command::new(&exe);
+        headless(&mut command, source, true);
+        on_device(&mut command, device);
+        command.current_dir(&files);
+        let mut run = run_within(&mut command, RUN_LIMIT);
+        let said = device_said(&mut run, device).map_err(|message| format!("{label}: {message}"));
+        if run.status != Some(0) || !run.stderr.is_empty() {
+            return Err(format!(
+                "{label}: exited with {:?}\n--- answers\n{}--- stderr\n{}---",
+                run.status, run.drive, run.stderr
+            ));
+        }
+        devices.lock().unwrap().insert(said?);
+        let out = std::fs::read_to_string(source.with_extension("out")).unwrap_or_default();
+        if run.stdout != out {
+            return Err(format!(
+                "{label}: standard output differs from the .out file\n--- actual\n{}---",
+                run.stdout
+            ));
+        }
+        // Only the release run may write the expected file; debug must
+        // match it.
+        if !(update_expect() && *mode == Mode::Debug) {
+            expect(&source.with_extension("frames"), &run.drive, "the answers")
+                .map_err(|message| format!("{label}: {message}"))?;
+        }
+        let count =
+            check_captures(&run.drive, &files).map_err(|message| format!("{label}: {message}"))?;
+        captures.fetch_add(count, Ordering::Relaxed);
+        Ok(())
+    });
+
+    // A file that can't be written.
+    let mut failures = failures;
+    let exe = build_text(&dir, "driven", DRIVEN);
+    let commands = dir.join("unwritable.drive");
+    std::fs::write(&commands, "tick\ncapture missing/frame.png\n").expect("write commands");
+    let mut command = Command::new(&exe);
+    command
+        .env("MIDNIGHT_WINDOW", "headless")
+        .env("MIDNIGHT_DRIVE", &commands)
+        .current_dir(&dir);
+    on_device(&mut command, device);
+    let mut run = run_within(&mut command, PANIC_LIMIT);
+    let said = device_said(&mut run, device);
+    let expected = format!(
+        "tick\n{}:2: can't capture: can't write missing/frame.png: No such file or directory\n",
+        commands.display()
+    );
+    if said.is_err() || run.status != Some(1) || run.drive != expected || !run.stderr.is_empty() {
+        failures.push(format!(
+            "a capture to a file that can't be written: exited with {:?}, {said:?}\n\
+             --- expected\n{expected}--- answers\n{}--- stderr\n{}---",
+            run.status, run.drive, run.stderr
+        ));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs with frames", jobs.len() + 1, failures);
+    let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
+    note(&format!(
+        "window_frames: {} runs of {} programs, {} captures, on {}",
+        jobs.len(),
+        sources.len(),
+        captures.into_inner(),
+        devices.join(" and ")
+    ));
+}
+
+/// The CRC-32 of PNG and of zlib's gzip.
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for &byte in bytes {
+        crc ^= u32::from(byte);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 {
+                0xedb8_8320 ^ (crc >> 1)
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
+/// The width, height and pixels of a PNG file of 8-bit RGBA, not
+/// interlaced, every row unfiltered: what `capture` writes. Every chunk's
+/// CRC, the zlib header and the Adler-32 are checked. The deflate stream
+/// may have stored blocks and blocks of fixed codes.
+fn png_pixels(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
+    let rest = bytes
+        .strip_prefix(b"\x89PNG\r\n\x1a\n")
+        .ok_or("no PNG signature")?;
+    let word = |at: usize| -> Result<u32, String> {
+        let four = rest.get(at..at + 4).ok_or("the file is cut short")?;
+        Ok(u32::from_be_bytes(four.try_into().unwrap()))
+    };
+    let mut at = 0;
+    let mut size = None;
+    let mut stream = Vec::new();
+    loop {
+        let length = word(at)? as usize;
+        let typed = rest
+            .get(at + 4..at + 8 + length)
+            .ok_or("the file is cut short")?;
+        if crc32(typed) != word(at + 8 + length)? {
+            return Err(format!(
+                "the CRC of a chunk `{}` is wrong",
+                String::from_utf8_lossy(&typed[..4])
+            ));
+        }
+        let (kind, body) = typed.split_at(4);
+        at += 12 + length;
+        match kind {
+            b"IHDR" if size.is_none() && body.len() == 13 => {
+                if body[8..] != [8, 6, 0, 0, 0] {
+                    return Err(format!("not 8-bit RGBA unfiltered: {:?}", &body[8..]));
+                }
+                let width = u32::from_be_bytes(body[0..4].try_into().unwrap());
+                let height = u32::from_be_bytes(body[4..8].try_into().unwrap());
+                size = Some((width, height));
+            }
+            b"IDAT" if size.is_some() => stream.extend_from_slice(body),
+            b"IEND" if size.is_some() && body.is_empty() => break,
+            _ => {
+                return Err(format!(
+                    "an unexpected chunk `{}`",
+                    String::from_utf8_lossy(kind)
+                ));
+            }
+        }
+    }
+    if at != rest.len() {
+        return Err("bytes after IEND".to_string());
+    }
+    let (width, height) = size.ok_or("no IHDR")?;
+    let raw = zlib_inflate(&stream)?;
+    let stride = 1 + width as usize * 4;
+    if raw.len() != stride * height as usize {
+        return Err(format!(
+            "{} bytes of rows, {width}x{height} pixels need {}",
+            raw.len(),
+            stride * height as usize
+        ));
+    }
+    let mut pixels = Vec::with_capacity(raw.len());
+    for row in raw.chunks(stride) {
+        if row[0] != 0 {
+            return Err(format!("a row has the filter {}", row[0]));
+        }
+        pixels.extend_from_slice(&row[1..]);
+    }
+    Ok((width, height, pixels))
+}
+
+/// Reads bits of a deflate stream, the lowest bit of each byte first.
+struct Bits<'a> {
+    bytes: &'a [u8],
+    at: usize,
+}
+
+impl Bits<'_> {
+    fn bit(&mut self) -> Result<u32, String> {
+        let byte = self
+            .bytes
+            .get(self.at / 8)
+            .ok_or("the deflate stream is cut short")?;
+        let bit = (byte >> (self.at % 8)) & 1;
+        self.at += 1;
+        Ok(u32::from(bit))
+    }
+
+    /// `n` bits, the first the lowest.
+    fn number(&mut self, n: u32) -> Result<u32, String> {
+        let mut value = 0;
+        for i in 0..n {
+            value |= self.bit()? << i;
+        }
+        Ok(value)
+    }
+
+    /// A Huffman code of `n` bits, its highest bit first.
+    fn code(&mut self, n: u32) -> Result<u32, String> {
+        let mut value = 0;
+        for _ in 0..n {
+            value = value << 1 | self.bit()?;
+        }
+        Ok(value)
+    }
+
+    /// A symbol of the fixed literal and length code.
+    fn symbol(&mut self) -> Result<u32, String> {
+        let code = self.code(7)?;
+        if code <= 0x17 {
+            return Ok(256 + code);
+        }
+        let code = code << 1 | self.bit()?;
+        match code {
+            0x30..=0xbf => Ok(code - 0x30),
+            0xc0..=0xc7 => Ok(280 + code - 0xc0),
+            _ => Ok(144 + (code << 1 | self.bit()?) - 0x190),
+        }
+    }
+}
+
+/// The bytes of a zlib stream of stored blocks and blocks of fixed codes.
+fn zlib_inflate(stream: &[u8]) -> Result<Vec<u8>, String> {
+    const LENGTH_BASE: [u32; 29] = [
+        3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115,
+        131, 163, 195, 227, 258,
+    ];
+    const LENGTH_EXTRA: [u32; 29] = [
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+    ];
+    const DISTANCE_BASE: [u32; 30] = [
+        1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537,
+        2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
+    ];
+    const DISTANCE_EXTRA: [u32; 30] = [
+        0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12,
+        13, 13,
+    ];
+    if stream.len() < 6 || stream[0] & 0x0f != 8 || stream[1] & 0x20 != 0 {
+        return Err("not a zlib stream of deflate without a dictionary".to_string());
+    }
+    if (u32::from(stream[0]) << 8 | u32::from(stream[1])) % 31 != 0 {
+        return Err("the zlib header's check is wrong".to_string());
+    }
+    let mut bits = Bits {
+        bytes: &stream[..stream.len() - 4],
+        at: 16,
+    };
+    let mut out: Vec<u8> = Vec::new();
+    loop {
+        let last = bits.number(1)? == 1;
+        match bits.number(2)? {
+            0 => {
+                bits.at = bits.at.div_ceil(8) * 8;
+                let length = bits.number(16)?;
+                if bits.number(16)? != !length & 0xffff {
+                    return Err("a stored block's length is wrong".to_string());
+                }
+                for _ in 0..length {
+                    out.push(bits.number(8)? as u8);
+                }
+            }
+            1 => loop {
+                let symbol = bits.symbol()?;
+                match symbol {
+                    0..=255 => out.push(symbol as u8),
+                    256 => break,
+                    257..=285 => {
+                        let l = (symbol - 257) as usize;
+                        let length = LENGTH_BASE[l] + bits.number(LENGTH_EXTRA[l])?;
+                        let d = bits.code(5)? as usize;
+                        if d >= 30 {
+                            return Err(format!("the distance code {d}"));
+                        }
+                        let distance =
+                            (DISTANCE_BASE[d] + bits.number(DISTANCE_EXTRA[d])?) as usize;
+                        if distance > out.len() {
+                            return Err("a copy from before the start".to_string());
+                        }
+                        for _ in 0..length {
+                            out.push(out[out.len() - distance]);
+                        }
+                    }
+                    _ => return Err(format!("the length symbol {symbol}")),
+                }
+            },
+            kind => return Err(format!("a deflate block of type {kind}")),
+        }
+        if last {
+            break;
+        }
+    }
+    if bits.at.div_ceil(8) != bits.bytes.len() {
+        return Err("bytes after the last deflate block".to_string());
+    }
+    let (mut a, mut b) = (1u32, 0u32);
+    for &byte in &out {
+        a = (a + u32::from(byte)) % 65521;
+        b = (b + a) % 65521;
+    }
+    let adler = u32::from_be_bytes(stream[stream.len() - 4..].try_into().unwrap());
+    if adler != b << 16 | a {
+        return Err("the Adler-32 is wrong".to_string());
+    }
+    Ok(out)
+}
+
+/// The CRC-32 of a frame of `width` by `height` pixels of one opaque
+/// colour.
+fn frame_crc(width: u32, height: u32, rgb: [u8; 3]) -> u32 {
+    let pixel = [rgb[0], rgb[1], rgb[2], 255];
+    crc32(&pixel.repeat((width * height) as usize))
+}
+
+/// The CRCs in the `.frames` files of the frame programs are those of the
+/// colours the programs paint: in `frame_bytes`, every value of a byte in
+/// each of red, green and blue.
+#[test]
+fn frames_are_the_colours_painted() {
+    let answers = std::fs::read_to_string("tests/run/frame_bytes.frames").expect("read answers");
+    let crcs: Vec<u32> = answers
+        .lines()
+        .filter_map(capture_answer)
+        .map(|(_, _, _, crc)| crc)
+        .collect();
+    let painted: Vec<u32> = (0..256u32)
+        .map(|k| frame_crc(16, 8, [k as u8, 255 - k as u8, (k * 7 % 256) as u8]))
+        .collect();
+    assert_eq!(crcs, painted);
+
+    let answers = std::fs::read_to_string("tests/run/frame_sizes.frames").expect("read answers");
+    let captures: Vec<(&str, u32, u32, u32)> = answers.lines().filter_map(capture_answer).collect();
+    let painted = [
+        ("open.png", 64, 48, [255, 128, 0]),
+        ("first.png", 64, 48, [0, 0, 255]),
+        ("still.png", 64, 48, [0, 0, 255]),
+        ("scaled.png", 45, 32, [0, 0, 255]),
+        ("again.png", 20, 10, [10, 20, 30]),
+        ("again-ticked.png", 20, 10, [10, 20, 30]),
+    ]
+    .map(|(file, width, height, rgb)| (file, width, height, frame_crc(width, height, rgb)));
+    assert_eq!(captures, painted);
+}
+
+/// A PNG file of a stored block and one of a fixed-code block with a copy
+/// both decode, and a wrong CRC is found.
+#[test]
+fn png_files_are_read() {
+    fn chunk(kind: &[u8], body: &[u8]) -> Vec<u8> {
+        let mut typed = kind.to_vec();
+        typed.extend_from_slice(body);
+        let mut bytes = (body.len() as u32).to_be_bytes().to_vec();
+        bytes.extend_from_slice(&typed);
+        bytes.extend_from_slice(&crc32(&typed).to_be_bytes());
+        bytes
+    }
+    fn png(stream: &[u8]) -> Vec<u8> {
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        bytes.extend(chunk(b"IHDR", &[0, 0, 0, 2, 0, 0, 0, 1, 8, 6, 0, 0, 0]));
+        bytes.extend(chunk(b"IDAT", stream));
+        bytes.extend(chunk(b"IEND", &[]));
+        bytes
+    }
+    let raw = [0u8, 1, 2, 3, 4, 1, 2, 3, 4];
+    let mut adler = [0u8; 4];
+    let (mut a, mut b) = (1u32, 0u32);
+    for &byte in &raw {
+        a = (a + u32::from(byte)) % 65521;
+        b = (b + a) % 65521;
+    }
+    adler.copy_from_slice(&(b << 16 | a).to_be_bytes());
+
+    let mut stored = vec![0x78, 0x01, 0x01, 9, 0, !9, 0xff];
+    stored.extend_from_slice(&raw);
+    stored.extend_from_slice(&adler);
+    assert_eq!(
+        png_pixels(&png(&stored)),
+        Ok((2, 1, vec![1, 2, 3, 4, 1, 2, 3, 4]))
+    );
+
+    // The literals 0, 1, 2, 3, 4, a copy of 4 bytes from 4 back, the end:
+    // the bits of a fixed-code block, written lowest first.
+    let mut fixed = vec![0x78, 0x01];
+    let mut bits: Vec<u32> = vec![1, 1, 0];
+    let mut code = |value: u32, n: u32| {
+        for i in (0..n).rev() {
+            bits.push(value >> i & 1);
+        }
+    };
+    for literal in 0..5 {
+        code(0x30 + literal, 8);
+    }
+    code(258 - 256, 7);
+    code(3, 5);
+    code(0, 7);
+    for byte in bits.chunks(8) {
+        fixed.push(
+            byte.iter()
+                .enumerate()
+                .fold(0u8, |acc, (i, bit)| acc | (*bit as u8) << i),
+        );
+    }
+    fixed.extend_from_slice(&adler);
+    assert_eq!(
+        png_pixels(&png(&fixed)),
+        Ok((2, 1, vec![1, 2, 3, 4, 1, 2, 3, 4]))
+    );
+
+    let mut broken = png(&stored);
+    broken[30] ^= 1;
+    assert!(png_pixels(&broken).is_err());
+    assert_eq!(
+        capture_answer("capture a: b.png: 3 ticks, 320x200, crc 5f1d02c9"),
+        Some(("a: b.png", 320, 200, 0x5f1d02c9))
+    );
+}
+
 #[test]
 fn floats_are_split_from_the_text_around_them() {
     assert_eq!(
@@ -2305,6 +2831,78 @@ fn a_window_that_cannot_be_shown_is_an_error() {
         run.stderr
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Without `MIDNIGHT_GPU_FLAGS` or `MIDNIGHT_WINDOW_FLAGS`, `midnight` says
+/// so in one line and builds a program with a window that runs headless
+/// and captures nothing, with GPU systems or without, in both modes.
+#[test]
+fn a_window_built_without_the_flags_runs_headless() {
+    let dir = scratch("window-without-flags");
+    let cases = [
+        ("MIDNIGHT_WINDOW_FLAGS", "MIDNIGHT_WINDOW_FLAGS is"),
+        ("MIDNIGHT_GPU_FLAGS", "MIDNIGHT_GPU_FLAGS is"),
+    ];
+    let mut failures = Vec::new();
+    let mut runs = 0;
+    for (unset, said) in cases {
+        for source in ["tests/run/window_gpu.12am", "tests/run/frame_sizes.12am"] {
+            for mode in MODES {
+                runs += 1;
+                let label = format!("{source} ({mode:?}) without {unset}");
+                let exe = dir.join(format!("program-{runs}"));
+                let mut command = midnight();
+                command
+                    .arg("build")
+                    .arg(source)
+                    .arg("-o")
+                    .arg(&exe)
+                    .env("MIDNIGHT_CFLAGS", STRICT_CFLAGS)
+                    .env_remove(unset);
+                if mode == Mode::Debug {
+                    command.arg("--debug");
+                }
+                let output = command.output().expect("run midnight");
+                let line = format!(
+                    "midnight: {said} not set; the window will run only headless, and capture nothing\n"
+                );
+                let stderr = text(&output.stderr);
+                if !output.status.success() || !stderr.ends_with(&line) {
+                    failures.push(format!("{label}: the build said\n{stderr}"));
+                    continue;
+                }
+                let source = Path::new(source);
+                let run = run_within(&mut on_cpu(&exe, source), RUN_LIMIT);
+                let out = std::fs::read_to_string(source.with_extension("out")).unwrap();
+                if run.status != Some(0) || run.stdout != out || !run.stderr.is_empty() {
+                    failures.push(format!(
+                        "{label}: exited with {:?}\n--- stdout\n{}--- stderr\n{}---",
+                        run.status, run.stdout, run.stderr
+                    ));
+                }
+                let commands = dir.join("capture.drive");
+                std::fs::write(&commands, "capture frame.png\n").expect("write commands");
+                let mut command = Command::new(&exe);
+                command
+                    .env("MIDNIGHT_WINDOW", "headless")
+                    .env("MIDNIGHT_DRIVE", &commands)
+                    .current_dir(&dir);
+                let run = run_within(&mut command, PANIC_LIMIT);
+                let expected = format!(
+                    "{}:1: can't capture: the program was built without the window flags\n",
+                    commands.display()
+                );
+                if run.status != Some(1) || run.drive != expected {
+                    failures.push(format!(
+                        "{label}: a capture exited with {:?}\n--- answers\n{}---",
+                        run.status, run.drive
+                    ));
+                }
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("programs built without the flags", runs, failures);
 }
 
 /// A program with a window reports each word of `MIDNIGHT_WINDOW` it does

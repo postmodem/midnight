@@ -1,0 +1,13 @@
+capture open.png: 0 ticks, 64x48, crc c83ea49b
+tick
+capture first.png: 1 tick, 64x48, crc 478dd1fc
+scale 1.5
+resize 30 21
+capture still.png: 1 tick, 64x48, crc 478dd1fc
+tick 2
+capture scaled.png: 3 ticks, 45x32, crc 97587593
+close
+tick
+capture again.png: 4 ticks, 20x10, crc 5060fa56
+tick
+capture again-ticked.png: 5 ticks, 20x10, crc 5060fa56

@@ -1,0 +1,16 @@
+# The frame Window.open showed, in the colour before it.
+capture open.png
+tick
+capture first.png
+# Nothing changes before a tick begins.
+scale 1.5
+resize 30 21
+capture still.png
+tick 2
+capture scaled.png
+close
+tick
+# The window is opened again: its alpha is ignored.
+capture again.png
+tick
+capture again-ticked.png

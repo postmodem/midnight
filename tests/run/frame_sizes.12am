@@ -1,0 +1,23 @@
+# A capture is the last frame: before the first tick, the frame Window.open
+# showed; after that, the frame of the last tick, at the pixel size the
+# window had in that tick. A window opened again starts at a scale of 1,
+# with a frame of its own.
+
+system report
+  on WindowResized do |size|
+    puts "tick #{Time.tick}: #{size.pixel_width}x#{size.pixel_height} pixels"
+  end
+end
+
+Window.background = Color(255, 128, 0)
+Window.open("Sizes", 64, 48)
+Window.background = Color(0, 0, 255)
+while Window.open?
+  World.tick
+end
+puts "closed after #{Time.tick} ticks"
+
+Window.background = Color(10, 20, 30, 0)
+Window.open("Again", 20, 10)
+World.run
+puts "closed again after #{Time.tick} ticks"

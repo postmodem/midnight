@@ -7,12 +7,15 @@
 #include "midnight_rt.h"
 
 /* MN_GPU_SYSTEMS is defined when the program declares a GPU system, and
- * MN_GPU as well when midnight_gpu.c is compiled with it. */
+ * MN_GPU when midnight_gpu.c is compiled with the program: for its GPU
+ * systems, its window, or both. MN_WINDOW is defined when the program has
+ * a window, and MN_FRAMES when midnight_window.c is compiled with it,
+ * which also means MN_GPU. */
 #ifdef MN_GPU
 #include "midnight_gpu.h"
-#ifndef MN_GPU_SYSTEMS
-#define MN_GPU_SYSTEMS
 #endif
+#ifdef MN_FRAMES
+#include "midnight_window.h"
 #endif
 
 /* MN_THREADS is defined when the program has a loop that can be split, and
@@ -975,6 +978,13 @@ static struct {
     char *tick_text;
     int64_t ticks_left;
     int64_t ticks_run;
+
+    /* The last frame: its size in pixels, its background, and the value of
+     * Time.tick when it was made. */
+    uint32_t frame_width;
+    uint32_t frame_height;
+    MnColor frame_background;
+    int64_t frame_tick;
 } win;
 
 /* Prints a command's answer. */
@@ -1005,8 +1015,19 @@ static _Noreturn void drive_fail(const char *format, ...) {
     mn_leave(1);
 }
 
-/* Reads MIDNIGHT_WINDOW and MIDNIGHT_DRIVE. */
+static void gpu_read_options(void);
+
+#ifdef MN_FRAMES
+static const char *gpu_device_start(struct WGPUSurfaceImpl *surface);
+
+const char *mn_window_device(struct WGPUSurfaceImpl *surface) {
+    return gpu_device_start(surface);
+}
+#endif
+
+/* Reads MIDNIGHT_WINDOW, MIDNIGHT_DRIVE and MIDNIGHT_GPU. */
 static void window_start(void) {
+    gpu_read_options();
     const char *list = getenv("MIDNIGHT_WINDOW");
     while (list && *list != '\0') {
         size_t len = strcspn(list, ",");
@@ -1199,6 +1220,15 @@ static void drive_tick_answer(bool ending) {
     win.tick_text = NULL;
 }
 
+/* Makes the frame of the window as the resource has it now. */
+static void window_frame(void) {
+    const MnWindow *window = mn_window_program->window;
+    win.frame_width = (uint32_t)window->pixel_width;
+    win.frame_height = (uint32_t)window->pixel_height;
+    win.frame_background = window->background;
+    win.frame_tick = mn_time.tick;
+}
+
 void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     (void)title;
     if (mn_world.in_tick) {
@@ -1240,6 +1270,7 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     window->pixel_width = win.pixel_width;
     window->pixel_height = win.pixel_height;
     window->open = true;
+    window_frame();
     if (win.info) {
         fflush(stdout);
         fprintf(stderr,
@@ -1286,14 +1317,229 @@ static void window_tick_begin(void) {
 }
 
 /* What happens when a tick has ended. */
-static void window_tick_end(void) { drive_tick_answer(false); }
+static void window_tick_end(void) {
+    if (win.open) window_frame();
+    drive_tick_answer(false);
+}
 
-/* Writes the last frame to `file`, for `capture`. */
+#ifdef MN_FRAMES
+/* ---- PNG ---- */
+
+/* The CRC-32 of PNG and zlib's gzip, continued from `crc` over `len`
+ * bytes; 0 to begin. */
+static uint32_t crc32_of(uint32_t crc, const unsigned char *bytes, size_t len) {
+    static uint32_t table[256];
+    if (table[1] == 0) {
+        for (uint32_t n = 0; n < 256; n++) {
+            uint32_t c = n;
+            for (int k = 0; k < 8; k++) c = c & 1 ? 0xedb88320u ^ (c >> 1) : c >> 1;
+            table[n] = c;
+        }
+    }
+    crc = ~crc;
+    for (size_t i = 0; i < len; i++) crc = table[(crc ^ bytes[i]) & 0xff] ^ (crc >> 8);
+    return ~crc;
+}
+
+/* Bytes written a bit at a time, the first bit in the lowest bit of a
+ * byte, as deflate writes them. */
+typedef struct PngOut {
+    unsigned char *data;
+    size_t len;
+    size_t capacity;
+    uint64_t bits;
+    int count;
+} PngOut;
+
+static void png_byte(PngOut *out, unsigned char byte) {
+    if (out->len == out->capacity) {
+        out->capacity = out->capacity ? out->capacity * 2 : 4096;
+        out->data = mn_realloc(out->data, out->capacity);
+    }
+    out->data[out->len++] = byte;
+}
+
+static void png_u32(PngOut *out, uint32_t value) {
+    for (int shift = 24; shift >= 0; shift -= 8) png_byte(out, (unsigned char)(value >> shift));
+}
+
+/* Writes the `n` low bits of `value`, lowest first. */
+static void png_bits(PngOut *out, uint32_t value, int n) {
+    out->bits |= (uint64_t)value << out->count;
+    out->count += n;
+    while (out->count >= 8) {
+        png_byte(out, (unsigned char)out->bits);
+        out->bits >>= 8;
+        out->count -= 8;
+    }
+}
+
+/* Writes a Huffman code of `n` bits, its highest bit first. */
+static void png_code(PngOut *out, uint32_t code, int n) {
+    uint32_t reversed = 0;
+    for (int i = 0; i < n; i++) reversed |= ((code >> i) & 1u) << (n - 1 - i);
+    png_bits(out, reversed, n);
+}
+
+/* A symbol of deflate's fixed literal and length code. */
+static void png_symbol(PngOut *out, uint32_t symbol) {
+    if (symbol < 144) {
+        png_code(out, 0x30 + symbol, 8);
+    } else if (symbol < 256) {
+        png_code(out, 0x190 + symbol - 144, 9);
+    } else if (symbol < 280) {
+        png_code(out, symbol - 256, 7);
+    } else {
+        png_code(out, 0xc0 + symbol - 280, 8);
+    }
+}
+
+/* A copy of `length` bytes, 3 to 258, from `distance` bytes back, 1 to
+ * 32768. */
+static void png_match(PngOut *out, uint32_t length, uint32_t distance) {
+    static const uint16_t length_base[29] = {
+        3,  4,  5,  6,  7,  8,  9,  10, 11,  13,  15,  17,  19,  23, 27,
+        31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258};
+    static const uint8_t length_extra[29] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                                             1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
+                                             4, 4, 4, 4, 5, 5, 5, 5, 0};
+    static const uint16_t distance_base[30] = {
+        1,    2,    3,    4,    5,    7,     9,     13,    17,  25,
+        33,   49,   65,   97,   129,  193,   257,   385,   513, 769,
+        1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577};
+    static const uint8_t distance_extra[30] = {0, 0, 0, 0, 1, 1, 2,  2,  3,  3,
+                                               4, 4, 5, 5, 6, 6, 7,  7,  8,  8,
+                                               9, 9, 10, 10, 11, 11, 12, 12, 13, 13};
+    int l = 28;
+    while (length_base[l] > length) l--;
+    png_symbol(out, 257 + (uint32_t)l);
+    png_bits(out, length - length_base[l], length_extra[l]);
+    int d = 29;
+    while (distance_base[d] > distance) d--;
+    png_code(out, (uint32_t)d, 5);
+    png_bits(out, distance - distance_base[d], distance_extra[d]);
+}
+
+/* How many bytes from `at`, at most 258, equal those `distance` bytes
+ * before them. */
+static uint32_t png_run(const unsigned char *raw, size_t at, size_t end,
+                        size_t distance) {
+    if (distance == 0 || distance > 32768 || at < distance) return 0;
+    uint32_t length = 0;
+    while (length < 258 && at + length < end &&
+           raw[at + length] == raw[at + length - distance]) {
+        length++;
+    }
+    return length;
+}
+
+/* Writes a chunk of the PNG from `out->data[start]` on: its length and
+ * type were written before the data, and its CRC follows. */
+static void png_chunk_end(PngOut *out, size_t start) {
+    size_t length = out->len - start - 4;
+    for (int i = 0; i < 4; i++) {
+        out->data[start - 4 + i] = (unsigned char)(length >> (24 - 8 * i));
+    }
+    png_u32(out, crc32_of(0, out->data + start, out->len - start));
+}
+
+static size_t png_chunk_begin(PngOut *out, const char *type) {
+    png_u32(out, 0);
+    size_t start = out->len;
+    for (int i = 0; i < 4; i++) png_byte(out, (unsigned char)type[i]);
+    return start;
+}
+
+/* The PNG file of `rgba`, 8 bits each of red, green, blue and alpha, in
+ * `out->data`. Every row is stored unfiltered, and the pixels are one
+ * deflate block of fixed codes in which a run of bytes equal to those of
+ * the pixel before, or of the pixel above, is a copy. */
+static void png_make(PngOut *out, uint32_t width, uint32_t height,
+                     const unsigned char *rgba) {
+    static const unsigned char signature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+    for (int i = 0; i < 8; i++) png_byte(out, signature[i]);
+
+    size_t start = png_chunk_begin(out, "IHDR");
+    png_u32(out, width);
+    png_u32(out, height);
+    png_byte(out, 8); /* bits a sample */
+    png_byte(out, 6); /* red, green, blue and alpha */
+    png_byte(out, 0);
+    png_byte(out, 0);
+    png_byte(out, 0);
+    png_chunk_end(out, start);
+
+    size_t stride = 1 + (size_t)width * 4;
+    size_t end = stride * height;
+    unsigned char *raw = mn_malloc(end);
+    for (uint32_t y = 0; y < height; y++) {
+        raw[y * stride] = 0;
+        memcpy(raw + y * stride + 1, rgba + (size_t)y * width * 4, (size_t)width * 4);
+    }
+    start = png_chunk_begin(out, "IDAT");
+    png_byte(out, 0x78);
+    png_byte(out, 0x01);
+    png_bits(out, 1, 1); /* the last block */
+    png_bits(out, 1, 2); /* of fixed codes */
+    size_t at = 0;
+    while (at < end) {
+        uint32_t left = png_run(raw, at, end, 4);
+        uint32_t up = png_run(raw, at, end, stride);
+        uint32_t length = left > up ? left : up;
+        if (length >= 3) {
+            png_match(out, length, left > up ? 4 : (uint32_t)stride);
+            at += length;
+        } else {
+            png_symbol(out, raw[at++]);
+        }
+    }
+    png_symbol(out, 256);
+    if (out->count > 0) png_bits(out, 0, 8 - out->count);
+    uint32_t a = 1;
+    uint32_t b = 0;
+    for (size_t i = 0; i < end; i++) {
+        a = (a + raw[i]) % 65521;
+        b = (b + a) % 65521;
+    }
+    png_u32(out, (b << 16) | a);
+    free(raw);
+    png_chunk_end(out, start);
+
+    start = png_chunk_begin(out, "IEND");
+    png_chunk_end(out, start);
+}
+#endif
+
+/* Writes the last frame to `file`, for `capture`, and answers with the
+ * number of ticks it is the picture of, its size and the CRC-32 of its
+ * pixels. */
 static void window_capture(const char *text, const char *file) {
-    (void)text;
     if (*file == '\0') drive_fail("`capture` takes the name of a file");
     if (!win.open) drive_fail("can't capture: no window is open");
-    drive_fail("can't capture: the program has no device");
+#ifndef MN_FRAMES
+    (void)text;
+    drive_fail("can't capture: the program was built without the window flags");
+#else
+    MnFrame frame = {win.frame_width, win.frame_height, win.frame_background};
+    size_t size = (size_t)frame.width * frame.height * 4;
+    unsigned char *rgba = mn_malloc(size);
+    const char *unable = mn_window_read(&frame, rgba);
+    if (unable) drive_fail("can't capture: %s", unable);
+    PngOut png = {0};
+    png_make(&png, frame.width, frame.height, rgba);
+    uint32_t crc = crc32_of(0, rgba, size);
+    free(rgba);
+    FILE *out = fopen(file, "wb");
+    bool written = out && fwrite(png.data, 1, png.len, out) == png.len;
+    if (out && fclose(out) != 0) written = false;
+    free(png.data);
+    if (!written) {
+        drive_fail("can't capture: can't write %s: %s", file, strerror(errno));
+    }
+    drive_answer("%s: %lld tick%s, %ux%u, crc %08x", text, (long long)win.frame_tick,
+                 win.frame_tick == 1 ? "" : "s", frame.width, frame.height,
+                 (unsigned)crc);
+#endif
 }
 
 /* When the program ends: answers the `tick` command, carries out the
@@ -1309,6 +1555,9 @@ static void window_finish(void) {
     win.drive = NULL;
     win.drive_done = true;
     win.open = false;
+#ifdef MN_FRAMES
+    mn_window_finish();
+#endif
 }
 #endif
 
@@ -3056,7 +3305,9 @@ void mn_gpu_submit(void) {
 
 #ifdef MN_GPU
 const char *mn_gpu_strict_refused;
+#endif
 
+#if defined(MN_GPU) && defined(MN_GPU_SYSTEMS)
 /* Runs the strict check on `device` and on the CPU, sets
  * mn_gpu_strict_refused when they differ or with `strict-cpu`, and prints
  * the `info` line that says where strict blocks run. */
@@ -3100,9 +3351,12 @@ static void gpu_strict_check(const char *device) {
 }
 #endif
 
-#ifdef MN_GPU_SYSTEMS
-/* Reads MIDNIGHT_GPU, chooses the device and prints the `info` line. */
-static void gpu_start(void) {
+#if defined(MN_GPU_SYSTEMS) || defined(MN_WINDOW)
+/* Reads MIDNIGHT_GPU, once. */
+static void gpu_read_options(void) {
+    static bool read;
+    if (read) return;
+    read = true;
     static const struct {
         const char *word;
         bool *option;
@@ -3132,17 +3386,41 @@ static void gpu_start(void) {
         list += len;
         if (*list == ',') list++;
     }
-
-    const char *device = NULL;
-    mn_gpu_rows = gpu_options.rows;
-#ifdef MN_GPU
-    if (!gpu_options.off) device = mn_gpu_device_start(gpu_options.software);
+}
 #endif
+
+#ifdef MN_GPU
+/* The device has been asked for. */
+static bool gpu_started;
+
+/* Starts the device, fitting `surface` when that is not NULL, unless it
+ * has been asked for before or MIDNIGHT_GPU has `off`, and prints the
+ * `info` line. Returns its name, or NULL when there is none. */
+static const char *gpu_device_start(struct WGPUSurfaceImpl *surface) {
+    if (gpu_started) return mn_gpu_device_name();
+    gpu_started = true;
+    const char *device = NULL;
+    if (!gpu_options.off) {
+        device = mn_gpu_device_start(gpu_options.software, surface);
+    }
     if (gpu_options.info) {
+        fflush(stdout);
         fprintf(stderr, "midnight: gpu: %s\n", device ? device : "no device");
     }
+    return device;
+}
+#endif
+
+#ifdef MN_GPU_SYSTEMS
+/* Reads MIDNIGHT_GPU, chooses the device and prints the `info` line. */
+static void gpu_start(void) {
+    gpu_read_options();
+    mn_gpu_rows = gpu_options.rows;
 #ifdef MN_GPU
+    const char *device = gpu_device_start(NULL);
     if (device && mn_gpu_check) gpu_strict_check(device);
+#else
+    if (gpu_options.info) fprintf(stderr, "midnight: gpu: no device\n");
 #endif
 }
 

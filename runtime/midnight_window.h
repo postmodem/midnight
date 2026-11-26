@@ -1,0 +1,85 @@
+/*
+ * What midnight_rt.c and midnight_window.c need from each other.
+ *
+ * midnight_window.c is the part of the runtime that shows a window, with
+ * SDL 3, and draws its frames on the device, with wgpu-native. It is
+ * compiled, with midnight_gpu.c, only into programs with a window, and only
+ * when both MIDNIGHT_GPU_FLAGS and MIDNIGHT_WINDOW_FLAGS are set. MN_FRAMES
+ * and MN_GPU are then defined and midnight_rt.c includes this header.
+ * Generated code never does.
+ *
+ * Everything here is called from the thread that runs the ticks.
+ *
+ * A frame is drawn into a texture midnight_window.c owns, RGBA8UnormSrgb,
+ * of the frame's size. A window that is shown gets the texture by one more
+ * pass, so a frame read back is the same with a window and without one.
+ */
+
+#ifndef MIDNIGHT_WINDOW_H
+#define MIDNIGHT_WINDOW_H
+
+#include "midnight_rt.h"
+
+/* A frame: the picture of the world after a tick. Its alpha is ignored. */
+typedef struct MnFrame {
+    uint32_t width;  /* pixels, 1 to MN_WINDOW_LARGEST */
+    uint32_t height; /* pixels, 1 to MN_WINDOW_LARGEST */
+    MnColor background;
+} MnFrame;
+
+/* What the desktop says of a window that is shown. */
+typedef struct MnWindowSizes {
+    int64_t width;  /* points */
+    int64_t height; /* points */
+    int64_t pixel_width;
+    int64_t pixel_height;
+    /* The person at the desktop has asked for the window to be closed. */
+    bool closed;
+} MnWindowSizes;
+
+/* ---- In midnight_rt.c ---------------------------------------------------- */
+
+struct WGPUSurfaceImpl;
+
+/* Starts the device, fitting `surface` when that is not NULL, unless it has
+ * been asked for before or MIDNIGHT_GPU has `off`, and prints MIDNIGHT_GPU's
+ * `info` line. Returns the device's name, or NULL when there is none. */
+const char *mn_window_device(struct WGPUSurfaceImpl *surface);
+
+/* ---- In midnight_window.c ------------------------------------------------ */
+
+/* Shows a window of `width` by `height` points titled `title`, with SDL's
+ * video driver for Wayland before the one for X11. Starts the device
+ * through mn_window_device when there is none, asking for one that can draw
+ * to the window. Returns NULL and the window's sizes in `sizes`, with
+ * `how` set to where it is shown and how frames reach it ("wayland,
+ * mailbox"); or why no window can be shown, with nothing left open but SDL
+ * and the device. Neither string needs to be freed. Call it while no
+ * window is shown. */
+const char *mn_window_show(const char *title, int64_t width, int64_t height,
+                           MnWindowSizes *sizes, const char **how);
+
+/* Takes what has happened to the shown window since the last call: its
+ * sizes now, and whether a close was asked for. A change of pixel size
+ * configures the surface again. */
+void mn_window_poll(MnWindowSizes *sizes);
+
+/* Draws `frame` into the frame texture and, while a window is shown and
+ * not hidden, minimized or occluded, presents it. Never waits for the
+ * display. */
+void mn_window_draw(const MnFrame *frame);
+
+/* Writes the pixels of `frame` to `rgba`, width * height * 4 bytes, rows
+ * from the top: reads the frame texture back, after drawing the frame into
+ * it when it holds another. Starts the device through mn_window_device when
+ * there is none. Returns NULL, or why the frame can't be read. */
+const char *mn_window_read(const MnFrame *frame, unsigned char *rgba);
+
+/* Closes the shown window. */
+void mn_window_close(void);
+
+/* Releases everything midnight_window.c made, and shuts SDL down when it
+ * was started. Call before mn_gpu_device_finish. */
+void mn_window_finish(void);
+
+#endif

@@ -2,10 +2,11 @@
  * What midnight_rt.c and midnight_gpu.c need from each other.
  *
  * midnight_gpu.c is the part of the runtime that talks to wgpu-native. It
- * is compiled only into programs that declare a GPU system, and only when
- * the compiler was given the flags to build it (MIDNIGHT_GPU_FLAGS).
- * MN_GPU is then defined and midnight_rt.c includes this header. Generated
- * code never does.
+ * is compiled only into programs that declare a GPU system or have a
+ * window, and only when the compiler was given the flags to build it
+ * (MIDNIGHT_GPU_FLAGS; for a window, MIDNIGHT_WINDOW_FLAGS as well). MN_GPU
+ * is then defined and midnight_rt.c includes this header. Generated code
+ * never does.
  *
  * Every column a GPU block names has, per table, a GPU buffer holding the
  * column's bytes, and one of three states: only the CPU copy is current,
@@ -53,11 +54,31 @@ extern const char *mn_gpu_strict_refused;
 
 /* ---- In midnight_gpu.c --------------------------------------------------- */
 
-/* Chooses the device: the fastest adapter of the primary backends, with
- * the limits it offers. An adapter that runs on the CPU is taken only with
- * `software`. Returns the device's name for the `info` line, or NULL when
- * there is none. */
-const char *mn_gpu_device_start(bool software);
+/* The wgpu-native handles, named by their struct tags so that this header
+ * needs no wgpu-native header. */
+struct WGPUInstanceImpl;
+struct WGPUAdapterImpl;
+struct WGPUDeviceImpl;
+struct WGPUQueueImpl;
+struct WGPUSurfaceImpl;
+
+/* Chooses the device: the fastest adapter of the primary backends that can
+ * draw to `surface` when that is not NULL, with the limits it offers. An
+ * adapter that runs on the CPU is taken only with `software`. Returns the
+ * device's name for the `info` line, or NULL when there is none. Call it
+ * once at most. */
+const char *mn_gpu_device_start(bool software, struct WGPUSurfaceImpl *surface);
+
+/* The device's name, or NULL when no device has been started. */
+const char *mn_gpu_device_name(void);
+
+/* What midnight_window.c draws with: the instance, created when there is
+ * none, and the adapter, device and queue of the device, NULL until it has
+ * been started. They stay owned by midnight_gpu.c. */
+struct WGPUInstanceImpl *mn_gpu_instance(void);
+struct WGPUAdapterImpl *mn_gpu_adapter(void);
+struct WGPUDeviceImpl *mn_gpu_device(void);
+struct WGPUQueueImpl *mn_gpu_queue(void);
 
 /* Records a block's shader over every table its outer query matches and
  * returns NULL. The work is submitted later, unless the block is
@@ -103,8 +124,9 @@ void mn_gpu_device_submit(void);
  * finished everything submitted to it. */
 void mn_gpu_device_wait(void);
 
-/* Releases every column copy and the device. Call after
- * mn_gpu_device_forget has been called for every block. */
+/* Releases every column copy, the device and the instance. Call after
+ * mn_gpu_device_forget has been called for every block, and after the
+ * window has released what it made with them. */
 void mn_gpu_device_finish(void);
 
 #endif

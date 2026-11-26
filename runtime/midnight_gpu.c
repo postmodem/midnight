@@ -106,6 +106,7 @@ typedef struct Fetch {
 
 static struct {
     WGPUInstance instance;
+    WGPUAdapter adapter;
     WGPUDevice device;
     WGPUQueue queue;
     char name[160];
@@ -1665,19 +1666,31 @@ static const char *backend_name(WGPUBackendType backend) {
     }
 }
 
-const char *mn_gpu_device_start(bool software) {
-    WGPUInstanceExtras extras = {0};
-    extras.chain.sType = (WGPUSType)WGPUSType_InstanceExtras;
-    extras.backends = WGPUInstanceBackend_Primary;
-    WGPUInstanceDescriptor instance = {0};
-    instance.nextInChain = &extras.chain;
-    gpu.instance = wgpuCreateInstance(&instance);
-    if (!gpu.instance) return NULL;
+WGPUInstance mn_gpu_instance(void) {
+    if (!gpu.instance) {
+        WGPUInstanceExtras extras = {0};
+        extras.chain.sType = (WGPUSType)WGPUSType_InstanceExtras;
+        extras.backends = WGPUInstanceBackend_Primary;
+        WGPUInstanceDescriptor instance = {0};
+        instance.nextInChain = &extras.chain;
+        gpu.instance = wgpuCreateInstance(&instance);
+    }
+    return gpu.instance;
+}
+
+WGPUAdapter mn_gpu_adapter(void) { return gpu.device ? gpu.adapter : NULL; }
+WGPUDevice mn_gpu_device(void) { return gpu.device; }
+WGPUQueue mn_gpu_queue(void) { return gpu.queue; }
+const char *mn_gpu_device_name(void) { return gpu.device ? gpu.name : NULL; }
+
+const char *mn_gpu_device_start(bool software, WGPUSurface surface) {
+    if (!mn_gpu_instance()) return NULL;
 
     WGPUAdapter adapter = NULL;
     WGPURequestAdapterOptions options = {0};
     options.featureLevel = WGPUFeatureLevel_Core;
     options.powerPreference = WGPUPowerPreference_HighPerformance;
+    options.compatibleSurface = surface;
     WGPURequestAdapterCallbackInfo adapter_callback = {0};
     adapter_callback.mode = WGPUCallbackMode_AllowSpontaneous;
     adapter_callback.callback = on_adapter;
@@ -1707,13 +1720,10 @@ const char *mn_gpu_device_start(bool software) {
             wgpuAdapterRequestDevice(adapter, &device, device_callback);
             wgpuInstanceProcessEvents(gpu.instance);
         }
-        wgpuAdapterRelease(adapter);
+        if (!gpu.device) wgpuAdapterRelease(adapter);
     }
-    if (!gpu.device) {
-        wgpuInstanceRelease(gpu.instance);
-        gpu.instance = NULL;
-        return NULL;
-    }
+    if (!gpu.device) return NULL;
+    gpu.adapter = adapter;
     gpu.queue = wgpuDeviceGetQueue(gpu.device);
     gpu.trip = 1;
     gpu.max_buffer = limits.maxBufferSize;
@@ -1733,7 +1743,11 @@ const char *mn_gpu_device_start(bool software) {
 }
 
 void mn_gpu_device_finish(void) {
-    if (!gpu.device) return;
+    if (!gpu.device) {
+        if (gpu.instance) wgpuInstanceRelease(gpu.instance);
+        gpu.instance = NULL;
+        return;
+    }
     mn_gpu_device_wait();
     for (uint32_t t = 0; t < mn_world.table_count; t++) {
         MnTable *table = mn_world.tables[t];
@@ -1769,8 +1783,10 @@ void mn_gpu_device_finish(void) {
     gpu.finishing = true;
     wgpuQueueRelease(gpu.queue);
     wgpuDeviceRelease(gpu.device);
+    wgpuAdapterRelease(gpu.adapter);
     wgpuInstanceRelease(gpu.instance);
     gpu.queue = NULL;
     gpu.device = NULL;
+    gpu.adapter = NULL;
     gpu.instance = NULL;
 }

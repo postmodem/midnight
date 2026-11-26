@@ -7,6 +7,8 @@ const RUNTIME_H: &str = include_str!("../runtime/midnight_rt.h");
 const RUNTIME_C: &str = include_str!("../runtime/midnight_rt.c");
 const GPU_H: &str = include_str!("../runtime/midnight_gpu.h");
 const GPU_C: &str = include_str!("../runtime/midnight_gpu.c");
+const WINDOW_H: &str = include_str!("../runtime/midnight_window.h");
+const WINDOW_C: &str = include_str!("../runtime/midnight_window.c");
 const POOL_H: &str = include_str!("../runtime/midnight_pool.h");
 const POOL_C: &str = include_str!("../runtime/midnight_pool.c");
 
@@ -82,19 +84,40 @@ pub fn run(c_source: &str, debug: bool, parts: Parts) -> Result<u8, String> {
     Ok(exit_code(status))
 }
 
-/// The flags that build and link `midnight_gpu.c`, when the program has a
-/// GPU system and `MIDNIGHT_GPU_FLAGS` gives them. Says so on standard
-/// error when the program has one and the variable does not.
-fn gpu_flags(gpu: bool) -> Option<String> {
-    if !gpu {
-        return None;
-    }
-    let flags = std::env::var("MIDNIGHT_GPU_FLAGS").unwrap_or_default();
-    if flags.trim().is_empty() {
+/// The value of a flags variable, or `None` when it is unset or blank.
+fn flags_variable(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|flags| !flags.trim().is_empty())
+}
+
+/// The flags that build and link `midnight_gpu.c` and, for a window,
+/// `midnight_window.c`. The device part is built for a GPU system when
+/// `MIDNIGHT_GPU_FLAGS` is set, and for a window when that and
+/// `MIDNIGHT_WINDOW_FLAGS` both are; the window part for a window when
+/// both are. Says on standard error what runs without them.
+fn part_flags(gpu: bool, window: bool) -> (Option<String>, Option<String>) {
+    let gpu_flags = flags_variable("MIDNIGHT_GPU_FLAGS");
+    let window_flags = flags_variable("MIDNIGHT_WINDOW_FLAGS");
+    if gpu && gpu_flags.is_none() {
         eprintln!("midnight: MIDNIGHT_GPU_FLAGS is not set; GPU systems will run on the CPU");
-        return None;
     }
-    Some(flags)
+    if window {
+        let missing = match (&gpu_flags, &window_flags) {
+            (None, None) => Some("MIDNIGHT_GPU_FLAGS and MIDNIGHT_WINDOW_FLAGS are"),
+            (None, Some(_)) => Some("MIDNIGHT_GPU_FLAGS is"),
+            (Some(_), None) => Some("MIDNIGHT_WINDOW_FLAGS is"),
+            (Some(_), Some(_)) => None,
+        };
+        if let Some(missing) = missing {
+            eprintln!(
+                "midnight: {missing} not set; the window will run only headless, and capture nothing"
+            );
+        }
+    }
+    let frames = window && gpu_flags.is_some() && window_flags.is_some();
+    let device = (gpu || frames).then_some(gpu_flags).flatten();
+    (device, window_flags.filter(|_| frames))
 }
 
 fn compile_in(
@@ -120,10 +143,14 @@ fn compile_in(
     write("program.c", c_source)?;
     write("midnight_rt.h", RUNTIME_H)?;
     write("midnight_rt.c", RUNTIME_C)?;
-    let gpu_flags = gpu_flags(gpu);
+    let (gpu_flags, window_flags) = part_flags(gpu, window);
     if gpu_flags.is_some() {
         write("midnight_gpu.h", GPU_H)?;
         write("midnight_gpu.c", GPU_C)?;
+    }
+    if window_flags.is_some() {
+        write("midnight_window.h", WINDOW_H)?;
+        write("midnight_window.c", WINDOW_C)?;
     }
     if threads {
         write("midnight_pool.h", POOL_H)?;
@@ -148,10 +175,14 @@ fn compile_in(
     if gpu_flags.is_some() {
         command.arg("-DMN_GPU");
     }
-    // The runtime keeps the window's state and reads MIDNIGHT_WINDOW and
-    // MIDNIGHT_DRIVE when the program has a window.
+    // The runtime keeps the window's state and reads MIDNIGHT_WINDOW,
+    // MIDNIGHT_DRIVE and MIDNIGHT_GPU when the program has a window, and
+    // shows it and draws its frames when midnight_window.c is built with it.
     if window {
         command.arg("-DMN_WINDOW");
+    }
+    if window_flags.is_some() {
+        command.arg("-DMN_FRAMES");
     }
     // The runtime reads MIDNIGHT_THREADS and splits loops when the pool is
     // built with it.
@@ -166,12 +197,15 @@ fn compile_in(
     if gpu_flags.is_some() {
         command.arg(dir.join("midnight_gpu.c"));
     }
+    if window_flags.is_some() {
+        command.arg(dir.join("midnight_window.c"));
+    }
     if threads {
         command.arg(dir.join("midnight_pool.c"));
     }
     command.arg("-lm");
     // Libraries come after the files that use them.
-    if let Some(flags) = &gpu_flags {
+    for flags in [&gpu_flags, &window_flags].into_iter().flatten() {
         command.args(flags.split_whitespace());
     }
 

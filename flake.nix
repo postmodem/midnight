@@ -150,6 +150,7 @@
           "gpu_stats_match_expected"
           "gpu_driver_finds_its_parts"
           "gpu_strict_div_sqrt"
+          "window_frames"
         ];
 
       # The suite's ThreadSanitizer tests.
