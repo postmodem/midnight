@@ -1,6 +1,6 @@
 # 0005 — Several cores: loops split across CPU threads, with the output of one
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0004
 
 ## Goal
