@@ -1,6 +1,6 @@
 # The Midnight language
 
-This document describes Midnight 0.5: the language core specified by
+This document describes Midnight 0.6: the language core specified by
 [`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
 systems specified by
 [`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), what moves
@@ -8,8 +8,9 @@ between CPU and GPU memory, specified by
 [`specs/0003-moving-less.md`](../specs/0003-moving-less.md), strict GPU
 systems, specified by
 [`specs/0004-strict-gpu-systems.md`](../specs/0004-strict-gpu-systems.md),
-and loops on several cores, specified by
-[`specs/0005-several-cores.md`](../specs/0005-several-cores.md).
+loops on several cores, specified by
+[`specs/0005-several-cores.md`](../specs/0005-several-cores.md), and a
+window, specified by [`specs/0006-a-window.md`](../specs/0006-a-window.md).
 It is the reference for what a program means. Where the compiler and this
 document disagree, one of them has a bug.
 
@@ -115,9 +116,10 @@ system tag then true unless until when while
 
 `gpu` is used in one place, before `system`: see [GPU systems](#gpu-systems).
 
-The names `Int`, `Float`, `Bool`, `String`, `Entity`, `World`, `Time` and
-`Math`, and the compact type names (`Float32`, `Int8`, `Int16`, `Int32`,
-`UInt8`, `UInt16`, `UInt32`), are built in and can't be redefined.
+The names `Int`, `Float`, `Bool`, `String`, `Entity`, `World`, `Time`,
+`Math`, `Window`, `Color`, `WindowResized` and `WindowClosed`, and the
+compact type names (`Float32`, `Int8`, `Int16`, `Int32`, `UInt8`,
+`UInt16`, `UInt32`), are built in and can't be redefined.
 
 **Literals.**
 
@@ -389,7 +391,7 @@ iteration. This holds for every loop form, including `each` and `on`. The
 one exception is the `each` of a [GPU system](#gpu-systems), which `break`
 cannot leave.
 
-Blocks are not values in 0.5. `do |…| … end` is accepted only by the loop
+Blocks are not values in 0.6. `do |…| … end` is accepted only by the loop
 forms in this document.
 
 ## Functions
@@ -683,7 +685,248 @@ The built-in resource `Time` describes the clock of the simulation:
 | `Time.elapsed` | `Float` | Simulated seconds completed. Read-only.              |
 
 At the end of each tick, `Time.tick` goes up by one and `Time.elapsed` by
-`Time.dt`. Ticks run as fast as they can; nothing waits for real time.
+`Time.dt`. Ticks run as fast as they can; nothing waits for real time,
+unless a window is open: see [The window](#the-window).
+
+## The window
+
+```ruby
+Window.background = Color(16, 16, 32)
+Window.open("Drift", 800, 600)
+
+system report
+  on WindowResized do |size|
+    puts "#{size.width} by #{size.height}"
+  end
+end
+
+World.run
+puts "closed after #{Time.tick} ticks"
+```
+
+A program can open a window, keep real time while it is open, learn that
+it was resized or closed, and show a frame at the end of every tick. A
+frame is the window's background colour and nothing more.
+
+The names `Window`, `Color`, `WindowResized` and `WindowClosed` are built
+in and can't be declared by a program. A program that names `Window` or
+one of the two events **has a window**. `Color` alone is a struct like any
+other.
+
+**`Color`** is a struct, as if declared
+
+```ruby
+struct Color
+  r: UInt8 = 0
+  g: UInt8 = 0
+  b: UInt8 = 0
+  a: UInt8 = 255
+end
+```
+
+Its components are the bytes of an sRGB colour, the numbers a paint
+program or a style sheet shows: `Color(255, 128, 0)` is orange. It is a
+plain value with the rules of any struct, and may be a field of a
+component. A component out of range is the error it is for any `UInt8`.
+
+**`Window`** is a resource with one instance, like `Time`:
+
+| Member                 | Type    | Meaning                                         |
+| ---------------------- | ------- | ----------------------------------------------- |
+| `Window.open(title, width, height)` | | Opens the window. `title` is a `String`; `width` and `height` are `Int`, in points. A statement: it has no value. |
+| `Window.open?`         | `Bool`  | Whether a window is open. Read-only.            |
+| `Window.width`         | `Int`   | Width in points. Read-only.                     |
+| `Window.height`        | `Int`   | Height in points. Read-only.                    |
+| `Window.pixel_width`   | `Int`   | Width of a frame in pixels. Read-only.          |
+| `Window.pixel_height`  | `Int`   | Height of a frame in pixels. Read-only.         |
+| `Window.background`    | `Color` | What a frame is filled with. Starts as `Color(0, 0, 0)`. Its `a` is ignored: a window is opaque. |
+
+A **point** is the unit a desktop measures windows in. On most displays a
+point is a pixel; on a display with a scale of 2 a window of 800 by 600
+points has frames of 1600 by 1200 pixels. A program asks for a size in
+points, so a window is the same size to the eye on every display, and
+reads the pixel size where it needs the exact grid.
+
+Before a window is opened the four sizes are 0. After one is closed they
+keep their last values. The fields are read wherever a resource field is,
+in a GPU system too. Assigning to any field but `background` is a compile
+error.
+
+**`Window.open`** follows the rule of `World.tick`: it is called from
+top-level code; it is a compile error in the body of an `each` and in a
+GPU system, and a run-time error while a tick is in progress or when it is
+reached through a function inside an `each`. It is also a run-time error
+when a window is already open, when `width` or `height` is less than 1 or
+more than 8192, and when no window can be shown (see
+[Without a display](#without-a-display)). When it returns, the window is
+open, shows a frame of the background colour, and the four sizes hold what
+the desktop gave it, which need not be what was asked for. A window may be
+opened again after it was closed.
+
+**Events.** What happens to the window reaches the program when a tick
+begins, before the first system runs, as events:
+
+```ruby
+event WindowResized
+  width: Int
+  height: Int
+  pixel_width: Int
+  pixel_height: Int
+end
+
+event WindowClosed
+end
+```
+
+- `WindowResized` is emitted when any of the four sizes has changed since
+  the last tick began, once, with the sizes the window has now. The fields
+  of `Window` change at the same moment and at no other: during a tick
+  they do not change.
+- `WindowClosed` is emitted when the person at the desktop has closed the
+  window. The window is gone when the tick begins: `Window.open?` is
+  false.
+
+They are received with `on`, by the rules of every event: emitted at the
+start of a tick, they are seen by every `on` of that tick. Emitting one of
+them is a compile error.
+
+**Closing the window ends `World.run`.** In the tick that begins with
+`WindowClosed`, the runtime also calls `World.stop`. So a program whose
+last statement is `World.run` ends when its window is closed, having run
+one last tick in which it can react, and a program that ticks in a loop of
+its own writes
+
+```ruby
+while Window.open?
+  World.tick
+end
+```
+
+When a program ends, by its last statement, `exit` or a run-time error,
+its window closes.
+
+**Ticks keep real time while a window is open.** A tick does not begin
+until `Time.dt` real seconds after the tick before it began. With the
+default `Time.dt` that is sixty ticks a second, on every display. A tick
+that takes longer than `Time.dt` is followed at once by the next, and the
+time lost is not made up: the program runs slow, never in a burst. The
+first tick after `Window.open` begins at once. `Time.dt` is read each time,
+so a program that changes it changes its pace.
+
+Nothing about a tick depends on that wait. `Time.tick`, `Time.dt` and
+`Time.elapsed` are the simulated values they always were, and a program
+with no window open, a headless one, or a driven one ticks as fast as it
+can.
+
+**A frame for each tick.** When a tick ends while a window is open, the
+window shows a new **frame**: the picture of the world after that tick, of
+`Window.pixel_width` by `Window.pixel_height` pixels. In 0.6 the picture is
+`Window.background`. Showing a frame never waits for the display, so the
+display's rate changes neither the pace nor the output of a program, and a
+window that is hidden, minimized or on another workspace costs the program
+nothing: its ticks go on. The frames are drawn on the device that GPU
+systems use; a window needs one (see [Without a display](#without-a-display)).
+
+**Determinism.** A window brings two things from outside into a program:
+its sizes and the moment it is closed. Both enter only when a tick begins.
+A headless run takes them from its commands alone, so it prints the same
+output on every machine and for every run. A frame of 0.6 is the same
+picture, pixel for pixel, on every device: each byte of the background is
+cleared as the linear value whose sRGB encoding it is.
+
+### Without a display
+
+`MIDNIGHT_WINDOW` is a comma-separated list of words, read when the
+program starts, by programs with a window only:
+
+| Word       | Meaning                                                       |
+| ---------- | ------------------------------------------------------------- |
+| `headless` | Show no window. `Window.open` gives a window of exactly the size asked for, at a scale of 1, that exists in the program only. Ticks are not held to real time. |
+| `info`     | Print one line to standard error when a window opens: its sizes, and where it is shown (`wayland`, `x11` or `cocoa`) and how frames reach it (`mailbox`, `immediate` or `fifo`), or `headless`. |
+
+A word that is not in the table is reported once, when the program starts.
+A headless window touches no desktop, and no device until a frame is
+captured. Nothing closes a headless window but its commands: without
+`MIDNIGHT_DRIVE`, a program that waits for it with `World.run` runs until
+it is stopped from outside.
+
+Without `headless`, a program that cannot show a window stops at
+`Window.open` with a run-time error that says why and names
+`MIDNIGHT_WINDOW=headless`:
+
+```
+drift.12am:2: runtime error: Window.open: no window can be shown: no display was found; set MIDNIGHT_WINDOW=headless to run without one
+```
+
+The reasons are: `the program was built without the window flags`,
+`` MIDNIGHT_GPU has `off` ``, `no display was found`, `no device can draw
+to the desktop`, `DEVICE can't draw to the desktop`, and failures of the
+window system that name what failed. On Linux a display is found only
+through `WAYLAND_DISPLAY`, `WAYLAND_SOCKET` or `DISPLAY`; Wayland is tried
+before X11.
+
+`MIDNIGHT_DRIVE=FILE` gives a program with a window its **commands**: one
+to a line, read from a file or a named pipe. A line that is empty or
+begins with `#` is skipped, and the spaces around a command are. With
+commands a program is **driven**: its ticks are not held to real time,
+headless or not, and before each tick begins, while a window is open, the
+runtime carries out commands until one lets the tick run.
+
+| Command        | Meaning                                                    |
+| -------------- | ---------------------------------------------------------- |
+| `tick`, `tick N` | Let the next tick, or the next `N` ticks, run.           |
+| `resize W H`   | The window becomes `W` by `H` points, each from 1 to 8192, as if resized at the desktop. Headless only. |
+| `scale S`      | A point becomes `S` pixels, a decimal number from 0.5 to 4 with at most six places; a pixel size is the size in points times `S`, halves rounded up. Headless only. |
+| `close`        | The window is closed, as if at the desktop.                |
+| `capture FILE` | Write the last frame to `FILE` as a PNG.                   |
+
+- `resize`, `scale` and `close` take effect in the tick that begins next,
+  through the events above. A `tick N` counts every tick of the program
+  while it is carried out, window open or not.
+- The last frame is the frame of the last tick that ended while the window
+  was open, or, before such a tick, the one `Window.open` showed.
+  `capture` writes it as a PNG of 8 bits each of red, green, blue and
+  alpha, `Window.pixel_width` by `Window.pixel_height`, alpha 255. The
+  same pixels always give the same file.
+- When the commands run out the window is closed, as by `close`, and from
+  then on ticks run freely.
+- When the program ends, the commands up to the next `tick` are carried
+  out.
+- Each command is answered with one line on standard error, when it has
+  been carried out: `midnight: drive: ` and the command as it was written.
+  For `tick` the line comes when its last tick has finished, and says how
+  many ticks have run if the program ended first. For `capture` it adds
+  the value `Time.tick` had when the frame was made, its size in pixels and
+  the CRC-32 of its pixels, four bytes each, rows from the top:
+
+  ```
+  midnight: drive: tick 3
+  midnight: drive: capture after.png: 3 ticks, 320x200, crc 5f1d02c9
+  midnight: drive: tick 5: the program ended after 2 ticks
+  ```
+
+- A command that is not in the table, or has the wrong arguments, a
+  `resize` or `scale` in a program that is not headless or that would make
+  a frame larger than 8192 pixels on a side, and a `capture` that cannot
+  be made (no window is open, no device, the file cannot be written) stop
+  the program with status 1 and a line that names the file and the line
+  number:
+
+  ```
+  midnight: drive: steps.drive:4: can't capture: no window is open
+  ```
+
+- A file of commands that cannot be opened stops the program with status
+  1 when the first command is wanted.
+
+`MIDNIGHT_GPU=off` means what it says for frames as well: the program uses
+no device, so it shows no window and captures nothing. A window that is
+shown uses the device the program's GPU systems use, or, in a program
+without one, asks for an adapter that can draw to it; a headless window
+opens the device at its first `capture`. A failure of the window or its
+surface after `Window.open` has returned prints `midnight: window error:
+…` and ends the program with status 70, as an error from the device does;
+so does a window the desktop makes larger than 8192 pixels on a side.
 
 ## GPU systems
 
@@ -1374,9 +1617,10 @@ through other functions, keeps to all of these:
    order when the loop ends, which is the order one thread makes them in.
    A component that is added, and an event, are plain values under rule 1.
 6. **None of these:** `spawn`; `on`; `rand`, `rand(n)` and `srand`; `puts`
-   and `print`; `clock`, `sleep` and `exit`; `World.stop`; `World.tick`
-   and `World.run`, which a function may hold and which stop the program
-   when reached inside an `each`; a `break` that leaves this `each`; and a
+   and `print`; `clock`, `sleep` and `exit`; `World.stop`; `World.tick`,
+   `World.run` and `Window.open`, which a function may hold and which stop
+   the program when reached inside an `each`; a `break` that leaves this
+   `each`; and a
    `return` anywhere in the block, loops inside it included. A `return` in
    a called function belongs to that function.
 7. **Device memory.** A component that some GPU block names as a term is
@@ -1477,7 +1721,7 @@ place, `at line N` or ``in `f` (line N), called at line K``:
 | `` `R.f += …` at line N is a `Float` sum`` / ``… is a sum into a compact field`` | 4 |
 | `` `R.f` is summed and also read`` / ``… and also assigned`` | 4 |
 | `` `R.f += …` is in a called function: `f` (line N), called at line K`` | 4 |
-| `` `spawn` ``, `` `on` ``, `` `rand` ``, `` `srand` ``, `` `puts` ``, `` `print` ``, `` `clock` ``, `` `sleep` ``, `` `exit` ``, `` `World.stop` ``, `` `World.tick` ``, `` `World.run` ``, `` `break` ``, `` `return` `` | 6 |
+| `` `spawn` ``, `` `on` ``, `` `rand` ``, `` `srand` ``, `` `puts` ``, `` `print` ``, `` `clock` ``, `` `sleep` ``, `` `exit` ``, `` `World.stop` ``, `` `World.tick` ``, `` `World.run` ``, `` `Window.open` ``, `` `break` ``, `` `return` `` | 6 |
 | ``reads `C`, which the GPU system `name` uses, by `e[C]` `` / ``… in the nested `each` `` | 7 |
 
 A sum written with `-=` is printed as `+= …` too. For a nested `each` the
@@ -1928,10 +2172,15 @@ The runtime errors are:
 - storing an `Int` that does not fit in a compact integer field or element,
 - an `Int` raised to a negative power,
 - `rand(n)` with `n <= 0`,
-- `World.tick` or `World.run` called while a tick is in progress, or from
-  a function called inside the body of an `each`,
+- `World.tick`, `World.run` or `Window.open` called while a tick is in
+  progress, or from a function called inside the body of an `each`,
+- `Window.open` while a window is open, with a width or height less than 1
+  or more than 8192, or when no window can be shown,
 - an `Int` that does not fit in 32 bits where a GPU system reads it from a
   resource field or a constant.
+
+The commands of `MIDNIGHT_DRIVE` stop a program with errors of their own;
+see [Without a display](#without-a-display).
 
 In a GPU system an error is reported when the `each` it happened in ends,
 and its message names no value; the last error in the list is reported
@@ -1942,7 +2191,7 @@ A loop that runs on several cores stops with the error it stops with on
 one thread: that of the earliest failing row in visiting order. See
 [Several cores](#several-cores).
 
-There are no exceptions to catch in 0.5.
+There are no exceptions to catch in 0.6.
 
 ## Grammar
 
@@ -2027,15 +2276,22 @@ document. The `NL` after `do |…|`, and the one after the last statement of a
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.5
+## Not in 0.6
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
 blocks as values, modules and namespaces, exceptions, input (standard input,
 files, command-line arguments), arithmetic at 32 bits outside GPU systems,
 system ordering constraints, running several systems at the same time,
-windows, graphics and audio, relationships between entities, and calling C
-libraries.
+relationships between entities, and calling C libraries.
+
+A window leaves these out: drawing anything but the background; keyboard,
+mouse, controllers, text input and the clipboard; sound; more than one
+window at a time; closing, resizing, moving or renaming the window from
+the program, full screen, the cursor and an icon; refusing a close the
+user asked for; running faster or slower than real time while a window is
+open; and reading entities, components or resources over the commands'
+pipe.
 
 A loop on several cores leaves these out: `Float` sums, strings and lists,
 `spawn`, `rand` and output. A loop that has one of them runs on one core.

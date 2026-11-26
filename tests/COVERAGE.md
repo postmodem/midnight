@@ -8,7 +8,9 @@ it. Names without a directory are `tests/run/NAME.12am` (with `NAME.out`);
 `tests/plan/NAME.12am` (with `NAME.plan`); `loops/NAME` is
 `tests/loops/NAME.12am` (with `NAME.loops`). A program of `tests/run` with a
 `NAME.stats` file has its `MIDNIGHT_GPU=stats` lines checked on a device,
-and one with a `NAME.split` file has the loops it splits checked.
+and one with a `NAME.split` file has the loops it splits checked. A program
+with a window gets the commands of its `NAME.drive` file, and one with a
+`NAME.frames` file has its answers and captures checked on a device.
 
 Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
@@ -17,8 +19,8 @@ The expected output of the `cores_*` programs is what each prints on one
 thread, read against its source; every run on several threads must give
 the same.
 
-Counts: 277 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
-344 in `tests/fail`, 87 in `tests/panic`, 16 in `tests/plan`, 37 in
+Counts: 286 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
+354 in `tests/fail`, 92 in `tests/panic`, 16 in `tests/plan`, 38 in
 `tests/loops`.
 
 ## A first program, The model
@@ -42,7 +44,7 @@ Counts: 277 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `a!=b` is `a != b` | `lex_names` |
 | Conditional operator written with spaces after a `?` name | `lex_names`, `fn_question_bang_names`, `fn_mutual_recursion` |
 | Keywords are reserved, `gpu` and `strict` included | `fail/syntax_keyword_as_variable`, `fail/syntax_gpu_reserved`, `fail/syntax_strict_reserved` |
-| Built-in names can't be redefined | `fail/builtin_type_redefined`, `fail/builtin_compact_type_redefined`, `fail/builtin_name_redefined_constant` |
+| Built-in names can't be redefined | `fail/builtin_type_redefined`, `fail/builtin_compact_type_redefined`, `fail/builtin_name_redefined_constant`, `fail/window_builtin_window`, `fail/window_builtin_color`, `fail/window_builtin_event` |
 | `Int` literals: `42`, `1_000_000`, `0xff`, `0b1010` | `lex_int_literals`, `tos_int`, `const_expressions` |
 | `Float` literals: `3.14`, `1_000.5`, `1e-3`, `2.5e6` | `lex_float_literals`, `tos_float` |
 | `Bool` literals | `types_basic`, `ops_logic` |
@@ -322,6 +324,46 @@ Counts: 277 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `Time.dt`: starts at `1.0 / 60`, writable | `time_default_dt`, `time_fields`, `system_first_program` |
 | `Time.elapsed`: goes up by `Time.dt` at the end of each tick, read-only | `time_fields`, `time_default_dt`, `fail/readonly_time_elapsed` |
 
+## The window
+
+Every program here runs headless with the commands of its `.drive` file.
+The tests named in the suite are in `tests/suite.rs`; the window-mode ones
+run inside `tests/window/compositor.sh`.
+
+| Construct | Files |
+| --- | --- |
+| `Window`, `Color`, `WindowResized`, `WindowClosed` are built in and can't be declared | `fail/window_builtin_window`, `fail/window_builtin_color`, `fail/window_builtin_event` |
+| A program that names `Color` alone has no window; `Color`'s fields, the default alpha, a plain value, a field of a component | `color` |
+| A component of `Color` out of range is the error of any `UInt8` | `frame_bytes` (the colours of 256 ticks, wrapped with `% 256` where they would not fit) |
+| The fields of `Window`: 0 before a window is opened, the sizes asked for headless, kept after a close; `background` starts black and is assigned, also a field of it | `window_fields` |
+| Assigning a field other than `background` is a compile error | `fail/window_readonly_size` |
+| An unknown member of `Window` | `fail/window_unknown_member` |
+| `Window.open?` | `window_fields`, `window_loop`, `window_events` |
+| The fields read in a GPU system and in an independent `each`, with the values of the tick | `window_gpu` |
+| `Window.open` takes a `String` and two `Int`s, and has no value | `fail/window_open_arguments`, `fail/window_open_value` |
+| `Window.open` in the body of an `each`, and in a GPU system, is a compile error | `fail/window_open_in_each`, `fail/window_open_in_gpu` |
+| `Window.open` during a tick, through a function inside an `each`, with a window open, with a size less than 1 or more than 8192 | `panic/window_open_in_tick`, `panic/window_open_in_each`, `panic/window_open_twice`, `panic/window_open_too_narrow`, `panic/window_open_too_tall` |
+| A window opened again after it was closed | `window_twice`, `window_runs_out`, `frame_sizes` |
+| `WindowResized` once for any number of changes before a tick, none when the sizes come back; the fields change when the tick begins and not before | `window_events`, `window_fields`, `frame_sizes`; with a window: `window_resized` |
+| `WindowClosed`: the window is gone when the tick begins, seen by every `on` of that tick | `window_events`; with a window: `window_closes` |
+| Emitting a built-in event is a compile error | `fail/window_emit_builtin` |
+| Closing the window ends `World.run`, after one last tick | `window_events`, `window_runs_out`, `examples/window`; with a window: `window_closes` |
+| A loop of the program's own on `Window.open?` | `window_loop` |
+| Ticks keep real time while a window is shown: 120 ticks at 60 Hz, at 144 Hz, on a workspace that is not shown | `window_keeps_time` |
+| A frame for each tick, of the pixel size, filled with the background, alpha ignored | `frame_sizes`, `frame_bytes`; `frames_are_the_colours_painted` |
+| Every byte of a colour is exact in a frame, on every device | `frame_bytes`, `window_frames` on hardware and `llvmpipe`; `frames_are_the_colours_painted` |
+| A frame shown in a window is the frame captured | `window_shown` |
+| `MIDNIGHT_WINDOW`: `headless`, `info`, an unknown word; read by a program with a window only | `only_programs_with_a_window_read_the_window_variables`; `info` of a shown window: `window_shown`, `window_keeps_time` |
+| No window can be shown: built without the flags, `MIDNIGHT_GPU` has `off`, no display found | `a_window_built_without_the_flags_runs_headless`, `a_window_that_cannot_be_shown_is_an_error` |
+| `tick`, `tick N`, `resize`, `scale` (halves rounded up), `close`, comments, blank lines and spaces; the answers; a `tick` the program ends before | `window_events`, `window_fields`, `drive_answers` |
+| When the commands run out the window is closed, and ticks then run freely | `window_runs_out`, `frame_bytes`, `frame_sizes` |
+| When the program ends, the commands up to the next `tick` are carried out | `drive_answers` |
+| `capture`: before the first tick the frame `Window.open` showed, then the frame of the last tick, its size, `N ticks`, the CRC-32 of its pixels; a PNG of fixed codes | `frame_sizes`, `frame_bytes`; `window_frames`, `png_files_are_read` |
+| Every wrong command stops the program with its file and line: unknown, wrong arguments, `resize` or `scale` out of range or not headless, a frame larger than 8192, `capture` with no file, no window, no device | `drive_errors` |
+| A `capture` to a file that can't be written; a file of commands that can't be opened | `window_frames`, `drive_errors` |
+| Commands from a named pipe, with a window shown | `window_shown` |
+| Without `MIDNIGHT_GPU_FLAGS` or `MIDNIGHT_WINDOW_FLAGS`: one line from `midnight`, the program runs headless and captures nothing | `a_window_built_without_the_flags_runs_headless` |
+
 ## GPU systems
 
 The rules a `gpu system` must follow are in "What a GPU block may contain"
@@ -558,6 +600,7 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 | Rule 5: `despawn` of the loop's own entity and of another, `add` of a tag and of a component with a value, `remove`, `emit`, and all of them in a called function | `loops/cores_queued`; `rule_5_queued_changes_and_events_are_fine` |
 | Rule 6: `` `spawn` ``, `` `on` ``, `` `rand` `` (also `rand(n)`), `` `srand` `` (with a seed and without), `` `puts` ``, `` `print` ``, `` `clock` ``, `` `sleep` ``, `` `exit` ``, `` `World.stop` ``, each in the block and in a called function | `loops/does_spawn`, `loops/does_on`, `loops/does_rand`, `loops/does_srand`, `loops/does_puts`, `loops/does_print`, `loops/does_clock`, `loops/does_sleep`, `loops/does_exit`, `loops/does_world_stop`; `rule_6_each_deed_keeps_a_loop_on_one_core` |
 | Rule 6: `` `World.tick` `` and `` `World.run` ``, held by a function | `loops/does_world_tick`, `loops/does_world_run`; `rule_6_tick_and_run_are_found_through_functions` |
+| Rule 6: `` `Window.open` ``, held by a function | `loops/does_window_open` |
 | Rule 6: `` `break` `` that leaves the `each`; one that leaves a loop inside the block is fine | `loops/does_break`; `rule_6_a_break_counts_only_when_it_leaves_the_each` |
 | Rule 6: `` `return` `` in the block, in a loop inside it, in a nested `each`; one in a called function is fine | `loops/does_return`, `loops/swarm`; `rule_6_a_return_in_the_block_counts_and_one_in_a_called_function_does_not` |
 | Rule 7: ``reads `C`, which the GPU system `name` uses, by `e[C]` `` and ``… in the nested `each` ``, in the block and in a called function; the loop's own parameter, and a nested `each` that never uses its parameter, are fine | `loops/reads_gpu`; `rule_7_a_component_of_a_gpu_block_is_reached_only_through_own_parameters` |
@@ -877,6 +920,12 @@ the rule for where a column lives.
 | | in a system, under `World.run` | `panic/world_run_in_system_during_run` | `World.run called while a tick is in progress` |
 | `World.tick` inside an `each` | in a function called from the body | `panic/world_tick_in_each` | `World.tick called inside an `each`` |
 | `World.run` inside an `each` | in a function called from the body | `panic/world_run_in_each` | `World.run called inside an `each`` |
+| `Window.open` during a tick | in a system | `panic/window_open_in_tick` | `Window.open called while a tick is in progress` |
+| `Window.open` inside an `each` | in a function called from the body | `panic/window_open_in_each` | `Window.open called inside an `each`` |
+| `Window.open` with a window open | | `panic/window_open_twice` | `Window.open called while a window is open` |
+| `Window.open` with a size out of range | a width of 0 | `panic/window_open_too_narrow` | `Window.open: a width of 0 is less than 1` |
+| | a height of 8193 | `panic/window_open_too_tall` | `Window.open: a height of 8193 is more than 8192` |
+| No window can be shown | each reason the suite can reach | `a_window_that_cannot_be_shown_is_an_error` (suite) | `Window.open: no window can be shown: REASON; set MIDNIGHT_WINDOW=headless to run without one` |
 | A failure in a GPU system (the message names no value) | `Int` `/` by zero | `panic/gpu_division_by_zero` | `division by zero` |
 | | `Int` `%` by zero, in the nested `each` | `panic/gpu_modulo_by_zero` | `modulo by zero` |
 | | `Int` `**` with a negative exponent | `panic/gpu_negative_exponent` | `negative exponent` |
@@ -1350,6 +1399,16 @@ against that header.
 | unknown variable (or function) `totl`, suggesting `total` | `unknown_variable_suggest.12am` | 5 | Errors (suggestions); the section of the thing named |
 | unknown `World` operation `tik`, suggesting `tick` | `unknown_world_method_suggest.12am` | 8 | Errors (suggestions); the section of the thing named |
 | an `if` used as a value needs an `else` branch | `value_if_without_else.12am` | 5 | Types; Expressions |
+| `Color` is a built-in name and can't be redefined | `window_builtin_color.12am` | 4 | Lexical structure: built-in names; The window |
+| `WindowClosed` is a built-in name and can't be redefined | `window_builtin_event.12am` | 4 | Lexical structure: built-in names; The window |
+| `Window` is a built-in name and can't be redefined | `window_builtin_window.12am` | 4 | Lexical structure: built-in names; The window |
+| `WindowClosed` is a built-in event and can't be emitted | `window_emit_builtin.12am` | 5 | The window: events |
+| `Window.open` takes `Int` sizes: expected `Int`, found `Float` | `window_open_arguments.12am` | 4 | The window |
+| `Window.open` is not allowed inside an `each` | `window_open_in_each.12am` | 9 | The window |
+| `Window.open` is not allowed in a function called from a GPU system | `window_open_in_gpu.12am` | 5 | The window |
+| `Window.open` has no value | `window_open_value.12am` | 4 | The window |
+| can't assign to `Window.width` | `window_readonly_size.12am` | 4 | The window |
+| unknown member `widht` for `Window` | `window_unknown_member.12am` | 4 | The window |
 | `greet` returns nothing, so its call can't be used as a value | `void_as_value.12am` | 8 | Functions |
 | `greet` returns nothing, so its call can't be used as a value (here, as an argument of `puts`) | `void_in_expression.12am` | 8 | Functions |
 | `World.tick` and `World.run` are not allowed in the body of a query `each`: at the top level, nested, in a function and in a system; `World.stop` there, and a tick in a list's `each`, are fine | `world_tick_in_each.12am` | 14, 16, 23, 29 | Systems and ticks |

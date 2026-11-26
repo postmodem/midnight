@@ -5,8 +5,9 @@ systems. The compiler is Rust with no crates; it emits C11 that is built
 together with a C runtime. For each `each` of a `gpu system` it also emits a
 WGSL shader, which the runtime runs through `wgpu-native`. A GPU block that
 runs on the CPU, and an ordinary `each` the compiler finds independent, run
-in pieces on several threads, with the output of one. `README.md` has the
-overview.
+in pieces on several threads, with the output of one. A program with a
+window shows it through SDL 3 and draws its frames on the same device, or
+runs headless, driven by commands. `README.md` has the overview.
 
 ## What defines what
 
@@ -35,7 +36,11 @@ overview.
     independent `each`: what a piece is, and what code that runs in one may
     call.
 - `runtime/midnight_gpu.h` is what `midnight_rt.c` and `midnight_gpu.c` need
-  from each other. Generated code never includes it.
+  from each other, and what `midnight_window.c` needs of the device.
+  Generated code never includes it.
+- `runtime/midnight_window.h` is what `midnight_rt.c` and
+  `midnight_window.c` need from each other. Generated code never includes
+  it.
 - `runtime/midnight_pool.h` is what `midnight_rt.c` and `midnight_pool.c`
   need from each other. Generated code never includes it, and
   `midnight_pool.c` uses nothing of `midnight_rt.c`.
@@ -50,14 +55,20 @@ nix develop -c cargo clippy --all-targets -- -D warnings
 nix develop -c cargo fmt
 nix develop -c cargo run -- run FILE.12am  # also: build, check, emit-c; add --debug
 nix develop -c cargo run -- loops FILE.12am  # where each loop runs, and what keeps one on one core
-nix flake check                            # package, clippy, rustfmt, nixfmt, GPU programs on llvmpipe, ThreadSanitizer
+nix flake check                            # package, clippy, rustfmt, nixfmt, GPU programs on llvmpipe, ThreadSanitizer, windows
 nix run .#bench                            # timings against bench/baseline.c
 nix run .#bench-cores                      # loops on one thread and on all cores
 nix run .#gpu-test                         # GPU programs on this machine's GPU, both build modes
 MIDNIGHT_TEST_GPU=software nix develop -c cargo test   # the suite, plus GPU programs on llvmpipe
 MIDNIGHT_TEST_GPU=hardware nix develop -c cargo test   # the suite, plus GPU programs on this machine's GPU
 MIDNIGHT_TEST_TSAN=1 nix develop -c cargo test         # the suite, plus the pool and the programs under ThreadSanitizer
+nix develop -c bash tests/window/test.sh OUT           # windows inside a compositor of their own, on this machine's GPU
+nix run .#window-test                                  # the same with the packaged compiler
 ```
+
+Nothing opens a window on the desktop it is run from: a program with a
+window runs headless, or inside `tests/window/compositor.sh`, which starts
+a sway of its own that shows nothing and has no input devices.
 
 Flakes see only files known to git: `git add` a new file before a `nix`
 command that needs it.
@@ -69,9 +80,16 @@ command that needs it.
 - No `unsafe` in the compiler.
 - `midnight_rt.c` is C11 with libc and libm only; where it is built with
   `MN_THREADS` it also uses a POSIX mutex, thread-local storage and
-  `sigsetjmp`, and nothing of those otherwise. `midnight_gpu.c` is C11
-  with libc, libm and `wgpu-native`, and is compiled only into programs with
-  a GPU system; a program without one links neither it nor `wgpu-native`.
+  `sigsetjmp`, and nothing of those otherwise; where it is built with
+  `MN_WINDOW` it also uses `clock_nanosleep` for the pace of a window.
+  `midnight_gpu.c` is C11 with libc, libm and `wgpu-native`, and is
+  compiled only into programs with a GPU system or a window; a program
+  with neither links neither it nor `wgpu-native`.
+- `midnight_window.c` is C11 with libc, libm, SDL 3 and `wgpu-native`, and
+  is compiled, with `-DMN_FRAMES` and `midnight_gpu.c`, only into programs
+  with a window, when `MIDNIGHT_GPU_FLAGS` and `MIDNIGHT_WINDOW_FLAGS` are
+  both set. It is called from the thread that runs the ticks and no other.
+  A headless window never starts SDL.
 - `midnight_pool.c` is C11 with libc and POSIX threads, and is compiled,
   with `-DMN_THREADS -pthread`, only into programs with a loop that can be
   split: a GPU system or an independent `each`. Any other program is built
@@ -80,7 +98,9 @@ command that needs it.
   depend on addresses, hash order of pointers or wall-clock time (apart
   from `clock`, `sleep` and `srand` with no argument). With
   `midnight_gpu.c`, output may depend on the device only as "Determinism"
-  in the reference allows.
+  in the reference allows. A window's pace waits for the clock and changes
+  nothing a program computes; what the desktop does enters only when a
+  tick begins, and a headless run takes it from its commands alone.
 - Nothing may make a program's output, exit status or run-time error depend
   on the number of threads, on which thread runs a piece, or on the order
   pieces finish in. A loop is split only when the result is exactly the
@@ -98,7 +118,12 @@ command that needs it.
   wherever `midnight` invokes the C compiler, so programs are built with the
   flags in the README's mode table and no others. A program with a GPU
   system adds `MIDNIGHT_GPU_FLAGS`, whose runpaths are how it finds
-  `wgpu-native` and the Vulkan loader.
+  `wgpu-native` and the Vulkan loader; a program with a window adds
+  `MIDNIGHT_WINDOW_FLAGS` too, for SDL 3. `midnight` removes
+  `LD_LIBRARY_PATH` for the C compiler and for the program `run` starts.
+  The suite runs programs directly: a shell whose `LD_LIBRARY_PATH` was set
+  by something else (some launchers set it to their own ALSA) breaks every
+  program linked with SDL 3, so unset it before `cargo test`.
 
 ## Tests
 
@@ -119,6 +144,11 @@ command that needs it.
 - `examples/NAME.12am` with `NAME.out`: as `tests/run`.
 - Every program above runs with `MIDNIGHT_GPU=off`: GPU systems run their CPU
   implementation, so the suite needs no device and is exact.
+- A program with a window runs with `MIDNIGHT_WINDOW=headless` and
+  `MIDNIGHT_DRIVE` set to its `NAME.drive` file, `capture` lines blanked,
+  or to an empty file; the display variables name nothing that can be
+  connected to and `XDG_RUNTIME_DIR` is an empty directory (`no_display`).
+  A new test that runs a window program outside window mode does the same.
 - Several threads:
   - `thread_programs` runs every program of `tests/run`, `tests/panic` and
     `examples` for which `midnight loops` prints a `gpu` or a `cores` line,
@@ -155,8 +185,8 @@ command that needs it.
 - GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe) or
   `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU), the tests
   `gpu_programs`, `gpu_stats_match_plan`, `gpu_stats_match_expected`,
-  `gpu_driver_finds_its_parts` and `gpu_strict_div_sqrt` also run, on
-  release and debug builds. Without it they do nothing. `checks.gpu` is the
+  `gpu_driver_finds_its_parts`, `gpu_strict_div_sqrt` and `window_frames`
+  also run, on release and debug builds. Without it they do nothing. `checks.gpu` is the
   software mode in the build sandbox; `apps.gpu-test` is the hardware mode,
   on the device the Vulkan loader finds, which a `VK_DRIVER_FILES` the
   caller sets chooses.
@@ -197,10 +227,39 @@ command that needs it.
     of the CPU's `/` and `sqrtf` with subnormals flushed: `sqrt` of every
     bit pattern and `/` of 2^28 pairs on hardware, 2^24 of each on
     llvmpipe.
-  - The first three print the device they ran on. In GPU mode
-    `UPDATE_EXPECT=1` rewrites `.stats` files and no others.
+  - `window_frames` runs every program of `tests/run` that has a
+    `NAME.frames` file headless with all its commands, `capture` included,
+    in a directory of its own, and requires `NAME.out`, exactly the answers
+    in `NAME.frames`, and each captured file to be a PNG of the size and
+    pixels (by CRC-32) its answer gives. The answers are the same on every
+    device. `frames_are_the_colours_painted`, which needs no device, holds
+    the CRCs in those files to the colours the programs paint: change it
+    with them.
+  - The first three and `window_frames` print the device they ran on. In
+    GPU mode `UPDATE_EXPECT=1` rewrites `.stats` and `.frames` files and no
+    others.
   - The dev shell sets `MIDNIGHT_TEST_SOFTWARE_ICD`, the Vulkan driver file
     the software mode passes to programs as `VK_DRIVER_FILES`.
+- Window mode: with `MIDNIGHT_TEST_WINDOW=1`, inside
+  `tests/window/compositor.sh` (the tests fail outside it), `window_shown`,
+  `window_keeps_time`, `window_closes` and `window_resized` run, one at a
+  time, in release and debug builds, on the device `MIDNIGHT_TEST_GPU`
+  names or the hardware one. `tests/window/test.sh` runs the smoke program
+  and then these; `checks.window` runs it in the build sandbox (sway with
+  pixman, llvmpipe) and `apps.window-test` on this machine's GPU. The
+  compositor floats every window at the top left at the size it asks for,
+  and sends one titled `midnight hidden` to a workspace that is not shown.
+  The tests act on windows only through `swaymsg` and take pictures with
+  `grim`; nothing types or clicks.
+  - `window_shown` runs the `.frames` programs whose commands have no
+    `resize` or `scale` with a window, the commands from a named pipe: the
+    answers and output must be the headless ones, `info` must name
+    `wayland`, and a picture of the compositor must hold the last capture's
+    pixels.
+  - `window_keeps_time`: 120 ticks in 1.9 to 2.3 seconds with the output at
+    60 Hz, at 144 Hz, and with the window on a workspace that is not shown.
+  - `window_closes` and `window_resized`: a close and a resize by the
+    compositor reach the program as the events.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
   diagnostic and run-time error has a test; keep it that way when the
   language changes.

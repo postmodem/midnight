@@ -1,0 +1,38 @@
+# A window whose background drifts through the colours until it is closed.
+#
+# Shows the window: opening it, its background, its events, and the end of
+# World.run when it is closed. Run it headless, with its commands, to see
+# what it does without a display:
+#
+#   MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/window.drive \
+#     nix run . -- run examples/window.12am
+
+resource Drift
+  step: Int = 0
+end
+
+# A triangle wave: 0 up to 255 and back down, 510 steps long.
+def wave(step: Int) -> Int
+  t = step % 510
+  t < 256 ? t : 510 - t
+end
+
+system drift
+  Drift.step += 1
+  s = Drift.step
+  Window.background = Color(wave(s), wave(s + 170), wave(s + 340))
+end
+
+system report
+  on WindowResized do |size|
+    puts "now #{size.width}x#{size.height} points, #{size.pixel_width}x#{size.pixel_height} pixels"
+  end
+  on WindowClosed do
+    puts "closed at #{Window.background}"
+  end
+end
+
+Window.open("Drift", 800, 600)
+puts "opened at #{Window.width}x#{Window.height} points"
+World.run
+puts "ran #{Time.tick} ticks, #{Time.elapsed.round(2)} seconds"

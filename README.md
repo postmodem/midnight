@@ -98,6 +98,7 @@ nix run . -- run examples/nbody.12am
 nix run . -- emit-wgsl examples/nbody.12am
 nix run . -- plan tests/plan/reader.12am
 nix run . -- loops examples/bounce.12am
+nix run . -- run examples/window.12am
 ```
 
 ## The compiler
@@ -160,12 +161,13 @@ on Vulkan on Linux and Metal on macOS, without a window. `midnight emit-wgsl`
 prints them, and `midnight plan` prints the transfers between CPU and GPU
 memory that one tick performs; the reference explains how to read a plan.
 
-Only a program that declares a GPU system is linked against `wgpu-native`,
-with the flags in `MIDNIGHT_GPU_FLAGS`, which the packaged compiler and the
-dev shell set. Without that variable `midnight` says so in one line and
-builds the program with the C functions only. A program with no GPU system
-depends on libc and libm alone, and on POSIX threads when it has a loop
-that can run on several cores (see [Several cores](#several-cores)).
+Only a program that declares a GPU system or has a window is linked
+against `wgpu-native`, with the flags in `MIDNIGHT_GPU_FLAGS`, which the
+packaged compiler and the dev shell set. Without that variable `midnight`
+says so in one line and builds the program with the C functions only. A
+program with no GPU system and no window depends on libc and libm alone,
+and on POSIX threads when it has a loop that can run on several cores (see
+[Several cores](#several-cores)).
 
 When it starts, a program with a GPU system picks the fastest hardware
 adapter. `MIDNIGHT_GPU` changes that. It is a comma-separated list of:
@@ -252,6 +254,58 @@ A word that is not in the table is reported once, when the program starts.
 No word changes what a program prints to standard output. A thread with
 nothing to do polls for 50 microseconds and then blocks.
 
+## A window
+
+A program that names `Window` opens a window with `Window.open`, keeps
+real time while it is open, and shows a frame of `Window.background` at
+the end of every tick; the reference has the rules.
+
+```sh
+nix run . -- run examples/window.12am
+```
+
+shows a window whose colour drifts until you close it. The window comes
+from [SDL 3](https://libsdl.org), on Wayland when there is one and on X11
+otherwise, or on macOS; its frames are drawn on the same `wgpu-native`
+device as GPU systems. Only a program with a window is built with
+`runtime/midnight_window.c` and `runtime/midnight_gpu.c` and linked against
+SDL 3 and `wgpu-native`, with the flags in `MIDNIGHT_GPU_FLAGS` and
+`MIDNIGHT_WINDOW_FLAGS`, which the packaged compiler and the dev shell set.
+Without either variable `midnight` says so in one line and builds a
+program that runs only headless and captures nothing. `midnight` removes
+`LD_LIBRARY_PATH` from the environment of the C compiler and of the
+program `midnight run` starts: a program finds its libraries through its
+runpaths.
+
+The same program runs with no display, and commands step it and take
+pictures of it:
+
+```sh
+MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/window.drive nix run . -- run examples/window.12am
+```
+
+`MIDNIGHT_WINDOW` is a comma-separated list of:
+
+| Word       | Meaning                                                         |
+| ---------- | --------------------------------------------------------------- |
+| `headless` | Show no window: the window exists in the program only, at exactly the size asked for and a scale of 1, and ticks run as fast as they can. |
+| `info`     | Print one line to standard error when a window opens: its sizes in points and pixels, and `headless` or where it is shown and how frames reach it, such as `wayland, mailbox`. |
+
+`MIDNIGHT_DRIVE` names a file or a named pipe of commands, one to a line:
+`tick`, `tick N`, `resize W H`, `scale S`, `close` and `capture FILE`, which
+writes the last frame as a PNG. Each command is answered on standard error
+with a line that begins `midnight: drive: `; the reference has the rest.
+The run above writes `drift.png` and `drift-2x.png` to the working
+directory.
+
+A program with a window reads `MIDNIGHT_GPU` too: `off` means it shows no
+window and captures nothing, `software` lets it draw with an adapter that
+computes on the CPU, and `info` names the device when it is opened. A
+window that is shown uses the device of the program's GPU systems, or asks
+for one that can draw to it; a headless window opens the device at its
+first capture. A failure of the window after it has opened prints
+`midnight: window error: …` and ends the program with status 70.
+
 ## Benchmarks
 
 ```sh
@@ -315,7 +369,7 @@ nix flake check
 ```
 
 `nix develop` provides the Rust toolchain, clang and `nixfmt`, and sets
-`MIDNIGHT_GPU_FLAGS`. `cargo test` runs the unit tests and every program
+`MIDNIGHT_GPU_FLAGS` and `MIDNIGHT_WINDOW_FLAGS`. `cargo test` runs the unit tests and every program
 under `tests/` and `examples/`, each in both build modes, with GPU systems
 on the CPU. `nix flake check` builds the package (which runs the same tests
 in the sandbox) and checks clippy, rustfmt and nixfmt.
@@ -367,23 +421,57 @@ The suite tests the compiler cargo built, or the one `MIDNIGHT_BIN` names.
 On Linux, `nix flake check` includes `checks.gpu`, which runs them on Mesa's
 software Vulkan inside the build sandbox.
 
+Every program with a window runs headless in the tests above, with the
+commands of its `NAME.drive` file, `capture` left out, or with none. In GPU
+mode a program of `tests/run` with a `NAME.frames` file also runs with its
+captures, in a directory of its own: the answers to its commands must be
+exactly that file, and each file it writes must be a PNG of the size and
+pixels its answer gives.
+
+The tests of a window that is shown never use the desktop they are run
+from. `tests/window/compositor.sh` starts sway with no output on any screen
+and no input devices, in a runtime directory of its own, and runs a command
+with that compositor as the only display it can reach. Inside it,
+`tests/window/test.sh` runs a hand-written SDL program, then the suite's
+window tests: the frame programs with a window and their commands from a
+pipe, against a picture of the compositor; 120 ticks timed at 60 Hz, at
+144 Hz and on a workspace that is not shown; a close and a resize by the
+compositor.
+
+```sh
+bash tests/window/test.sh OUT            # in the dev shell, on the machine's GPU
+nix run .#window-test                    # the packaged compiler, on the machine's GPU
+```
+
+On Linux, `nix flake check` includes `checks.window`, which runs them with
+sway drawing in software and the programs on Mesa's software Vulkan inside
+the build sandbox. The dev shell provides sway and `grim`. Every other
+test that runs a program with a window sets the display variables to
+addresses that cannot be connected to.
+
 ```
 src/            the compiler, one module per stage:
                 source, lexer, parser, check, plan, loops, emit, driver
 runtime/        midnight_rt.h, midnight_rt.c; midnight_gpu.h, midnight_gpu.c
-                for programs with a GPU system; midnight_pool.h,
-                midnight_pool.c for programs with a loop that can be split
+                for programs with a GPU system or a window;
+                midnight_window.h, midnight_window.c for programs with a
+                window; midnight_pool.h, midnight_pool.c for programs with
+                a loop that can be split
 docs/           language.md
 examples/       programs with their expected output
 tests/run/      programs that must print exactly NAME.out, on a device the
                 `stats` lines in NAME.stats when there is one, and with
-                MIDNIGHT_THREADS=4,small,info the lines in NAME.split
+                MIDNIGHT_THREADS=4,small,info the lines in NAME.split; a
+                program with a window gets the commands in NAME.drive,
+                and on a device must answer them with NAME.frames
 tests/fail/     programs that must be rejected with exactly NAME.err
 tests/panic/    programs that must stop with the run-time error in NAME.err
 tests/plan/     programs whose transfer plan must be exactly NAME.plan
 tests/loops/    programs for which `midnight loops` must print exactly
                 NAME.loops
 tests/pool/     stress.c, which exercises the thread pool on its own
+tests/window/   compositor.sh, test.sh, and smoke.c, a window from SDL 3
+                and wgpu-native on its own
 bench/          baseline.c, churn.12am, bench.sh; gpu_*.12am, bench-gpu.sh;
                 cores_*.12am, cores.sh
 specs/          one spec per change
@@ -393,17 +481,18 @@ specs/          one spec per change
 exercise it. After a deliberate change to a diagnostic,
 `UPDATE_EXPECT=1 cargo test` rewrites the expected files; review the diff
 before committing it. With `MIDNIGHT_TEST_GPU` set it rewrites the `.stats`
-files, the only expected files that come from a device.
+and `.frames` files, the only expected files that come from a device.
 
 ## Status
 
-Midnight 0.5 is the language core, GPU systems, the rules that move only
-what is needed between CPU and GPU memory, strict GPU systems, and loops
-on several cores. It is
+Midnight 0.6 is the language core, GPU systems, the rules that move only
+what is needed between CPU and GPU memory, strict GPU systems, loops on
+several cores, and a window. It is
 tested on `x86_64-linux`, GPU systems on an NVIDIA device, on an AMD iGPU
-through Mesa's RADV, and on Mesa's software Vulkan; the flake also offers
+through Mesa's RADV, and on Mesa's software Vulkan, and the window on
+Wayland; the flake also offers
 `aarch64-linux`, `x86_64-darwin` and `aarch64-darwin`, which evaluate but
-have not been run. What 0.5 leaves out
+have not been run. What 0.6 leaves out
 is listed at the end of the reference.
 
 ## License

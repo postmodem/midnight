@@ -1,7 +1,8 @@
 # 0006 — A window: a program on the screen, and a way to drive it without one
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0005
+- **Tested on:** x86_64-linux, 2026-11-26
 
 ## Goal
 
@@ -591,3 +592,85 @@ All run on x86_64-linux, on the development machine.
 - **`midnight` drops `LD_LIBRARY_PATH`.** Programs are linked to exact
   libraries by runpath; a variable that overrides those is never what a
   Midnight program was built for.
+
+## Outcome
+
+Implemented, with the differences listed under "Differences from the
+design". Eleven of the twelve criteria pass on x86_64-linux: a Ryzen 9
+9950X3D beside an RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10,
+`wgpu-native` 27.0.4.0, sway 1.12, clang 21.1.8. Criterion 11 needs a
+person at a desktop and has not been run.
+
+### Acceptance criteria
+
+| #  | Result |
+| -- | ------ |
+| 1  | `nix flake check` passes, with `checks.window`: the smoke program and the four window tests in the sandbox, sway drawing with pixman, the programs on `llvmpipe`. `nix run .#gpu-test` and `nix run .#window-test` pass on the RTX 5090. |
+| 2  | Against `f813995` (0.5.0) no `.out`, `.err`, `.plan`, `.loops`, `.split` or `.stats` file has changed; the new ones are added. `emit-c` and `emit-wgsl` give the same bytes for every program of `tests/`, `examples/` and `bench/` that 0.5.0 has, 1,576 outputs, except `tests/run/fn_param_types.12am`, whose `enum Color` is now `Hue`, with the same `.out`. |
+| 3  | The nine programs of `tests/run` and `examples` with a window print their expected output headless in both build modes with `MIDNIGHT_GPU=off` and the display variables naming nothing, in `run_programs` and `example_programs`. |
+| 4  | `window_frames` passes on the 5090 and on `llvmpipe` with the same `.frames` files: 524 captures each. The 262 PNG files of `frame_bytes` and `frame_sizes` are byte-identical from the two devices. |
+| 5  | `window_shown` passes in the sandbox and on the 5090, release and debug: the answers are the headless ones, `info` says `wayland, mailbox`, and every pixel of the last capture is in the picture of the compositor. |
+| 6  | `window_keeps_time` passes on the 5090: 120 ticks in 1.9834 to 1.9841 s at 60 Hz, at 144 Hz and on a workspace that is not shown, release and debug. In the sandbox 1.9835 to 1.9870 s. |
+| 7  | No sanitizer report: every debug run of a program with a window in the suite, headless, and the debug runs of the window tests in the sandbox. |
+| 8  | Every window test runs inside `tests/window/compositor.sh`, which sets `DISPLAY` and the session bus to addresses that can't be connected to and gives sway a runtime directory of its own; every other run of a window program in the suite sets `WAYLAND_DISPLAY` and `DISPLAY` to names that can't be connected to and `XDG_RUNTIME_DIR` to an empty directory. |
+| 9  | `ldd` on the release builds of `examples/hello.12am` and of `examples/nbody.12am` lists what it lists on 0.5.0. |
+| 10 | With `LD_LIBRARY_PATH` set to a directory holding another build of ALSA, which SDL 3 links, `midnight run examples/window.12am` builds and runs headless with `examples/window.drive`. |
+| 11 | Not run: it needs the desktop the program is started from. |
+| 12 | The reference says 0.6 and `midnight --version` prints `midnight 0.6.0`. Every command in the README was run as written, `./move` and the headless window in scratch directories, the window on the desktop inside `tests/window/compositor.sh`. `tests/COVERAGE.md` has "The window". |
+
+### Measured
+
+- 120 ticks of a shown window, from `Window.open` returning to the end of
+  the last: 1.9834 to 1.9870 s in every case, against 119/60 = 1.9833 s
+  for the waits alone.
+- A capture of one colour: 12.9 KB for 800 by 600 pixels, 50 KB for 1600
+  by 1200 (7.7 MB of pixels).
+- `examples/window.12am` shown in the compositor for six seconds: 293
+  ticks in 4.88 s of simulated time, the rest of the six being the build
+  and the device.
+
+### Differences from the design
+
+- **The built-in declarations are Midnight source.** When a program names
+  `Window`, one of the two events or `Color`, a file `<built-in>` with
+  those declarations is parsed and put before the program's items
+  (`Color` alone brings only the struct). The checker exempts its
+  declarations from the rule on built-in names.
+- **`Window` has a sixth field, `open`**, which the source can't name:
+  `Window.open?` reads it. The typed program marks no field read-only; the
+  checker refuses the assignments, and `tir::Window` lists the field the
+  program may assign.
+- **The window's description is not in `MnProgram`.** Generated code sets
+  `mn_window_program` before `mn_start`, as it sets `mn_gpu_check`, and
+  asserts that its layout of the resource, `Color` and `WindowResized` is
+  that of `midnight_rt.h`. A field added to `MnProgram` would change the
+  initializer of every program.
+- **The largest frame is 8192 pixels on a side on every device**, so a
+  headless run never depends on the device. A shown window that the
+  desktop makes larger ends the program with a window error.
+- **A headless frame is drawn when it is captured.** A frame of 0.6 is its
+  size and its background, which the runtime records at the end of each
+  tick; a shown window draws and presents each one. Frame submissions and
+  waits count in `MIDNIGHT_GPU=stats`.
+- **The device.** A program with a GPU system opens it when it starts, as
+  before, and a shown window checks that the surface can be drawn by it.
+  A program with a window and no GPU system opens it at its first capture
+  or at a shown `Window.open`, and reads `MIDNIGHT_GPU` for `off`,
+  `software` and `info`.
+- **`N ticks` in a capture's answer** is the value `Time.tick` had when
+  the frame was made: for the frame `Window.open` showed, at the call.
+- **A display is found only through the display variables** on Linux:
+  with none of `WAYLAND_DISPLAY`, `WAYLAND_SOCKET` and `DISPLAY` set,
+  `Window.open` says no display was found without asking SDL, which would
+  try `wayland-0`.
+- **`window_shown` runs the frame programs whose commands have no `resize`
+  or `scale`**, which a shown window refuses; `frame_sizes` is tested
+  headless only.
+- **The window tests set their conditions before a program starts**: the
+  output's rate by `swaymsg`, and a hidden window by a rule of the
+  compositor that sends `midnight hidden` to a workspace that is not
+  shown; the test checks in sway's tree that the window is shown or not.
+  The compositor floats every window at its top left at the size asked
+  for, so sizes and pictures line up with the headless runs.
+- **Missing flags** are said in one line for the window; a program that
+  also has a GPU system gets the line for GPU systems as well.

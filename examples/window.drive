@@ -1,0 +1,10 @@
+# Three seconds of drift, then a capture of the frame.
+tick 180
+capture drift.png
+# The display's scale becomes 2.
+scale 2
+tick
+capture drift-2x.png
+# The window is closed.
+close
+tick

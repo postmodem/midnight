@@ -1595,9 +1595,9 @@ static void png_make(PngOut *out, uint32_t width, uint32_t height,
     while (at < end) {
         uint32_t left = png_run(raw, at, end, 4);
         uint32_t up = png_run(raw, at, end, stride);
-        uint32_t length = left > up ? left : up;
+        uint32_t length = left >= up ? left : up;
         if (length >= 3) {
-            png_match(out, length, left > up ? 4 : (uint32_t)stride);
+            png_match(out, length, left >= up ? 4 : (uint32_t)stride);
             at += length;
         } else {
             png_symbol(out, raw[at++]);

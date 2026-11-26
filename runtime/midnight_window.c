@@ -264,6 +264,11 @@ void mn_window_draw(const MnFrame *frame) {
         win.holds = false;
         return;
     }
+    if (frame->width > MN_WINDOW_LARGEST || frame->height > MN_WINDOW_LARGEST) {
+        window_fail("the desktop made the window %ux%u pixels, larger than %d by %d",
+                    frame->width, frame->height, MN_WINDOW_LARGEST,
+                    MN_WINDOW_LARGEST);
+    }
     WGPUCommandEncoder encoder =
         wgpuDeviceCreateCommandEncoder(mn_gpu_device(), NULL);
     frame_record(encoder, frame);
