@@ -1,0 +1,832 @@
+{
+  "format": 1,
+  "commit": "825a10836091ef55f807f1af8b53bd2fdb5bdfa9",
+  "version": "0.7.0",
+  "ruby": "3.4.12",
+  "claude_code": "2.1.327",
+  "date": "2026-11-26",
+  "label": "sandpile-grid",
+  "models": [
+    "sonnet",
+    "haiku"
+  ],
+  "trials": 1,
+  "effort": null,
+  "task_names": [
+    "sandpile"
+  ],
+  "preamble_sha256": "0a7f8ff0a107d36d2eda2a422116df16b984b6abc9b971a3d8a576f7a17f8a71",
+  "agent_tools": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin:/nix/store/9g53s4a9kv7k5xbfjhyaxjymgw62di6r-bash-interactive-5.3p9/bin:/nix/store/8kxpzdb09cbn252h8wl14zds9jgbw2q0-findutils-4.10.0/bin:/nix/store/hi1zxw2mg94cwrpbq1s8bbjm1k5y3vci-gnugrep-3.12/bin:/nix/store/r3fwyjb1k9v7y6qd5l2jq1sx3b46dx2y-gnused-4.10/bin:/nix/store/q7p8cvfxi5vplngni9a38n17ykhgcx1d-ripgrep-15.1.0/bin",
+  "coreutils": "/nix/store/p7ip75rls2g87d1yy4568djpa244c7ww-coreutils-9.11/bin",
+  "kit": {
+    "file": "evals/kit",
+    "files": [
+      {
+        "dest": "language.md",
+        "source": "docs/language.md",
+        "sha256": "110c84529a5fdd3a46d853d1a7598c19d92570eb99e0c26f029cdce01a702661"
+      },
+      {
+        "dest": "README.md",
+        "source": "README.md",
+        "sha256": "3aa2fcbc847be09d6f8e77f2e9538d4baa90ca3362bddf5d957bca3f042571da"
+      },
+      {
+        "dest": "examples/battle.12am",
+        "source": "examples/battle.12am",
+        "sha256": "b7628c2fc79e99d078c9e1dbb4ce347cf2fa13c812247db60b3e135d4ba03206"
+      },
+      {
+        "dest": "examples/battle.out",
+        "source": "examples/battle.out",
+        "sha256": "e61cf6d3ee973c95479b104a630a60b07a6e1c41e2eb47faedbd84d43dcbcf91"
+      },
+      {
+        "dest": "examples/bench.12am",
+        "source": "examples/bench.12am",
+        "sha256": "45d982b13b601831617b5bedddd9aac4665484e2a078356500c1119da3fd9782"
+      },
+      {
+        "dest": "examples/bounce.12am",
+        "source": "examples/bounce.12am",
+        "sha256": "c9a859451f8eb76dc6f83144b1549a04e48aa7c929216baba6e7ce95027cf4f7"
+      },
+      {
+        "dest": "examples/bounce.out",
+        "source": "examples/bounce.out",
+        "sha256": "f4f990ff8ca88db06fe33598444fd5eddff567f841bfab2c4f9a310e4ad35e3a"
+      },
+      {
+        "dest": "examples/hello.12am",
+        "source": "examples/hello.12am",
+        "sha256": "45637b2c36f48ab214412d095ee8060e0f5897cbc7434e7d9802f04d7893dc8e"
+      },
+      {
+        "dest": "examples/hello.out",
+        "source": "examples/hello.out",
+        "sha256": "d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5"
+      },
+      {
+        "dest": "examples/input.12am",
+        "source": "examples/input.12am",
+        "sha256": "31cf9ccb91a3ba1a896211ce86eabb3deebc1b4894fe4cf357bdfaa09e854d14"
+      },
+      {
+        "dest": "examples/input.drive",
+        "source": "examples/input.drive",
+        "sha256": "399a96abf52ccb9af87fdc728ae0da381390d9061031d20079dbbbe3fbae16b9"
+      },
+      {
+        "dest": "examples/input.out",
+        "source": "examples/input.out",
+        "sha256": "1cae9f27cd6bcff432d1339c443a6215b45629dad1cff3771e06bab6950b5d68"
+      },
+      {
+        "dest": "examples/life.12am",
+        "source": "examples/life.12am",
+        "sha256": "5505814cfd6fe21583fa3c6b33d9c194fb95b64b32a577fab47fe8f37636e23d"
+      },
+      {
+        "dest": "examples/life.out",
+        "source": "examples/life.out",
+        "sha256": "10769d19937b68aa5515ac8a6e525a1f84bc4a985fb625241be89695b1b64074"
+      },
+      {
+        "dest": "examples/life_rules.12am",
+        "source": "examples/life_rules.12am",
+        "sha256": "268afe3044121e468878985f408f3ac5f0ad80ae12e146277bb893ce80545a3a"
+      },
+      {
+        "dest": "examples/life_rules.out",
+        "source": "examples/life_rules.out",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "dest": "examples/move.12am",
+        "source": "examples/move.12am",
+        "sha256": "ba4ca27197bbc8617b6cf6edf42d3262a2c4fafe2565944052dc69fd59ca4d6f"
+      },
+      {
+        "dest": "examples/move.out",
+        "source": "examples/move.out",
+        "sha256": "eed2aa0dbec0f13f0fc00f257e3de666e113db91e07a083af9cb3807d92f12a0"
+      },
+      {
+        "dest": "examples/nbody.12am",
+        "source": "examples/nbody.12am",
+        "sha256": "6158862f5218fd773da8005da5a15afe578333545a4c79421fb420d98c0f028f"
+      },
+      {
+        "dest": "examples/nbody.out",
+        "source": "examples/nbody.out",
+        "sha256": "deecf226e42be730c657467146a8a39fcffff051a76f25d94de56505e19f3bb8"
+      },
+      {
+        "dest": "examples/window.12am",
+        "source": "examples/window.12am",
+        "sha256": "2ce4755a13a9fdfd00caad0e5a487f111ad9b91c58fd030085d297e004d5c984"
+      },
+      {
+        "dest": "examples/window.drive",
+        "source": "examples/window.drive",
+        "sha256": "61229ae96139f3a775a1d7aee931e1b1a2ef1d58d9f5b95a9ea100ec025164b0"
+      },
+      {
+        "dest": "examples/window.out",
+        "source": "examples/window.out",
+        "sha256": "78bf297d417ce4aae145876b4a9173ba5d7ed29925cbca944c812b4c8c6754d1"
+      }
+    ],
+    "sections": {
+      "language.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          23,
+          "A first program"
+        ],
+        [
+          63,
+          "The model"
+        ],
+        [
+          92,
+          "Lexical structure"
+        ],
+        [
+          142,
+          "Types"
+        ],
+        [
+          176,
+          "Compact field types"
+        ],
+        [
+          221,
+          "Variables and values"
+        ],
+        [
+          250,
+          "What can be modified"
+        ],
+        [
+          273,
+          "Expressions"
+        ],
+        [
+          328,
+          "Control flow"
+        ],
+        [
+          401,
+          "Functions"
+        ],
+        [
+          431,
+          "Declaring data"
+        ],
+        [
+          433,
+          "Structs"
+        ],
+        [
+          476,
+          "Enums"
+        ],
+        [
+          489,
+          "Components and tags"
+        ],
+        [
+          508,
+          "Resources"
+        ],
+        [
+          523,
+          "Events"
+        ],
+        [
+          536,
+          "Constants"
+        ],
+        [
+          547,
+          "Entities"
+        ],
+        [
+          582,
+          "Queries"
+        ],
+        [
+          623,
+          "Structural changes inside `each`"
+        ],
+        [
+          655,
+          "Systems and ticks"
+        ],
+        [
+          695,
+          "The window"
+        ],
+        [
+          849,
+          "Without a display"
+        ],
+        [
+          948,
+          "Keyboard and mouse"
+        ],
+        [
+          1172,
+          "Commands for the keyboard and the mouse"
+        ],
+        [
+          1235,
+          "GPU systems"
+        ],
+        [
+          1279,
+          "What a GPU block may contain"
+        ],
+        [
+          1311,
+          "What a GPU system may touch"
+        ],
+        [
+          1349,
+          "Snapshot semantics"
+        ],
+        [
+          1387,
+          "Arithmetic at 32 bits"
+        ],
+        [
+          1439,
+          "Runtime errors in a GPU system"
+        ],
+        [
+          1479,
+          "Random numbers in a GPU system"
+        ],
+        [
+          1513,
+          "Determinism"
+        ],
+        [
+          1553,
+          "Strict GPU systems"
+        ],
+        [
+          1660,
+          "Without a GPU"
+        ],
+        [
+          1674,
+          "The transfer plan"
+        ],
+        [
+          1852,
+          "Several cores"
+        ],
+        [
+          2055,
+          "Events"
+        ],
+        [
+          2091,
+          "Built-ins"
+        ],
+        [
+          2093,
+          "Output"
+        ],
+        [
+          2113,
+          "Numbers"
+        ],
+        [
+          2130,
+          "Strings"
+        ],
+        [
+          2143,
+          "Lists"
+        ],
+        [
+          2163,
+          "Random numbers, time and exit"
+        ],
+        [
+          2180,
+          "Programs and files"
+        ],
+        [
+          2200,
+          "What things cost"
+        ],
+        [
+          2254,
+          "What a GPU system costs"
+        ],
+        [
+          2360,
+          "What several cores cost"
+        ],
+        [
+          2451,
+          "Errors"
+        ],
+        [
+          2502,
+          "Grammar"
+        ],
+        [
+          2585,
+          "Not in 0.7"
+        ]
+      ],
+      "README.md": [
+        [
+          1,
+          "(before the first section)"
+        ],
+        [
+          87,
+          "Try it"
+        ],
+        [
+          107,
+          "The compiler"
+        ],
+        [
+          158,
+          "GPU systems"
+        ],
+        [
+          217,
+          "Several cores"
+        ],
+        [
+          260,
+          "A window"
+        ],
+        [
+          304,
+          "Keyboard and mouse"
+        ],
+        [
+          353,
+          "Benchmarks"
+        ],
+        [
+          406,
+          "Working on it"
+        ],
+        [
+          541,
+          "Status"
+        ],
+        [
+          553,
+          "License"
+        ]
+      ],
+      "examples/battle.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/battle.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bench.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/bounce.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/hello.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/input.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/life_rules.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/move.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/nbody.out": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.12am": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.drive": [
+        [
+          1,
+          null
+        ]
+      ],
+      "examples/window.out": [
+        [
+          1,
+          null
+        ]
+      ]
+    }
+  },
+  "tasks": {
+    "sandpile": {
+      "sha256": "c36d0ed1c5c5077fd39b74623506a0676f4c71761c4c9e9adfa6c0f41cf2a73a",
+      "control": false,
+      "areas": [
+        "lists"
+      ],
+      "ruby": "Array.new with a block, ranges, each_slice, join"
+    }
+  },
+  "runs": [
+    {
+      "task": "sandpile",
+      "model": "haiku",
+      "models_reported": [
+        "claude-haiku-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T21:02:16Z",
+      "dir": "evals/runs/2026-11-26-825a108-sandpile-grid/sandpile/haiku-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "be93edd130654a0bc2a77364fdff9cadc14e243897e57831b025e2be603f035e",
+      "graded_program_sha256": "d9284a33d7b609ad10a733f8031eaf94029054bfba9b214d2d8dfeb1cb70daf7",
+      "grading": {
+        "ms": 403,
+        "load": 65.65,
+        "timeout": false
+      },
+      "calls": {
+        "total": 2,
+        "by_subcommand": {
+          "check": 1,
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "language.md": [
+          [
+            1,
+            1259
+          ]
+        ],
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/life.12am": [
+          [
+            1,
+            99
+          ]
+        ]
+      },
+      "turns": 9,
+      "duration_ms": 25075,
+      "input_tokens": 14,
+      "output_tokens": 4833,
+      "cache_read_tokens": 174250,
+      "cache_creation_tokens": 41138,
+      "cost_usd": 0.012387999999999998,
+      "partial": false
+    },
+    {
+      "task": "sandpile",
+      "model": "sonnet",
+      "models_reported": [
+        "claude-sonnet-5-5"
+      ],
+      "effort": "default",
+      "trial": 1,
+      "attempt": 1,
+      "counts": true,
+      "claude_code": "2.1.327",
+      "started": "2026-11-26T21:02:16Z",
+      "dir": "evals/runs/2026-11-26-825a108-sandpile-grid/sandpile/sonnet-1-1",
+      "outcome": "pass",
+      "checks": {
+        "build": true,
+        "output": true
+      },
+      "failed_checks": [],
+      "graded_sha256": "5a55331ecd1ece3f1e8b490051c245339e1524746eb043cc6149805216fbaf02",
+      "graded_program_sha256": "5ce1f056aaf97ca0c6d0869ca426435544c578eb3829fc8e70e37dcbb57659df",
+      "grading": {
+        "ms": 401,
+        "load": 77.4,
+        "timeout": false
+      },
+      "calls": {
+        "total": 1,
+        "by_subcommand": {
+          "run": 1
+        },
+        "failed": {},
+        "failed_total": 0
+      },
+      "diagnostics": [],
+      "compiler_bug": false,
+      "first_try": true,
+      "verified": true,
+      "denied": [],
+      "slow_calls": 0,
+      "read": {
+        "README.md": [
+          [
+            1,
+            555
+          ]
+        ],
+        "examples/life.12am": [
+          [
+            1,
+            99
+          ]
+        ],
+        "language.md": [
+          [
+            1,
+            440
+          ],
+          [
+            476,
+            476
+          ],
+          [
+            489,
+            489
+          ],
+          [
+            508,
+            508
+          ],
+          [
+            523,
+            523
+          ],
+          [
+            536,
+            536
+          ],
+          [
+            547,
+            547
+          ],
+          [
+            582,
+            582
+          ],
+          [
+            623,
+            623
+          ],
+          [
+            655,
+            655
+          ],
+          [
+            695,
+            695
+          ],
+          [
+            849,
+            849
+          ],
+          [
+            948,
+            948
+          ],
+          [
+            1172,
+            1172
+          ],
+          [
+            1235,
+            1235
+          ],
+          [
+            1279,
+            1279
+          ],
+          [
+            1311,
+            1311
+          ],
+          [
+            1349,
+            1349
+          ],
+          [
+            1387,
+            1387
+          ],
+          [
+            1439,
+            1439
+          ],
+          [
+            1479,
+            1479
+          ],
+          [
+            1513,
+            1513
+          ],
+          [
+            1553,
+            1553
+          ],
+          [
+            1660,
+            1660
+          ],
+          [
+            1674,
+            1674
+          ],
+          [
+            1852,
+            1852
+          ],
+          [
+            2055,
+            2055
+          ],
+          [
+            2091,
+            2091
+          ],
+          [
+            2093,
+            2093
+          ],
+          [
+            2113,
+            2113
+          ],
+          [
+            2130,
+            2130
+          ],
+          [
+            2143,
+            2143
+          ],
+          [
+            2163,
+            2163
+          ],
+          [
+            2180,
+            2180
+          ],
+          [
+            2200,
+            2200
+          ],
+          [
+            2254,
+            2254
+          ],
+          [
+            2360,
+            2360
+          ],
+          [
+            2451,
+            2451
+          ],
+          [
+            2502,
+            2502
+          ],
+          [
+            2585,
+            2585
+          ]
+        ]
+      },
+      "turns": 10,
+      "duration_ms": 12561,
+      "input_tokens": 14,
+      "output_tokens": 1535,
+      "cache_read_tokens": 100934,
+      "cache_creation_tokens": 23316,
+      "cost_usd": 0.11873539999999999,
+      "partial": false
+    }
+  ]
+}
