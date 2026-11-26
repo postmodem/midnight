@@ -1,6 +1,6 @@
 # 0006 — A window: a program on the screen, and a way to drive it without one
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0005
 
 ## Goal
