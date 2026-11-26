@@ -55,10 +55,7 @@ system play
 end
 
 system record
-  results = ""
   on Match do |m|
-    results += ", " unless results.empty?
-    results += score(m)
     each Team do |t|
       if t.name == m.home || t.name == m.away
         mine = t.name == m.home ? m.home_goals : m.away_goals
@@ -69,10 +66,15 @@ system record
       end
     end
   end
-  puts "round #{Time.tick + 1}: #{results}"
 end
 
 system table
+  results = ""
+  on Match do |m|
+    results += ", " unless results.empty?
+    results += score(m)
+  end
+  puts "round #{Time.tick + 1}: #{results}"
   rows: [Row] = []
   each Team do |t|
     rows.push(Row(t.name, t.points, t.diff))

@@ -27,8 +27,14 @@ At the start there are ten rabbits and three foxes:
 
 Step 2 below says what a fox's hunger and meals do.
 
+Each rabbit and each fox is an entity. A rabbit that is eaten and a fox
+that starves are despawned, and a baby or a cub is spawned as a new
+entity.
+
 The program runs 15 ticks. Each tick has four steps, in this order. Each
-step finishes for every animal before the next step begins.
+step is a system of its own, and the four systems run once a tick, in the
+order given. Each step finishes for every animal before the next step
+begins.
 
 1. **Hunt.** All the foxes hunt at the same time. Each fox picks the
    lowest-numbered rabbit at its own place, if there is one. When two or

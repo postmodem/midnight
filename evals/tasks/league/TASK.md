@@ -1,8 +1,8 @@
 ## League
 
 Six teams play a league: Bees, Ants, Cats, Dogs, Eels and Fish. Every team
-plays every other team once, over five rounds. The program plays the rounds
-in this order:
+plays every other team once, over five rounds. The program plays one round
+per tick, in this order:
 
 | Round | Matches (home team, home goals - away goals, away team) |
 | ----- | ------------------------------------------------------- |
@@ -17,6 +17,11 @@ in this order:
 - A team's goal difference is the number of goals it has scored minus the
   number of goals scored against it, over all its matches so far, home and
   away.
+
+Each team is an entity. The program has three systems, which run once a
+tick in this order: one announces the round's matches as events, another
+updates the teams from those events, and a third prints the round's line
+and the table.
 
 After each round the program prints the round's results and then the
 league table:
