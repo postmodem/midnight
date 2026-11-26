@@ -96,6 +96,11 @@ class ParseTest < Minitest::Test
     FileUtils.rm_rf([dir, keep])
   end
 
+  def test_output_is_compared_as_bytes
+    assert Eval::Grade.same_output?("tick 1: 20.5 °C → on\n".b, "tick 1: 20.5 °C → on\n")
+    refute Eval::Grade.same_output?("tick 1: 20.5 °C\n".b, "tick 1: 20.5 C\n")
+  end
+
   def test_loops_check
     out = "s.12am:4  system walk   each Pos  cores\n" \
           "s.12am:9  system walk   each Vel  one core: assigns `best` at line 10\n" \
@@ -234,6 +239,17 @@ class ParseTest < Minitest::Test
     reason, limit = usage.infrastructure
     assert_match(/\Ausage limit/, reason)
     assert limit
+    last = JSON.parse(fixture("api-error.jsonl").lines.last)
+    login = Eval::Transcript.new(JSON.generate(last.merge("result" => "Not logged in · Please run /login",
+                                                          "api_error_status" => nil)))
+    reason, limit = login.infrastructure
+    assert_match(/Not logged in/, reason)
+    refute limit
+    rate = Eval::Transcript.new(JSON.generate(last.merge("result" => "API Error: 429 rate_limit_error",
+                                                         "api_error_status" => 429)))
+    reason, limit = rate.infrastructure
+    assert_match(/\AAPI error/, reason)
+    refute limit, "a rate limit is not a usage limit"
     cut = Eval::Transcript.new(fixture("denied.jsonl").lines[0..3].join)
     assert_equal ["no result line", false], cut.infrastructure
     assert cut.usage["partial"]

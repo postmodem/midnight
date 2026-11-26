@@ -223,13 +223,14 @@ cap, and one program graded at a time:
 
 1. **Builds:** `midnight build solution.12am` exits 0.
 2. **Output:** the program, run with `MIDNIGHT_DRIVE=check.drive` when the
-   task has one, exits 0, and its standard output is exactly
-   `expected.out`. Standard error is not compared.
+   task has one, exits 0, and its standard output is `expected.out`, byte
+   for byte. Standard error is not compared.
 3. **Loops:** when the task has a `loops` file, each of its lines is
    `WHERE PLACE`, as in `system walk cores` or `strict gpu system settle
    gpu`. In what `midnight loops solution.12am` prints, columns are
    separated by two or more spaces; at least one line has `WHERE` as its
-   second column, and every such line has `PLACE` as its last.
+   second column, and the last column of every such line is `PLACE` or
+   begins `PLACE:` (as `one core: prints at line 4` does).
 4. **Systems:** when the task has a `systems` file, each of its lines is
    `NAME` or `NAME each`. One of the program's files declares the system
    (`system NAME`, `gpu system NAME` or `strict gpu system NAME`) on a
@@ -245,23 +246,39 @@ when there is no `solution.12am`, when the time limit ended it
 
 A run that the harness did not end, and that ends because of the agent's
 machinery and not the agent, is an **infrastructure error**: Claude Code
-exits with no `result` line, or its `result` line has `is_error` true and
-reports an API error or a usage limit. It counts neither as a pass nor as
-a fail. `run` starts it again as the same trial, up to twice, and keeps
+exits with no `result` line, or its `result` line has `is_error` true,
+which an agent that finishes never sets: an API error, a rate limit, a
+usage limit, a lapsed login. A usage limit is told by the result's text,
+not by its status, which a rate limit shares. It counts neither as a pass
+nor as a fail. `run` starts it again as the same trial, up to twice, and keeps
 each attempt's transcript. A usage limit ends the runs in flight as
 infrastructure errors that count no attempt, and stops the whole run.
 
 **The audit.** A tool call **ran** when its tool result is not a
 permission denial. For every call that ran, the harness takes as paths the
-`file_path`, `path` and `pattern` arguments of the file tools, and every
-word of a Bash command that begins with `/` or `~` or contains `..`, with
-redirections split off. Each is resolved against the run's directory. A
-path that resolves outside the run's directory, the wrapper's directory,
-`/dev/null`, `/dev/stdout`, `/dev/stderr` and Claude Code's tool-result
-directory for the run marks the run **escaped**, and so does a refusal in
-the call log. An escaped run counts as failed, is listed by itself in the
-report, and is a defect of the harness or the task to be fixed before
-results are used.
+`file_path`, `path` and `pattern` arguments of the file tools, and the
+words of a Bash command that begin with `/` or `~` or contain `..`: its
+arguments, with redirections split off, the value after `=` of an option,
+and the argument of an option that names a file (`-f`, `--file`,
+`--exclude-from`, `--ignore-file`); not the program of `grep`, `rg`, `sed`
+or `awk`, nor what `echo` and `printf` print. `cd` alone counts as `~`.
+The file tools' paths are resolved against the run's directory; a Bash
+word against the shell's directory when the call began, as Claude Code
+keeps it: the directory a `cd` left, from call to call, unless a call's
+result says the directory was reset. `~` and `~/` are the home directory,
+and a word that begins with any other `~` is outside. A path that resolves
+outside the run's directory, the wrapper's directory, `/dev/null`,
+`/dev/stdout`, `/dev/stderr` and Claude Code's tool-result directory for
+the run marks the run **escaped**, and so does a refusal in the call log.
+An escaped run counts as failed, is listed by itself in the report, and is
+a defect of the harness or the task to be fixed before results are used.
+
+What the audit cannot follow puts the run on a list **for review** in the
+report, without marking it: a word with `$` or a backquote; a relative
+word after a `cd` to a directory it cannot know (`cd -`, a variable); a
+`sed` program with an `r`, `R`, `w`, `W` or `e` command; an `awk` program
+with `getline`, `system` or output to a file or a pipe; `rg --pre`;
+`find -exec` and its kind; and a call the audit fails on.
 
 ### What is recorded
 
@@ -353,7 +370,8 @@ account details and are large.
 5. The reference as read: for each `##` and `###` section of each file in
    `docs/`, and for each file with no headings, the number of runs that
    read any of its lines.
-6. Compiler bugs, escaped runs, infrastructure errors, denied calls, runs
+6. Compiler bugs, escaped runs, runs for review with what the audit could
+   not follow, infrastructure errors, denied calls, runs
    that ended in `timeout` or `no solution`, and calls the time limit
    ended while the load average exceeded the number of cores, if any.
 

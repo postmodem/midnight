@@ -52,6 +52,18 @@ class ReportTest < Minitest::Test
     assert_empty read(call("Bash", { "command" => "midnight run docs/examples/hello.12am" }, EXAMPLE))
   end
 
+  def test_the_shells_directory_carries_over
+    out = "line 5 of the reference\nline 6 of the reference\n"
+    assert_equal({ "language.md" => [5, 6, 10] },
+                 read(call("Bash", { "command" => "cd docs && grep -n '^#' language.md" }, "10:## Lists"),
+                      call("Bash", { "command" => "sed -n 5,6p language.md" }, out)))
+    reset = "10:## Lists\nShell cwd was reset to #{ROOT}"
+    assert_equal({ "language.md" => [10] },
+                 read(call("Bash", { "command" => "cd docs && grep -n '^#' language.md" }, reset),
+                      call("Bash", { "command" => "sed -n 5,6p language.md" }, out)))
+    assert_empty read(call("Bash", { "command" => "cat ~nobody/language.md ~+/x" }, out))
+  end
+
   def test_ruby_shaped
     shaped = ->(msg) { Eval::RubyShaped.ruby_shaped?(Eval::Stderr.template(msg), Eval::Stderr.spans(msg)) }
     assert shaped.("unknown method `insert` for `[Row]`")

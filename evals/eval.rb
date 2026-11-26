@@ -729,16 +729,19 @@ module Eval
     end
 
     # nil, or why the run is an infrastructure error: [reason, usage_limit?].
+    # Every result with is_error is one: an agent that finishes never sets
+    # it. A usage limit is told by its text; a rate limit is an API error.
     def infrastructure
       r = result
       return ["no result line", false] unless r
       return nil unless r["is_error"]
 
       text = r["result"].to_s
-      return ["usage limit: #{text[0, 200]}", true] if text.match?(USAGE) || r["api_error_status"] == 429
-      return ["API error: #{text[0, 200]}", false] if text.match?(API) || r["api_error_status"]
+      return ["API error: #{text[0, 200]}", false] if text.match?(API)
+      return ["usage limit: #{text[0, 200]}", true] if text.match?(USAGE)
+      return ["API error: #{text[0, 200]}", false] if r["api_error_status"]
 
-      nil
+      ["error: #{text[0, 200]}", false]
     end
 
     # Turns, duration, tokens and cost.
@@ -780,6 +783,9 @@ module Eval
     REDIRECT = /\A\d*(?:&>>|&>|>>|>\||>&|>|<<<|<<|<&|<>|<)/
     PATTERN_FIRST = %w[grep egrep fgrep rg sed awk].freeze
     NO_PATHS = %w[echo printf].freeze
+    FILE_OPTIONS = %w[-f --file --exclude-from --ignore-file].freeze
+    RUNS = %w[--pre -exec -execdir -ok -okdir].freeze
+    RESET = /Shell cwd was reset to (\S+)/
 
     # A shell command split into simple commands at unquoted `|`, `;`,
     # `&`, `&&`, `||` and newlines, with a space put before each unquoted
@@ -808,74 +814,166 @@ module Eval
       out.map(&:strip).reject(&:empty?)
     end
 
-    # The words of a shell command that may be paths. After `cd DIR`, the
-    # relative words of later commands are taken from DIR.
-    def bash_words(command)
-      dir = nil
-      segments(command).flat_map do |seg|
-        words = begin
-          Shellwords.split(seg)
-        rescue ArgumentError
-          seg.split(/\s+/)
-        end
-        found = segment_words(words)
-        found = found.map { |w| w.start_with?("/", "~") ? w : File.join(dir, w) } if dir
-        if words.first == "cd" && words[1]
-          dir = words[1].start_with?("/", "~") || dir.nil? ? words[1] : File.join(dir, words[1])
-        end
-        found
+    def split(seg)
+      Shellwords.split(seg)
+    rescue ArgumentError
+      seg.split(/\s+/)
+    end
+
+    # Each call that ran, with the shell's directory when it began (nil
+    # when not known). Claude Code keeps the directory a Bash call's `cd`
+    # left for the next one, unless the call's result says it reset it.
+    def walk(calls, root)
+      cwd = root
+      calls.each do |c|
+        next if c["denied"]
+
+        yield c, cwd
+        next unless c["tool"] == "Bash"
+
+        cwd = bash_words(c.dig("input", "command").to_s, cwd)[2]
+        reset = c["result"].to_s[RESET, 1]
+        cwd = reset if reset
       end
+    end
+
+    # `~` and `~/…` as paths under the home directory; nil for any other
+    # word.
+    def tilde(word)
+      return nil unless word == "~" || word.start_with?("~/")
+
+      File.join(Dir.home, word.delete_prefix("~"))
+    end
+
+    # The absolute path of a word taken from dir: :outside for `~+`, `~-`
+    # and `~user`, nil for a relative word when dir is not known.
+    def expand(word, dir)
+      home = tilde(word)
+      return home if home
+      return :outside if word.start_with?("~")
+      return nil if dir.nil? && !word.start_with?("/")
+
+      File.expand_path(word, dir || "/")
+    end
+
+    # The directory `cd` with these words goes to from dir, or nil when it
+    # cannot be known.
+    def cd(words, dir)
+      target = words[1] || "~"
+      return nil if target == "-" || target.match?(/[$`]/)
+
+      full = expand(target, dir)
+      full == :outside ? nil : full
+    end
+
+    # [found, review, dir]: each word of a shell command that may be a
+    # path, as [word, the directory it is taken from]; what the audit cannot
+    # follow; and the directory the command leaves the shell in. `cd` alone
+    # counts as `~`.
+    def bash_words(command, cwd)
+      dir = cwd
+      found = []
+      review = []
+      segments(command).each do |seg|
+        words = split(seg)
+        paths, why = segment_words(words)
+        found.concat(paths.map { |w| [w, dir] })
+        review.concat(why)
+        next unless File.basename(words.first.to_s) == "cd"
+
+        found << ["~", dir] if words[1].nil?
+        dir = cd(words, dir)
+        review << "`#{seg}` goes where the audit cannot follow" if dir.nil?
+      end
+      [found, review, dir]
     end
 
     def path_like?(word) = word.start_with?("/", "~") || word.include?("..")
 
-    # The path-like words of one simple command: assignments' values, the
-    # command, redirection targets and arguments, but not the pattern or
-    # script of grep, rg, sed and awk, nor what echo and printf print.
+    # [paths, review] for one simple command. Paths are its path-like
+    # words: assignments' values, the command, redirection targets, the
+    # files options name, and arguments, but not the program of grep, rg,
+    # sed and awk, nor what echo and printf print. Review lists what the
+    # audit cannot follow: a word with `$` or a backquote, a sed or awk
+    # program that reads, writes or runs something, and options that run
+    # a command.
     def segment_words(seg)
       seg = seg.dup
       found = []
+      review = []
       while seg.size > 1 && (m = seg.first.match(/\A[A-Za-z_][A-Za-z_0-9]*=(.*)\z/m))
         found << m[1]
         seg.shift
       end
-      return found.select { |w| path_like?(w) } if seg.empty?
+      unless seg.empty?
+        found << seg.first
+        cmd = File.basename(seg.first)
+        program_due = PATTERN_FIRST.include?(cmd)
+        take = nil
+        seg.drop(1).each do |w|
+          if take == :program
+            review << "#{cmd} program `#{w}`" if runs_something?(cmd, w)
+            take = nil
+          elsif take == :file
+            found << w
+            take = nil
+          elsif (m = w.match(REDIRECT))
+            target = w.delete_prefix(m[0])
+            found << target unless target.empty? || target.start_with?("&")
+          elsif NO_PATHS.include?(cmd)
+            next
+          elsif PATTERN_FIRST.include?(cmd) && %w[-e --regexp --expression].include?(w)
+            take = :program
+            program_due = false
+          elsif FILE_OPTIONS.include?(w)
+            take = :file
+            program_due = false
+          elsif w.start_with?("-")
+            name, value = w.split("=", 2)
+            review << "`#{w}` runs a command" if RUNS.include?(name)
+            next unless value
 
-      found << seg.first
-      cmd = File.basename(seg.first)
-      pattern_due = PATTERN_FIRST.include?(cmd)
-      skip_next = false
-      seg.drop(1).each do |w|
-        if skip_next
-          skip_next = false
-        elsif (m = w.match(REDIRECT))
-          target = w.delete_prefix(m[0])
-          found << target unless target.empty? || target.start_with?("&")
-        elsif NO_PATHS.include?(cmd)
-          next
-        elsif PATTERN_FIRST.include?(cmd) && %w[-e --regexp --expression].include?(w)
-          skip_next = true
-          pattern_due = false
-        elsif w.start_with?("-")
-          next
-        elsif pattern_due
-          pattern_due = false
-        else
-          found << w
+            if %w[--regexp --expression].include?(name)
+              review << "#{cmd} program `#{value}`" if runs_something?(cmd, value)
+            else
+              found << value
+            end
+            program_due = false if %w[--file --regexp --expression].include?(name)
+          elsif program_due
+            review << "#{cmd} program `#{w}`" if runs_something?(cmd, w)
+            program_due = false
+          else
+            found << w
+          end
         end
       end
-      found.select { |w| path_like?(w) }
+      review.concat(found.select { |w| w.match?(/[$`]/) }.map { |w| "`#{w}`" })
+      [found.select { |w| path_like?(w) }, review]
     end
 
-    # The candidate paths of one tool call.
-    def paths(call)
+    # Whether a sed or awk program may read or write a file or run a
+    # command: sed's r, R, w, W and e outside its regular expressions, and
+    # awk's getline, system, and output to a file or a pipe.
+    def runs_something?(cmd, program)
+      case cmd
+      when "sed"
+        program.gsub(%r{/(?:[^/\\]|\\.)*/}, "/").match?(%r{(?:\A|[\s;{}\d$,!/])[rRwWe](?:[\s/]|\z)})
+      when "awk"
+        program.match?(/getline|system\s*\(|>\s*["A-Za-z_(]|\|/)
+      else false
+      end
+    end
+
+    # [paths, review] of one tool call: each path as [word, the directory it
+    # is taken from].
+    def paths(call, root, cwd)
       input = call["input"]
       case call["tool"]
-      when "Bash" then bash_words(input["command"].to_s)
-      when "Read", "Edit", "Write" then [input["file_path"]].compact
-      when "Glob" then [input["path"], glob_base(input["pattern"])].compact
-      when "Grep" then [input["path"], glob_base(input["glob"])].compact
-      else []
+      when "Bash" then bash_words(input["command"].to_s, cwd).first(2)
+      when "Read", "Edit", "Write" then [[input["file_path"]].compact.map { |p| [p, root] }, []]
+      when "Glob" then [[input["path"], glob_base(input["pattern"])].compact.map { |p| [p, root] }, []]
+      when "Grep" then [[input["path"], glob_base(input["glob"])].compact.map { |p| [p, root] }, []]
+      else [[], []]
       end
     end
 
@@ -889,24 +987,33 @@ module Eval
       cut ? pattern[0, cut + 1] : nil
     end
 
-    def expand(path, root)
-      path = File.join(Dir.home, path.delete_prefix("~")) if path == "~" || path.start_with?("~/")
-      File.expand_path(path, root)
-    end
-
-    # The paths, outside the allowed places, that calls which ran reached.
-    def escapes(calls, root:, wrapper:, tool_results:)
+    # { "escapes" => the paths outside the allowed places that calls which
+    # ran reached, "review" => what the audit could not follow }.
+    def check(calls, root:, wrapper:, tool_results:)
       allowed = [root, wrapper, tool_results].compact
-      calls.reject { |c| c["denied"] }.flat_map do |c|
-        paths(c).filter_map do |p|
-          full = expand(p, root)
-          next if %w[/dev/null /dev/stdout /dev/stderr].include?(full)
-          next if allowed.any? { |a| Guard.inside?(full, a) }
+      escapes = []
+      review = []
+      walk(calls, root) do |c, cwd|
+        found, why = paths(c, root, cwd)
+        review.concat(why.map { |w| { "tool" => c["tool"], "what" => w } })
+        found.each do |p, dir|
+          full = expand(p, dir)
+          if full.nil?
+            review << { "tool" => c["tool"], "what" => "`#{p}` from a directory the audit cannot follow" }
+            next
+          end
+          next if full != :outside && %w[/dev/null /dev/stdout /dev/stderr].include?(full)
+          next if full != :outside && allowed.any? { |a| Guard.inside?(full, a) }
 
-          { "tool" => c["tool"], "path" => p }
+          escapes << { "tool" => c["tool"], "path" => p }
         end
+      rescue StandardError => e
+        review << { "tool" => c["tool"], "what" => "the audit failed: #{e.message}" }
       end
+      { "escapes" => escapes, "review" => review }
     end
+
+    def escapes(calls, **places) = check(calls, **places)["escapes"]
   end
 
   # Grading one program against one task.
@@ -988,7 +1095,7 @@ module Eval
         run_env = task.drive ? env.merge("MIDNIGHT_DRIVE" => "check.drive") : env
         r = Guard.capture(run_env, [File.join(dir, "solution")], chdir: dir, limit: LIMIT, cap: CAP)
         stdout = r[:out].scrub
-        checks["output"] = r[:status].zero? && r[:out] == task.expected
+        checks["output"] = r[:status].zero? && same_output?(r[:out], task.expected)
         unless checks["output"]
           notes["output"] = r[:timeout] ? "time limit" : "status #{r[:status]}"
           notes["output"] += ", #{first_difference(r[:out], task.expected)}" if r[:status].zero?
@@ -1014,9 +1121,11 @@ module Eval
         "program_sha256" => program_sha, "stdout" => stdout }
     end
 
+    def same_output?(got, want) = got.b == want.b
+
     def first_difference(got, want)
-      g = got.lines
-      w = want.lines
+      g = got.b.lines
+      w = want.b.lines
       i = (0...[g.size, w.size].max).find { |k| g[k] != w[k] }
       "line #{i + 1}: got #{g[i].to_s.chomp.inspect}, want #{w[i].to_s.chomp.inspect}"
     end
@@ -1070,11 +1179,15 @@ module Eval
     def lines(calls, root:, docs:)
       index = docs.transform_values { |text| Index.new(text) }
       seen = Hash.new { |h, k| h[k] = [] }
-      calls.reject { |c| c["denied"] }.each do |c|
+      Audit.walk(calls, root) do |c, cwd|
         text = c["result"].to_s
         next if text.empty?
 
-        targets = targets(c, root, index.keys)
+        targets = begin
+          targets(c, root, cwd, index.keys)
+        rescue StandardError
+          []
+        end
         next if targets.empty?
 
         if c["tool"] == "Read"
@@ -1091,8 +1204,8 @@ module Eval
       seen.transform_values { |v| v.uniq.sort }.reject { |_, v| v.empty? }
     end
 
-    # The files of docs/ a call reads.
-    def targets(call, root, dests)
+    # The files of docs/ a call reads; cwd is the shell's directory.
+    def targets(call, root, cwd, dests)
       input = call["input"]
       case call["tool"]
       when "Read"
@@ -1105,27 +1218,23 @@ module Eval
           !input["glob"] || File.fnmatch?(input["glob"], File.basename(d), File::FNM_EXTGLOB) ||
             File.fnmatch?(input["glob"], d, File::FNM_PATHNAME | File::FNM_EXTGLOB)
         end
-      when "Bash" then shell_targets(input["command"].to_s, root, dests)
+      when "Bash" then shell_targets(input["command"].to_s, cwd, root, dests)
       else []
       end
     end
 
     # The files of docs/ the reading commands of a shell command name,
-    # with `cd` followed. A directory stands for the files under it only
-    # for grep and rg.
-    def shell_targets(command, root, dests)
-      dir = root
+    # taken from cwd, with `cd` followed. A directory stands for the files
+    # under it only for grep and rg.
+    def shell_targets(command, cwd, root, dests)
+      dir = cwd
       found = []
       Audit.segments(command).each do |seg|
-        words = begin
-          Shellwords.split(seg)
-        rescue ArgumentError
-          seg.split(/\s+/)
-        end
+        words = Audit.split(seg)
         cmd = File.basename(words.first.to_s)
         if cmd == "cd"
-          dir = File.expand_path(words[1] || root, dir)
-        elsif READERS.include?(cmd)
+          dir = Audit.cd(words, dir)
+        elsif dir && READERS.include?(cmd)
           words.drop(1).each do |w|
             found.concat(matching(w, dir, root, dests, recursive: %w[grep egrep fgrep rg].include?(cmd)))
           end
@@ -1157,7 +1266,9 @@ module Eval
     def matching(word, dir, root, dests, recursive:)
       return [] if word.start_with?("-")
 
-      full = File.expand_path(word, dir)
+      full = Audit.expand(word, dir)
+      return [] unless full.is_a?(String)
+
       docs = File.join(root, "docs")
       if full == docs || full == root
         return recursive ? dests : []
@@ -1458,6 +1569,7 @@ module Eval
       lists = {
         "Compiler bugs" => graded.select { |r| r["compiler_bug"] },
         "Escaped runs" => graded.select { |r| r["outcome"] == "escaped" },
+        "Runs for review (calls the audit could not follow)" => graded.select { |r| r["review"] },
         "Infrastructure errors" => results["runs"].select { |r| r["outcome"] == "infrastructure" },
         "Timeouts" => graded.select { |r| r["outcome"] == "timeout" },
         "No solution" => graded.select { |r| r["outcome"] == "no solution" },
@@ -1494,7 +1606,7 @@ module Eval
       case r["outcome"]
       when "infrastructure" then " (#{r['infrastructure']})"
       when "escaped" then " (#{r['escapes'].map { |e| e['path'] }.join(', ')})"
-      else ""
+      else r["review"] ? " (#{r['review'].map { |e| e['what'] }.first(3).join('; ')})" : ""
       end
     end
   end
@@ -1753,8 +1865,9 @@ module Eval
         return rec.merge(transcript.usage)
       end
 
-      escapes = Audit.escapes(tool_calls, root: @root, wrapper: @wrapper,
-                                          tool_results: Eval.tool_results_dir(@root))
+      audit = Audit.check(tool_calls, root: @root, wrapper: @wrapper,
+                                      tool_results: Eval.tool_results_dir(@root))
+      escapes = audit["escapes"]
       escapes += calls.select { |c| c["refused"] }.map { |c| { "tool" => "midnight", "path" => c["refused"] } }
       graded = Grade.grade(@task, program_dir, compiler: @runner.compiler, keep: @keep)
       given_sha = @task.repair? ? Guard.sha256(@task.path("given", "solution.12am")) : nil
@@ -1770,6 +1883,7 @@ module Eval
       rec["graded_sha256"] = graded["sha256"]
       rec["graded_program_sha256"] = graded["program_sha256"]
       rec["escapes"] = escapes unless escapes.empty?
+      rec["review"] = audit["review"] unless audit["review"].empty?
       rec["calls"] = CallLog.summary(calls)
       rec["diagnostics"] = CallLog.diagnostics(calls)
       rec["compiler_bug"] = calls.any? { |c| Stderr.compiler_bug?(c["stderr"]) }
