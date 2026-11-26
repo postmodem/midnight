@@ -416,7 +416,8 @@ nix flake check
 `MIDNIGHT_GPU_FLAGS` and `MIDNIGHT_WINDOW_FLAGS`. `cargo test` runs the unit tests and every program
 under `tests/` and `examples/`, each in both build modes, with GPU systems
 on the CPU. `nix flake check` builds the package (which runs the same tests
-in the sandbox) and checks clippy, rustfmt and nixfmt.
+in the sandbox) and checks clippy, rustfmt and nixfmt, and the evals'
+harness.
 
 Every program with a loop that can be split also runs, in both build modes,
 with `MIDNIGHT_THREADS` set to `1`, `4`, `3,small`, `7,small,reverse`,
@@ -503,6 +504,21 @@ the build sandbox. The dev shell provides sway and `grim`. Every other
 test that runs a program with a window sets the display variables to
 addresses that cannot be connected to.
 
+The evals measure how well agents write Midnight from its documentation
+alone. Claude Code is given a set of small programs to write or repair,
+each in a directory of its own with the documentation and the compiler
+and nothing else, and a report says how often each model succeeded,
+which diagnostics it met and how it got past them, and which parts of
+the reference it read. A spec that changes the syntax, a diagnostic or
+the reference runs them before and after, and its Outcome compares the
+two. They need the network and a Claude account, so `nix flake check`
+tests only the harness and the tasks' own programs. `evals/README.md`
+says how to run them, read a report and add a task.
+
+```sh
+nix run .#eval -- run                    # every task, sonnet and haiku, five trials each
+```
+
 ```
 src/            the compiler, one module per stage:
                 source, lexer, parser, check, plan, loops, emit, driver
@@ -511,8 +527,10 @@ runtime/        midnight_rt.h, midnight_rt.c; midnight_gpu.h, midnight_gpu.c
                 midnight_window.h, midnight_window.c for programs with a
                 window; midnight_pool.h, midnight_pool.c for programs with
                 a loop that can be split
-docs/           language.md
+docs/           language.md; principles.md
 examples/       programs with their expected output
+evals/          the evals: eval.rb, the harness; tasks/, each a program
+                to write or repair; results/, committed runs and reports
 tests/run/      programs that must print exactly NAME.out, on a device the
                 `stats` lines in NAME.stats when there is one, and with
                 MIDNIGHT_THREADS=4,small,info the lines in NAME.split; a

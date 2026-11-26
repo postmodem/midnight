@@ -8,7 +8,8 @@ runs on the CPU, and an ordinary `each` the compiler finds independent, run
 in pieces on several threads, with the output of one. A program with a
 window shows it through SDL 3, takes the keyboard and the mouse from it,
 and draws its frames on the same device, or runs headless, driven by
-commands. `README.md` has the overview.
+commands. `evals/` measures how well agents write it from its
+documentation alone. `README.md` has the overview.
 
 ## What defines what
 
@@ -58,7 +59,7 @@ nix develop -c cargo clippy --all-targets -- -D warnings
 nix develop -c cargo fmt
 nix develop -c cargo run -- run FILE.12am  # also: build, check, emit-c; add --debug
 nix develop -c cargo run -- loops FILE.12am  # where each loop runs, and what keeps one on one core
-nix flake check                            # package, clippy, rustfmt, nixfmt, GPU programs on llvmpipe, ThreadSanitizer, windows
+nix flake check                            # package, clippy, rustfmt, nixfmt, evals' harness and tasks, GPU programs on llvmpipe, ThreadSanitizer, windows
 nix run .#bench                            # timings against bench/baseline.c
 nix run .#bench-cores                      # loops on one thread and on all cores
 nix run .#gpu-test                         # GPU programs on this machine's GPU, both build modes
@@ -67,7 +68,14 @@ MIDNIGHT_TEST_GPU=hardware nix develop -c cargo test   # the suite, plus GPU pro
 MIDNIGHT_TEST_TSAN=1 nix develop -c cargo test         # the suite, plus the pool and the programs under ThreadSanitizer
 nix develop -c bash tests/window/test.sh OUT           # windows inside a compositor of their own, on this machine's GPU
 nix run .#window-test                                  # the same with the packaged compiler
+nix run .#eval -- run [--tasks A,B] [--models M,N] [--trials K] [--label L]  # agents on the eval tasks, at HEAD
+nix run .#eval -- report RESULTS           # also: compare A B; grade TASK FILE; grade --run RESULTS
+nix run .#eval -- self-test [TASK...]      # every task's own programs grade as they should
+nix run .#eval -- isolation                # haiku tries to leave its directory; the token must reach nothing
 ```
+
+`nix run .#eval -- run` starts Claude Code sessions: it needs the network
+and the account, and costs usage. `evals/README.md` has the details.
 
 Nothing opens a window on the desktop it is run from: a program with a
 window runs headless, or inside `tests/window/compositor.sh`, which starts
@@ -133,6 +141,15 @@ command that needs it.
   The suite runs programs directly: a shell whose `LD_LIBRARY_PATH` was set
   by something else (some launchers set it to their own ALSA) breaks every
   program linked with SDL 3, so unset it before `cargo test`.
+- The evals run before and after a spec that changes the syntax, a
+  diagnostic or the reference, with the same models, effort, kit and
+  trials (10 trials where a choice of syntax rests on them), and the
+  spec's Outcome has the `compare`. A task added or changed is run once
+  per model on the commit that adds or changes it, and the results are
+  committed in the next commit. Results are committed; transcripts never
+  are.
+- The README's paragraph on the evals names no task and no rule of
+  grading: every agent the evals start reads the README.
 
 ## Tests
 
@@ -305,6 +322,22 @@ command that needs it.
 - A program that reads the keyboard or the mouse takes its input from its
   `.drive` file in every mode but `window_input`; `drive_errors` holds
   every command error, in the order they are reported.
+- Evals:
+  - `evals/tasks/NAME/` is a task: `TASK.md`, `meta` (`areas:`,
+    `control:`, `ruby:`, `minutes:`), `solution.12am`, `expected.out`,
+    `right/*.12am` (other correct programs), `wrong/*.12am` (programs
+    grading rejects), and optionally `given/` (files beside `TASK.md`),
+    `check.drive`, `loops` and `systems`. The rules for a task are in
+    "Tasks" in `specs/0008-evals.md`.
+  - `eval_solutions_pass` builds every task's `solution.12am` and `right/`
+    programs, in release and debug, and requires `expected.out` with
+    status 0 and every `loops` and `systems` line; every `wrong/` program
+    must fail a check. A change to the language that breaks a task's
+    program changes the task with it. Solutions with a split loop also
+    run in `thread_programs`, and those with a GPU system in
+    `gpu_programs`.
+  - `checks.evals` runs the harness's tests (`evals/test/test_*.rb`) and
+    `self-test` in the build sandbox, with the packaged compiler.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
   diagnostic and run-time error has a test; keep it that way when the
   language changes.
