@@ -1,0 +1,4 @@
+# The reference without its section on structural changes inside `each`.
+evals/test/kit-no-structural/language.md language.md
+README.md README.md
+examples examples

@@ -1,0 +1,3 @@
+Window.open("probe", 320, 240)
+World.tick
+puts Window.open?
