@@ -74,6 +74,28 @@ class ParseTest < Minitest::Test
     FileUtils.rm_rf(dir)
   end
 
+  def test_the_program_is_its_files_outside_docs
+    dir = Eval::Env.mktemp
+    keep = Eval::Env.mktemp
+    FileUtils.mkdir_p([File.join(dir, "docs", "examples"), File.join(dir, "lib")])
+    File.write(File.join(dir, "solution.12am"), "system tally\nend\n")
+    File.write(File.join(dir, "lib", "a.12am"), "")
+    File.write(File.join(dir, "docs", "examples", "report.12am"), "system report\nend\n")
+    assert_equal %w[lib/a.12am solution.12am], Guard.program_files(dir)
+    Eval.keep_program(dir, keep)
+    assert_equal %w[lib/a.12am solution.12am], Guard.program_files(keep)
+    assert_equal ["report"], Eval::Grade.missing_systems(keep, nil, [["report", false]])
+
+    sha = Guard.program_sha256(dir)
+    assert_equal sha, Guard.program_sha256(keep)
+    File.write(File.join(dir, "docs", "examples", "report.12am"), "changed")
+    assert_equal sha, Guard.program_sha256(dir)
+    File.write(File.join(dir, "lib", "a.12am"), "changed")
+    refute_equal sha, Guard.program_sha256(dir)
+  ensure
+    FileUtils.rm_rf([dir, keep])
+  end
+
   def test_loops_check
     out = "s.12am:4  system walk   each Pos  cores\n" \
           "s.12am:9  system walk   each Vel  one core: assigns `best` at line 10\n" \
@@ -146,6 +168,12 @@ class ParseTest < Minitest::Test
     assert_nil Eval::CallLog.first_try([], nil)
     # For a repair, calls on the given content do not count.
     assert_equal true, Eval::CallLog.first_try(calls.drop(1), "w1")
+
+    # With a hash of the whole program, a helper changed after the last run
+    # leaves the graded program unverified.
+    calls[2]["program_sha256"] = "p2"
+    assert Eval::CallLog.verified(calls, "w2", "p2")
+    refute Eval::CallLog.verified(calls, "w2", "p9")
   end
 
   def test_init_isolation

@@ -257,6 +257,22 @@ module Eval
         File.file?(path) ? Digest::SHA256.file(path).hexdigest : nil
       end
 
+      # The program in dir: its .12am files outside docs/, as sorted
+      # relative paths.
+      def program_files(dir)
+        Dir.glob("**/*.12am", base: dir).reject { |f| f.start_with?("docs/") }.sort
+      end
+
+      # A hash of the program in dir: each file's path and contents.
+      def program_sha256(dir)
+        require "digest"
+        d = Digest::SHA256.new
+        program_files(dir).each { |f| d << "#{f}\0#{File.binread(File.join(dir, f))}\0" }
+        d.hexdigest
+      rescue SystemCallError
+        nil
+      end
+
       def load_average
         File.read("/proc/loadavg").split.first.to_f
       rescue SystemCallError
@@ -278,6 +294,7 @@ module Eval
           "args" => argv,
           "file" => file && (inside?(file, root) ? file.delete_prefix("#{root}/") : file),
           "sha256" => file && sha256(file),
+          "program_sha256" => program_sha256(root),
           "passed" => env.reject { |k, _| %w[PATH HOME XDG_RUNTIME_DIR].include?(k) },
           "dropped" => dropped,
           "caller" => caller_env.select { |k, _| k.start_with?("MIDNIGHT_") },
@@ -621,13 +638,14 @@ module Eval
       first && first["status"].zero?
     end
 
-    # Whether a run of solution.12am exited 0 with the graded content.
-    def verified(calls, graded_sha)
+    # Whether a run of solution.12am exited 0 with the graded content: the
+    # whole program's, where the call log has its hash.
+    def verified(calls, graded_sha, graded_program = nil)
       return false unless graded_sha
 
       calls.any? do |c|
-        !c["refused"] && subcommand(c) == "run" && c["file"] == "solution.12am" &&
-          c["sha256"] == graded_sha && c["status"].zero?
+        same = c["program_sha256"] && graded_program ? c["program_sha256"] == graded_program : c["sha256"] == graded_sha
+        !c["refused"] && subcommand(c) == "run" && c["file"] == "solution.12am" && same && c["status"].zero?
       end
     end
   end
@@ -918,18 +936,15 @@ module Eval
       Guard.environment({}, { "path" => Env.coreutils, "home" => home, "xdg" => xdg, "tmp" => tmp }).first
     end
 
-    # Copies every .12am file under src (or src itself, as solution.12am)
-    # into a fresh directory with the task's check.drive, and grades it.
-    # Returns { "verdict", "checks" => {build:, output:, loops:}, ... }.
+    # Copies the program in src (or src itself, as solution.12am) into a
+    # fresh directory with the task's check.drive, and grades it. Returns
+    # { "verdict", "checks" => {build:, output:, loops:}, ... }.
     def grade(task, src, compiler: Grade.compiler, keep: nil)
       LOCK.synchronize do
         dir = Env.mktemp
         begin
           if File.directory?(src)
-            Dir.glob("**/*.12am", base: src).each do |f|
-              FileUtils.mkdir_p(File.dirname(File.join(dir, f)))
-              FileUtils.cp(File.join(src, f), File.join(dir, f))
-            end
+            Eval.keep_program(src, dir)
           else
             FileUtils.cp(src, File.join(dir, "solution.12am"))
           end
@@ -957,6 +972,7 @@ module Eval
       checks = {}
       notes = {}
       sha = Guard.sha256(solution)
+      program_sha = Guard.program_sha256(dir)
       refused = Guard.refusal(["build", "solution.12am"], {}, dir, File.realpath(dir))
       if refused
         notes["build"] = refused
@@ -994,7 +1010,8 @@ module Eval
         notes["systems"] = "missing: #{missing.join(', ')}" unless missing.empty?
       end
       verdict = checks.values.all? ? "pass" : "fail"
-      { "verdict" => verdict, "checks" => checks, "notes" => notes, "sha256" => sha, "stdout" => stdout }
+      { "verdict" => verdict, "checks" => checks, "notes" => notes, "sha256" => sha,
+        "program_sha256" => program_sha, "stdout" => stdout }
     end
 
     def first_difference(got, want)
@@ -1711,10 +1728,7 @@ module Eval
       calls = CallLog.read(File.join(@logs, "calls.jsonl"))
       FileUtils.cp(File.join(@logs, "calls.jsonl"), @keep) if File.exist?(File.join(@logs, "calls.jsonl"))
       program_dir = File.join(@keep, "program")
-      Dir.glob("**/*.12am", base: @root).reject { |f| f.start_with?("docs/") }.each do |f|
-        FileUtils.mkdir_p(File.dirname(File.join(program_dir, f)))
-        FileUtils.cp(File.join(@root, f), File.join(program_dir, f))
-      end
+      Eval.keep_program(@root, program_dir)
       tool_calls = transcript.tool_calls
       rec = {
         "task" => @task.name, "model" => @model, "models_reported" => transcript.models_reported,
@@ -1742,7 +1756,7 @@ module Eval
       escapes = Audit.escapes(tool_calls, root: @root, wrapper: @wrapper,
                                           tool_results: Eval.tool_results_dir(@root))
       escapes += calls.select { |c| c["refused"] }.map { |c| { "tool" => "midnight", "path" => c["refused"] } }
-      graded = Grade.grade(@task, @root, compiler: @runner.compiler, keep: @keep)
+      graded = Grade.grade(@task, program_dir, compiler: @runner.compiler, keep: @keep)
       given_sha = @task.repair? ? Guard.sha256(@task.path("given", "solution.12am")) : nil
       rec["outcome"] =
         if !escapes.empty? then "escaped"
@@ -1754,12 +1768,13 @@ module Eval
       rec["failed_checks"] = graded["checks"].reject { |_, v| v }.keys
       rec["grade_notes"] = graded["notes"] unless graded["notes"].to_h.empty?
       rec["graded_sha256"] = graded["sha256"]
+      rec["graded_program_sha256"] = graded["program_sha256"]
       rec["escapes"] = escapes unless escapes.empty?
       rec["calls"] = CallLog.summary(calls)
       rec["diagnostics"] = CallLog.diagnostics(calls)
       rec["compiler_bug"] = calls.any? { |c| Stderr.compiler_bug?(c["stderr"]) }
       rec["first_try"] = CallLog.first_try(calls, given_sha)
-      rec["verified"] = CallLog.verified(calls, graded["sha256"])
+      rec["verified"] = CallLog.verified(calls, graded["sha256"], graded["program_sha256"])
       rec["denied"] = tool_calls.select { |c| c["denied"] }.map do |c|
         { "tool" => c["tool"], "input" => c["input"]["command"] || c["input"]["file_path"] || c["input"]["path"] }
       end
@@ -1775,6 +1790,15 @@ module Eval
       Dir.rmdir(dir) if dir && File.directory?(dir) && Dir.empty?(dir)
     rescue SystemCallError
       nil
+    end
+  end
+
+  # Copies the program in src to the same paths under dest.
+  def self.keep_program(src, dest)
+    FileUtils.mkdir_p(dest)
+    Guard.program_files(src).each do |f|
+      FileUtils.mkdir_p(File.dirname(File.join(dest, f)))
+      FileUtils.cp(File.join(src, f), File.join(dest, f))
     end
   end
 

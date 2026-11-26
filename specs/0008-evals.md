@@ -194,24 +194,29 @@ It refuses a call, with status 2 and one line on standard error:
 
 It appends one record per call to the call log in the log directory: the
 time, the arguments, the variables passed and dropped, the SHA-256 of the
-file argument, the load average, the exit status or the refusal, and the
-standard error. The call log, not the transcript, is what grading reads
+file argument and of the program (below), the load average, the exit
+status or the refusal, and the standard error. The call log, not the transcript, is what grading reads
 for compiler calls: a command the agent believes ran may have been
 refused.
 
 These guards are in the wrapper because permission patterns match more
 than they appear to: `Bash(MIDNIGHT_* midnight *)` also allows a command
-that sets two variables, or `RUBYOPT` after a `MIDNIGHT_` one. A program the wrapper accepts reads only files of
-the run's directory, its sources and its file of commands; it reaches no
-network and no C library, and with `MIDNIGHT_GPU=off` it captures no
-frame, so it writes nothing but its output.
+that sets two variables, or `RUBYOPT` after a `MIDNIGHT_` one. A program
+the wrapper accepts reads only files of the run's directory, its sources
+and its file of commands; it reaches no network and no C library, and
+with `MIDNIGHT_GPU=off` it captures no frame, so it writes nothing but its
+output.
 
 ### Grading
 
+The **program** of a run is the `.12am` files under the run's directory
+that are not under `docs/`. Its hash is the SHA-256 of each file's path
+and contents, in order of path.
+
 When the agent finishes, or after the task's time limit, the harness
-kills the agent's process group, copies every `.12am` file under the run's
-directory, at the same relative paths, into a fresh directory with the
-task's `check.drive`, and grades `solution.12am` there with the compiler
+kills the agent's process group, keeps the program (below), copies it, at
+the same relative paths, into a fresh directory with the task's
+`check.drive`, and grades `solution.12am` there with the compiler
 under test, in the wrapper's environment, with no `MIDNIGHT_THREADS`,
 standard input from `/dev/null`, the wrapper's 30-second limit and 1 MB
 cap, and one program graded at a time:
@@ -281,8 +286,8 @@ For each run the results file holds:
 - **first try**: whether the first `check`, `build` or `run` of
   `solution.12am` with content the agent wrote exited 0 (for a repair, the
   first with content that differs from the given file); **verified**:
-  whether a `run` of `solution.12am` exited 0 with the content that was
-  graded;
+  whether a `run` of `solution.12am` exited 0 when the program had the
+  hash of the program graded;
 - each denied tool call: the tool and its command or path;
 - what the agent read of `docs/`: the lines of each file that a tool
   result returned. For `Read`, the range its result shows; for the `Grep`
