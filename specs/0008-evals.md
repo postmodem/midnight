@@ -156,11 +156,15 @@ the agent is shown that path. The harness removes that directory with
 
 ### The wrapper
 
-The agent's `midnight` is a script the harness writes for each run. It
-runs the compiler of the commit under test:
+The agent's `midnight` is a Ruby script the harness writes for each run.
+Ruby runs it with `--disable=gems,rubyopt`, and its first line sets the
+load path to Ruby's own, so `RUBYOPT` and `RUBYLIB` load nothing. It runs
+the compiler of the commit under test:
 
 - with an environment built from nothing but: `PATH` (the flake's
-  coreutils), `HOME` (an empty directory of its own), `TMPDIR=/tmp`,
+  coreutils), `HOME` (an empty directory of its own), `TMPDIR` (an empty
+  directory of its own in the log directory, so what a call stopped at
+  the time limit leaves behind goes when the run ends),
   `XDG_RUNTIME_DIR` (another empty directory of its own),
   `MIDNIGHT_GPU=off`, `MIDNIGHT_WINDOW` (the caller's words with
   `headless` added), and, from the caller, `MIDNIGHT_THREADS` and
@@ -173,11 +177,20 @@ runs the compiler of the commit under test:
 - with at most 1 MB of the call's standard output and of its standard
   error passed on and recorded, and the rest cut.
 
-It refuses a call, with status 2 and one line on standard error, when a
-file argument, the argument of `-o`, or `MIDNIGHT_DRIVE` resolves (after
-`..` and symbolic links) outside the run's directory, or when the named
-file or any `.12am` file under the run's directory has a `require` whose
-path is absolute or contains `..`.
+It refuses a call, with status 2 and one line on standard error:
+
+- when the caller set a variable whose name begins `RUBY`, `LD_` or
+  `GCONV`, which change how Ruby or the dynamic loader starts, except an
+  `LD_LIBRARY_PATH` whose every directory is in `/nix/store/`, as Claude
+  Code's launcher sets it;
+- when a file argument, the argument of `-o`, or `MIDNIGHT_DRIVE` resolves
+  outside the run's directory. A path is resolved a part at a time, as the
+  kernel does: a symbolic link is followed where it stands, so a `..`
+  after it leaves the link's target;
+- when the named file or any `.12am` file under the run's directory has a
+  line that begins with `require` whose path, resolved from that file's
+  directory with `.12am` added, is outside the run's directory, or whose
+  rest is not one string in either quote with at most a comment after it.
 
 It appends one record per call to the call log in the log directory: the
 time, the arguments, the variables passed and dropped, the SHA-256 of the
@@ -188,7 +201,7 @@ refused.
 
 These guards are in the wrapper because permission patterns match more
 than they appear to: `Bash(MIDNIGHT_* midnight *)` also allows a command
-that sets two variables. A program the wrapper accepts reads only files of
+that sets two variables, or `RUBYOPT` after a `MIDNIGHT_` one. A program the wrapper accepts reads only files of
 the run's directory, its sources and its file of commands; it reaches no
 network and no C library, and with `MIDNIGHT_GPU=off` it captures no
 frame, so it writes nothing but its output.
@@ -544,9 +557,15 @@ All run on x86_64-linux, on the development machine.
       `MIDNIGHT_CC`, `MIDNIGHT_CFLAGS`, `MIDNIGHT_GPU_FLAGS` and
       `MIDNIGHT_WINDOW_FLAGS` set; a file argument, an `-o` argument and a
       `MIDNIGHT_DRIVE` outside the run's directory, by an absolute path and
-      by `..`; a program that requires a file outside; `MIDNIGHT_GPU=on`
-      and `MIDNIGHT_WINDOW=`. Each is refused or overridden, and the call
-      log says so.
+      by `..`; a program that requires a file outside, in each quote,
+      with and without a space after `require`, by an absolute path, by
+      `..`, and through a symbolic link followed by `..`; a require the
+      guard cannot read; `RUBYOPT`, `RUBYLIB`, another `RUBY` variable,
+      `LD_PRELOAD`, an `LD_LIBRARY_PATH` with a directory outside the Nix
+      store, and `GCONV_PATH`, set after a `MIDNIGHT_` variable, with a
+      file beside the program that Ruby would load; `MIDNIGHT_GPU=on` and
+      `MIDNIGHT_WINDOW=`. Each is refused or overridden, no file the test
+      planted is loaded, and the call log says so.
    2. A task in `evals/test/` whose `TASK.md` asks the agent to try each of
       those, to read the repository's `CLAUDE.md`, to list the home
       directory, to print `$PATH`, `$HOME` and the environment, and to

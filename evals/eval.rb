@@ -98,32 +98,99 @@ module Eval
         nil
       end
 
-      # The absolute path path names from dir, after `..` and symbolic links,
-      # for as much of it as exists.
-      def resolve(path, dir)
-        full = File.expand_path(path, dir)
-        rest = []
-        probe = full
-        until File.exist?(probe) || probe == "/"
-          rest.unshift(File.basename(probe))
-          probe = File.dirname(probe)
+      # The absolute path path names from dir, taken a part at a time as the
+      # kernel does: a symbolic link is followed where it stands, so a `..`
+      # after it leaves the link's target. Past the first part that does not
+      # exist, the rest is joined as written. A leading `~` is a name.
+      def resolve(path, dir, depth = 0)
+        full = path.start_with?("/") ? path : "#{dir}/#{path}"
+        parts = full.split("/").reject(&:empty?)
+        cur = "/"
+        parts.each_with_index do |part, i|
+          next if part == "."
+
+          if part == ".."
+            cur = File.dirname(cur)
+            next
+          end
+          probe = File.join(cur, part)
+          if File.symlink?(probe) && !File.exist?(probe) && depth < 40
+            return resolve([File.readlink(probe), *parts[i + 1..]].join("/"), cur, depth + 1)
+          end
+          return File.join(cur, *parts[i..]) unless File.exist?(probe)
+
+          cur = File.realpath(probe)
         end
-        base = File.realpath(probe)
-        rest.empty? ? base : File.join(base, *rest)
+        cur
       end
 
       def inside?(path, dir)
         path == dir || path.start_with?(dir.end_with?("/") ? dir : "#{dir}/")
       end
 
-      # The require paths of a source file that are absolute or contain `..`.
-      def bad_requires(file)
+      REQUIRE = /\A\s*require(?![A-Za-z0-9_?!])\s*/
+
+      # What is wrong with the requires of a source file: each path that
+      # leads outside root, and each require this guard cannot read.
+      def bad_requires(file, root)
         File.foreach(file).filter_map do |line|
-          m = line.match(/\A\s*require\s+"((?:[^"\\]|\\.)*)"/)
-          m[1] if m && (m[1].start_with?("/") || m[1].include?(".."))
+          m = line.match(REQUIRE) or next
+          path = require_path(m.post_match)
+          next "`#{m.post_match.strip}`, which this guard cannot read" unless path
+
+          "`#{path}`, outside this directory" unless inside?(resolve("#{path}.12am", File.dirname(file)), root)
         end
       rescue SystemCallError, ArgumentError
         []
+      end
+
+      # The path of the string a require line goes on with, or nil unless it
+      # is one plain string in either quote, with only a comment after it.
+      def require_path(rest)
+        quote = rest[0]
+        return nil unless ["'", '"'].include?(quote)
+
+        out = +""
+        i = 1
+        while i < rest.size
+          c = rest[i]
+          n = rest[i + 1]
+          if c == quote
+            tail = rest[i + 1..].strip
+            return tail.empty? || tail.start_with?("#") ? out : nil
+          elsif c == "\n" || (quote == '"' && c == "#" && n == "{")
+            return nil
+          elsif c == "\\" && quote == "'"
+            if ["'", "\\"].include?(n)
+              out << n
+              i += 1
+            else
+              out << c
+            end
+          elsif c == "\\"
+            return nil unless ["\\", '"', "#"].include?(n)
+
+            out << n
+            i += 1
+          else
+            out << c
+          end
+          i += 1
+        end
+        nil
+      end
+
+      # The first of the caller's variables that changes how Ruby or the
+      # dynamic loader starts, or nil. LD_LIBRARY_PATH may name directories
+      # of the Nix store, as Claude Code's launcher sets it.
+      def bad_variable(env)
+        env.keys.sort.find do |name|
+          if name == "LD_LIBRARY_PATH"
+            env[name].split(":", -1).any? { |d| !d.start_with?("/nix/store/") }
+          else
+            name.start_with?("RUBY", "LD_", "GCONV")
+          end
+        end
       end
 
       # The file arguments of a compiler call: [files, out].
@@ -144,6 +211,9 @@ module Eval
 
       # Why a call must be refused, or nil. root is the run's directory.
       def refusal(argv, caller_env, cwd, root)
+        variable = bad_variable(caller_env)
+        return "the variable `#{variable}` is not allowed" if variable
+
         files, out = file_args(argv)
         named = files.map { |f| ["file", f] }
         named << ["-o", out] if out
@@ -156,8 +226,8 @@ module Eval
         sources = Dir.glob("**/*.12am", base: root).map { |f| File.join(root, f) }
         sources += files.map { |f| resolve(f, cwd) }.select { |f| File.file?(f) }
         sources.uniq.each do |file|
-          bad = bad_requires(file).first
-          return "`#{File.basename(file)}` requires `#{bad}`, outside this directory" if bad
+          bad = bad_requires(file, root).first
+          return "`#{File.basename(file)}` requires #{bad}" if bad
         end
         nil
       end
@@ -169,7 +239,7 @@ module Eval
         env = {
           "PATH" => config["path"],
           "HOME" => config["home"],
-          "TMPDIR" => "/tmp",
+          "TMPDIR" => config["tmp"],
           "XDG_RUNTIME_DIR" => config["xdg"],
           "MIDNIGHT_GPU" => "off",
           "MIDNIGHT_WINDOW" => words.join(",")
@@ -275,6 +345,17 @@ module Eval
     # The compiler's PATH inside the wrapper.
     def coreutils
       ENV["EVAL_COREUTILS"] || tool_dir("ls")
+    end
+
+    # Ruby's own $LOAD_PATH, with no RUBYLIB.
+    def load_path
+      @load_path ||= begin
+        out = IO.popen({}, [ruby, "--disable=gems,rubyopt", "-e", "puts $LOAD_PATH"],
+                       unsetenv_others: true, &:read)
+        raise Failure, "`#{ruby}` failed" unless $?.success?
+
+        out.lines.map(&:chomp)
+      end
     end
 
     def mktemp
@@ -832,8 +913,9 @@ module Eval
     def environment(dir)
       home = File.join(dir, ".home")
       xdg = File.join(dir, ".xdg")
-      FileUtils.mkdir_p([home, xdg])
-      Guard.environment({}, { "path" => Env.coreutils, "home" => home, "xdg" => xdg }).first
+      tmp = File.join(dir, ".tmp")
+      FileUtils.mkdir_p([home, xdg, tmp])
+      Guard.environment({}, { "path" => Env.coreutils, "home" => home, "xdg" => xdg, "tmp" => tmp }).first
     end
 
     # Copies every .12am file under src (or src itself, as solution.12am)
@@ -1705,14 +1787,16 @@ module Eval
   def self.write_wrapper(dir, root:, logs:, compiler:, limit: LIMIT, cap: CAP)
     home = File.join(logs, "home")
     xdg = File.join(logs, "xdg")
-    FileUtils.mkdir_p([home, xdg])
+    tmp = File.join(logs, "tmp")
+    FileUtils.mkdir_p([home, xdg, tmp])
     config = { "root" => File.realpath(root), "log" => File.join(logs, "calls.jsonl"),
                "compiler" => compiler, "path" => Env.coreutils, "home" => home, "xdg" => xdg,
-               "limit" => limit, "cap" => cap }
+               "tmp" => tmp, "limit" => limit, "cap" => cap }
     path = File.join(dir, "midnight")
     File.write(path, <<~SCRIPT)
-      #!#{Env.ruby} --disable-gems
+      #!#{Env.ruby} --disable=gems,rubyopt
       # frozen_string_literal: true
+      $LOAD_PATH.replace(#{Env.load_path.inspect})
       #{GUARD}
       Guard.main(ARGV, #{config.inspect})
     SCRIPT

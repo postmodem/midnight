@@ -38,7 +38,7 @@ class WrapperTest < Minitest::Test
   def call(*args, env: {}, chdir: @root)
     out_r, out_w = IO.pipe
     err_r, err_w = IO.pipe
-    pid = Process.spawn(env, @midnight, *args, chdir: chdir, out: out_w, err: err_w)
+    pid = Process.spawn(env, @midnight, *args, chdir: chdir, out: out_w, err: err_w, unsetenv_others: true)
     out_w.close
     err_w.close
     reader = Thread.new { out_r.read }
@@ -69,7 +69,8 @@ class WrapperTest < Minitest::Test
     assert_equal %w[HOME MIDNIGHT_GPU MIDNIGHT_WINDOW PATH TMPDIR XDG_RUNTIME_DIR], env.keys.sort
     assert_equal "off", env["MIDNIGHT_GPU"]
     assert_equal "headless", env["MIDNIGHT_WINDOW"]
-    assert_equal "/tmp", env["TMPDIR"]
+    assert Guard.inside?(env["TMPDIR"], @logs), "the compiler's TMPDIR is under the log directory"
+    assert File.directory?(env["TMPDIR"])
     assert Dir.empty?(env["XDG_RUNTIME_DIR"])
     entry = log.last
     assert_equal %w[check solution.12am], entry["args"]
@@ -145,10 +146,63 @@ class WrapperTest < Minitest::Test
     assert_refused("check", "solution.12am")
   end
 
+  def test_refuses_every_form_of_a_require_outside
+    name = File.basename(@other)
+    [
+      "require '../#{name}/outside'",
+      "require\"../#{name}/outside\"",
+      "require '#{@other}/outside'",
+      "  require \"#{@other}/outside\"  # a comment",
+      "require \"..\\/#{name}/outside\"",
+      "require \"a\#{1}\"",
+      "require '../#{name}/outside' x"
+    ].each do |line|
+      File.write(File.join(@root, "solution.12am"), "#{line}\nputs 1\n")
+      assert_refused("check", "solution.12am")
+    end
+  end
+
+  def test_refuses_a_require_through_a_link
+    FileUtils.mkdir_p(File.join(@other, "sub"))
+    File.symlink(File.join(@other, "sub"), File.join(@root, "deep"))
+    File.write(File.join(@root, "solution.12am"), "require \"deep/../outside\"\n")
+    assert_refused("check", "solution.12am")
+    File.write(File.join(@root, "solution.12am"), "require \"deep/x\"\n")
+    assert_refused("check", "solution.12am")
+  end
+
   def test_accepts_a_require_inside
     File.write(File.join(@root, "helper.12am"), "def two -> Int\n  2\nend\n")
-    File.write(File.join(@root, "solution.12am"), "require \"helper\"\nputs two\n")
-    status, = call("check", "solution.12am")
+    FileUtils.mkdir_p(File.join(@root, "sub"))
+    File.write(File.join(@root, "sub", "three.12am"), "require '../helper'\n")
+    ["require \"helper\"", "require 'helper' # two", "require \"sub/three\"", "require \"~nobody/x\""].each do |line|
+      File.write(File.join(@root, "solution.12am"), "#{line}\nputs two\n")
+      status, = call("check", "solution.12am")
+      assert_equal 0, status, line
+    end
+  end
+
+  def test_refuses_variables_that_change_how_it_starts
+    ran = File.join(@other, "ran")
+    File.write(File.join(@root, "x.rb"), "File.write(#{ran.inspect}, '')\n")
+    File.write(File.join(@root, "json.rb"), "File.write(#{ran.inspect}, '')\n")
+    [
+      { "MIDNIGHT_A" => "1", "RUBYOPT" => "-r./x.rb" },
+      { "RUBYLIB" => "." },
+      { "RUBY_DEBUG" => "1" },
+      { "LD_PRELOAD" => "" },
+      { "LD_BIND_NOW" => "1" },
+      { "LD_LIBRARY_PATH" => "." },
+      { "LD_LIBRARY_PATH" => ":/nix/store/x-lib/lib" },
+      { "GCONV_PATH" => "." }
+    ].each do |env|
+      assert_refused("check", "solution.12am", env: env)
+      refute File.exist?(ran), "#{env} ran code"
+    end
+  end
+
+  def test_accepts_a_library_path_in_the_store
+    status, = call("check", "solution.12am", env: { "LD_LIBRARY_PATH" => "/nix/store/x-alsa-lib/lib" })
     assert_equal 0, status
   end
 
