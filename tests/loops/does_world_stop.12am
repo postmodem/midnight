@@ -1,0 +1,22 @@
+# expect: both loops stay on one core for rule 6: `World.stop` in the
+# block and in a called function.
+
+component Health
+  hp: Int = 10
+end
+
+def halt
+  World.stop
+end
+
+system direct
+  each Health do |health|
+    World.stop if health.hp < 0
+  end
+end
+
+system called
+  each Health do |health|
+    halt if health.hp < 0
+  end
+end

@@ -466,6 +466,7 @@ impl<'a> Lower<'a> {
             query,
             params,
             body,
+            ..
         } = &stmt.kind
         else {
             unreachable!("the checker lets the body of a GPU system hold only `each` blocks");
@@ -966,6 +967,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 query,
                 params,
                 body,
+                ..
             } => self.nested_each(query, params, body),
             StmtKind::ListEach { .. }
             | StmtKind::On { .. }

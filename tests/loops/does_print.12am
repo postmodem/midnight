@@ -1,0 +1,22 @@
+# expect: both loops stay on one core for rule 6: `print` in the block and
+# in a called function.
+
+component Health
+  hp: Int = 10
+end
+
+def show(n: Int)
+  print n
+end
+
+system direct
+  each Health do |health|
+    print health.hp
+  end
+end
+
+system called
+  each Health do |health|
+    show(health.hp)
+  end
+end

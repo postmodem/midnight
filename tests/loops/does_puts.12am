@@ -1,0 +1,23 @@
+# expect: both loops stay on one core for rule 6: `puts` in the block and
+# in a called function. The `puts` comes before the string it prints, so
+# it is the reason, not the string.
+
+component Health
+  hp: Int = 10
+end
+
+def show(n: Int)
+  puts n
+end
+
+system direct
+  each Health do |health|
+    puts "hp #{health.hp}"
+  end
+end
+
+system called
+  each Health do |health|
+    show(health.hp)
+  end
+end

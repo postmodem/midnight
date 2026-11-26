@@ -1,0 +1,78 @@
+# expect: every loop stays on one core for rule 2: an assignment to a
+# resource field, to part of one, to `Time.dt`, to a variable of the code
+# around the loop, to a field of one, and to a resource field and to
+# `Time.dt` in a called function. A compound assignment that is not `+=` or
+# `-=` is an assignment too.
+
+struct Pair
+  a: Int = 0
+  b: Int = 0
+end
+
+component Health
+  hp: Int = 10
+end
+
+resource Stats
+  last: Int = 0
+  scale: Int = 1
+  pair: Pair = Pair(0, 0)
+end
+
+def record(n: Int)
+  Stats.last = n
+end
+
+def slow
+  Time.dt = 0.5
+end
+
+system field
+  each Health do |health|
+    Stats.last = health.hp
+  end
+end
+
+system scaled
+  each Health do |health|
+    Stats.scale *= 2
+  end
+end
+
+system part
+  each Health do |health|
+    Stats.pair.a = health.hp
+  end
+end
+
+system dt
+  each Health do |health|
+    Time.dt = 0.25
+  end
+end
+
+system variable
+  best = 0
+  each Health do |health|
+    best = health.hp if health.hp > best
+  end
+end
+
+system variable_part
+  pair = Pair(0, 0)
+  each Health do |health|
+    pair.b = health.hp
+  end
+end
+
+system called_field
+  each Health do |health|
+    record(health.hp)
+  end
+end
+
+system called_dt
+  each Health do |health|
+    slow if health.hp < 0
+  end
+end

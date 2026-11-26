@@ -1,0 +1,6 @@
+tests/loops/cores_queued.12am:30  system age     each Entity, Life    cores
+tests/loops/cores_queued.12am:40  system strike  each Target          cores
+tests/loops/cores_queued.12am:46  system mark    each Entity, Life    cores
+tests/loops/cores_queued.12am:53  system unmark  each Entity, Target  cores
+tests/loops/cores_queued.12am:60  system report  each Entity, Life    cores
+tests/loops/cores_queued.12am:73  system called  each Entity, Life    cores

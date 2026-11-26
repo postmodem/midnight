@@ -1,0 +1,6 @@
+tests/loops/reads_assigned.12am:25  def furthest          each Position            one core: assigns `far` at line 26
+tests/loops/reads_assigned.12am:32  system follow         each Position, Leader    one core: reads `Position`, which this loop assigns, by `leader.who[Position]` at line 33
+tests/loops/reads_assigned.12am:38  system crowd          each Position            one core: reads `Position`, which this loop assigns, in the nested `each` at line 39
+tests/loops/reads_assigned.12am:46  system follow_called  each Position, Leader    one core: reads `Position`, which this loop assigns, by `e[Position]` in `where_is` (line 20), called at line 47
+tests/loops/reads_assigned.12am:52  system crowd_called   each Position            one core: reads `Position`, which this loop assigns, in the nested `each` in `furthest` (line 25), called at line 53
+tests/loops/reads_assigned.12am:58  system flee           each Position, Velocity  cores

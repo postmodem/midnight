@@ -1,0 +1,3 @@
+tests/loops/assigns_nested.12am:14  def stop_all   each Velocity  cores
+tests/loops/assigns_nested.12am:20  system push    each Position  one core: assigns `Velocity` through the nested `each` at line 21
+tests/loops/assigns_nested.12am:28  system called  each Position  one core: assigns `Velocity` through the nested `each` in `stop_all` (line 14), called at line 29

@@ -1,0 +1,1 @@
+tests/loops/does_world_run.12am:17  top level  each Health  one core: `World.run` in `go` (line 10), called at line 18

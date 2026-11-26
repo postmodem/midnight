@@ -45,7 +45,7 @@ use crate::tir::{
     Place, PlaceKind, Program, Query, RecordId, Stmt, StmtKind, System, Term, TimeField, Type,
 };
 
-use super::{util, walk};
+use super::{effects, util};
 
 /// The types of the values a GPU system works on.
 const GPU_VALUES: &str = "numbers, `Bool`s, enums, entities and structs of those";
@@ -73,8 +73,8 @@ pub(super) fn check(
     if !program.systems.iter().any(|system| system.gpu) {
         return Vec::new();
     }
-    let calls = call_graph(program);
     let program = &*program;
+    let calls = effects::call_graph(program);
     let mut pass = Pass {
         program,
         known_ints,
@@ -93,38 +93,6 @@ pub(super) fn check(
     errors.sort_by_key(|d| (d.span.file.0, d.span.start, d.span.end));
     errors.dedup_by(|a, b| a.span == b.span && a.message == b.message);
     errors
-}
-
-/// The functions each function calls, in the order of their first call.
-fn call_graph(program: &mut Program) -> Vec<Vec<FuncId>> {
-    program
-        .funcs
-        .iter_mut()
-        .map(|func| {
-            let mut callees: Vec<FuncId> = Vec::new();
-            walk::block(&mut func.body.block, &mut |node| {
-                let callee = match node {
-                    walk::Node::Expr(Expr {
-                        kind: ExprKind::Call { func, .. },
-                        ..
-                    }) => *func,
-                    walk::Node::Stmt(Stmt {
-                        kind:
-                            StmtKind::CompoundAssign {
-                                op: CompoundOp::Method(func),
-                                ..
-                            },
-                        ..
-                    }) => *func,
-                    _ => return,
-                };
-                if !callees.contains(&callee) {
-                    callees.push(callee);
-                }
-            });
-            callees
-        })
-        .collect()
 }
 
 /// The `each` statement of `block` that covers exactly `span`: its query
@@ -219,6 +187,7 @@ impl<'p> Pass<'p> {
                 query,
                 params,
                 body,
+                ..
             } = &stmt.kind
             else {
                 self.errors.push(
@@ -688,6 +657,7 @@ impl<'a, 'p> Walk<'a, 'p> {
                 query,
                 params,
                 body,
+                ..
             } => self.each(stmt, query, params, body, pos),
             StmtKind::On { body, .. } => {
                 self.not_allowed(

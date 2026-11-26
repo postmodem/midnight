@@ -1,0 +1,45 @@
+# expect: `first` and `first_in_branch` stay on one core for rule 6: a
+# `break` leaves the `each`. In `inner` and `nested` the `break` leaves a
+# loop inside the block, and they are independent.
+
+component Health
+  hp: Int = 10
+end
+
+component Armor
+  points: Int = 0
+end
+
+system first
+  each Health do |health|
+    break if health.hp > 100
+    health.hp += 1
+  end
+end
+
+system first_in_branch
+  each Health do |health|
+    if health.hp > 100
+      health.hp = 100
+      break
+    end
+  end
+end
+
+system inner
+  each Health do |health|
+    5.times do |i|
+      break if health.hp > 100
+      health.hp += i
+    end
+  end
+end
+
+system nested
+  each Health do |health|
+    each Armor do |armor|
+      break if armor.points > 5
+      health.hp += armor.points
+    end
+  end
+end

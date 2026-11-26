@@ -1,0 +1,19 @@
+# expect: the loop stays on one core for rule 6: a function it reaches
+# through another holds `World.run`. The reason names the function that
+# holds it and the call in the block.
+
+component Health
+  hp: Int = 10
+end
+
+def go
+  World.run
+end
+
+def maybe_go(n: Int)
+  go if n > 2
+end
+
+each Health do |health|
+  maybe_go(health.hp)
+end

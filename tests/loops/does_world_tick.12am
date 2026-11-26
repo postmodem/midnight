@@ -1,0 +1,15 @@
+# expect: the loop stays on one core for rule 6: a function it calls holds
+# `World.tick`, which is a run-time error when the call is reached. The
+# loop keeps every other rule.
+
+component Health
+  hp: Int = 10
+end
+
+def step(n: Int)
+  World.tick if n > 2
+end
+
+each Health do |health|
+  step(health.hp)
+end

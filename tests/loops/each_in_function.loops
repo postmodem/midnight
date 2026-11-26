@@ -1,0 +1,7 @@
+tests/loops/each_in_function.12am:24  def Wind.blow    each Velocity  cores
+tests/loops/each_in_function.12am:31  def scale_all    each Velocity  cores
+tests/loops/each_in_function.12am:38  def faster_than  each Velocity  cores
+tests/loops/each_in_function.12am:45  def shout_all    each Velocity  one core: `puts` at line 46
+tests/loops/each_in_function.12am:51  system rank      each Position  cores
+tests/loops/each_in_function.12am:57  system settle    each Position  one core: assigns `Velocity` through the nested `each` in `scale_all` (line 31), called at line 58
+tests/loops/each_in_function.12am:63  system noisy     each Position  one core: `puts` in `shout_all` (line 46), called at line 64

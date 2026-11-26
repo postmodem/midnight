@@ -1,0 +1,66 @@
+# expect: every loop stays on one core for rule 1, a list: an element read
+# from a list field, a list variable of the code around the loop that is
+# indexed, pushed to and walked, a list built in the block, a list field
+# of a resource assigned by index (the assignment comes first, so the
+# reason is rule 2's), and a list in a called function.
+
+component Path
+  steps: [Int] = []
+  at: Int = 0
+end
+
+resource Board
+  cells: [Int] = [0, 0, 0]
+end
+
+def third(n: Int) -> Int
+  values = [n, n, n]
+  values[2]
+end
+
+system element
+  each Path do |path|
+    path.at = path.steps[0]
+  end
+end
+
+system indexed
+  table = [1, 2, 3]
+  each Path do |path|
+    path.at = table[1]
+  end
+end
+
+system pushed
+  seen: [Int] = []
+  each Path do |path|
+    seen.push(path.at)
+  end
+end
+
+system walked
+  table = [1, 2, 3]
+  each Path do |path|
+    table.each do |n|
+      path.at += n
+    end
+  end
+end
+
+system built
+  each Path do |path|
+    path.at = [1, 2].length
+  end
+end
+
+system stored
+  each Path do |path|
+    Board.cells[0] = path.at
+  end
+end
+
+system called
+  each Path do |path|
+    path.at = third(path.at)
+  end
+end

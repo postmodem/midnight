@@ -1,0 +1,9 @@
+tests/loops/reads_gpu.12am:24  gpu system cool       each Heat        gpu
+tests/loops/reads_gpu.12am:30  gpu system shine      each Heat        gpu
+tests/loops/reads_gpu.12am:43  def brightest         each Glow        one core: assigns `best` at line 44
+tests/loops/reads_gpu.12am:50  system follow         each Mark        one core: reads `Heat`, which the GPU system `cool` uses, by `mark.from[Heat]` at line 51
+tests/loops/reads_gpu.12am:56  system average        each Mark        one core: reads `Glow`, which the GPU system `shine` uses, in the nested `each` at line 57
+tests/loops/reads_gpu.12am:64  system follow_called  each Mark        one core: reads `Heat`, which the GPU system `cool` uses, by `e[Heat]` in `heat_of` (line 38), called at line 65
+tests/loops/reads_gpu.12am:70  system glow_called    each Mark        one core: reads `Glow`, which the GPU system `shine` uses, in the nested `each` in `brightest` (line 43), called at line 71
+tests/loops/reads_gpu.12am:76  system warm           each Heat, Mark  cores
+tests/loops/reads_gpu.12am:83  system count          each Mark        cores

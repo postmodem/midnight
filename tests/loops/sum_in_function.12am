@@ -1,0 +1,33 @@
+# expect: both loops stay on one core for rule 4: the sum into an `Int`
+# resource field is in a called function, reached directly and through
+# another function. The reason names the function the sum is in and the
+# call in the block.
+
+component Health
+  hp: Int = 10
+end
+
+resource Stats
+  total: Int = 0
+end
+
+def count(n: Int)
+  Stats.total += n
+end
+
+def count_twice(n: Int)
+  count(n)
+  count(n)
+end
+
+system direct
+  each Health do |health|
+    count(health.hp)
+  end
+end
+
+system through
+  each Health do |health|
+    count_twice(health.hp)
+  end
+end

@@ -1,0 +1,2 @@
+tests/loops/compact_sum.12am:15  system small  each Health  one core: `Stats.small += …` at line 16 is a sum into a compact field
+tests/loops/compact_sum.12am:21  system wide   each Health  one core: `Stats.wide += …` at line 22 is a sum into a compact field

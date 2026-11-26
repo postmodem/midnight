@@ -1,0 +1,2 @@
+tests/loops/does_exit.12am:13  system direct  each Health  one core: `exit` at line 14
+tests/loops/does_exit.12am:19  system called  each Health  one core: `exit` in `give_up` (line 9), called at line 20

@@ -1,0 +1,4 @@
+tests/loops/does_return.12am:15  def nearest    each Position  one core: `return` at line 16
+tests/loops/does_return.12am:22  def in_loop    each Health    one core: `return` at line 24
+tests/loops/does_return.12am:31  def in_nested  each Health    one core: `return` at line 33
+tests/loops/does_return.12am:45  system capped  each Health    cores

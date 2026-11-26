@@ -1,0 +1,69 @@
+# expect: every loop is independent. Each assigns only through its own
+# parameters and to variables created in its block: a field, a whole
+# component, a compound assignment with an operator method, a term whose
+# component has a string field that the block leaves alone, an `Entity`
+# parameter that is read, and a query with `with:` and `without:`.
+
+struct Vec2
+  x: Float = 0.0
+  y: Float = 0.0
+
+  def +(other: Vec2) -> Vec2
+    Vec2(x + other.x, y + other.y)
+  end
+
+  def *(k: Float) -> Vec2
+    Vec2(x * k, y * k)
+  end
+end
+
+component Position
+  at: Vec2 = Vec2(0.0, 0.0)
+end
+
+component Velocity
+  by: Vec2 = Vec2(0.0, 0.0)
+end
+
+component Named
+  name: String = "nobody"
+  level: Int = 1
+end
+
+component Owner
+  me: Entity
+end
+
+tag Frozen
+tag Fast
+
+system move
+  each Position, Velocity do |pos, vel|
+    pos.at += vel.by * Time.dt
+  end
+end
+
+system reset
+  each Position do |pos|
+    pos = Position(Vec2(0.0, 0.0))
+  end
+end
+
+system level_up
+  each Named do |named|
+    next_level = named.level + 1
+    named.level = next_level
+  end
+end
+
+system own
+  each Entity, Owner do |e, owner|
+    owner.me = e
+  end
+end
+
+system filtered
+  each Velocity, with: Fast, without: Frozen do |vel|
+    vel.by.x *= 2.0
+  end
+end

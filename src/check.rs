@@ -17,6 +17,7 @@
 //! unknown, so later uses of it stay quiet.
 
 mod decls;
+mod effects;
 mod exprs;
 mod gpu;
 mod members;
@@ -793,12 +794,14 @@ impl<'a> Checker<'a> {
             events: self.events,
             consts,
             funcs,
+            summaries: Vec::new(),
             systems,
             main,
         };
         let errors = gpu::check(&mut program, &system_decls, &known_ints);
         if errors.is_empty() {
             overwrite::mark(&mut program);
+            effects::analyze(&mut program);
             Ok(program)
         } else {
             Err(errors)

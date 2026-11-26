@@ -1,0 +1,22 @@
+# expect: both loops stay on one core for rule 6: `sleep` in the block and
+# in a called function.
+
+component Stamp
+  at: Float = 0.0
+end
+
+def rest
+  sleep(0.0)
+end
+
+system direct
+  each Stamp do |stamp|
+    sleep(stamp.at)
+  end
+end
+
+system called
+  each Stamp do |stamp|
+    rest if stamp.at < 0.0
+  end
+end

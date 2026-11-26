@@ -1,0 +1,8 @@
+tests/loops/assigns_outside.12am:31  system field          each Health  one core: assigns `Stats.last` at line 32
+tests/loops/assigns_outside.12am:37  system scaled         each Health  one core: assigns `Stats.scale` at line 38
+tests/loops/assigns_outside.12am:43  system part           each Health  one core: assigns `Stats.pair` at line 44
+tests/loops/assigns_outside.12am:49  system dt             each Health  one core: assigns `Time.dt` at line 50
+tests/loops/assigns_outside.12am:56  system variable       each Health  one core: assigns `best` at line 57
+tests/loops/assigns_outside.12am:63  system variable_part  each Health  one core: assigns `pair` at line 64
+tests/loops/assigns_outside.12am:69  system called_field   each Health  one core: assigns `Stats.last` in `record` (line 23), called at line 70
+tests/loops/assigns_outside.12am:75  system called_dt      each Health  one core: assigns `Time.dt` in `slow` (line 27), called at line 76

@@ -1,0 +1,28 @@
+# expect: all three loops stay on one core for rule 6: `srand` with a
+# seed, without one, and in a called function.
+
+component Health
+  hp: Int = 10
+end
+
+def reseed(n: Int)
+  srand(n)
+end
+
+system seeded
+  each Health do |health|
+    srand(health.hp)
+  end
+end
+
+system from_clock
+  each Health do |health|
+    srand if health.hp < 0
+  end
+end
+
+system called
+  each Health do |health|
+    reseed(health.hp)
+  end
+end

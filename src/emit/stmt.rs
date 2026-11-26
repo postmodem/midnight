@@ -55,6 +55,7 @@ impl<'a> FnCx<'a, '_> {
                 query,
                 params,
                 body,
+                ..
             } => self.each(query, params, body),
             StmtKind::On { event, param, body } => self.on(*event, *param, body),
             StmtKind::Puts(args) => self.output(args, true),

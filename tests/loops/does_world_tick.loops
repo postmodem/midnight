@@ -1,0 +1,1 @@
+tests/loops/does_world_tick.12am:13  top level  each Health  one core: `World.tick` in `step` (line 10), called at line 14

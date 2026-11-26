@@ -1,0 +1,22 @@
+# expect: both loops stay on one core for rule 6: `exit` in the block and
+# in a called function.
+
+component Health
+  hp: Int = 10
+end
+
+def give_up
+  exit(3)
+end
+
+system direct
+  each Health do |health|
+    exit(2) if health.hp < 0
+  end
+end
+
+system called
+  each Health do |health|
+    give_up if health.hp < 0
+  end
+end

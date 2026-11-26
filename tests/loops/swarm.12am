@@ -1,0 +1,80 @@
+# expect: the lines of "Several cores" in the reference: a GPU block, the
+# independent `age` (a whole-number sum and a queued `despawn`) and `flee`
+# (reads `Position`, assigns `Velocity`), and one loop for each of the
+# common reasons to stay on one core: a `Float` sum, `rand`, `return` and
+# `puts`.
+
+component Boid
+  x: Float32 = 0.0
+  vx: Float32 = 0.0
+end
+
+component Position
+  x: Float = 0.0
+  y: Float = 0.0
+end
+
+component Velocity
+  dx: Float = 0.0
+  dy: Float = 0.0
+end
+
+component Life
+  left: Float = 1.0
+end
+
+tag Prey
+tag Hunter
+
+resource Stats
+  expired: Int = 0
+  drift: Float = 0.0
+end
+
+gpu system steer
+  each Boid do |boid|
+    boid.x += boid.vx * Time.dt
+  end
+end
+
+system age
+  each Entity, Life do |e, life|
+    life.left -= Time.dt
+    if life.left <= 0.0
+      Stats.expired += 1
+      e.despawn
+    end
+  end
+end
+
+system flee
+  each Position, Velocity, with: Prey do |pos, vel|
+    each Position, with: Hunter do |hunter|
+      vel.dx += (pos.x - hunter.x) * 0.01
+      vel.dy += (pos.y - hunter.y) * 0.01
+    end
+  end
+end
+
+system drift
+  each Velocity do |vel|
+    Stats.drift += vel.dx
+  end
+end
+
+system jitter
+  each Velocity do |vel|
+    vel.dx += rand - 0.5
+  end
+end
+
+def nearest(limit: Float) -> Float
+  each Position do |pos|
+    return pos.x if pos.x < limit
+  end
+  limit
+end
+
+each Entity, Position do |e, pos|
+  puts "#{e} #{pos.x}"
+end

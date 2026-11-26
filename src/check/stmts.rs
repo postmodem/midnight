@@ -737,6 +737,8 @@ impl Checker<'_> {
             query,
             params: locals,
             body,
+            // Decided by the effect analysis.
+            run: tir::Run::Inside,
         })
     }
 

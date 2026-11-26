@@ -1,0 +1,3 @@
+tests/loops/does_srand.12am:13  system seeded      each Health  one core: `srand` at line 14
+tests/loops/does_srand.12am:19  system from_clock  each Health  one core: `srand` at line 20
+tests/loops/does_srand.12am:25  system called      each Health  one core: `srand` in `reseed` (line 9), called at line 26

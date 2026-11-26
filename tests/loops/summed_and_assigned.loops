@@ -1,0 +1,4 @@
+tests/loops/summed_and_assigned.12am:19  system after     each Health  one core: `Stats.total` is summed and also assigned at line 21
+tests/loops/summed_and_assigned.12am:26  system before    each Health  one core: `Stats.total` is summed and also assigned at line 27
+tests/loops/summed_and_assigned.12am:33  system called    each Health  one core: `Stats.total` is summed and also assigned in `reset` (line 15), called at line 35
+tests/loops/summed_and_assigned.12am:41  system variable  each Health  one core: `count` is summed and also assigned at line 43

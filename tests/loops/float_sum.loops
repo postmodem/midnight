@@ -1,0 +1,5 @@
+tests/loops/float_sum.12am:20  system plus      each Velocity  one core: `Stats.drift += …` at line 21 is a `Float` sum
+tests/loops/float_sum.12am:26  system minus     each Velocity  one core: `Stats.drift += …` at line 27 is a `Float` sum
+tests/loops/float_sum.12am:32  system narrow    each Velocity  one core: `Stats.narrow += …` at line 33 is a `Float` sum
+tests/loops/float_sum.12am:39  system variable  each Velocity  one core: `total += …` at line 40 is a `Float` sum
+tests/loops/float_sum.12am:45  system called    each Velocity  one core: `Stats.drift += …` in `drift_by` (line 16), called at line 46 is a `Float` sum

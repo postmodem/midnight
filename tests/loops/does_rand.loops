@@ -1,0 +1,3 @@
+tests/loops/does_rand.12am:15  system jitter  each Velocity  one core: `rand` at line 16
+tests/loops/does_rand.12am:21  system dice    each Velocity  one core: `rand` at line 22
+tests/loops/does_rand.12am:27  system called  each Velocity  one core: `rand` in `pick` (line 11), called at line 28

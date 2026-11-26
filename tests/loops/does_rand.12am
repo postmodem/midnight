@@ -1,0 +1,30 @@
+# expect: all three loops stay on one core for rule 6: `rand`, `rand(n)`,
+# and `rand` in a called function. The numbers come from one sequence, in
+# the order of the calls.
+
+component Velocity
+  dx: Float = 0.0
+  steps: Int = 0
+end
+
+def pick(n: Int) -> Int
+  rand(n)
+end
+
+system jitter
+  each Velocity do |vel|
+    vel.dx += rand - 0.5
+  end
+end
+
+system dice
+  each Velocity do |vel|
+    vel.steps = rand(6)
+  end
+end
+
+system called
+  each Velocity do |vel|
+    vel.steps = pick(6)
+  end
+end

@@ -1,0 +1,2 @@
+tests/loops/does_clock.12am:13  system direct  each Stamp  one core: `clock` at line 14
+tests/loops/does_clock.12am:19  system called  each Stamp  one core: `clock` in `now` (line 9), called at line 20

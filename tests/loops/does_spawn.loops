@@ -1,0 +1,2 @@
+tests/loops/does_spawn.12am:16  system direct  each Health  one core: `spawn` at line 17
+tests/loops/does_spawn.12am:22  system called  each Health  one core: `spawn` in `haunt` (line 12), called at line 23

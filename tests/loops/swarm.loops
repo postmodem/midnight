@@ -1,0 +1,7 @@
+tests/loops/swarm.12am:35  gpu system steer  each Boid                gpu
+tests/loops/swarm.12am:41  system age        each Entity, Life        cores
+tests/loops/swarm.12am:51  system flee       each Position, Velocity  cores
+tests/loops/swarm.12am:60  system drift      each Velocity            one core: `Stats.drift += …` at line 61 is a `Float` sum
+tests/loops/swarm.12am:66  system jitter     each Velocity            one core: `rand` at line 67
+tests/loops/swarm.12am:72  def nearest       each Position            one core: `return` at line 73
+tests/loops/swarm.12am:78  top level         each Entity, Position    one core: `puts` at line 79

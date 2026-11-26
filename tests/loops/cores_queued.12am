@@ -1,0 +1,76 @@
+# expect: every loop is independent. Each queues a structural change or
+# emits: `despawn` of its own entity, `despawn` of another entity, `add`
+# of a tag and of a component with a value, `remove`, `emit`, and all of
+# them in a called function.
+
+component Life
+  left: Float = 1.0
+end
+
+component Target
+  who: Entity
+end
+
+component Burn
+  heat: Int = 0
+end
+
+tag Expired
+
+event Died
+  who: Entity
+  left: Float
+end
+
+resource Stats
+  expired: Int = 0
+end
+
+system age
+  each Entity, Life do |e, life|
+    life.left -= Time.dt
+    if life.left <= 0.0
+      Stats.expired += 1
+      e.despawn
+    end
+  end
+end
+
+system strike
+  each Target do |target|
+    target.who.despawn
+  end
+end
+
+system mark
+  each Entity, Life do |e, life|
+    e.add(Expired) if life.left <= 0.0
+    e.add(Burn(3)) if life.left > 10.0
+  end
+end
+
+system unmark
+  each Entity, Target, with: Expired do |e, target|
+    e.remove(Expired)
+    target.who.remove(Burn, Expired)
+  end
+end
+
+system report
+  each Entity, Life do |e, life|
+    emit Died(e, life.left) if life.left <= 0.0
+  end
+end
+
+def retire(e: Entity, left: Float)
+  emit Died(e, left)
+  e.add(Expired)
+  e.remove(Burn)
+  e.despawn
+end
+
+system called
+  each Entity, Life do |e, life|
+    retire(e, life.left) if life.left <= 0.0
+  end
+end

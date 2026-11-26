@@ -1,0 +1,48 @@
+# expect: every loop stays on one core for rule 4, a `Float` sum: into a
+# `Float` resource field, with `-=`, into a `Float32` field, into a
+# `Float` variable of the code around the loop, and into a `Float` field
+# in a called function.
+
+component Velocity
+  dx: Float = 0.0
+end
+
+resource Stats
+  drift: Float = 0.0
+  narrow: Float32 = 0.0
+end
+
+def drift_by(x: Float)
+  Stats.drift += x
+end
+
+system plus
+  each Velocity do |vel|
+    Stats.drift += vel.dx
+  end
+end
+
+system minus
+  each Velocity do |vel|
+    Stats.drift -= vel.dx
+  end
+end
+
+system narrow
+  each Velocity do |vel|
+    Stats.narrow += vel.dx
+  end
+end
+
+system variable
+  total = 0.0
+  each Velocity do |vel|
+    total += vel.dx
+  end
+end
+
+system called
+  each Velocity do |vel|
+    drift_by(vel.dx)
+  end
+end

@@ -1,0 +1,75 @@
+# expect: every loop is independent. Each adds to a whole-number total
+# with `+=` or `-=`: a resource field, two sums into one field, two
+# fields, a variable of the code around the loop, a sum in a branch, in a
+# counting loop and in a nested `each`, and a variable summed by a loop in
+# a function. A `Float` variable created in the block is no total.
+
+component Health
+  hp: Int = 10
+end
+
+component Armor
+  points: Int = 0
+end
+
+resource Stats
+  total: Int = 0
+  hurt: Int = 0
+end
+
+system field
+  each Health do |health|
+    Stats.total += health.hp
+  end
+end
+
+system twice
+  each Health do |health|
+    Stats.total += health.hp
+    Stats.total -= 1
+  end
+end
+
+system two_fields
+  each Health do |health|
+    Stats.total += health.hp
+    Stats.hurt += 1 if health.hp < 5
+  end
+end
+
+system variable
+  count = 0
+  each Health do |health|
+    count += 1
+  end
+  Stats.total = count
+end
+
+system deeper
+  each Health do |health|
+    if health.hp > 0
+      3.times do
+        Stats.total += 1
+      end
+    end
+    each Armor do |armor|
+      Stats.hurt += armor.points
+    end
+  end
+end
+
+def living -> Int
+  alive = 0
+  each Health do |health|
+    alive += 1 if health.hp > 0
+  end
+  alive
+end
+
+system local_float
+  each Health do |health|
+    share = 0.0
+    share += 0.5
+    health.hp = share.floor
+  end
+end

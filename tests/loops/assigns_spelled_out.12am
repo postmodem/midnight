@@ -1,0 +1,46 @@
+# expect: the first three loops stay on one core for rule 2 with the hint
+# to write `+=`: an `Int` resource field and an `Int` variable of the code
+# around the loop are assigned themselves plus or minus something. A
+# `Float` field written the same way is a plain assignment, and so is a
+# field assigned something else plus one.
+
+component Health
+  hp: Int = 10
+end
+
+resource Stats
+  total: Int = 0
+  other: Int = 0
+  heat: Float = 0.0
+end
+
+system field
+  each Health do |health|
+    Stats.total = Stats.total + health.hp
+  end
+end
+
+system variable
+  count = 0
+  each Health do |health|
+    count = 1 + count
+  end
+end
+
+system minus
+  each Health do |health|
+    Stats.total = Stats.total - 1
+  end
+end
+
+system float
+  each Health do |health|
+    Stats.heat = Stats.heat + 1.0
+  end
+end
+
+system unrelated
+  each Health do |health|
+    Stats.total = Stats.other + 1
+  end
+end

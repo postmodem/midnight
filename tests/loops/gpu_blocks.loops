@@ -1,0 +1,3 @@
+tests/loops/gpu_blocks.12am:15  gpu system gravity      each Body  gpu
+tests/loops/gpu_blocks.12am:22  gpu system gravity      each Body  gpu
+tests/loops/gpu_blocks.12am:28  strict gpu system cool  each Heat  gpu

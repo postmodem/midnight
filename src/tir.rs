@@ -40,6 +40,20 @@
 //! right-hand side of an assignment before the place is written) and which
 //! locals belong to which block: a local lives from its `Let` (or from the
 //! loop that binds it) to the end of the enclosing [`Block`].
+//!
+//! # Effects, for backends
+//!
+//! The checker's last pass works out what code does to the world, and
+//! leaves three things here:
+//!
+//! - every [`Query`] has an [`id`](Query::id), unique in the program;
+//! - every function has a [`Summary`] in [`Program::summaries`]: what it
+//!   does, directly or through the functions it calls;
+//! - every [`StmtKind::Each`] has a [`Run`]: where the loop runs, as
+//!   "Several cores" in the reference defines it. For a loop that can be
+//!   split across the cores it carries what a backend needs to split it
+//!   ([`Cores`]); for one that can't, the first thing in its block that
+//!   keeps it on one core ([`Reason`]).
 
 use crate::source::Span;
 
@@ -70,6 +84,10 @@ id! {
     FuncId,
     /// Index into the `locals` of the enclosing [`Body`].
     LocalId,
+    /// The number of a [`Query`]: of one `each` or one `World.count(…)`
+    /// in the source. Counted from 0 through the functions, then the
+    /// systems, then the top level, each in source order.
+    QueryId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -155,6 +173,8 @@ pub struct Program {
     pub consts: Vec<Const>,
     /// Functions and methods.
     pub funcs: Vec<Func>,
+    /// One per function, in the order of `funcs`.
+    pub summaries: Vec<Summary>,
     /// In the order `World.tick` runs them.
     pub systems: Vec<System>,
     /// The top-level statements, in order.
@@ -371,6 +391,8 @@ pub enum StmtKind {
         query: Query,
         params: Vec<LocalId>,
         body: Block,
+        /// Where the loop runs.
+        run: Run,
     },
     /// Runs the body for each event this site has not seen yet. `param`
     /// gets a copy of the event. Each `On` in the tree is one site with its
@@ -404,6 +426,8 @@ pub enum CompoundOp {
 
 #[derive(Clone, Debug)]
 pub struct Query {
+    /// Which query of the program this is.
+    pub id: QueryId,
     pub terms: Vec<Term>,
     /// Further components the entity must have. Tags go here.
     pub with: Vec<ComponentId>,
@@ -430,6 +454,246 @@ pub enum Term {
         /// ordinary `each` can be.
         overwritten: bool,
     },
+}
+
+/// Where an `each` runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Run {
+    /// Written inside another `each`: it runs where it is reached, as part
+    /// of a run of that loop.
+    Inside,
+    /// A block of a GPU system: on the device, and in pieces on the cores
+    /// when it runs on the CPU.
+    Gpu,
+    /// Independent: no run of the block can see what another run does, so
+    /// the rows can be divided among the cores.
+    Cores(Cores),
+    /// On the thread that reaches it, one row after another.
+    OneCore(Reason),
+}
+
+/// What a backend needs to split an independent `each`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cores {
+    /// The whole-number totals the block adds to with `+=` and `-=`, in
+    /// the order of their first sum. A `CompoundAssign` in the block, loops
+    /// and `each`es inside it included, whose place is one of these is a
+    /// sum, and nothing else the block reaches reads or assigns one.
+    pub sums: Vec<Target>,
+    /// The work of one run. Its first term has no rows and is at least 1.
+    pub weight: Weight,
+    /// Every other query the block can reach: the `each`es and
+    /// `World.count(…)` inside the block and in every function it calls,
+    /// directly or through other functions. Ascending.
+    pub queries: Vec<QueryId>,
+}
+
+/// A resource field or a variable that a loop adds to or assigns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Target {
+    /// A field of a user resource, by index into [`Resource::fields`].
+    Field(ResourceId, usize),
+    /// A variable of the code around the loop: a local of the [`Body`] the
+    /// `each` stands in.
+    Local(LocalId),
+}
+
+/// An estimate of work, in operations: the sum of its terms. The terms
+/// are ordered by `rows`, fewer first, and no two have the same `rows`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Weight {
+    pub terms: Vec<WeightTerm>,
+}
+
+/// `factor` times the number of rows of each query in `rows`, as they are
+/// when the loop begins. `factor` is at least 1 and at most
+/// [`Weight::LIMIT`]. `rows` is ascending and may name a query twice.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WeightTerm {
+    pub factor: u64,
+    pub rows: Vec<QueryId>,
+}
+
+impl Weight {
+    /// Where factors stop growing. A backend's sums and products of
+    /// weights stop here too.
+    pub const LIMIT: u64 = 1 << 62;
+}
+
+/// The first thing in an `each`'s block, in source order, that keeps the
+/// loop on one core.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reason {
+    pub kind: ReasonKind,
+    /// Where the thing is. For a nested `each`, the `each`.
+    pub span: Span,
+    /// Set when the thing is not in the block but in a function it calls.
+    pub via: Option<Via>,
+}
+
+/// How a block reaches something in a function.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Via {
+    /// The function the thing is in.
+    pub func: FuncId,
+    /// The call in the block that leads there, directly or through other
+    /// functions.
+    pub call: Span,
+}
+
+/// The ways of breaking the rules of an independent `each`. The number is
+/// the rule's in "Several cores".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReasonKind {
+    /// 1: an expression or a place that is a `String`, or a record with
+    /// one inside.
+    UsesString,
+    /// 1: the same for a list.
+    UsesList,
+    /// 2: an assignment to, or through, `e[C]`. `span` is the `e[C]`.
+    AssignsRow(ComponentId),
+    /// 2: a nested `each` assigns through its parameter for this
+    /// component.
+    AssignsNested(ComponentId),
+    /// 2: an assignment to a resource field, or to a variable of the code
+    /// around the loop. `spelled_out` when an `Int` target is assigned
+    /// itself plus or minus something, which `+=` or `-=` would make a
+    /// sum.
+    Assigns { target: Target, spelled_out: bool },
+    /// 2: an assignment to `Time.dt`.
+    AssignsDt,
+    /// 3: a read, by `e[C]` or (`nested`) through a parameter of a nested
+    /// `each`, of a component the loop assigns through its own parameters.
+    ReadsAssigned {
+        component: ComponentId,
+        nested: bool,
+    },
+    /// 4: `+=` or `-=` on a `Float` target.
+    FloatSum(Target),
+    /// 4: `+=` or `-=` on a compact integer field.
+    CompactSum(Target),
+    /// 4: something reads a total of the loop.
+    SummedAndRead(Target),
+    /// 4: something assigns a total of the loop otherwise than by a sum
+    /// in the block.
+    SummedAndAssigned(Target),
+    /// 4: `+=` or `-=` on an `Int` resource field in a called function.
+    /// `via` is always set.
+    SumInFunction(Target),
+    /// 6
+    Does(Deed),
+    /// 7: a read, by `e[C]` or (`nested`) through a parameter of a nested
+    /// `each`, of a component that a GPU block names as a term. `system`
+    /// indexes [`Program::systems`]: the first GPU system that names it.
+    ReadsGpu {
+        component: ComponentId,
+        system: usize,
+        nested: bool,
+    },
+}
+
+/// What rule 6 of an independent `each` leaves out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Deed {
+    Spawn,
+    On,
+    /// `rand` and `rand(n)`.
+    Rand,
+    /// `srand` with and without a seed.
+    Srand,
+    Puts,
+    Print,
+    Clock,
+    Sleep,
+    Exit,
+    WorldStop,
+    WorldTick,
+    WorldRun,
+    /// A `break` that leaves the `each`. Never in a [`Summary`].
+    Break,
+    /// A `return` in the block. Never in a [`Summary`].
+    Return,
+}
+
+impl Deed {
+    /// The word as the source writes it.
+    pub fn word(self) -> &'static str {
+        match self {
+            Deed::Spawn => "spawn",
+            Deed::On => "on",
+            Deed::Rand => "rand",
+            Deed::Srand => "srand",
+            Deed::Puts => "puts",
+            Deed::Print => "print",
+            Deed::Clock => "clock",
+            Deed::Sleep => "sleep",
+            Deed::Exit => "exit",
+            Deed::WorldStop => "World.stop",
+            Deed::WorldTick => "World.tick",
+            Deed::WorldRun => "World.run",
+            Deed::Break => "break",
+            Deed::Return => "return",
+        }
+    }
+}
+
+/// What a function does, directly or through the functions it calls.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Summary {
+    /// Each kind of effect once, with the place of its first use: in the
+    /// order a reader of the body meets them, a call standing for
+    /// everything its function does.
+    pub effects: Vec<Effect>,
+    /// The function can call itself, directly or through others.
+    pub recursive: bool,
+    /// The work of one call: 64 for a function that recurses.
+    pub weight: Weight,
+    /// Every query the function can reach: its own `each`es and
+    /// `World.count(…)` and those of the functions it calls. Ascending.
+    pub queries: Vec<QueryId>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Effect {
+    pub kind: EffectKind,
+    /// The function the effect is written in.
+    pub func: FuncId,
+    /// Where in that function. For `TermUse` and `TermWrite`, the `each`;
+    /// for `RowRead` and `RowWrite`, the `e[C]`.
+    pub span: Span,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EffectKind {
+    /// A read of `e[C]`.
+    RowRead(ComponentId),
+    /// An assignment to, or through, `e[C]`.
+    RowWrite(ComponentId),
+    /// An `each` has the component as a term and its block uses the
+    /// parameter.
+    TermUse(ComponentId),
+    /// The block of an `each` assigns through the parameter of this term.
+    TermWrite(ComponentId),
+    /// A read of a resource field.
+    FieldRead(ResourceId, usize),
+    /// An assignment to a resource field, or to part of it, that is not a
+    /// `FieldSum`.
+    FieldWrite(ResourceId, usize),
+    /// `R.f += x` or `R.f -= x` with a built-in operator.
+    FieldSum(ResourceId, usize),
+    /// An assignment to `Time.dt`.
+    DtWrite,
+    Despawn,
+    Add,
+    Remove,
+    Emit(EventId),
+    /// `spawn`, `on`, output, random numbers, the clock, `exit` and the
+    /// `World` methods other than `count`.
+    Does(Deed),
+    /// A value that is a `String`, or a record with one inside.
+    UsesString,
+    /// The same for a list.
+    UsesList,
 }
 
 /// Something that can be read and, unless the checker ruled it out,

@@ -1,0 +1,5 @@
+tests/loops/assigns_row.12am:23  system whole     each Target  one core: assigns `target.who[Health]` at line 24
+tests/loops/assigns_row.12am:29  system field     each Target  one core: assigns `target.who[Health]` at line 30
+tests/loops/assigns_row.12am:35  system compound  each Target  one core: assigns `target.who[Health]` at line 36
+tests/loops/assigns_row.12am:41  system long      each Target  one core: assigns `…[Health]` at line 42
+tests/loops/assigns_row.12am:47  system called    each Target  one core: assigns `e[Health]` in `heal` (line 15), called at line 48

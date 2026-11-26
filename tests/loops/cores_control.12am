@@ -1,0 +1,81 @@
+# expect: every loop is independent. Each uses control flow that stays in
+# its own run: `next`, `if` and `case`, `while`, a counting loop, a call
+# of a function, of a method, of a function that calls itself, and of two
+# functions that call each other.
+
+enum Mood
+  Calm
+  Angry
+end
+
+component Health
+  hp: Int = 10
+  mood: Mood = Mood::Calm
+
+  def low? -> Bool
+    hp < 3
+  end
+end
+
+def clamp_hp(n: Int) -> Int
+  return 0 if n < 0
+  return 100 if n > 100
+  n
+end
+
+def factorial(n: Int) -> Int
+  return 1 if n <= 1
+  n * factorial(n - 1)
+end
+
+def even?(n: Int) -> Bool
+  return true if n == 0
+  odd?(n - 1)
+end
+
+def odd?(n: Int) -> Bool
+  return false if n == 0
+  even?(n - 1)
+end
+
+system skip
+  each Health do |health|
+    next if health.hp > 50
+    health.hp += 1
+  end
+end
+
+system branch
+  each Health do |health|
+    case health.mood
+    when Mood::Calm then health.hp += 1
+    when Mood::Angry then health.hp -= 1
+    end
+    health.mood = Mood::Angry if health.low?
+  end
+end
+
+system loops
+  each Health do |health|
+    while health.hp < 10
+      health.hp += 3
+    end
+    health.hp.times do |i|
+      next if i > 2
+      health.hp += 1
+    end
+  end
+end
+
+system calls
+  each Health do |health|
+    health.hp = clamp_hp(health.hp)
+  end
+end
+
+system recursion
+  each Health do |health|
+    health.hp = factorial(health.hp % 5)
+    health.hp += 1 if even?(health.hp % 7)
+  end
+end

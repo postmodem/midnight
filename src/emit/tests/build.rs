@@ -19,6 +19,7 @@ pub fn empty_program() -> Program {
         events: Vec::new(),
         consts: Vec::new(),
         funcs: Vec::new(),
+        summaries: Vec::new(),
         systems: Vec::new(),
         main: Body {
             locals: Vec::new(),
@@ -503,6 +504,7 @@ pub fn each(
         query: query(terms, with, without),
         params: params.into_iter().map(id).collect(),
         body: blk(body),
+        run: Run::Inside,
     })
 }
 
@@ -512,6 +514,7 @@ pub fn query(
     without: Vec<ComponentId>,
 ) -> Query {
     Query {
+        id: QueryId(0),
         terms: terms
             .into_iter()
             .map(|term| match term {

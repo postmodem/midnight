@@ -1,0 +1,5 @@
+tests/loops/cores_control.12am:42  system skip       each Health  cores
+tests/loops/cores_control.12am:49  system branch     each Health  cores
+tests/loops/cores_control.12am:59  system loops      each Health  cores
+tests/loops/cores_control.12am:71  system calls      each Health  cores
+tests/loops/cores_control.12am:77  system recursion  each Health  cores

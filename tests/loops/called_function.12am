@@ -1,0 +1,91 @@
+# expect: a reason in a called function names the function the thing is
+# in, its line there, and the line of the call in the block, however many
+# functions lie between. `deep` reaches `rand` in `pick` through `choose`.
+# `first_wins` calls `quiet`, which breaks no rule, then `pick` and
+# `show`: the first call that breaks a rule gives the reason. `in_order`
+# calls `both`, which prints before it draws. `spins` reaches `rand`
+# through a function that calls itself. `method` reaches `puts` through a
+# method, which is named with its type, and `operator` through a compound
+# assignment with an operator method.
+
+struct Meter
+  level: Int = 0
+
+  def show
+    puts level
+  end
+
+  def +(n: Int) -> Meter
+    print n
+    Meter(level + n)
+  end
+end
+
+component Health
+  hp: Int = 10
+  meter: Meter = Meter(0)
+end
+
+def pick(n: Int) -> Int
+  rand(n)
+end
+
+def choose(n: Int) -> Int
+  pick(n) + 1
+end
+
+def quiet(n: Int) -> Int
+  n * 2
+end
+
+def show(n: Int)
+  puts n
+end
+
+def both(n: Int) -> Int
+  show(n)
+  pick(n)
+end
+
+def spin(n: Int) -> Int
+  return rand(6) if n <= 0
+  spin(n - 1)
+end
+
+system deep
+  each Health do |health|
+    health.hp = choose(health.hp)
+  end
+end
+
+system first_wins
+  each Health do |health|
+    health.hp = quiet(health.hp)
+    health.hp = pick(health.hp)
+    show(health.hp)
+  end
+end
+
+system in_order
+  each Health do |health|
+    health.hp = both(health.hp)
+  end
+end
+
+system spins
+  each Health do |health|
+    health.hp = spin(3)
+  end
+end
+
+system method
+  each Health do |health|
+    health.meter.show
+  end
+end
+
+system operator
+  each Health do |health|
+    health.meter += 1
+  end
+end

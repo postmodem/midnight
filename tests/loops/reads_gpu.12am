@@ -1,0 +1,88 @@
+# expect: `Heat` is a term of the GPU system `cool`, and `Glow` of the
+# nested `each` of `shine`. `follow`, `average`, `follow_called` and
+# `glow_called` stay on one core for rule 7: they read one of the two by
+# `e[C]` or in a nested `each`, in the block or in a called function. The
+# reason names the first GPU system that uses the component. `warm` reaches
+# `Heat` only through its own parameter and is independent, and so is
+# `count`, whose nested `each` has `Heat` as a term and never uses the
+# parameter.
+
+component Heat
+  value: Float32 = 0.0
+end
+
+component Glow
+  level: Float32 = 0.0
+end
+
+component Mark
+  n: Int = 0
+  from: Entity
+end
+
+gpu system cool
+  each Heat do |heat|
+    heat.value *= 0.5
+  end
+end
+
+gpu system shine
+  each Heat do |heat|
+    each Glow do |glow|
+      heat.value += glow.level
+    end
+  end
+end
+
+def heat_of(e: Entity) -> Float
+  e[Heat].value
+end
+
+def brightest -> Float
+  best = 0.0
+  each Glow do |glow|
+    best = glow.level if glow.level > best
+  end
+  best
+end
+
+system follow
+  each Mark do |mark|
+    mark.n = mark.from[Heat].value.floor
+  end
+end
+
+system average
+  each Mark do |mark|
+    each Glow do |glow|
+      mark.n += glow.level.floor
+    end
+  end
+end
+
+system follow_called
+  each Mark do |mark|
+    mark.n = heat_of(mark.from).floor
+  end
+end
+
+system glow_called
+  each Mark do |mark|
+    mark.n = brightest.floor
+  end
+end
+
+system warm
+  each Heat, Mark do |heat, mark|
+    heat.value += 1.0
+    mark.n += 1
+  end
+end
+
+system count
+  each Mark do |mark|
+    each Heat do |heat|
+      mark.n += 1
+    end
+  end
+end

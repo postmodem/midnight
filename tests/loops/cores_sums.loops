@@ -1,0 +1,7 @@
+tests/loops/cores_sums.12am:21  system field        each Health  cores
+tests/loops/cores_sums.12am:27  system twice        each Health  cores
+tests/loops/cores_sums.12am:34  system two_fields   each Health  cores
+tests/loops/cores_sums.12am:42  system variable     each Health  cores
+tests/loops/cores_sums.12am:49  system deeper       each Health  cores
+tests/loops/cores_sums.12am:63  def living          each Health  cores
+tests/loops/cores_sums.12am:70  system local_float  each Health  cores

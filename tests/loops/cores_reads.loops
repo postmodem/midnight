@@ -1,0 +1,9 @@
+tests/loops/cores_reads.12am:32  system constant        each Position            cores
+tests/loops/cores_reads.12am:38  system time            each Position, Velocity  cores
+tests/loops/cores_reads.12am:45  system resource_field  each Velocity            cores
+tests/loops/cores_reads.12am:52  system variable        each Velocity            cores
+tests/loops/cores_reads.12am:58  def scale_all          each Velocity            cores
+tests/loops/cores_reads.12am:64  system follow          each Velocity, Leader    cores
+tests/loops/cores_reads.12am:72  system census          each Crowd               cores
+tests/loops/cores_reads.12am:78  system flee            each Position, Velocity  cores
+tests/loops/cores_reads.12am:86  system pairs           each Crowd               cores

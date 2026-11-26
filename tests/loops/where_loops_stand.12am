@@ -1,0 +1,71 @@
+# expect: one line for each `each` that is not written inside another
+# `each`, in source order, whatever it stands in: a branch, a counting
+# loop, an `on` block (whose parameter the loop reads), a system, a
+# function and the top level. The nested `each` of `pairs` has no line.
+# The loop in the counting loop sums into a variable of the code around
+# it, and the top-level loop after it reads that variable.
+
+component Health
+  hp: Int = 10
+end
+
+component Armor
+  points: Int = 0
+end
+
+event Blast
+  damage: Int
+end
+
+resource Rules
+  harsh: Bool = false
+end
+
+system branches
+  if Rules.harsh
+    each Health do |health|
+      health.hp -= 1
+    end
+  else
+    each Armor do |armor|
+      armor.points += 1
+    end
+  end
+end
+
+system blasts
+  on Blast do |blast|
+    each Health do |health|
+      health.hp -= blast.damage
+    end
+  end
+end
+
+system pairs
+  each Health do |health|
+    each Armor do |armor|
+      health.hp += armor.points
+    end
+  end
+end
+
+def heal_all(by: Int)
+  each Health do |health|
+    health.hp += by
+  end
+end
+
+total = 0
+3.times do |round|
+  each Health do |health|
+    total += health.hp + round
+  end
+end
+
+each Armor do |armor|
+  armor.points = total
+end
+
+each Entity, Health do |e, health|
+  puts "#{e} #{health.hp}"
+end

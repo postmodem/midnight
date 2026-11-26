@@ -1,0 +1,24 @@
+# expect: both loops stay on one core for rule 4, a sum into a compact
+# field: a store into one can fail, and which row fails must not depend on
+# the order of the sums.
+
+component Health
+  hp: Int = 10
+end
+
+resource Stats
+  small: Int16 = 0
+  wide: UInt32 = 0
+end
+
+system small
+  each Health do |health|
+    Stats.small += health.hp
+  end
+end
+
+system wide
+  each Health do |health|
+    Stats.wide -= 1
+  end
+end

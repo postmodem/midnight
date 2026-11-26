@@ -1,0 +1,82 @@
+# expect: every loop stays on one core for rule 1, a `String`: a literal,
+# `to_s`, a string field, a constant, a string variable of the code around
+# the loop, a whole component that has a string field, an `add` whose
+# default is a string, an `emit` of an event with a string field, and a
+# string in a called function.
+
+component Named
+  name: String = "nobody"
+  level: Int = 1
+end
+
+component Health
+  hp: Int = 10
+end
+
+event Shout
+  text: String
+end
+
+TITLE = "midnight"
+
+def label(n: Int) -> Int
+  text = n.to_s
+  text.length
+end
+
+system literal
+  each Health do |health|
+    greeting = "hi"
+    health.hp += greeting.length
+  end
+end
+
+system converted
+  each Health do |health|
+    health.hp = health.hp.to_s.length
+  end
+end
+
+system field
+  each Named, Health do |named, health|
+    health.hp += named.name.length
+  end
+end
+
+system constant
+  each Health do |health|
+    health.hp += TITLE.length
+  end
+end
+
+system around
+  prefix = "x"
+  each Health do |health|
+    health.hp += prefix.length
+  end
+end
+
+system whole
+  each Named do |named|
+    copy = named
+    named.level = copy.level + 1
+  end
+end
+
+system added
+  each Entity, Health do |e, health|
+    e.add(Named)
+  end
+end
+
+system shouted
+  each Health do |health|
+    emit Shout("ouch") if health.hp < 0
+  end
+end
+
+system called
+  each Health do |health|
+    health.hp += label(health.hp)
+  end
+end

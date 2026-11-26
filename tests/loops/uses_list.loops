@@ -1,0 +1,7 @@
+tests/loops/uses_list.12am:22  system element  each Path  one core: uses a list at line 23
+tests/loops/uses_list.12am:29  system indexed  each Path  one core: uses a list at line 30
+tests/loops/uses_list.12am:36  system pushed   each Path  one core: uses a list at line 37
+tests/loops/uses_list.12am:43  system walked   each Path  one core: uses a list at line 44
+tests/loops/uses_list.12am:51  system built    each Path  one core: uses a list at line 52
+tests/loops/uses_list.12am:57  system stored   each Path  one core: assigns `Board.cells` at line 58
+tests/loops/uses_list.12am:63  system called   each Path  one core: uses a list in `third` (line 17), called at line 64

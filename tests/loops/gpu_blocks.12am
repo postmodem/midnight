@@ -1,0 +1,31 @@
+# expect: each `each` of a GPU system is one `gpu` line, in a strict
+# system too. The nested `each` of a block has no line.
+
+component Body
+  x: Float32 = 0.0
+  vx: Float32 = 0.0
+  mass: Float32 = 1.0
+end
+
+component Heat
+  value: Float32 = 0.0
+end
+
+gpu system gravity
+  each Body do |a|
+    pull: Float = 0.0
+    each Body do |b|
+      pull += (b.x - a.x) * b.mass
+    end
+    a.vx += pull * Time.dt
+  end
+  each Body do |body|
+    body.x += body.vx * Time.dt
+  end
+end
+
+strict gpu system cool
+  each Heat do |heat|
+    heat.value *= 0.5
+  end
+end

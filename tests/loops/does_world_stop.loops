@@ -1,0 +1,2 @@
+tests/loops/does_world_stop.12am:13  system direct  each Health  one core: `World.stop` at line 14
+tests/loops/does_world_stop.12am:19  system called  each Health  one core: `World.stop` in `halt` (line 9), called at line 20

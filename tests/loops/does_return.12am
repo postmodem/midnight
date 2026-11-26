@@ -1,0 +1,48 @@
+# expect: `nearest`, `in_loop` and `in_nested` stay on one core for rule
+# 6: a `return` in the block, in a loop inside it, and in a nested `each`.
+# `capped` calls a function that returns early; that `return` belongs to
+# the function, and the loop is independent.
+
+component Position
+  x: Float = 0.0
+end
+
+component Health
+  hp: Int = 10
+end
+
+def nearest(limit: Float) -> Float
+  each Position do |pos|
+    return pos.x if pos.x < limit
+  end
+  0.0
+end
+
+def in_loop
+  each Health do |health|
+    3.times do
+      return if health.hp > 100
+      health.hp += 1
+    end
+  end
+end
+
+def in_nested
+  each Health do |health|
+    each Position do |pos|
+      return if pos.x > 100.0
+      health.hp += 1
+    end
+  end
+end
+
+def cap(n: Int) -> Int
+  return 100 if n > 100
+  n
+end
+
+system capped
+  each Health do |health|
+    health.hp = cap(health.hp)
+  end
+end

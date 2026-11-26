@@ -1,0 +1,51 @@
+# expect: every loop stays on one core for rule 4, a total that is also
+# read: a resource field read after the sum, read before it, read on the
+# sum's own right-hand side, read in a called function, and a variable of
+# the code around the loop read in the block.
+
+component Health
+  hp: Int = 10
+end
+
+resource Stats
+  total: Int = 0
+end
+
+def over?(limit: Int) -> Bool
+  Stats.total > limit
+end
+
+system after
+  each Health do |health|
+    Stats.total += health.hp
+    health.hp = 0 if Stats.total > 100
+  end
+end
+
+system before
+  each Health do |health|
+    health.hp = Stats.total
+    Stats.total += 1
+  end
+end
+
+system own_side
+  each Health do |health|
+    Stats.total += Stats.total
+  end
+end
+
+system called
+  each Health do |health|
+    Stats.total += health.hp
+    health.hp = 0 if over?(100)
+  end
+end
+
+system variable
+  count = 0
+  each Health do |health|
+    count += 1
+    health.hp = count
+  end
+end

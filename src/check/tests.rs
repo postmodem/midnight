@@ -9,6 +9,7 @@ use crate::parser;
 use crate::tir::{Expr, ExprKind, Place, PlaceKind, Stmt, StmtKind};
 
 mod diagnostics;
+mod effects;
 mod gpu;
 mod overwrite;
 mod typed;
@@ -380,6 +381,7 @@ impl Dump<'_> {
                 query,
                 params,
                 body,
+                ..
             } => {
                 let params: Vec<&str> = params.iter().map(|id| self.local(*id)).collect();
                 format!(

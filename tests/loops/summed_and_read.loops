@@ -1,0 +1,5 @@
+tests/loops/summed_and_read.12am:19  system after     each Health  one core: `Stats.total` is summed and also read at line 21
+tests/loops/summed_and_read.12am:26  system before    each Health  one core: `Stats.total` is summed and also read at line 27
+tests/loops/summed_and_read.12am:33  system own_side  each Health  one core: `Stats.total` is summed and also read at line 34
+tests/loops/summed_and_read.12am:39  system called    each Health  one core: `Stats.total` is summed and also read in `over?` (line 15), called at line 41
+tests/loops/summed_and_read.12am:47  system variable  each Health  one core: `count` is summed and also read at line 49

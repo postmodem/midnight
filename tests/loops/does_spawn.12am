@@ -1,0 +1,25 @@
+# expect: both loops stay on one core for rule 6: `spawn` in the block
+# and in a called function. A spawned entity's handle is taken when
+# `spawn` is called, so the order of the calls shows.
+
+component Health
+  hp: Int = 10
+end
+
+tag Ghost
+
+def haunt
+  spawn Ghost
+end
+
+system direct
+  each Health do |health|
+    spawn Ghost if health.hp <= 0
+  end
+end
+
+system called
+  each Health do |health|
+    haunt if health.hp <= 0
+  end
+end

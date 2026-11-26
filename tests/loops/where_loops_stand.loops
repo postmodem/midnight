@@ -1,0 +1,8 @@
+tests/loops/where_loops_stand.12am:26  system branches  each Health          cores
+tests/loops/where_loops_stand.12am:30  system branches  each Armor           cores
+tests/loops/where_loops_stand.12am:38  system blasts    each Health          cores
+tests/loops/where_loops_stand.12am:45  system pairs     each Health          cores
+tests/loops/where_loops_stand.12am:53  def heal_all     each Health          cores
+tests/loops/where_loops_stand.12am:60  top level        each Health          cores
+tests/loops/where_loops_stand.12am:65  top level        each Armor           cores
+tests/loops/where_loops_stand.12am:69  top level        each Entity, Health  one core: `puts` at line 70

@@ -1,0 +1,93 @@
+# expect: every loop is independent. Each reads something it does not
+# write: a constant, `Time`, a resource field, a variable and a parameter
+# of the code around it, `e[C]`, `has?`, `alive?`, `World.count` with and
+# without a query, a nested `each`, and a nested `each` inside a nested
+# `each`.
+
+LIMIT = 100.0
+
+component Position
+  x: Float = 0.0
+end
+
+component Velocity
+  dx: Float = 0.0
+end
+
+component Leader
+  who: Entity
+end
+
+component Crowd
+  size: Int = 0
+end
+
+tag Hunter
+
+resource Wind
+  push: Float = 0.5
+end
+
+system constant
+  each Position do |pos|
+    pos.x = LIMIT if pos.x > LIMIT
+  end
+end
+
+system time
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt + Time.elapsed * 0.0
+    vel.dx = 0.0 if Time.tick > 1000
+  end
+end
+
+system resource_field
+  each Velocity do |vel|
+    vel.dx += Wind.push
+  end
+end
+
+system variable
+  boost = Wind.push * 2.0
+  each Velocity do |vel|
+    vel.dx += boost
+  end
+end
+
+def scale_all(k: Float)
+  each Velocity do |vel|
+    vel.dx *= k
+  end
+end
+
+system follow
+  each Velocity, Leader do |vel, leader|
+    if leader.who.alive? && leader.who.has?(Position)
+      vel.dx = leader.who[Position].x
+    end
+  end
+end
+
+system census
+  each Crowd do |crowd|
+    crowd.size = World.count(Position) + World.count
+  end
+end
+
+system flee
+  each Position, Velocity do |pos, vel|
+    each Position, with: Hunter do |hunter|
+      vel.dx += (pos.x - hunter.x) * 0.01
+    end
+  end
+end
+
+system pairs
+  each Crowd do |crowd|
+    each Position do |a|
+      each Velocity do |b|
+        crowd.size += 1 if a.x > b.dx
+      end
+    end
+  end
+end

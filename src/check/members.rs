@@ -144,6 +144,8 @@ impl CheckedQuery {
         }
         let terms: Option<Vec<tir::Term>> = self.terms.into_iter().collect();
         Some(tir::Query {
+            // Numbered by the effect analysis.
+            id: tir::QueryId(0),
             terms: terms?,
             with: self.with,
             without: self.without,

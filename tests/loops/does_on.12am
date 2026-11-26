@@ -1,0 +1,32 @@
+# expect: both loops stay on one core for rule 6: `on` in the block and in
+# a called function. An `on` moves its place in the stream of events.
+
+component Health
+  hp: Int = 10
+end
+
+event Hit
+  damage: Int
+end
+
+def worst -> Int
+  most = 0
+  on Hit do |hit|
+    most = hit.damage if hit.damage > most
+  end
+  most
+end
+
+system direct
+  each Health do |health|
+    on Hit do |hit|
+      health.hp -= hit.damage
+    end
+  end
+end
+
+system called
+  each Health do |health|
+    health.hp -= worst
+  end
+end

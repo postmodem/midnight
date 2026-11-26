@@ -1,0 +1,50 @@
+# expect: every loop stays on one core for rule 2, an assignment to
+# `e[C]`: the whole component, a field, a compound assignment, an entity
+# that is a long expression (the reason then shows `…[C]`), and one in a
+# called function.
+
+component Health
+  hp: Int = 10
+end
+
+component Target
+  who: Entity
+end
+
+def heal(e: Entity)
+  e[Health].hp = 10
+end
+
+def pick_the_entity_with_a_long_name(a: Entity, b: Entity, c: Entity) -> Entity
+  a
+end
+
+system whole
+  each Target do |target|
+    target.who[Health] = Health(1)
+  end
+end
+
+system field
+  each Target do |target|
+    target.who[Health].hp = 1
+  end
+end
+
+system compound
+  each Target do |target|
+    target.who[Health].hp -= 1
+  end
+end
+
+system long
+  each Target do |target|
+    pick_the_entity_with_a_long_name(target.who, target.who, target.who)[Health].hp = 1
+  end
+end
+
+system called
+  each Target do |target|
+    heal(target.who)
+  end
+end

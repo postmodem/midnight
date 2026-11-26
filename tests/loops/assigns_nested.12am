@@ -1,0 +1,31 @@
+# expect: both loops stay on one core for rule 2: a nested `each` assigns
+# through its own parameter, in the block and in a called function. The
+# reason names the component and the line of the nested `each`.
+
+component Position
+  x: Float = 0.0
+end
+
+component Velocity
+  dx: Float = 0.0
+end
+
+def stop_all
+  each Velocity do |vel|
+    vel.dx = 0.0
+  end
+end
+
+system push
+  each Position do |pos|
+    each Velocity do |vel|
+      vel.dx += pos.x
+    end
+  end
+end
+
+system called
+  each Position do |pos|
+    stop_all if pos.x > 100.0
+  end
+end

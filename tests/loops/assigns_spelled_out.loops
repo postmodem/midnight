@@ -1,0 +1,5 @@
+tests/loops/assigns_spelled_out.12am:18  system field      each Health  one core: assigns `Stats.total` at line 19; write `Stats.total += …` for a sum
+tests/loops/assigns_spelled_out.12am:25  system variable   each Health  one core: assigns `count` at line 26; write `count += …` for a sum
+tests/loops/assigns_spelled_out.12am:31  system minus      each Health  one core: assigns `Stats.total` at line 32; write `Stats.total += …` for a sum
+tests/loops/assigns_spelled_out.12am:37  system float      each Health  one core: assigns `Stats.heat` at line 38
+tests/loops/assigns_spelled_out.12am:43  system unrelated  each Health  one core: assigns `Stats.total` at line 44

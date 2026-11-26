@@ -1,0 +1,2 @@
+tests/loops/sum_in_function.12am:24  system direct   each Health  one core: `Stats.total += …` is in a called function: `count` (line 15), called at line 25
+tests/loops/sum_in_function.12am:30  system through  each Health  one core: `Stats.total += …` is in a called function: `count` (line 15), called at line 31

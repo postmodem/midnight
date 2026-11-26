@@ -1,0 +1,2 @@
+tests/loops/does_puts.12am:14  system direct  each Health  one core: `puts` at line 15
+tests/loops/does_puts.12am:20  system called  each Health  one core: `puts` in `show` (line 10), called at line 21

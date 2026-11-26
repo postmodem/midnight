@@ -1,0 +1,6 @@
+tests/loops/called_function.12am:56  system deep        each Health  one core: `rand` in `pick` (line 30), called at line 57
+tests/loops/called_function.12am:62  system first_wins  each Health  one core: `rand` in `pick` (line 30), called at line 64
+tests/loops/called_function.12am:70  system in_order    each Health  one core: `puts` in `show` (line 42), called at line 71
+tests/loops/called_function.12am:76  system spins       each Health  one core: `rand` in `spin` (line 51), called at line 77
+tests/loops/called_function.12am:82  system method      each Health  one core: `puts` in `Meter.show` (line 15), called at line 83
+tests/loops/called_function.12am:88  system operator    each Health  one core: `print` in `Meter.+` (line 19), called at line 89

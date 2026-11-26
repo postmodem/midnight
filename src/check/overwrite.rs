@@ -458,6 +458,7 @@ pub(super) fn mark(program: &mut Program) {
                             query,
                             params,
                             body,
+                            ..
                         },
                     span,
                 }) = node
@@ -480,6 +481,7 @@ pub(super) fn mark(program: &mut Program) {
                     query,
                     params,
                     body,
+                    ..
                 } = &stmt.kind
                 {
                     let flags = flags(program, &reaches, &query.terms, params, body, true);

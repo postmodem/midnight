@@ -1,0 +1,63 @@
+# expect: every loop but the last stays on one core for rule 3: it assigns
+# `Position` through its own parameter and reads `Position` by `e[C]`, in
+# a nested `each`, by `e[C]` in a called function, and in an `each` of a
+# called function. `flee` reads `Position` and assigns `Velocity`, which is
+# independent.
+
+component Position
+  x: Float = 0.0
+end
+
+component Velocity
+  dx: Float = 0.0
+end
+
+component Leader
+  who: Entity
+end
+
+def where_is(e: Entity) -> Float
+  e[Position].x
+end
+
+def furthest -> Float
+  far = 0.0
+  each Position do |pos|
+    far = pos.x if pos.x > far
+  end
+  far
+end
+
+system follow
+  each Position, Leader do |pos, leader|
+    pos.x = leader.who[Position].x
+  end
+end
+
+system crowd
+  each Position do |pos|
+    each Position do |other|
+      pos.x += other.x * 0.01
+    end
+  end
+end
+
+system follow_called
+  each Position, Leader do |pos, leader|
+    pos.x = where_is(leader.who)
+  end
+end
+
+system crowd_called
+  each Position do |pos|
+    pos.x = furthest
+  end
+end
+
+system flee
+  each Position, Velocity do |pos, vel|
+    each Position do |other|
+      vel.dx += (pos.x - other.x) * 0.01
+    end
+  end
+end

@@ -1,0 +1,45 @@
+# expect: every loop stays on one core for rule 4, a total that is also
+# assigned in another way: a resource field assigned after the sum,
+# assigned before it, assigned in a called function, and a variable of the
+# code around the loop assigned in the block.
+
+component Health
+  hp: Int = 10
+end
+
+resource Stats
+  total: Int = 0
+end
+
+def reset
+  Stats.total = 0
+end
+
+system after
+  each Health do |health|
+    Stats.total += health.hp
+    Stats.total = 0 if health.hp < 0
+  end
+end
+
+system before
+  each Health do |health|
+    Stats.total = 0 if health.hp < 0
+    Stats.total += health.hp
+  end
+end
+
+system called
+  each Health do |health|
+    Stats.total += health.hp
+    reset if health.hp < 0
+  end
+end
+
+system variable
+  count = 0
+  each Health do |health|
+    count += 1
+    count = 0 if health.hp < 0
+  end
+end

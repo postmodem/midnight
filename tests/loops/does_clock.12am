@@ -1,0 +1,22 @@
+# expect: both loops stay on one core for rule 6: `clock` in the block and
+# in a called function.
+
+component Stamp
+  at: Float = 0.0
+end
+
+def now -> Float
+  clock
+end
+
+system direct
+  each Stamp do |stamp|
+    stamp.at = clock
+  end
+end
+
+system called
+  each Stamp do |stamp|
+    stamp.at = now
+  end
+end

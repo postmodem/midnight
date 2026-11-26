@@ -1,0 +1,5 @@
+tests/loops/cores_own_rows.12am:41  system move      each Position, Velocity  cores
+tests/loops/cores_own_rows.12am:47  system reset     each Position            cores
+tests/loops/cores_own_rows.12am:53  system level_up  each Named               cores
+tests/loops/cores_own_rows.12am:60  system own       each Entity, Owner       cores
+tests/loops/cores_own_rows.12am:66  system filtered  each Velocity            cores

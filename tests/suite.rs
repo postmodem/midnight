@@ -11,6 +11,8 @@
 //!   exit 1 and print exactly `NAME.err` to standard error.
 //! - `tests/plan/NAME.12am` + `NAME.plan`: `midnight plan` must exit 0,
 //!   print exactly `NAME.plan`, and print nothing to standard error.
+//! - `tests/loops/NAME.12am` + `NAME.loops`: `midnight loops` must exit 0,
+//!   print exactly `NAME.loops`, and print nothing to standard error.
 //! - `examples/NAME.12am` + `NAME.out`: as `tests/run`. `examples/bench.12am`
 //!   and `bench/churn.12am` are only compiled.
 //!
@@ -410,6 +412,33 @@ fn plan_programs() {
         .map_err(|message| format!("{}: {message}", source.display()))
     });
     report("plans", sources.len(), failures);
+}
+
+#[test]
+fn loops_programs() {
+    let sources = programs("tests/loops");
+    let failures = for_each_parallel(&sources, |source| {
+        let output = midnight()
+            .arg("loops")
+            .arg(source)
+            .output()
+            .expect("run midnight");
+        if output.status.code() != Some(0) || !output.stderr.is_empty() {
+            return Err(format!(
+                "{}: `midnight loops` exited with {:?}, expected 0 and no diagnostics\n{}",
+                source.display(),
+                output.status,
+                text(&output.stderr)
+            ));
+        }
+        expect(
+            &source.with_extension("loops"),
+            &text(&output.stdout),
+            "loops",
+        )
+        .map_err(|message| format!("{}: {message}", source.display()))
+    });
+    report("loops", sources.len(), failures);
 }
 
 #[test]

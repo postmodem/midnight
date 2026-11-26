@@ -1,0 +1,9 @@
+tests/loops/uses_string.12am:28  system literal    each Health          one core: uses a `String` at line 29
+tests/loops/uses_string.12am:35  system converted  each Health          one core: uses a `String` at line 36
+tests/loops/uses_string.12am:41  system field      each Named, Health   one core: uses a `String` at line 42
+tests/loops/uses_string.12am:47  system constant   each Health          one core: uses a `String` at line 48
+tests/loops/uses_string.12am:54  system around     each Health          one core: uses a `String` at line 55
+tests/loops/uses_string.12am:60  system whole      each Named           one core: uses a `String` at line 61
+tests/loops/uses_string.12am:67  system added      each Entity, Health  one core: uses a `String` at line 68
+tests/loops/uses_string.12am:73  system shouted    each Health          one core: uses a `String` at line 74
+tests/loops/uses_string.12am:79  system called     each Health          one core: uses a `String` in `label` (line 23), called at line 80

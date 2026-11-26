@@ -1,0 +1,70 @@
+# expect: an `each` in a function or a method gets its verdict from its
+# own block, wherever the function is called from. `Wind.blow`,
+# `scale_all` and `faster_than` are independent and `shout_all` is not. A
+# method is named with its type. `rank` calls `faster_than` from inside
+# its block: the loop of `faster_than` then runs inside a run of `rank`,
+# and `rank` is independent too, since that loop only reads `Velocity` and
+# counts into a variable of its function. `settle` calls `scale_all`,
+# whose loop assigns `Velocity` in every run of `settle`, and `noisy`
+# calls `shout_all`: both stay on one core.
+
+component Position
+  x: Float = 0.0
+  rank: Int = 0
+end
+
+component Velocity
+  dx: Float = 0.0
+end
+
+struct Wind
+  push: Float = 0.5
+
+  def blow
+    each Velocity do |vel|
+      vel.dx += push
+    end
+  end
+end
+
+def scale_all(k: Float)
+  each Velocity do |vel|
+    vel.dx *= k
+  end
+end
+
+def faster_than(limit: Float) -> Int
+  count = 0
+  each Velocity do |vel|
+    count += 1 if vel.dx > limit
+  end
+  count
+end
+
+def shout_all
+  each Velocity do |vel|
+    puts vel.dx
+  end
+end
+
+system rank
+  each Position do |pos|
+    pos.rank = faster_than(pos.x)
+  end
+end
+
+system settle
+  each Position do |pos|
+    scale_all(0.5) if pos.x > 100.0
+  end
+end
+
+system noisy
+  each Position do |pos|
+    shout_all if pos.x > 100.0
+  end
+end
+
+Wind(0.25).blow
+scale_all(2.0)
+puts faster_than(1.0)
