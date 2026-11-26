@@ -1,0 +1,140 @@
+# The hunt settled fox by fox: a fox eats unless a lower-numbered fox
+# picked the same rabbit. Animals spawned in number order.
+component Rabbit
+  num: Int
+  place: Int
+  age: Int
+end
+
+component Fox
+  num: Int
+  place: Int
+  hunger: Int = 0
+  meals: Int = 0
+  target: Int = 0
+  ate: Bool = false
+end
+
+resource Counts
+  next_rabbit: Int = 1
+  next_fox: Int = 1
+  eaten: Int = 0
+  born: Int = 0
+  cubs: Int = 0
+  starved: Int = 0
+end
+
+def add_rabbit(place: Int, age: Int)
+  spawn Rabbit(Counts.next_rabbit, place, age)
+  Counts.next_rabbit += 1
+end
+
+def add_fox(place: Int)
+  spawn Fox(num: Counts.next_fox, place: place)
+  Counts.next_fox += 1
+end
+
+system hunt
+  Counts.eaten = 0
+  Counts.born = 0
+  Counts.cubs = 0
+  Counts.starved = 0
+  each Fox do |fox|
+    fox.ate = false
+    best = 0
+    each Rabbit do |r|
+      if r.place == fox.place && (best == 0 || r.num < best)
+        best = r.num
+      end
+    end
+    fox.target = best
+  end
+  each Fox do |fox|
+    next if fox.target == 0
+    lowest = true
+    each Fox do |other|
+      lowest = false if other.target == fox.target && other.num < fox.num
+    end
+    fox.ate = lowest
+  end
+  each Fox do |fox|
+    next unless fox.ate
+    each Entity, Rabbit do |e, r|
+      if r.num == fox.target
+        e.despawn
+        Counts.eaten += 1
+      end
+    end
+  end
+end
+
+system foxes
+  last = Counts.next_fox - 1
+  1.upto(last) do |i|
+    each Entity, Fox do |e, fox|
+      next unless fox.num == i
+      if fox.ate
+        fox.hunger = 0
+        fox.meals += 1
+        if fox.meals == 2
+          fox.meals = 0
+          add_fox(fox.place)
+          Counts.cubs += 1
+        end
+      else
+        fox.hunger += 1
+        if fox.hunger == 3
+          e.despawn
+          Counts.starved += 1
+        else
+          fox.place = (fox.place + 2) % 12
+        end
+      end
+    end
+  end
+end
+
+system rabbits
+  counts = [0] * 12
+  each Rabbit do |r|
+    counts[r.place] += 1
+  end
+  last = Counts.next_rabbit - 1
+  1.upto(last) do |i|
+    each Rabbit do |r|
+      next unless r.num == i
+      if r.age >= 2 && counts[r.place] <= 3
+        add_rabbit(r.place, 0)
+        Counts.born += 1
+      end
+      r.age += 1
+    end
+  end
+end
+
+system report
+  t = Time.tick + 1
+  r = World.count(Rabbit)
+  f = World.count(Fox)
+  puts "tick #{t}: #{r} rabbits, #{f} foxes, #{Counts.eaten} eaten, #{Counts.born} born, #{Counts.cubs} cubs, #{Counts.starved} starved"
+end
+
+Counts.next_rabbit = 11
+Counts.next_fox = 4
+spawn Rabbit(1, 5, 3)
+spawn Rabbit(2, 0, 1)
+spawn Rabbit(3, 6, 0)
+spawn Rabbit(4, 10, 0)
+spawn Rabbit(5, 11, 2)
+spawn Rabbit(6, 5, 4)
+spawn Rabbit(7, 9, 1)
+spawn Rabbit(8, 5, 2)
+spawn Rabbit(9, 10, 3)
+spawn Rabbit(10, 7, 2)
+spawn Fox(num: 1, place: 5)
+spawn Fox(num: 2, place: 1, meals: 1)
+spawn Fox(num: 3, place: 8)
+
+15.times do
+  World.tick
+end

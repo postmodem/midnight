@@ -1,0 +1,104 @@
+# Results kept in a list of structs, teams in two tables, a selection sort.
+struct Result
+  round: Int
+  home: String
+  home_goals: Int
+  away_goals: Int
+  away: String
+end
+
+component Name
+  text: String
+end
+
+component Standing
+  points: Int
+  scored: Int
+  conceded: Int
+end
+
+tag Founder
+
+RESULTS = [
+  Result(1, "Bees", 2, 1, "Ants"), Result(1, "Cats", 0, 0, "Dogs"),
+  Result(1, "Eels", 1, 3, "Fish"), Result(2, "Bees", 1, 3, "Cats"),
+  Result(2, "Ants", 2, 2, "Eels"), Result(2, "Dogs", 1, 0, "Fish"),
+  Result(3, "Bees", 0, 1, "Dogs"), Result(3, "Ants", 1, 0, "Fish"),
+  Result(3, "Cats", 2, 2, "Eels"), Result(4, "Bees", 1, 1, "Eels"),
+  Result(4, "Ants", 0, 2, "Dogs"), Result(4, "Cats", 1, 0, "Fish"),
+  Result(5, "Bees", 3, 0, "Fish"), Result(5, "Ants", 1, 1, "Cats"),
+  Result(5, "Dogs", 0, 1, "Eels")
+]
+
+struct Line
+  name: String
+  points: Int
+  diff: Int
+end
+
+def better?(a: Line, b: Line) -> Bool
+  if a.points != b.points
+    a.points > b.points
+  elsif a.diff != b.diff
+    a.diff > b.diff
+  else
+    a.name < b.name
+  end
+end
+
+def credit(name: String, scored: Int, conceded: Int)
+  each Name, Standing do |n, s|
+    if n.text == name
+      s.scored += scored
+      s.conceded += conceded
+      if scored > conceded
+        s.points += 3
+      elsif scored == conceded
+        s.points += 1
+      end
+    end
+  end
+end
+
+system play
+  header = "round #{Time.tick + 1}:"
+  first = true
+  RESULTS.each do |r|
+    if r.round == Time.tick + 1
+      header += first ? " " : ", "
+      first = false
+      header += r.home + " " + r.home_goals.to_s + "-" + r.away_goals.to_s + " " + r.away
+      credit(r.home, r.home_goals, r.away_goals)
+      credit(r.away, r.away_goals, r.home_goals)
+    end
+  end
+  puts header
+end
+
+system standings
+  lines: [Line] = []
+  each Name, Standing do |n, s|
+    lines.push(Line(n.text, s.points, s.scored - s.conceded))
+  end
+  place = 1
+  while !lines.empty?
+    best = 0
+    lines.each_with_index do |l, i|
+      best = i if better?(l, lines[best])
+    end
+    l = lines.delete_at(best)
+    puts "#{place}. #{l.name} #{l.points} #{l.diff}"
+    place += 1
+  end
+end
+
+spawn Name("Fish"), Standing(0, 0, 0)
+spawn Name("Eels"), Standing(0, 0, 0)
+spawn Name("Dogs"), Standing(0, 0, 0), Founder
+spawn Name("Cats"), Standing(0, 0, 0)
+spawn Name("Ants"), Standing(0, 0, 0), Founder
+spawn Name("Bees"), Standing(0, 0, 0), Founder
+
+5.times do
+  World.tick
+end

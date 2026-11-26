@@ -1,0 +1,102 @@
+# Ties on points and goal difference keep the order the teams were visited in; teams spawned as the task lists them.
+component Team
+  name: String
+  points: Int = 0
+  diff: Int = 0
+end
+
+event Match
+  home: String
+  away: String
+  home_goals: Int
+  away_goals: Int
+end
+
+struct Row
+  name: String
+  points: Int
+  diff: Int
+end
+
+# Whether `a` is placed above `b` in the table.
+def above?(a: Row, b: Row) -> Bool
+  return a.points > b.points if a.points != b.points
+  return a.diff > b.diff if a.diff != b.diff
+  false
+end
+
+def score(m: Match) -> String
+  "#{m.home} #{m.home_goals}-#{m.away_goals} #{m.away}"
+end
+
+system play
+  round = Time.tick + 1
+  if round == 1
+    emit Match("Bees", "Ants", 2, 1)
+    emit Match("Cats", "Dogs", 0, 0)
+    emit Match("Eels", "Fish", 1, 3)
+  elsif round == 2
+    emit Match("Bees", "Cats", 1, 3)
+    emit Match("Ants", "Eels", 2, 2)
+    emit Match("Dogs", "Fish", 1, 0)
+  elsif round == 3
+    emit Match("Bees", "Dogs", 0, 1)
+    emit Match("Ants", "Fish", 1, 0)
+    emit Match("Cats", "Eels", 2, 2)
+  elsif round == 4
+    emit Match("Bees", "Eels", 1, 1)
+    emit Match("Ants", "Dogs", 0, 2)
+    emit Match("Cats", "Fish", 1, 0)
+  else
+    emit Match("Bees", "Fish", 3, 0)
+    emit Match("Ants", "Cats", 1, 1)
+    emit Match("Dogs", "Eels", 0, 1)
+  end
+end
+
+system record
+  results = ""
+  on Match do |m|
+    results += ", " unless results.empty?
+    results += score(m)
+    each Team do |t|
+      if t.name == m.home || t.name == m.away
+        mine = t.name == m.home ? m.home_goals : m.away_goals
+        theirs = t.name == m.home ? m.away_goals : m.home_goals
+        t.diff += mine - theirs
+        t.points += 3 if mine > theirs
+        t.points += 1 if mine == theirs
+      end
+    end
+  end
+  puts "round #{Time.tick + 1}: #{results}"
+end
+
+system table
+  rows: [Row] = []
+  each Team do |t|
+    row = Row(t.name, t.points, t.diff)
+    i = rows.length
+    rows.push(row)
+    while i > 0 && above?(row, rows[i - 1])
+      rows[i] = rows[i - 1]
+      i -= 1
+    end
+    rows[i] = row
+  end
+  rows.each_with_index do |r, k|
+    puts "#{k + 1}. #{r.name} #{r.points} #{r.diff}"
+  end
+end
+
+
+spawn Team("Bees")
+spawn Team("Ants")
+spawn Team("Cats")
+spawn Team("Dogs")
+spawn Team("Eels")
+spawn Team("Fish")
+
+5.times do
+  World.tick
+end

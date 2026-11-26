@@ -253,6 +253,39 @@
           '';
         };
 
+      # evals/eval.rb, run from the repository's root with the tools it
+      # hands on to agents and to the compiler.
+      evalFor =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "midnight-eval";
+          runtimeInputs = [
+            pkgs.ruby_3_4
+            pkgs.git
+            pkgs.coreutils
+          ];
+          runtimeEnv = {
+            EVAL_RUBY = lib.getExe pkgs.ruby_3_4;
+            EVAL_COREUTILS = "${pkgs.coreutils}/bin";
+            EVAL_AGENT_TOOLS = lib.makeBinPath [
+              pkgs.coreutils
+              pkgs.bash
+              pkgs.findutils
+              pkgs.gnugrep
+              pkgs.gnused
+              pkgs.ripgrep
+            ];
+          };
+          text = ''
+            if [ ! -f evals/eval.rb ] || [ ! -f flake.nix ] ||
+              [ "$(git rev-parse --show-toplevel 2>/dev/null)" != "$PWD" ]; then
+              echo "midnight-eval: run it from the root of the midnight repository" >&2
+              exit 2
+            fi
+            exec ruby evals/eval.rb "$@"
+          '';
+        };
+
       benchFor =
         pkgs:
         pkgs.writeShellApplication {
@@ -347,6 +380,11 @@
             program = lib.getExe (benchCoresFor pkgs);
             meta.description = "Time loops on one thread and on every core, with no GPU: GPU blocks and independent each loops";
           };
+          eval = {
+            type = "app";
+            program = lib.getExe (evalFor pkgs);
+            meta.description = "Run agents on the eval tasks, grade their programs, and report";
+          };
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           window-test = {
@@ -368,6 +406,7 @@
               pkgs.rust-analyzer
               pkgs.clang
               pkgs.nixfmt
+              pkgs.ruby_3_4
             ];
             MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
             MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;

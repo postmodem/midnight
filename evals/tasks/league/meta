@@ -1,0 +1,3 @@
+areas: events structs lists strings
+control: no
+ruby: sort_by, <=>, insert, join
