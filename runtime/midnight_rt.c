@@ -943,6 +943,16 @@ static void events_discard(uint32_t event, uint64_t until) {
     buf->base = until;
 }
 
+/* The words of MIDNIGHT_GPU. */
+static struct {
+    bool off;
+    bool software;
+    bool info;
+    bool stats;
+    bool rows;
+    bool strict_cpu;
+} gpu_options;
+
 /* ---- The window ------------------------------------------------------------ */
 
 #ifdef MN_WINDOW
@@ -985,6 +995,14 @@ static struct {
     uint32_t frame_height;
     MnColor frame_background;
     int64_t frame_tick;
+
+    /* The window is on the desktop, through midnight_window.c. */
+    bool shown;
+    /* When the last tick of a shown window was due, in nanoseconds of the
+     * monotonic clock; `paced` is false until the first tick after
+     * Window.open. */
+    bool paced;
+    int64_t due;
 } win;
 
 /* Prints a command's answer. */
@@ -1229,8 +1247,49 @@ static void window_frame(void) {
     win.frame_tick = mn_time.tick;
 }
 
-void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
+/* Shows a window of win.width by win.height points titled `title` and
+ * sets the sizes the desktop gave it; or returns why it can't be shown. */
+static const char *window_show(MnString title, const char **how) {
+#ifndef MN_FRAMES
     (void)title;
+    (void)how;
+    return "the program was built without the window flags";
+#else
+    if (gpu_options.off) return "MIDNIGHT_GPU has `off`";
+    int64_t len = mn_str_bytesize(title);
+    char *text = mn_malloc((size_t)len + 1);
+    if (len > 0) memcpy(text, title->bytes, (size_t)len);
+    text[len] = '\0';
+    MnWindowSizes sizes;
+    const char *unable = mn_window_show(text, win.width, win.height, &sizes, how);
+    free(text);
+    if (unable) return unable;
+    win.shown = true;
+    win.width = sizes.width;
+    win.height = sizes.height;
+    win.pixel_width = sizes.pixel_width;
+    win.pixel_height = sizes.pixel_height;
+    return NULL;
+#endif
+}
+
+#ifdef MN_FRAMES
+/* Draws the last frame and shows it on the desktop. */
+static void window_draw(void) {
+    MnFrame frame = {win.frame_width, win.frame_height, win.frame_background};
+    mn_window_draw(&frame);
+}
+#endif
+
+/* Takes a shown window off the desktop. */
+static void window_hide(void) {
+#ifdef MN_FRAMES
+    if (win.shown) mn_window_close();
+#endif
+    win.shown = false;
+}
+
+void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     if (mn_world.in_tick) {
         mn_panic(loc, "Window.open called while a tick is in progress");
     }
@@ -1250,20 +1309,25 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
                      (long long)sizes[i], MN_WINDOW_LARGEST);
         }
     }
-    if (!win.headless) {
-        mn_panic(loc,
-                 "Window.open: no window can be shown: %s; set "
-                 "MIDNIGHT_WINDOW=headless to run without one",
-                 "the program was built without the window flags");
-    }
-    win.open = true;
-    win.closing = false;
     win.scale_num = 1;
     win.scale_den = 1;
     win.width = width;
     win.height = height;
     win.pixel_width = width;
     win.pixel_height = height;
+    const char *how = "headless";
+    if (!win.headless) {
+        const char *unable = window_show(title, &how);
+        if (unable) {
+            mn_panic(loc,
+                     "Window.open: no window can be shown: %s; set "
+                     "MIDNIGHT_WINDOW=headless to run without one",
+                     unable);
+        }
+    }
+    win.open = true;
+    win.closing = false;
+    win.paced = false;
     MnWindow *window = mn_window_program->window;
     window->width = win.width;
     window->height = win.height;
@@ -1271,15 +1335,43 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     window->pixel_height = win.pixel_height;
     window->open = true;
     window_frame();
+#ifdef MN_FRAMES
+    if (win.shown) window_draw();
+#endif
     if (win.info) {
         fflush(stdout);
         fprintf(stderr,
-                "midnight: window: %lldx%lld points, %lldx%lld pixels, "
-                "headless\n",
+                "midnight: window: %lldx%lld points, %lldx%lld pixels, %s\n",
                 (long long)win.width, (long long)win.height,
-                (long long)win.pixel_width, (long long)win.pixel_height);
+                (long long)win.pixel_width, (long long)win.pixel_height, how);
     }
 }
+
+#ifdef MN_FRAMES
+/* Holds a tick of a shown window that is not driven until `Time.dt` after
+ * the tick before it was due. A tick that begins late is due when it
+ * begins; the first after Window.open begins at once. */
+static void window_pace(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    int64_t now_ns = (int64_t)now.tv_sec * 1000000000 + now.tv_nsec;
+    double dt = mn_time.dt;
+    if (!win.paced || !(dt > 0.0)) {
+        win.paced = true;
+        win.due = now_ns;
+        return;
+    }
+    win.due += dt < 1e9 ? (int64_t)(dt * 1e9) : INT64_C(1000000000000000000);
+    if (win.due <= now_ns) {
+        win.due = now_ns;
+        return;
+    }
+    fflush(stdout);
+    struct timespec due = {(time_t)(win.due / 1000000000), (long)(win.due % 1000000000)};
+    while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &due, NULL) == EINTR) {
+    }
+}
+#endif
 
 /* What happens before the first system of a tick runs. */
 static void window_tick_begin(void) {
@@ -1293,6 +1385,18 @@ static void window_tick_begin(void) {
     }
     if (!win.open) return;
     if (win.drive_done) win.closing = true;
+#ifdef MN_FRAMES
+    if (win.shown) {
+        if (!win.drive_name) window_pace();
+        MnWindowSizes sizes;
+        mn_window_poll(&sizes);
+        win.width = sizes.width;
+        win.height = sizes.height;
+        win.pixel_width = sizes.pixel_width;
+        win.pixel_height = sizes.pixel_height;
+        if (sizes.closed) win.closing = true;
+    }
+#endif
     MnWindow *window = mn_window_program->window;
     if (window->width != win.width || window->height != win.height ||
         window->pixel_width != win.pixel_width ||
@@ -1311,6 +1415,7 @@ static void window_tick_begin(void) {
         win.open = false;
         win.closing = false;
         window->open = false;
+        window_hide();
         mn_emit(mn_window_program->closed);
         mn_stop();
     }
@@ -1318,7 +1423,12 @@ static void window_tick_begin(void) {
 
 /* What happens when a tick has ended. */
 static void window_tick_end(void) {
-    if (win.open) window_frame();
+    if (win.open) {
+        window_frame();
+#ifdef MN_FRAMES
+        if (win.shown) window_draw();
+#endif
+    }
     drive_tick_answer(false);
 }
 
@@ -1555,6 +1665,7 @@ static void window_finish(void) {
     win.drive = NULL;
     win.drive_done = true;
     win.open = false;
+    window_hide();
 #ifdef MN_FRAMES
     mn_window_finish();
 #endif
@@ -3042,16 +3153,6 @@ void mn_gpu_wrote(MnTable *table, uint32_t component) {
 #endif
 
 const MnGpuCheck *mn_gpu_check;
-
-/* The words of MIDNIGHT_GPU. */
-static struct {
-    bool off;
-    bool software;
-    bool info;
-    bool stats;
-    bool rows;
-    bool strict_cpu;
-} gpu_options;
 
 /* A tick has ended whose `stats` line is not printed yet. */
 static bool stats_pending;

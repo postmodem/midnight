@@ -5,7 +5,9 @@
 #   tests/window/compositor.sh COMMAND [ARG ...]
 #
 # The compositor is sway with the headless backend: it has one output of
-# 1280x720 at 60 Hz that is shown nowhere, and no input devices. It and
+# 1280x720 at 60 Hz that is shown nowhere, and no input devices. Every
+# window floats at the output's top left, at the size it asks for; one
+# titled `midnight hidden` goes to workspace 9, which is not shown. It and
 # the command get a runtime directory of their own, so its sockets are
 # the only ones in reach. The display, compositor and session-bus
 # variables of the desktop this is run from are removed from everything
@@ -30,8 +32,13 @@ export DBUS_SESSION_BUS_ADDRESS=unix:path=$dir/no-bus
 cat > "$dir/config" << 'EOF'
 output HEADLESS-1 mode 1280x720@60Hz position 0 0 scale 1
 default_border none
+default_floating_border none
 focus_follows_mouse no
 xwayland disable
+floating_minimum_size 1 x 1
+floating_maximum_size -1 x -1
+for_window [title=".*"] floating enable, move position 0 0
+for_window [title="^midnight hidden$"] move container to workspace 9
 EOF
 
 export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1

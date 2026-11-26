@@ -201,9 +201,11 @@
           runtimeInputs = windowToolsFor pkgs;
           runtimeEnv = {
             MIDNIGHT_BIN = lib.getExe (midnightFor pkgs);
+            MIDNIGHT_SUITE = lib.getExe (suiteFor pkgs);
             MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
             MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
             MIDNIGHT_WINDOW_FLAGS = windowFlagsFor pkgs;
+            MIDNIGHT_TEST_GPU = "hardware";
             NIX_HARDENING_ENABLE = "";
           };
           text = ''
@@ -417,9 +419,12 @@
               {
                 nativeBuildInputs = windowToolsFor pkgs;
                 MIDNIGHT_BIN = lib.getExe midnight;
+                MIDNIGHT_SUITE = lib.getExe (suiteFor pkgs);
                 MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
                 MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
                 MIDNIGHT_WINDOW_FLAGS = windowFlagsFor pkgs;
+                MIDNIGHT_TEST_GPU = "software";
+                MIDNIGHT_TEST_SOFTWARE_ICD = softwareIcdFor pkgs;
                 NIX_HARDENING_ENABLE = "";
                 RENDERER = "pixman";
                 VK_DRIVER_FILES = softwareIcdFor pkgs;

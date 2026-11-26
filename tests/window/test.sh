@@ -5,9 +5,12 @@
 #   tests/window/test.sh OUT
 #
 # Needs MIDNIGHT_CC, MIDNIGHT_GPU_FLAGS and MIDNIGHT_WINDOW_FLAGS, and
-# sway, swaymsg and grim on PATH. RENDERER and RENDER_NODE are passed to
-# compositor.sh; VK_DRIVER_FILES, when set, chooses the device. OUT
-# receives what each test writes.
+# sway, swaymsg, grim and mkfifo on PATH. Run from the repository root:
+# the suite's window tests run as MIDNIGHT_SUITE, the suite's executable,
+# or through cargo when that is not set, on the device MIDNIGHT_TEST_GPU
+# names (the hardware device when it is not set). RENDERER and
+# RENDER_NODE are passed to compositor.sh; VK_DRIVER_FILES, when set,
+# chooses the smoke program's device. OUT receives what each test writes.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 out=$1
@@ -28,4 +31,15 @@ for build in smoke smoke-debug; do
   COMPOSITOR_LOG=$out/$build-run/sway.log \
     bash "$here/compositor.sh" bash "$here/smoke.sh" "$out/$build" "$out/$build-run"
 done
+
+# The suite's window tests, one at a time, in a compositor of their own.
+if [ -n "${MIDNIGHT_SUITE:-}" ]; then
+  suite=("$MIDNIGHT_SUITE")
+else
+  suite=(cargo test --release --test suite --)
+fi
+echo "== the suite's window tests"
+MIDNIGHT_TEST_WINDOW=1 COMPOSITOR_LOG=$out/suite-sway.log \
+  bash "$here/compositor.sh" "${suite[@]}" --exact --test-threads=1 --nocapture \
+  window_shown window_keeps_time window_closes window_resized
 echo "window tests passed"

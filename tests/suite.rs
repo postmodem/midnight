@@ -194,13 +194,26 @@ fn on_cpu(exe: &Path, source: &Path) -> Command {
 /// program with a window: `MIDNIGHT_WINDOW=headless`, and `MIDNIGHT_DRIVE`
 /// set to the program's `.drive` file, or to an empty one. Unless
 /// `captures`, the `capture` commands are left out, since a run with no
-/// device has no frames. The desktop's display variables are removed.
+/// device has no frames. The display variables name no display.
 fn headless(command: &mut Command, source: &Path, captures: bool) {
     command
         .env("MIDNIGHT_WINDOW", "headless")
-        .env("MIDNIGHT_DRIVE", drive_file(source, captures))
-        .env_remove("WAYLAND_DISPLAY")
-        .env_remove("DISPLAY");
+        .env("MIDNIGHT_DRIVE", drive_file(source, captures));
+    no_display(command);
+}
+
+/// Sets the display variables to addresses that cannot be connected to,
+/// and the runtime directory, where Wayland's sockets are, to an empty
+/// one, so that no window of a test reaches the desktop the tests run
+/// from.
+fn no_display(command: &mut Command) {
+    static EMPTY: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    let empty = EMPTY.get_or_init(|| scratch("no-display"));
+    command
+        .env("XDG_RUNTIME_DIR", empty)
+        .env("WAYLAND_DISPLAY", "midnight-no-display")
+        .env("DISPLAY", ":no-display")
+        .env_remove("WAYLAND_SOCKET");
 }
 
 /// The commands a test run of `source` is given. `capture` lines are kept
@@ -2663,9 +2676,8 @@ fn drive(dir: &Path, exe: &Path, name: &str, words: &str, commands: &str) -> (Ti
     command
         .env("MIDNIGHT_GPU", "off")
         .env("MIDNIGHT_WINDOW", words)
-        .env("MIDNIGHT_DRIVE", &file)
-        .env_remove("WAYLAND_DISPLAY")
-        .env_remove("DISPLAY");
+        .env("MIDNIGHT_DRIVE", &file);
+    no_display(&mut command);
     (
         run_within(&mut command, PANIC_LIMIT),
         file.to_string_lossy().into_owned(),
@@ -2811,25 +2823,43 @@ fn drive_answers() {
 }
 
 /// Without `headless`, a program that cannot show a window stops at
-/// `Window.open` with a run-time error that names `MIDNIGHT_WINDOW`.
+/// `Window.open` with a run-time error that says why and names
+/// `MIDNIGHT_WINDOW`: here, `MIDNIGHT_GPU` has `off`, or no display can be
+/// reached, whether the display variables name none or one that is not
+/// there.
 #[test]
 fn a_window_that_cannot_be_shown_is_an_error() {
     let dir = scratch("window-not-shown");
     let exe = build_text(&dir, "driven", DRIVEN);
-    let (run, _) = drive(&dir, &exe, "shown", "", "tick\n");
-    assert_eq!(run.status, Some(1), "{}", run.stderr);
-    let prefix = format!(
-        "{}:1: runtime error: Window.open: no window can be shown: ",
-        dir.join("driven.12am").display()
+    let error = |reason: &str| {
+        format!(
+            "{}:1: runtime error: Window.open: no window can be shown: {reason}; \
+             set MIDNIGHT_WINDOW=headless to run without one\n",
+            dir.join("driven.12am").display()
+        )
+    };
+    let (run, _) = drive(&dir, &exe, "off", "", "tick\n");
+    assert_eq!(
+        (run.status, run.stderr),
+        (Some(1), error("MIDNIGHT_GPU has `off`"))
     );
-    assert!(
-        run.stderr.starts_with(&prefix)
-            && run
-                .stderr
-                .ends_with("; set MIDNIGHT_WINDOW=headless to run without one\n"),
-        "{}",
-        run.stderr
-    );
+    for named in [true, false] {
+        let mut command = Command::new(&exe);
+        command
+            .env_remove("MIDNIGHT_GPU")
+            .env_remove("MIDNIGHT_WINDOW")
+            .env_remove("MIDNIGHT_DRIVE");
+        no_display(&mut command);
+        if !named {
+            command.env_remove("WAYLAND_DISPLAY").env_remove("DISPLAY");
+        }
+        let run = run_within(&mut command, PANIC_LIMIT);
+        assert_eq!(
+            (run.status, run.stderr),
+            (Some(1), error("no display was found")),
+            "display variables named: {named}"
+        );
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -2953,4 +2983,538 @@ fn only_programs_that_split_read_the_threads_variable() {
         ""
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ---- Window mode -----------------------------------------------------------
+
+/// The device the window tests draw on, when `MIDNIGHT_TEST_WINDOW` asks
+/// for them: the one `MIDNIGHT_TEST_GPU` names, or the hardware device.
+/// They must run inside `tests/window/compositor.sh`.
+fn window_device() -> Option<Device> {
+    if std::env::var_os("MIDNIGHT_TEST_WINDOW").is_none_or(|value| value.is_empty()) {
+        return None;
+    }
+    assert!(
+        std::env::var_os("SWAYSOCK").is_some(),
+        "MIDNIGHT_TEST_WINDOW is set: run the window tests inside tests/window/compositor.sh"
+    );
+    Some(Device::from_env().unwrap_or(Device::Hardware))
+}
+
+/// Held by each window test: they share one compositor and its output.
+static COMPOSITOR: Mutex<()> = Mutex::new(());
+
+/// Runs `swaymsg` with `args` on the compositor and returns what it says.
+fn sway(args: &[&str]) -> String {
+    let output = Command::new("swaymsg")
+        .args(args)
+        .output()
+        .expect("run swaymsg");
+    assert!(
+        output.status.success(),
+        "swaymsg {args:?}: {}",
+        text(&output.stdout)
+    );
+    text(&output.stdout)
+}
+
+/// Whether the compositor shows the window titled `title`.
+fn sway_shows(title: &str) -> Option<bool> {
+    let tree: String = sway(&["-t", "get_tree"])
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    let title: String = title.chars().filter(|c| !c.is_whitespace()).collect();
+    let at = tree.find(&format!("\"name\":\"{title}\""))?;
+    let node = &tree[at..];
+    let node = &node[..node.find('{').unwrap_or(node.len())];
+    Some(node.contains("\"visible\":true"))
+}
+
+/// A program running with a window in the compositor.
+struct Shown {
+    child: std::process::Child,
+    stderr: std::sync::mpsc::Receiver<String>,
+    said: String,
+    stdout: Option<std::thread::JoinHandle<Vec<u8>>>,
+}
+
+impl Shown {
+    /// Starts `exe` in `dir` with `MIDNIGHT_WINDOW=info` on `device`, with
+    /// `MIDNIGHT_DRIVE` set to `drive` when that is given.
+    fn start(exe: &Path, dir: &Path, drive: Option<&Path>, device: Device) -> Shown {
+        use std::io::{BufRead, Read};
+        let mut command = Command::new(exe);
+        command
+            .env("MIDNIGHT_WINDOW", "info")
+            .env_remove("MIDNIGHT_DRIVE")
+            .current_dir(dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        on_device(&mut command, device);
+        if let Some(drive) = drive {
+            command.env("MIDNIGHT_DRIVE", drive);
+        }
+        let mut child = command.spawn().expect("run program");
+        let mut stdout = child.stdout.take().expect("piped");
+        let stderr = child.stderr.take().expect("piped");
+        let (send, stderr_lines) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(stderr).lines() {
+                let Ok(line) = line else { break };
+                if send.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let stdout = std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = stdout.read_to_end(&mut bytes);
+            bytes
+        });
+        Shown {
+            child,
+            stderr: stderr_lines,
+            said: String::new(),
+            stdout: Some(stdout),
+        }
+    }
+
+    /// Waits until what the program has written to standard error passes
+    /// `done`, or the program ends, or `limit` passes. Returns whether it
+    /// passed.
+    fn wait_for(&mut self, limit: Duration, done: impl Fn(&str) -> bool) -> bool {
+        let started = Instant::now();
+        while !done(&self.said) {
+            let left = limit.saturating_sub(started.elapsed());
+            match self
+                .stderr
+                .recv_timeout(left.min(Duration::from_millis(50)))
+            {
+                Ok(line) => {
+                    self.said.push_str(&line);
+                    self.said.push('\n');
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    if left.is_zero() {
+                        return false;
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return false,
+            }
+        }
+        true
+    }
+
+    /// Waits for the program to end, and kills it when it has not ended
+    /// within `limit`. Returns its run.
+    fn finish(mut self, limit: Duration) -> TimedRun {
+        let started = Instant::now();
+        let mut timed_out = false;
+        let status = loop {
+            if let Some(status) = self.child.try_wait().expect("wait for program") {
+                break status;
+            }
+            if started.elapsed() >= limit {
+                timed_out = true;
+                let _ = self.child.kill();
+                break self.child.wait().expect("wait for program");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        while let Ok(line) = self.stderr.recv() {
+            self.said.push_str(&line);
+            self.said.push('\n');
+        }
+        let stdout = self
+            .stdout
+            .take()
+            .unwrap()
+            .join()
+            .expect("read standard output");
+        let (drive, stderr) = split_drive(&self.said);
+        TimedRun {
+            status: if timed_out { None } else { status.code() },
+            stdout: text(&stdout),
+            stderr,
+            drive,
+            timed_out,
+        }
+    }
+}
+
+/// Takes the `info` lines of a shown window out of a run's standard error:
+/// the device's and the window's. The window's must say it is shown on
+/// Wayland. Returns the window's.
+fn window_said(run: &mut TimedRun, device: Device) -> Result<String, String> {
+    device_said(run, device)?;
+    let mut said = None;
+    let mut rest = String::new();
+    for line in run.stderr.split_inclusive('\n') {
+        match line.strip_prefix("midnight: window: ") {
+            Some(window) if said.is_none() => said = Some(window.trim_end().to_string()),
+            _ => rest.push_str(line),
+        }
+    }
+    run.stderr = rest;
+    let said = said.ok_or("no `info` line for the window")?;
+    if !said.contains(", wayland, ") {
+        return Err(format!("the window is not shown on Wayland: {said}"));
+    }
+    Ok(said)
+}
+
+/// The pixels of a binary PPM file of 8-bit samples: width, height and
+/// three bytes a pixel.
+fn ppm_pixels(bytes: &[u8]) -> Result<(usize, usize, &[u8]), String> {
+    let mut fields = Vec::new();
+    let mut at = 0;
+    while fields.len() < 4 {
+        while bytes.get(at).is_some_and(u8::is_ascii_whitespace) {
+            at += 1;
+        }
+        let start = at;
+        while bytes
+            .get(at)
+            .is_some_and(|byte| !byte.is_ascii_whitespace())
+        {
+            at += 1;
+        }
+        fields.push(String::from_utf8_lossy(&bytes[start..at]).into_owned());
+    }
+    let number = |field: &str| {
+        field
+            .parse::<usize>()
+            .map_err(|_| "not a PPM file".to_string())
+    };
+    if fields[0] != "P6" || fields[3] != "255" {
+        return Err("not a binary PPM file of 8-bit samples".to_string());
+    }
+    let (width, height) = (number(&fields[1])?, number(&fields[2])?);
+    let pixels = bytes.get(at + 1..).ok_or("the file is cut short")?;
+    if pixels.len() != width * height * 3 {
+        return Err("the file is cut short".to_string());
+    }
+    Ok((width, height, pixels))
+}
+
+/// The programs with a `.frames` file whose commands a shown window can
+/// carry out: none of them is `resize` or `scale`.
+fn shown_frame_programs() -> Vec<PathBuf> {
+    frame_programs()
+        .into_iter()
+        .filter(|source| {
+            let commands =
+                std::fs::read_to_string(source.with_extension("drive")).unwrap_or_default();
+            !commands.lines().any(|line| {
+                let line = line.trim_start();
+                line.starts_with("resize") || line.starts_with("scale")
+            })
+        })
+        .collect()
+}
+
+/// Window mode: the frame programs that need neither `resize` nor `scale`
+/// run with a window on Wayland and their commands from a pipe, in release
+/// and debug builds. Their answers and output must be those of the
+/// headless run, and a picture of the compositor taken after the last
+/// command must hold the pixels of the last capture at the window's place.
+#[test]
+fn window_shown() {
+    let Some(device) = window_device() else {
+        return;
+    };
+    let _compositor = COMPOSITOR
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let sources = shown_frame_programs();
+    assert!(
+        !sources.is_empty(),
+        "no frame program a shown window can run"
+    );
+    let dir = scratch("window-shown");
+    let mut failures = Vec::new();
+    for source in &sources {
+        for mode in MODES {
+            let label = format!("{} ({mode:?}) with a window", source.display());
+            if let Err(message) = shown_frames(&dir, source, mode, device) {
+                failures.push(format!("{label}: {message}"));
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs with a window", sources.len() * MODES.len(), failures);
+}
+
+/// One run of `window_shown`.
+fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result<(), String> {
+    let stem = source.file_stem().unwrap().to_string_lossy();
+    let files = dir.join(format!("{stem}-{mode:?}"));
+    std::fs::create_dir_all(&files).expect("create a directory for captures");
+    let exe = files.join("program");
+    build(source, &exe, mode)?;
+    let pipe = files.join("commands");
+    let made = Command::new("mkfifo")
+        .arg(&pipe)
+        .status()
+        .expect("run mkfifo");
+    assert!(made.success(), "mkfifo {}", pipe.display());
+    let commands = std::fs::read(source.with_extension("drive")).expect("read commands");
+    let expected = std::fs::read_to_string(source.with_extension("frames")).expect("read answers");
+
+    let mut shown = Shown::start(&exe, &files, Some(&pipe), device);
+    // The program opens the pipe when its first tick begins; the commands
+    // are written, and the pipe stays open until the picture is taken.
+    let (close, closed) = std::sync::mpsc::channel::<()>();
+    let writer = {
+        let pipe = pipe.clone();
+        std::thread::spawn(move || {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&pipe)
+                .expect("open the pipe");
+            let _ = file.write_all(&commands);
+            let _ = closed.recv();
+        })
+    };
+    let answered = shown.wait_for(Duration::from_secs(120), |said| {
+        split_drive(said).0 == expected
+    });
+    let picture = files.join("screen.ppm");
+    let taken = answered && {
+        std::thread::sleep(Duration::from_millis(300));
+        Command::new("grim")
+            .args(["-t", "ppm"])
+            .arg(&picture)
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    let _ = close.send(());
+    if !answered {
+        // Unblocks the writer when the program never opened the pipe.
+        let _ = std::fs::OpenOptions::new().read(true).open(&pipe);
+    }
+    let _ = writer.join();
+    let mut run = shown.finish(Duration::from_secs(30));
+    let said = window_said(&mut run, device);
+    if run.status != Some(0) || !run.stderr.is_empty() || !taken {
+        return Err(format!(
+            "exited with {:?}, picture taken {taken}, {said:?}\n--- answers\n{}--- stderr\n{}---",
+            run.status, run.drive, run.stderr
+        ));
+    }
+    said?;
+    if run.drive != expected {
+        return Err(format!(
+            "the answers differ from the headless run's\n--- expected\n{expected}--- actual\n{}---",
+            run.drive
+        ));
+    }
+    let out = std::fs::read_to_string(source.with_extension("out")).unwrap_or_default();
+    if run.stdout != out {
+        return Err(format!(
+            "standard output differs from the .out file\n--- actual\n{}---",
+            run.stdout
+        ));
+    }
+    check_captures(&run.drive, &files)?;
+
+    let last = run
+        .drive
+        .lines()
+        .filter_map(capture_answer)
+        .next_back()
+        .ok_or("no capture")?;
+    let capture = std::fs::read(files.join(last.0)).expect("read the capture");
+    let (width, height, pixels) = png_pixels(&capture)?;
+    let (width, height) = (width as usize, height as usize);
+    let screen = std::fs::read(&picture).expect("read the picture");
+    let (screen_width, screen_height, screen) = ppm_pixels(&screen)?;
+    if width > screen_width || height > screen_height {
+        return Err(format!(
+            "a capture of {width}x{height} is larger than the picture"
+        ));
+    }
+    let wrong = (0..height)
+        .flat_map(|y| (0..width).map(move |x| (x, y)))
+        .filter(|&(x, y)| {
+            let captured = &pixels[(y * width + x) * 4..][..3];
+            let seen = &screen[(y * screen_width + x) * 3..][..3];
+            captured != seen
+        })
+        .count();
+    if wrong != 0 {
+        return Err(format!(
+            "{wrong} of {} pixels of the picture are not those of {}",
+            width * height,
+            last.0
+        ));
+    }
+    Ok(())
+}
+
+/// A program that opens a window titled `TITLE`, runs 120 ticks and prints
+/// how many seconds they took.
+const KEEPS_TIME: &str = "\
+Window.open(\"TITLE\", 320, 200)
+start = clock
+while Time.tick < 120
+  World.tick
+end
+puts clock - start
+";
+
+/// Window mode: 120 ticks of a window take 1.9 to 2.3 seconds with the
+/// output at 60 Hz, at 144 Hz, and with the window on a workspace that is
+/// not shown, in release and debug builds.
+#[test]
+fn window_keeps_time() {
+    let Some(device) = window_device() else {
+        return;
+    };
+    let _compositor = COMPOSITOR
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let dir = scratch("window-keeps-time");
+    let cases = [
+        ("at 60 Hz", "midnight keeps time", "1280x720@60Hz"),
+        ("at 144 Hz", "midnight keeps time", "1280x720@144Hz"),
+        ("not shown", "midnight hidden", "1280x720@60Hz"),
+    ];
+    let mut failures = Vec::new();
+    let mut times = Vec::new();
+    for mode in MODES {
+        for (what, title, output) in cases {
+            let label = format!("{what} ({mode:?})");
+            let name = title.replace(' ', "_");
+            let source = dir.join(format!("{name}.12am"));
+            std::fs::write(&source, KEEPS_TIME.replace("TITLE", title)).expect("write a program");
+            let exe = dir.join(format!("{name}-{mode:?}"));
+            if let Err(message) = build(&source, &exe, mode) {
+                failures.push(message);
+                continue;
+            }
+            sway(&["output", "HEADLESS-1", "mode", output]);
+            let mut shown = Shown::start(&exe, &dir, None, device);
+            let opened = shown.wait_for(Duration::from_secs(30), |said| {
+                said.contains("midnight: window: ")
+            });
+            let visible = if opened { sway_shows(title) } else { None };
+            let mut run = shown.finish(Duration::from_secs(30));
+            let said = window_said(&mut run, device);
+            let seconds = run.stdout.trim().parse::<f64>().ok();
+            times.push(format!("{label} {seconds:?}"));
+            let shown_as_asked = visible == Some(title != "midnight hidden");
+            if run.status != Some(0)
+                || !run.stderr.is_empty()
+                || said.is_err()
+                || !shown_as_asked
+                || !seconds.is_some_and(|seconds| (1.9..=2.3).contains(&seconds))
+            {
+                failures.push(format!(
+                    "{label}: exited with {:?}, {said:?}, shown {visible:?}, took {seconds:?} s\n\
+                     --- stdout\n{}--- stderr\n{}---",
+                    run.status, run.stdout, run.stderr
+                ));
+            }
+        }
+    }
+    sway(&["output", "HEADLESS-1", "mode", "1280x720@60Hz"]);
+    let _ = std::fs::remove_dir_all(&dir);
+    note(&format!("window_keeps_time: {}", times.join(", ")));
+    report("runs that keep time", cases.len() * MODES.len(), failures);
+}
+
+/// A program with a window that says what happens to it and ends when it
+/// is closed.
+const WATCHED: &str = "\
+Window.open(\"midnight watched\", 320, 200)
+
+system report
+  on WindowResized do |size|
+    puts \"#{size.width}x#{size.height} points, #{size.pixel_width}x#{size.pixel_height} pixels\"
+  end
+  on WindowClosed do
+    puts \"closed, open #{Window.open?}\"
+  end
+end
+
+World.run
+puts \"World.run ended\"
+";
+
+/// Runs `WATCHED` in both build modes with a window, gives the compositor
+/// the commands in `act` once it is shown, and requires `printed` on
+/// standard output.
+fn watched(name: &str, act: &[&[&str]], printed: &str) {
+    let Some(device) = window_device() else {
+        return;
+    };
+    let _compositor = COMPOSITOR
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let dir = scratch(name);
+    let source = dir.join("watched.12am");
+    std::fs::write(&source, WATCHED).expect("write a program");
+    let mut failures = Vec::new();
+    for mode in MODES {
+        let exe = exe_path(&dir, &source, mode);
+        if let Err(message) = build(&source, &exe, mode) {
+            failures.push(message);
+            continue;
+        }
+        let mut shown = Shown::start(&exe, &dir, None, device);
+        let opened = shown.wait_for(Duration::from_secs(30), |said| {
+            said.contains("midnight: window: ")
+        });
+        if opened {
+            for args in act {
+                std::thread::sleep(Duration::from_millis(300));
+                sway(args);
+            }
+        }
+        let mut run = shown.finish(Duration::from_secs(10));
+        let said = window_said(&mut run, device);
+        if run.status != Some(0) || !run.stderr.is_empty() || said.is_err() || run.stdout != printed
+        {
+            failures.push(format!(
+                "{mode:?}: exited with {:?}, {said:?}\n--- expected\n{printed}--- stdout\n{}--- stderr\n{}---",
+                run.status, run.stdout, run.stderr
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs with a window", MODES.len(), failures);
+}
+
+/// Window mode: a close by the compositor ends `World.run`, after a tick
+/// in which `WindowClosed` is seen.
+#[test]
+fn window_closes() {
+    watched(
+        "window-closes",
+        &[&["[title=\"midnight watched\"]", "kill"]],
+        "closed, open false\nWorld.run ended\n",
+    );
+}
+
+/// Window mode: a resize by the compositor arrives as one `WindowResized`
+/// with the new sizes.
+#[test]
+fn window_resized() {
+    watched(
+        "window-resized",
+        &[
+            &[
+                "[title=\"midnight watched\"]",
+                "resize",
+                "set",
+                "400",
+                "300",
+            ],
+            &["[title=\"midnight watched\"]", "kill"],
+        ],
+        "400x300 points, 400x300 pixels\nclosed, open false\nWorld.run ended\n",
+    );
 }
