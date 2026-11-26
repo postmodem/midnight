@@ -204,6 +204,24 @@
           };
           text = builtins.readFile ./bench/bench-gpu.sh;
         };
+
+      benchCoresFor =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "midnight-bench-cores";
+          runtimeInputs = [
+            (midnightFor pkgs)
+            pkgs.gawk
+            pkgs.gnused
+            pkgs.coreutils
+          ];
+          runtimeEnv = {
+            BENCH_SRC = "${src}";
+            MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
+            MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
+          };
+          text = builtins.readFile ./bench/cores.sh;
+        };
     in
     {
       packages = forAllSystems (pkgs: {
@@ -230,6 +248,11 @@
           type = "app";
           program = lib.getExe (benchGpuFor pkgs);
           meta.description = "Time GPU systems on the GPU and on the CPU: gravity on 16,384 bodies, also strict, then a move of one million entities";
+        };
+        bench-cores = {
+          type = "app";
+          program = lib.getExe (benchCoresFor pkgs);
+          meta.description = "Time loops on one thread and on every core, with no GPU: GPU blocks and independent each loops";
         };
       });
 

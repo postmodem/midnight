@@ -343,6 +343,9 @@ fn benchmarks_compile() {
         "bench/gpu_gravity.12am",
         "bench/gpu_move.12am",
         "bench/gpu_move_read.12am",
+        "bench/cores_age.12am",
+        "bench/cores_flee.12am",
+        "bench/cores_small.12am",
     ]
     .iter()
     .map(PathBuf::from)

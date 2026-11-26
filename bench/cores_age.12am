@@ -1,0 +1,56 @@
+# One million entities grow older in every tick, and the thousand whose
+# time is up are despawned: an independent loop with a whole-number sum
+# and queued changes. Prints the time per tick and a checksum.
+#
+# bench/cores.sh runs it on one thread and on every core.
+
+ENTITIES = 1_000_000
+# Entities that expire in each tick.
+EXPIRE = 1_000
+TICKS = 100
+
+component Life
+  left: Float
+end
+
+resource Stats
+  expired: Int = 0
+end
+
+system age
+  each Entity, Life do |e, life|
+    life.left -= Time.dt
+    if life.left <= 0.0
+      Stats.expired += 1
+      e.despawn
+    end
+  end
+end
+
+# Entity `i` lasts a little longer than `i / EXPIRE` ticks, so that EXPIRE
+# of them expire in each tick. The order mixes those that expire soon with
+# those that last.
+ENTITIES.times do |i|
+  turn = i * 7919 % ENTITIES / EXPIRE
+  spawn Life((turn + 0.5) * Time.dt)
+end
+
+World.tick
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+
+left = 0.0
+each Life do |life|
+  left += life.left
+end
+
+puts "entities: #{World.count(Life)}"
+puts "ticks: #{TICKS}"
+puts "seconds: #{seconds.round(6)}"
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"
+puts "checksum: #{Stats.expired * 1000003 + World.count(Life)} #{left}"

@@ -1,0 +1,58 @@
+# 100,000 prey each look at 64 hunters and turn away from them: an
+# independent loop with a nested `each`, which reads the positions of
+# other entities and assigns the velocity of its own. Prints the time per
+# tick and a checksum.
+#
+# bench/cores.sh runs it on one thread and on every core.
+
+PREY = 100_000
+HUNTERS = 64
+TICKS = 20
+
+component Position
+  x: Float
+  y: Float
+end
+
+component Velocity
+  dx: Float
+  dy: Float
+end
+
+tag Prey
+tag Hunter
+
+system flee
+  each Position, Velocity, with: Prey do |pos, vel|
+    each Position, with: Hunter do |hunter|
+      vel.dx += (pos.x - hunter.x) * 0.01
+      vel.dy += (pos.y - hunter.y) * 0.01
+    end
+  end
+end
+
+HUNTERS.times do |i|
+  spawn Position(i % 8 * 100.0, i / 8 * 100.0), Hunter
+end
+PREY.times do |i|
+  spawn Position(i % 1000 * 0.75, i / 1000 * 7.5), Velocity(0.0, 0.0), Prey
+end
+
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+
+checksum = 0.0
+each Velocity do |vel|
+  checksum += vel.dx + vel.dy * 2
+end
+
+puts "prey: #{World.count(Position, with: Prey)}"
+puts "ticks: #{TICKS}"
+puts "seconds: #{seconds.round(6)}"
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(4)}"
+puts "checksum: #{checksum}"

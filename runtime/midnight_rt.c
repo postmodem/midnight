@@ -2042,9 +2042,14 @@ static struct {
     MnTable **tables;
     uint64_t *starts;
     uint32_t table_capacity;
-    /* Working space for joining the pieces. */
+    /* Working space for joining the pieces: every stretch; for each one,
+     * the next stretch of its piece or UINT32_MAX; and for each piece, its
+     * first stretch or UINT32_MAX. */
     MnStretch *joined;
+    uint32_t *next;
     size_t joined_capacity;
+    uint32_t *first;
+    uint64_t first_capacity;
     /* The earliest piece that has failed, and its error. */
     pthread_mutex_t lock;
     uint64_t failed_piece;
@@ -2151,10 +2156,26 @@ static int stretch_order(const void *a, const void *b) {
     return x->kind < y->kind ? -1 : x->kind > y->kind;
 }
 
+/* Hands one stretch to the world: queued changes to the end of the queue,
+ * events to the end of their buffer. */
+static void stretch_append(const MnStretch *stretch) {
+    const MnBytes *bytes = &loops.threads[stretch->thread].buffers[stretch->kind];
+    size_t size = stretch->end - stretch->begin;
+    if (stretch->kind == 0) {
+        memcpy(commands_extend(size), bytes->data + stretch->begin, size);
+        mn_world.deferred_count += (uint32_t)stretch->count;
+    } else {
+        memcpy(events_extend(stretch->kind - 1, stretch->count),
+               bytes->data + stretch->begin, size);
+    }
+}
+
 /* Appends what the pieces queued to the world's queue and what they
  * emitted to the event buffers, piece after piece: the order in which one
- * thread queues and emits. */
-static void loop_join(uint32_t threads) {
+ * thread queues and emits. A piece has one stretch of a kind at most, and
+ * the kinds go to different places, so only the order of the pieces
+ * counts. */
+static void loop_join(uint32_t threads, uint64_t pieces) {
     size_t total = 0;
     for (uint32_t t = 0; t < threads; t++) {
         total += loops.threads[t].stretch_count;
@@ -2162,6 +2183,7 @@ static void loop_join(uint32_t threads) {
     if (total == 0) return;
     if (total > loops.joined_capacity) {
         loops.joined = mn_realloc(loops.joined, mn_mul(total, sizeof(MnStretch)));
+        loops.next = mn_realloc(loops.next, mn_mul(total, sizeof(uint32_t)));
         loops.joined_capacity = total;
     }
     size_t at = 0;
@@ -2172,18 +2194,27 @@ static void loop_join(uint32_t threads) {
                thread->stretch_count * sizeof(MnStretch));
         at += thread->stretch_count;
     }
-    qsort(loops.joined, total, sizeof(MnStretch), stretch_order);
+    /* With stretches for few of very many pieces, or too many to number
+     * in 32 bits, they are sorted. */
+    if (pieces / 64 > total || total >= UINT32_MAX) {
+        qsort(loops.joined, total, sizeof(MnStretch), stretch_order);
+        for (size_t i = 0; i < total; i++) stretch_append(&loops.joined[i]);
+        return;
+    }
+    /* Otherwise each piece gets the list of its stretches. */
+    if (pieces > loops.first_capacity) {
+        loops.first = mn_realloc(loops.first, mn_mul(pieces, sizeof(uint32_t)));
+        loops.first_capacity = pieces;
+    }
+    memset(loops.first, 0xff, (size_t)pieces * sizeof(uint32_t));
     for (size_t i = 0; i < total; i++) {
-        const MnStretch *stretch = &loops.joined[i];
-        const MnBytes *bytes =
-            &loops.threads[stretch->thread].buffers[stretch->kind];
-        size_t size = stretch->end - stretch->begin;
-        if (stretch->kind == 0) {
-            memcpy(commands_extend(size), bytes->data + stretch->begin, size);
-            mn_world.deferred_count += (uint32_t)stretch->count;
-        } else {
-            memcpy(events_extend(stretch->kind - 1, stretch->count),
-                   bytes->data + stretch->begin, size);
+        uint64_t piece = loops.joined[i].piece;
+        loops.next[i] = loops.first[piece];
+        loops.first[piece] = (uint32_t)i;
+    }
+    for (uint64_t piece = 0; piece < pieces; piece++) {
+        for (uint32_t i = loops.first[piece]; i != UINT32_MAX; i = loops.next[i]) {
+            stretch_append(&loops.joined[i]);
         }
     }
 }
@@ -2260,7 +2291,7 @@ static void loop_split(MnLoop *loop, const void *env, int64_t *sums,
                          split->threads};
     mn_pool_loop(&pieces);
 
-    loop_join(split->threads);
+    loop_join(split->threads, split->pieces);
     for (uint32_t t = 0; t < split->threads; t++) {
         const struct MnLoopThread *thread = &loops.threads[t];
         for (uint32_t i = 0; i < loop->sum_count; i++) {
@@ -2300,6 +2331,8 @@ static void loops_finish(void) {
     free(loops.tables);
     free(loops.starts);
     free(loops.joined);
+    free(loops.next);
+    free(loops.first);
     free(loops.failed_text);
     loops.threads = NULL;
     loops.thread_count = 0;
@@ -2307,7 +2340,10 @@ static void loops_finish(void) {
     loops.starts = NULL;
     loops.table_capacity = 0;
     loops.joined = NULL;
+    loops.next = NULL;
     loops.joined_capacity = 0;
+    loops.first = NULL;
+    loops.first_capacity = 0;
     loops.failed_text = NULL;
 }
 #endif

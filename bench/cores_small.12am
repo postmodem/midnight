@@ -1,0 +1,62 @@
+# An independent loop over 6,400 entities in 64 tables of 100: too little
+# work to split, so it runs on the thread that reaches it, on a machine
+# with one core and on one with many. Prints the time per tick and a
+# checksum.
+#
+# bench/cores.sh runs it on one thread and on every core, and the two
+# times are to be the same.
+TABLES = 64
+ROWS = 100
+TICKS = 20_000
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+tag T0
+tag T1
+tag T2
+tag T3
+tag T4
+tag T5
+
+system move
+  each Position, Velocity do |pos, vel|
+    pos.x += vel.dx * Time.dt
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+(TABLES * ROWS).times do |i|
+  t = i % TABLES
+  e = spawn Position(i % 100, i / 100), Velocity((i % 7 - 3) * 0.5, (i % 5 - 2) * 0.25)
+  e.add(T0) if t % 2 == 1
+  e.add(T1) if (t / 2) % 2 == 1
+  e.add(T2) if (t / 4) % 2 == 1
+  e.add(T3) if (t / 8) % 2 == 1
+  e.add(T4) if (t / 16) % 2 == 1
+  e.add(T5) if (t / 32) % 2 == 1
+end
+
+World.tick
+World.tick
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+
+checksum = 0.0
+each Position do |pos|
+  checksum += pos.x + pos.y * 2
+end
+
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(5)}"
+puts "checksum: #{checksum}"

@@ -4,7 +4,8 @@
 # bench/gpu_move_read.12am and the programs of COSTS each run on the GPU and
 # on the CPU. "On the CPU" is
 # the same program with MIDNIGHT_GPU=off, which runs the C implementation of
-# its GPU system on one thread, as a machine with no GPU does.
+# its GPU system as a machine with no GPU does: on every core, or on one
+# thread when MIDNIGHT_THREADS=1 is set.
 # bench/gpu_gravity_64k.12am runs on the GPU only. Each runs RUNS times
 # (default 3) and its fastest run counts. The gravity checksums of the GPU
 # and the CPU must agree within GRAVITY_TOLERANCE, relative, and the strict
