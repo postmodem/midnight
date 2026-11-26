@@ -1,0 +1,122 @@
+# Two ferries carry passengers from a dock. Passengers who wait too long
+# give up and leave.
+
+struct Arrival
+  tick: Int
+  num: Int
+  patience: Int
+end
+
+component Rider
+  num: Int
+  ferry: Int = 0
+end
+
+component Patience
+  left: Int
+end
+
+component Boat
+  num: Int
+  seats: Int
+end
+
+resource Counts
+  took1: Int = 0
+  took2: Int = 0
+  gone: Int = 0
+end
+
+ARRIVALS = [
+  Arrival(8, 23, 2),
+  Arrival(6, 21, 1), Arrival(6, 22, 2), Arrival(6, 19, 2), Arrival(6, 18, 1),
+  Arrival(6, 20, 3),
+  Arrival(5, 17, 2),
+  Arrival(4, 15, 1), Arrival(4, 16, 2),
+  Arrival(3, 13, 1), Arrival(3, 12, 4), Arrival(3, 14, 3),
+  Arrival(2, 10, 3), Arrival(2, 11, 2),
+  Arrival(1, 5, 4), Arrival(1, 8, 2), Arrival(1, 3, 3), Arrival(1, 7, 2),
+  Arrival(1, 1, 5), Arrival(1, 4, 1), Arrival(1, 9, 4), Arrival(1, 2, 2),
+  Arrival(1, 6, 3)
+]
+
+system arrive
+  Counts.gone = 0
+  Counts.took1 = 0
+  Counts.took2 = 0
+  ARRIVALS.each do |a|
+    if a.tick == Time.tick + 1
+      spawn Patience(a.patience), Rider(a.num)
+    end
+  end
+end
+
+def seats_of(n: Int) -> Int
+  seats = 0
+  each Boat do |b|
+    seats = b.seats if b.num == n
+  end
+  seats
+end
+
+system board
+  [1, 2].each do |n|
+    seats_of(n).times do
+      best = 0
+      each Rider do |r|
+        best = r.num if r.ferry == 0 && (best == 0 || r.num < best)
+      end
+      each Rider do |r|
+        r.ferry = n if r.num == best
+      end
+    end
+  end
+end
+
+system sail
+  each Entity, Rider do |e, r|
+    if r.ferry == 1
+      Counts.took1 += 1
+    elsif r.ferry == 2
+      Counts.took2 += 1
+    end
+    e.despawn if r.ferry != 0
+  end
+end
+
+system wait
+  each Entity, Rider, Patience do |e, r, p|
+    next if r.ferry != 0
+    p.left -= 1
+    if p.left == 0
+      e.despawn
+      Counts.gone += 1
+    end
+  end
+end
+
+system report
+  nums: [Int] = []
+  each Rider do |r|
+    nums.push(r.num)
+    i = nums.length - 1
+    while i > 0 && nums[i - 1] > nums[i]
+      t = nums[i]
+      nums[i] = nums[i - 1]
+      nums[i - 1] = t
+      i -= 1
+    end
+  end
+  waiting = "none"
+  nums.each_with_index do |n, i|
+    waiting = i == 0 ? n.to_s : waiting + ", " + n.to_s
+  end
+  puts "tick #{Time.tick + 1}: ferry 1 took #{Counts.took1}, ferry 2 took #{Counts.took2}, #{Counts.gone} left, waiting: #{waiting}"
+end
+
+spawn Boat(1, 1)
+spawn Boat(2, 2)
+
+8.times do
+  World.tick
+end
