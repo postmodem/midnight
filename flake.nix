@@ -193,6 +193,41 @@
         pkgs.gnused
       ];
 
+      # tests/window/input.c: a virtual keyboard and pointer for a headless
+      # compositor, with the virtual keyboard protocol from wtype's source
+      # and the virtual pointer protocol from wlr-protocols.
+      inputClientFor =
+        pkgs:
+        pkgs.clangStdenv.mkDerivation {
+          name = "midnight-input-client";
+          src = lib.fileset.toSource {
+            root = ./tests/window;
+            fileset = ./tests/window/input.c;
+          };
+          nativeBuildInputs = [
+            pkgs.wayland-scanner
+            pkgs.pkg-config
+          ];
+          buildInputs = [
+            pkgs.wayland
+            pkgs.libxkbcommon
+          ];
+          buildPhase = ''
+            for xml in ${pkgs.wtype.src}/protocol/virtual-keyboard-unstable-v1.xml \
+              ${pkgs.wlr-protocols}/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml; do
+              name=$(basename "$xml" .xml)
+              wayland-scanner client-header "$xml" "$name-client-protocol.h"
+              wayland-scanner private-code "$xml" "$name-protocol.c"
+            done
+            $CC -std=c11 -O2 -Wall -Wextra -Werror -I. input.c ./*-protocol.c -o input \
+              $(pkg-config --cflags --libs wayland-client xkbcommon)
+          '';
+          installPhase = ''
+            install -D input $out/bin/midnight-input-client
+          '';
+          meta.mainProgram = "midnight-input-client";
+        };
+
       # tests/window/test.sh on this machine's GPU, with sway drawing as it
       # chooses.
       windowTestFor =
@@ -207,6 +242,7 @@
             MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
             MIDNIGHT_WINDOW_FLAGS = windowFlagsFor pkgs;
             MIDNIGHT_TEST_GPU = "hardware";
+            MIDNIGHT_TEST_INPUT_CLIENT = lib.getExe (inputClientFor pkgs);
             NIX_HARDENING_ENABLE = "";
           };
           text = ''
@@ -340,6 +376,7 @@
           }
           // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
             MIDNIGHT_TEST_SOFTWARE_ICD = softwareIcdFor pkgs;
+            MIDNIGHT_TEST_INPUT_CLIENT = lib.getExe (inputClientFor pkgs);
             # For tests/window: a compositor of their own, and its picture.
             nativeBuildInputs = [
               pkgs.sway-unwrapped
@@ -427,6 +464,7 @@
                 MIDNIGHT_WINDOW_FLAGS = windowFlagsFor pkgs;
                 MIDNIGHT_TEST_GPU = "software";
                 MIDNIGHT_TEST_SOFTWARE_ICD = softwareIcdFor pkgs;
+                MIDNIGHT_TEST_INPUT_CLIENT = lib.getExe (inputClientFor pkgs);
                 NIX_HARDENING_ENABLE = "";
                 RENDERER = "pixman";
                 VK_DRIVER_FILES = softwareIcdFor pkgs;

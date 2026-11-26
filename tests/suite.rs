@@ -3707,3 +3707,487 @@ fn window_resized() {
         "400x300 points, 400x300 pixels\nclosed, open false\nWorld.run ended\n",
     );
 }
+
+// ---- Input from a compositor -----------------------------------------------
+
+/// The evdev code of the key at each position `Key` names, in the order of
+/// `Key`.
+const KEY_CODES: [(&str, u32); 105] = [
+    ("A", 30),
+    ("B", 48),
+    ("C", 46),
+    ("D", 32),
+    ("E", 18),
+    ("F", 33),
+    ("G", 34),
+    ("H", 35),
+    ("I", 23),
+    ("J", 36),
+    ("K", 37),
+    ("L", 38),
+    ("M", 50),
+    ("N", 49),
+    ("O", 24),
+    ("P", 25),
+    ("Q", 16),
+    ("R", 19),
+    ("S", 31),
+    ("T", 20),
+    ("U", 22),
+    ("V", 47),
+    ("W", 17),
+    ("X", 45),
+    ("Y", 21),
+    ("Z", 44),
+    ("Digit1", 2),
+    ("Digit2", 3),
+    ("Digit3", 4),
+    ("Digit4", 5),
+    ("Digit5", 6),
+    ("Digit6", 7),
+    ("Digit7", 8),
+    ("Digit8", 9),
+    ("Digit9", 10),
+    ("Digit0", 11),
+    ("Enter", 28),
+    ("Escape", 1),
+    ("Backspace", 14),
+    ("Tab", 15),
+    ("Space", 57),
+    ("Minus", 12),
+    ("Equal", 13),
+    ("BracketLeft", 26),
+    ("BracketRight", 27),
+    ("Backslash", 43),
+    ("Semicolon", 39),
+    ("Quote", 40),
+    ("Backquote", 41),
+    ("Comma", 51),
+    ("Period", 52),
+    ("Slash", 53),
+    ("CapsLock", 58),
+    ("F1", 59),
+    ("F2", 60),
+    ("F3", 61),
+    ("F4", 62),
+    ("F5", 63),
+    ("F6", 64),
+    ("F7", 65),
+    ("F8", 66),
+    ("F9", 67),
+    ("F10", 68),
+    ("F11", 87),
+    ("F12", 88),
+    ("PrintScreen", 99),
+    ("ScrollLock", 70),
+    ("Pause", 119),
+    ("Insert", 110),
+    ("Home", 102),
+    ("PageUp", 104),
+    ("Delete", 111),
+    ("End", 107),
+    ("PageDown", 109),
+    ("ArrowRight", 106),
+    ("ArrowLeft", 105),
+    ("ArrowDown", 108),
+    ("ArrowUp", 103),
+    ("NumLock", 69),
+    ("NumpadDivide", 98),
+    ("NumpadMultiply", 55),
+    ("NumpadSubtract", 74),
+    ("NumpadAdd", 78),
+    ("NumpadEnter", 96),
+    ("Numpad1", 79),
+    ("Numpad2", 80),
+    ("Numpad3", 81),
+    ("Numpad4", 75),
+    ("Numpad5", 76),
+    ("Numpad6", 77),
+    ("Numpad7", 71),
+    ("Numpad8", 72),
+    ("Numpad9", 73),
+    ("Numpad0", 82),
+    ("NumpadDecimal", 83),
+    ("IntlBackslash", 86),
+    ("ContextMenu", 127),
+    ("ControlLeft", 29),
+    ("ShiftLeft", 42),
+    ("AltLeft", 56),
+    ("MetaLeft", 125),
+    ("ControlRight", 97),
+    ("ShiftRight", 54),
+    ("AltRight", 100),
+    ("MetaRight", 126),
+];
+
+/// The evdev code of each `MouseButton`, in the order of `MouseButton`.
+const BUTTON_CODES: [(&str, u32); 5] = [
+    ("Left", 272),
+    ("Middle", 274),
+    ("Right", 273),
+    ("Back", 275),
+    ("Forward", 276),
+];
+
+/// The evdev code of the key `Key::name`.
+fn key_code(name: &str) -> Option<u32> {
+    KEY_CODES
+        .iter()
+        .find(|(key, _)| *key == name)
+        .map(|&(_, code)| code)
+}
+
+/// The evdev code of the button `MouseButton::name`.
+fn button_code(name: &str) -> Option<u32> {
+    BUTTON_CODES
+        .iter()
+        .find(|(button, _)| *button == name)
+        .map(|&(_, code)| code)
+}
+
+/// `tests/window/input.c`, built: the program `MIDNIGHT_TEST_INPUT_CLIENT`
+/// names, when it is set.
+fn input_client_path() -> Option<PathBuf> {
+    std::env::var_os("MIDNIGHT_TEST_INPUT_CLIENT")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+}
+
+/// The socket of the compositor of `tests/window/compositor.sh`.
+fn compositor_socket() -> PathBuf {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR inside compositor.sh");
+    let display =
+        std::env::var_os("WAYLAND_DISPLAY").expect("WAYLAND_DISPLAY inside compositor.sh");
+    Path::new(&dir).join(display)
+}
+
+/// `tests/window/input.c` connected to a compositor: a virtual keyboard and
+/// pointer. While it runs, every window in that compositor gets the focus
+/// and the pointer. It is stopped when dropped.
+struct InputClient {
+    child: std::process::Child,
+    stdin: Option<std::process::ChildStdin>,
+    answers: std::sync::mpsc::Receiver<String>,
+    stderr: Option<std::thread::JoinHandle<String>>,
+}
+
+impl InputClient {
+    /// Starts the client on the compositor whose socket is `socket`, an
+    /// absolute path, and waits until it says its devices are ready.
+    fn start(socket: &Path) -> Result<InputClient, String> {
+        use std::io::{BufRead, Read};
+        let path = input_client_path().ok_or("MIDNIGHT_TEST_INPUT_CLIENT is not set")?;
+        let mut child = Command::new(&path)
+            .arg(socket)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| format!("can't run {}: {error}", path.display()))?;
+        let stdout = child.stdout.take().expect("piped");
+        let mut stderr = child.stderr.take().expect("piped");
+        let (send, answers) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(stdout).lines() {
+                let Ok(line) = line else { break };
+                if send.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let stderr = std::thread::spawn(move || {
+            let mut text = String::new();
+            let _ = stderr.read_to_string(&mut text);
+            text
+        });
+        let mut client = InputClient {
+            stdin: child.stdin.take(),
+            child,
+            answers,
+            stderr: Some(stderr),
+        };
+        client.answer("ready")?;
+        Ok(client)
+    }
+
+    /// Waits up to ten seconds for the line `expected`.
+    fn answer(&mut self, expected: &str) -> Result<(), String> {
+        match self.answers.recv_timeout(Duration::from_secs(10)) {
+            Ok(line) if line == expected => Ok(()),
+            Ok(line) => Err(format!("the input client said {line:?}, not {expected:?}")),
+            Err(_) => Err(format!(
+                "the input client did not say {expected:?}: {}",
+                self.stop()
+            )),
+        }
+    }
+
+    /// Sends one command and waits until the compositor has handled it.
+    fn send(&mut self, command: &str) -> Result<(), String> {
+        let Some(stdin) = self.stdin.as_mut() else {
+            return Err("the input client is stopped".to_string());
+        };
+        if let Err(error) = writeln!(stdin, "{command}").and_then(|()| stdin.flush()) {
+            return Err(format!("`{command}`: {error}: {}", self.stop()));
+        }
+        self.answer("ok")
+            .map_err(|error| format!("`{command}`: {error}"))
+    }
+
+    /// Ends the client's input, waits up to five seconds for it to end and
+    /// kills it otherwise. Returns its status and what it wrote to
+    /// standard error.
+    fn stop(&mut self) -> String {
+        self.stdin = None;
+        let started = Instant::now();
+        let status = loop {
+            if let Ok(Some(status)) = self.child.try_wait() {
+                break status.code();
+            }
+            if started.elapsed() > Duration::from_secs(5) {
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        let said = self
+            .stderr
+            .take()
+            .map(|thread| thread.join().unwrap_or_default())
+            .unwrap_or_default();
+        format!("status {status:?}, said {said:?}")
+    }
+}
+
+impl Drop for InputClient {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+/// Runs the input client with `args` and `input`, and returns its status
+/// and what it wrote to standard error, or `None` for the status when it
+/// ran for more than ten seconds.
+fn input_client_run(args: &[&OsStr], input: &str) -> (Option<i32>, String) {
+    use std::io::Read;
+    let path = input_client_path().expect("MIDNIGHT_TEST_INPUT_CLIENT is set");
+    let mut child = Command::new(path)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run the input client");
+    let mut stdin = child.stdin.take().expect("piped");
+    let _ = stdin.write_all(input.as_bytes());
+    drop(stdin);
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait for the input client") {
+            break status.code();
+        }
+        if started.elapsed() > Duration::from_secs(10) {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let mut said = String::new();
+    if let Some(mut stderr) = child.stderr.take() {
+        let _ = stderr.read_to_string(&mut said);
+    }
+    (status, said)
+}
+
+/// The input client connects only to an absolute socket path given as its
+/// one argument: with none, two, a relative path or a path where no
+/// socket is, it stops with status 1 and says why. It runs when
+/// `MIDNIGHT_TEST_INPUT_CLIENT` names the client, and needs no compositor.
+#[test]
+fn input_client_needs_an_absolute_socket() {
+    if input_client_path().is_none() {
+        return;
+    }
+    let missing = std::env::temp_dir().join("midnight-no-socket-here");
+    let usage = "input: usage: input /ABSOLUTE/PATH/OF/THE/SOCKET\n";
+    let cases: [(Vec<&OsStr>, &str); 4] = [
+        (vec![], usage),
+        (vec![OsStr::new("/a"), OsStr::new("/b")], usage),
+        (
+            vec![OsStr::new("wayland-0")],
+            "input: the socket must be an absolute path: wayland-0\n",
+        ),
+        (vec![missing.as_os_str()], "input: can't connect to "),
+    ];
+    let mut failures = Vec::new();
+    for (args, said) in &cases {
+        let run = input_client_run(args, "");
+        if run.0 != Some(1) || !run.1.starts_with(said) {
+            failures.push(format!("{args:?}: {run:?}, expected status 1 and {said:?}"));
+        }
+    }
+    report("runs of the input client", cases.len(), failures);
+}
+
+/// Window mode: the input client refuses a compositor whose output is not
+/// headless. Inside the test compositor a second sway runs with the Wayland
+/// backend, whose output is `WL-1`; the client pointed at it stops with
+/// status 1 and says so, and that sway lists no virtual device.
+#[test]
+fn input_client_refuses_a_desktop() {
+    if window_device().is_none() {
+        return;
+    }
+    let _compositor = COMPOSITOR
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    assert!(
+        input_client_path().is_some(),
+        "MIDNIGHT_TEST_INPUT_CLIENT is not set"
+    );
+    let dir = scratch("input-refuses");
+    std::fs::write(dir.join("config"), "xwayland disable\n").expect("write sway's config");
+    let mut sway = Command::new("sway")
+        .arg("-c")
+        .arg(dir.join("config"))
+        .env_remove("SWAYSOCK")
+        .env_remove("WLR_LIBINPUT_NO_DEVICES")
+        .env("XDG_RUNTIME_DIR", &dir)
+        .env("WAYLAND_DISPLAY", compositor_socket())
+        .env("WLR_BACKENDS", "wayland")
+        .env("WLR_RENDERER", "pixman")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(std::fs::File::create(dir.join("sway.log")).expect("create sway's log"))
+        .spawn()
+        .expect("run sway");
+    let found = |prefix: &str, suffix: &str| {
+        std::fs::read_dir(&dir).ok()?.flatten().find_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            (name.starts_with(prefix) && name.ends_with(suffix) && !name.ends_with(".lock"))
+                .then(|| entry.path())
+        })
+    };
+    let started = Instant::now();
+    let (socket, ipc) = loop {
+        if let (Some(socket), Some(ipc)) = (found("wayland-", ""), found("sway-ipc.", ".sock")) {
+            break (socket, ipc);
+        }
+        if started.elapsed() > Duration::from_secs(10)
+            || sway.try_wait().is_ok_and(|status| status.is_some())
+        {
+            let _ = sway.kill();
+            let _ = sway.wait();
+            panic!(
+                "the second sway did not start:\n{}",
+                std::fs::read_to_string(dir.join("sway.log")).unwrap_or_default()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let swaymsg = |kind: &str| {
+        let output = Command::new("swaymsg")
+            .arg("-s")
+            .arg(&ipc)
+            .args(["-t", kind])
+            .output()
+            .expect("run swaymsg");
+        text(&output.stdout)
+    };
+    let outputs = swaymsg("get_outputs");
+    let run = input_client_run(&[socket.as_os_str()], "key down 30\nkey up 30\n");
+    let inputs = swaymsg("get_inputs");
+    let _ = sway.kill();
+    let _ = sway.wait();
+    let mut failures = Vec::new();
+    if !outputs.contains("\"name\": \"WL-1\"") {
+        failures.push(format!("the second sway's output is not WL-1: {outputs}"));
+    }
+    let refused = "input: output WL-1 is not headless; nothing was sent\n";
+    if run.0 != Some(1) || run.1 != refused {
+        failures.push(format!("the input client did not refuse: {run:?}"));
+    }
+    if inputs.trim() != "[]" {
+        failures.push(format!("the second sway has an input device: {inputs}"));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("refusals", 1, failures);
+}
+
+/// Window mode: the input client on the test compositor carries out a
+/// key command for every `Key`, a button command for every `MouseButton`
+/// and turns of the wheel, and stops with status 1 at a command it does
+/// not know or a number out of range.
+#[test]
+fn input_client_takes_its_commands() {
+    if window_device().is_none() {
+        return;
+    }
+    let _compositor = COMPOSITOR
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let socket = compositor_socket();
+    let mut failures = Vec::new();
+    let mut good = vec!["sync".to_string(), "scroll 0 0".to_string()];
+    for (name, _) in KEY_CODES {
+        let code = key_code(name).expect("a key of the table");
+        good.push(format!("key down {code}"));
+        good.push(format!("key up {code}"));
+    }
+    for (name, _) in BUTTON_CODES {
+        let code = button_code(name).expect("a button of the table");
+        good.push(format!("button down {code}"));
+        good.push(format!("button up {code}"));
+    }
+    good.extend(["scroll 1 -2", "scroll -0.5 0.25", "scroll 1000 -1000"].map(String::from));
+    match InputClient::start(&socket) {
+        Ok(mut client) => {
+            for command in &good {
+                if let Err(message) = client.send(command) {
+                    failures.push(message);
+                    break;
+                }
+            }
+            let said = client.stop();
+            if said != "status Some(0), said \"\"" {
+                failures.push(format!("at the end of its input: {said}"));
+            }
+        }
+        Err(message) => failures.push(message),
+    }
+    let bad = [
+        ("bogus", "unknown command `bogus`"),
+        ("", "unknown command ``"),
+        ("key down 0", "a key's code is from 1 to 767, not `0`"),
+        ("key down 768", "a key's code is from 1 to 767, not `768`"),
+        ("key down +30", "a key's code is from 1 to 767, not `+30`"),
+        (
+            "key sideways 30",
+            "`key` takes `down` or `up`, not `sideways`",
+        ),
+        ("key down 30 31", "unknown command `key`"),
+        (
+            "button up 271",
+            "a button's code is from 272 to 279, not `271`",
+        ),
+        (
+            "button up 280",
+            "a button's code is from 272 to 279, not `280`",
+        ),
+        ("scroll 0 1000.5", "`scroll` takes two numbers"),
+        ("scroll 0 0.0001", "`scroll` takes two numbers"),
+        ("scroll 1 .5", "`scroll` takes two numbers"),
+        ("scroll 1", "unknown command `scroll`"),
+    ];
+    for (command, said) in bad {
+        let run = input_client_run(&[socket.as_os_str()], &format!("{command}\n"));
+        if run.0 != Some(1) || !run.1.starts_with(&format!("input: {said}")) {
+            failures.push(format!(
+                "{command:?}: {run:?}, expected status 1 and {said:?}"
+            ));
+        }
+    }
+    report("runs of the input client", 1 + bad.len(), failures);
+}

@@ -5,7 +5,8 @@
 #   tests/window/test.sh OUT
 #
 # Needs MIDNIGHT_CC, MIDNIGHT_GPU_FLAGS and MIDNIGHT_WINDOW_FLAGS, and
-# sway, swaymsg, grim and mkfifo on PATH. Run from the repository root:
+# sway, swaymsg, grim and mkfifo on PATH, and MIDNIGHT_TEST_INPUT_CLIENT
+# naming tests/window/input.c built. Run from the repository root:
 # the suite's window tests run as MIDNIGHT_SUITE, the suite's executable,
 # or through cargo when that is not set, on the device MIDNIGHT_TEST_GPU
 # names (the hardware device when it is not set). RENDERER and
@@ -41,5 +42,6 @@ fi
 echo "== the suite's window tests"
 MIDNIGHT_TEST_WINDOW=1 COMPOSITOR_LOG=$out/suite-sway.log \
   bash "$here/compositor.sh" "${suite[@]}" --exact --test-threads=1 --nocapture \
-  window_shown window_keeps_time window_closes window_resized
+  window_shown window_keeps_time window_closes window_resized \
+  input_client_refuses_a_desktop input_client_takes_its_commands
 echo "window tests passed"
