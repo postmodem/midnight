@@ -33,6 +33,7 @@ mod helpers;
 pub(super) mod ir;
 pub(super) mod layout;
 mod lower;
+mod weight;
 pub(super) mod wgsl;
 
 use crate::tir::{Program, StmtKind, Term};

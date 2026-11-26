@@ -14,7 +14,9 @@
  *   says it takes ownership.
  * - Values handed to the world (spawn, add, emit) are moved in: the caller
  *   must not drop them afterwards.
- * - Counts are not atomic. Nothing here is thread-safe.
+ * - Counts are not atomic, and generated code calls the runtime from one
+ *   thread: the one that called mn_start. "Several threads" lists what the
+ *   runtime runs on other threads, and what that code may call.
  * - A MnLoc names the .12am line an operation came from, for run-time
  *   errors.
  *
@@ -680,11 +682,15 @@ void mn_sleep(double seconds);
  *   run has finished, mn_gpu_run reports the lowest site recorded, as a
  *   run-time error.
  *
+ * When the runtime calls the C implementation, it may divide the rows into
+ * pieces and run the pieces on several threads at once (see "Several
+ * threads"). The result is the same for every division.
+ *
  * Uniform words. A block's uniform data is `uniform_words` 32-bit words,
  * at least MN_GPU_HEADER_WORDS. The runtime fills the header and the
  * block's `fill` writes the rest:
  *
- *     word 0  u32  rows of the table being run
+ *     word 0  u32  rows of the table being run, for the shader
  *     word 1  u32  rows of the snapshot (0 without a nested query)
  *     word 2  u32  seed: the low 32 bits of the seed last given to srand,
  *                  exclusive-or the high 32 bits
@@ -746,7 +752,10 @@ typedef struct MnGpuSite {
     const char *message; /* "division by zero" */
 } MnGpuSite;
 
-/* What the C implementation of a block is given for one table. */
+/* What the C implementation of a block is given: some rows of one table.
+ * Several threads may run rows of a block at once, each call with a
+ * MnGpuRun and an error word of its own. Word 0 of `uniform` says nothing
+ * here. */
 typedef struct MnGpuRun {
     const uint32_t *uniform;
     /* One array per outer column, in order: the table's own. */
@@ -755,6 +764,9 @@ typedef struct MnGpuRun {
     const void *const *inner;
     /* Lower it to the site of a failing operation. */
     uint32_t *error;
+    /* The rows to run: `first` up to `end`, not included. */
+    uint32_t first;
+    uint32_t end;
 } MnGpuRun;
 
 typedef struct MnGpuBlock {
@@ -770,8 +782,18 @@ typedef struct MnGpuBlock {
     uint32_t uniform_words;
     /* Writes words MN_GPU_HEADER_WORDS and up. NULL when there are none. */
     void (*fill)(uint32_t *words);
-    /* Runs every row of one table. */
+    /* Runs the rows `first` up to `end` of one table. It reads the uniform
+     * words, the snapshot and its own rows, writes its own rows and the
+     * error word it is given, and calls nothing in the runtime but
+     * mn_strict_enter and mn_strict_leave. */
     void (*cpu)(const MnGpuRun *run);
+    /* An estimate of the work of one run, in operations: `weight`, plus
+     * `inner_weight` for each row of the snapshot. `weight` is at least
+     * 1. */
+    uint64_t weight;
+    uint64_t inner_weight;
+    /* Where the `each` is, for messages. */
+    MnLoc loc;
     const char *wgsl;
     bool fallible;
     /* The program's sites. NULL unless `fallible`. */
@@ -914,5 +936,38 @@ static inline void *mn_get_synced(MnEntity e, uint32_t component, size_t size,
     }
     return mn_get(e, component, size, loc);
 }
+
+/* ---- Several threads --------------------------------------------------------- */
+
+/*
+ * A program built with MN_THREADS is linked with midnight_pool.c and may
+ * run the rows of a loop in pieces, on several threads at once. A piece is
+ * a run of consecutive rows in visiting order, the rows of a query being
+ * numbered through its tables in order; it may cross from one table into
+ * the next. The pieces of a loop are the same for every number of threads.
+ *
+ * MIDNIGHT_THREADS, read once by mn_start, is a comma-separated list:
+ *
+ *     1 to 256   the thread count; without it, one thread for each core
+ *                the process may run on
+ *     small      every piece is one row, every loop of two rows or more
+ *                that can be split is, and a thread takes part for each
+ *                piece, up to the thread count
+ *     reverse    each thread's share of the pieces is run from the last
+ *     jitter     each thread yields at random, from a fixed seed, before
+ *                each piece
+ *     awake      threads never block
+ *     info       prints `midnight: threads: N` on standard error, and for
+ *                each loop the first time it is split
+ *                `midnight: threads: FILE:LINE: R rows in P pieces on T threads`
+ *
+ * An unknown word is reported on standard error and ignored. With a thread
+ * count of 1 no thread is created and no loop is split.
+ *
+ * What runs in pieces:
+ *
+ * - The C implementation of a GPU block. It calls nothing here but
+ *   mn_strict_enter and mn_strict_leave.
+ */
 
 #endif

@@ -1,0 +1,65 @@
+# A GPU block and a strict GPU block that run on the CPU in pieces. The
+# rows are in three tables of 701, 5 and 1300 entities and are numbered
+# through them, so pieces of a few rows cross from one table into the next.
+# Every run reads the snapshot of all 2006, and what is printed is what
+# one thread prints, for every number of threads and every size of piece.
+component Body
+  x: Float32
+  v: Float32
+  near: Int32
+end
+
+tag Red
+tag Blue
+
+gpu system count_near
+  each Body do |body|
+    near = 0
+    each Body do |other|
+      d = other.x - body.x
+      near += 1 if d * d < 4.0
+    end
+    body.near = near
+  end
+end
+
+strict gpu system drift
+  each Body do |body|
+    pull = 0.0
+    each Body do |other|
+      d = other.x - body.x
+      pull += d / (1.0 + d * d)
+    end
+    body.v = body.v * 0.5 + pull * 0.001
+    body.x += body.v
+  end
+end
+
+def place(i: Int) -> Float
+  (i * 37 % 101).to_f * 0.5
+end
+
+701.times do |i|
+  spawn Body(place(i), 0.0, 0)
+end
+5.times do |i|
+  spawn Body(place(i + 701), 0.0, 0), Red
+end
+1300.times do |i|
+  spawn Body(place(i + 706), 0.0, 0), Blue
+end
+
+2.times do
+  World.tick
+  near = 0
+  spread = 0.0
+  each Body do |body|
+    near += body.near
+    spread += body.x * body.x
+  end
+  puts "near #{near} spread #{spread}"
+end
+each Body, with: Red do |body|
+  puts "red #{body.near} #{body.x} #{body.v}"
+end
+puts World.count(Body, without: Red)

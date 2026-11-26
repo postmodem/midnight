@@ -63,13 +63,37 @@
 //! `UPDATE_EXPECT=1` the release run writes the files instead: `.stats`
 //! files are the only expected files GPU mode writes.
 //!
-//! # The thread pool
+//! In GPU mode `gpu_programs`, `gpu_stats_match_plan` and
+//! `gpu_stats_match_expected` also run each program with
+//! `MIDNIGHT_THREADS=4,small`, which must change neither the output nor a
+//! count.
+//!
+//! # Several threads
+//!
+//! A program that must stop with an error fails when it is still running
+//! after ten seconds.
+//!
+//! `thread_programs` runs every program of `tests/run`, `examples` and
+//! `tests/panic` that has a loop that can be split, as a release and as a
+//! debug build, with `MIDNIGHT_THREADS` set to `1`, `4`, `3,small`,
+//! `7,small,reverse`, `64,small,jitter` and `2,small,awake`: each run must
+//! give the program's expected output, and a program that stops with an
+//! error must also print the same every time.
+//!
+//! `splits_match_expected` runs every program of `tests/run` that has a
+//! `NAME.split` file with `MIDNIGHT_THREADS=4,small,info`: after the line
+//! with the thread count, standard error must be exactly the lines of that
+//! file with `midnight: threads: ` before each, one for each loop the
+//! first time it is split.
 //!
 //! `pool_stress` builds `tests/pool/stress.c` with
-//! `runtime/midnight_pool.c` and runs each of its modes. With
-//! `MIDNIGHT_TEST_TSAN=1`, `tsan_pool_stress` does the same with
-//! ThreadSanitizer and fails on any report; without it that test does
-//! nothing.
+//! `runtime/midnight_pool.c` and runs each of its modes.
+//!
+//! With `MIDNIGHT_TEST_TSAN=1`, `tsan_pool_stress` does the same with
+//! ThreadSanitizer, and `tsan_programs` builds every program
+//! `thread_programs` runs in release mode with `-fsanitize=thread` and runs
+//! it with `4,small` and with `7,small,reverse`; both fail on any report.
+//! Without the variable they do nothing.
 //!
 //! The compiler is the one cargo built, or `MIDNIGHT_BIN` when that is set.
 //! Programs are found relative to the working directory, which must be the
@@ -399,24 +423,26 @@ fn panic_programs() {
     let failures = for_each_parallel(&jobs, |(source, mode)| {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
-        let output = on_cpu(&exe).output().expect("run program");
+        let run = run_within(&mut on_cpu(&exe), PANIC_LIMIT);
         let label = format!("{} ({mode:?})", source.display());
-        if output.status.code() != Some(1) {
+        if run.timed_out {
+            return Err(format!(
+                "{label}: still running after {} s\n--- stderr\n{}",
+                PANIC_LIMIT.as_secs(),
+                run.stderr
+            ));
+        }
+        if run.status != Some(1) {
             return Err(format!(
                 "{label}: exited with {:?}, expected 1\n--- stderr\n{}",
-                output.status,
-                text(&output.stderr)
+                run.status, run.stderr
             ));
         }
         if update_expect() && *mode == Mode::Debug {
             return Ok(());
         }
-        expect(
-            &source.with_extension("err"),
-            &text(&output.stderr),
-            "standard error",
-        )
-        .map_err(|message| format!("{label}: {message}"))
+        expect(&source.with_extension("err"), &run.stderr, "standard error")
+            .map_err(|message| format!("{label}: {message}"))
     });
     let _ = std::fs::remove_dir_all(&dir);
     report("panicking programs", jobs.len(), failures);
@@ -698,13 +724,25 @@ const STRICT_PASSED: &str = "strict check passed";
 /// of `strict-cpu`.
 const STRICT_REFUSED: &str = ": MIDNIGHT_GPU has strict-cpu";
 
+/// The setting of `MIDNIGHT_THREADS` that the runs on a device are
+/// repeated with.
+const DEVICE_THREADS: &str = "4,small";
+
 /// Runs a compiled program with its GPU systems on `device`, asking for
 /// the `info` lines and giving the further words of `MIDNIGHT_GPU` in
-/// `more`. Fails when the program finds no such device or runs a GPU
-/// block on the CPU, unless `more` has `strict-cpu` and the block is
-/// strict.
-fn run_on_device(exe: &Path, device: Device, more: &[&str]) -> Result<DeviceRun, String> {
+/// `more`, and with `MIDNIGHT_THREADS` set to `threads` when that is
+/// given. Fails when the program finds no such device or runs a GPU block
+/// on the CPU, unless `more` has `strict-cpu` and the block is strict.
+fn run_on_device(
+    exe: &Path,
+    device: Device,
+    more: &[&str],
+    threads: Option<&str>,
+) -> Result<DeviceRun, String> {
     let mut command = Command::new(exe);
+    if let Some(threads) = threads {
+        command.env("MIDNIGHT_THREADS", threads);
+    }
     let mut words = vec!["info"];
     words.extend_from_slice(more);
     if device == Device::Software {
@@ -814,19 +852,24 @@ fn run_gpu_program(
         read(&out_path)?
     };
     let strict = gpu_system_lines(&program).any(|line| line.starts_with("strict "));
-    let mut runs: Vec<&[&str]> = vec![&[], &["rows"]];
+    let mut runs: Vec<(&[&str], Option<&str>)> =
+        vec![(&[], None), (&["rows"], None), (&[], Some(DEVICE_THREADS))];
     if strict {
-        runs.push(&["strict-cpu"]);
+        runs.push((&["strict-cpu"], None));
+        runs.push((&["strict-cpu"], Some(DEVICE_THREADS)));
     }
     let mut found = (String::new(), 0.0f64);
-    for more in runs {
-        let label = match more {
-            [] => format!("{} ({mode:?})", source.display()),
-            [word] => format!("{} ({mode:?}, {word})", source.display()),
-            _ => unreachable!("one word at most"),
-        };
-        let run =
-            run_on_device(&exe, device, more).map_err(|message| format!("{label}: {message}"))?;
+    for (more, threads) in runs {
+        let mut how = format!("{mode:?}");
+        for word in more {
+            how.push_str(&format!(", {word}"));
+        }
+        if let Some(threads) = threads {
+            how.push_str(&format!(", MIDNIGHT_THREADS={threads}"));
+        }
+        let label = format!("{} ({how})", source.display());
+        let run = run_on_device(&exe, device, more, threads)
+            .map_err(|message| format!("{label}: {message}"))?;
         let strict_line = match more {
             _ if !strict => None,
             ["strict-cpu"] => Some(format!("strict blocks run on the CPU{STRICT_REFUSED}")),
@@ -1059,36 +1102,43 @@ fn gpu_stats_match_plan() {
     let failures = for_each_parallel(&MODES, |mode| {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
-        let label = format!("{STATS_PROGRAM} ({mode:?})");
-        let run = run_on_device(&exe, device, &["stats"])
-            .map_err(|message| format!("{label}: {message}"))?;
-        if run.status != Some(0) || run.ticks.len() < 3 {
-            return Err(format!(
-                "{label}: exited with {:?} after {} ticks\n--- stderr\n{}---",
-                run.status,
-                run.ticks.len(),
-                run.stderr
-            ));
-        }
-        // The last line also counts the top-level code after the loop.
-        let last = run.ticks.len() - 1;
-        for (tick, counts) in run.ticks.iter().enumerate().take(last).skip(1) {
-            if (counts.uploads, counts.downloads) != planned {
+        for threads in [None, Some(DEVICE_THREADS)] {
+            let label = match threads {
+                None => format!("{STATS_PROGRAM} ({mode:?})"),
+                Some(threads) => {
+                    format!("{STATS_PROGRAM} ({mode:?}, MIDNIGHT_THREADS={threads})")
+                }
+            };
+            let run = run_on_device(&exe, device, &["stats"], threads)
+                .map_err(|message| format!("{label}: {message}"))?;
+            if run.status != Some(0) || run.ticks.len() < 3 {
                 return Err(format!(
-                    "{label}: tick {tick} made {} uploads and {} downloads; \
-                     the plan lists {} and {}\n{plan}",
-                    counts.uploads, counts.downloads, planned.0, planned.1
+                    "{label}: exited with {:?} after {} ticks\n--- stderr\n{}---",
+                    run.status,
+                    run.ticks.len(),
+                    run.stderr
                 ));
             }
-            if (counts.rows_up, counts.rows_down) != (0, 0) {
-                return Err(format!(
-                    "{label}: tick {tick} moved {} rows up and {} rows down; \
-                     the plan has no `rows` line\n{plan}",
-                    counts.rows_up, counts.rows_down
-                ));
+            // The last line also counts the top-level code after the loop.
+            let last = run.ticks.len() - 1;
+            for (tick, counts) in run.ticks.iter().enumerate().take(last).skip(1) {
+                if (counts.uploads, counts.downloads) != planned {
+                    return Err(format!(
+                        "{label}: tick {tick} made {} uploads and {} downloads; \
+                         the plan lists {} and {}\n{plan}",
+                        counts.uploads, counts.downloads, planned.0, planned.1
+                    ));
+                }
+                if (counts.rows_up, counts.rows_down) != (0, 0) {
+                    return Err(format!(
+                        "{label}: tick {tick} moved {} rows up and {} rows down; \
+                         the plan has no `rows` line\n{plan}",
+                        counts.rows_up, counts.rows_down
+                    ));
+                }
             }
+            devices.lock().unwrap().insert(run.device);
         }
-        devices.lock().unwrap().insert(run.device);
         Ok(())
     });
     let _ = std::fs::remove_dir_all(&dir);
@@ -1129,17 +1179,24 @@ fn gpu_stats_match_expected() {
     let failures = for_each_parallel(&jobs, |(source, mode)| {
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
+        let threads = format!(", MIDNIGHT_THREADS={DEVICE_THREADS}");
         let runs = [
-            (vec!["stats"], "stats", ""),
-            (vec!["stats", "rows"], "rows.stats", ", rows"),
+            (vec!["stats"], "stats", "", None),
+            (vec!["stats", "rows"], "rows.stats", ", rows", None),
+            (
+                vec!["stats"],
+                "stats",
+                threads.as_str(),
+                Some(DEVICE_THREADS),
+            ),
         ];
-        for (words, extension, how) in runs {
+        for (words, extension, how, threads) in runs {
             let expected = source.with_extension(extension);
             if !expected.exists() {
                 continue;
             }
             let label = format!("{} ({mode:?}{how})", source.display());
-            let run = run_on_device(&exe, device, &words)
+            let run = run_on_device(&exe, device, &words, threads)
                 .map_err(|message| format!("{label}: {message}"))?;
             if run.status != Some(0) || !run.stderr.is_empty() {
                 return Err(format!(
@@ -1624,4 +1681,251 @@ fn tsan_pool_stress() {
     }
     pool_stress_runs("tsan-pool-stress", true);
     note("tsan_pool_stress: every mode of tests/pool/stress.c, with no report");
+}
+
+/// The settings of `MIDNIGHT_THREADS` that every program with a loop that
+/// can be split runs under.
+const THREAD_SETTINGS: [&str; 6] = [
+    "1",
+    "4",
+    "3,small",
+    "7,small,reverse",
+    "64,small,jitter",
+    "2,small,awake",
+];
+
+/// The settings the ThreadSanitizer builds run under.
+const TSAN_SETTINGS: [&str; 2] = ["4,small", "7,small,reverse"];
+
+/// How long a run of a program that must stop with an error may take.
+const PANIC_LIMIT: Duration = Duration::from_secs(10);
+/// How long any other run of a test program may take.
+const RUN_LIMIT: Duration = Duration::from_secs(300);
+
+/// Whether a program has a loop that can be split across threads.
+fn can_split(source: &Path) -> bool {
+    declares_gpu_system(source)
+}
+
+/// The programs of `tests/run`, `examples` and `tests/panic` that have a
+/// loop that can be split, each with whether it must stop with an error.
+fn split_programs() -> Vec<(PathBuf, bool)> {
+    let mut found = Vec::new();
+    for (sources, stops) in [
+        (programs("tests/run"), false),
+        (examples(), false),
+        (programs("tests/panic"), true),
+    ] {
+        found.extend(
+            sources
+                .into_iter()
+                .filter(|source| can_split(source))
+                .map(|source| (source, stops)),
+        );
+    }
+    found
+}
+
+/// Runs a built program once for each setting of `MIDNIGHT_THREADS`, with
+/// no GPU device. A program that `stops` must exit 1 within ten seconds
+/// with exactly `NAME.err`, and print what it prints under the first
+/// setting; any other must exit 0, print exactly `NAME.out` and write
+/// nothing to standard error.
+fn run_with_threads(
+    exe: &Path,
+    source: &Path,
+    stops: bool,
+    how: &str,
+    settings: &[&str],
+) -> Result<(), String> {
+    let read = |extension: &str| {
+        let path = source.with_extension(extension);
+        std::fs::read_to_string(&path).map_err(|error| {
+            format!(
+                "{}: can't read {}: {error}",
+                source.display(),
+                path.display()
+            )
+        })
+    };
+    let (status, expected_stderr, limit) = if stops {
+        (1, read("err")?, PANIC_LIMIT)
+    } else {
+        (0, String::new(), RUN_LIMIT)
+    };
+    let mut expected_stdout = if stops { None } else { Some(read("out")?) };
+    for setting in settings {
+        let label = format!("{} ({how}, MIDNIGHT_THREADS={setting})", source.display());
+        let mut command = on_cpu(exe);
+        command.env("MIDNIGHT_THREADS", setting);
+        let run = run_within(&mut command, limit);
+        if run.timed_out {
+            return Err(format!(
+                "{label}: still running after {} s\n--- stdout\n{}--- stderr\n{}---",
+                limit.as_secs(),
+                run.stdout,
+                run.stderr
+            ));
+        }
+        if run.status != Some(status) {
+            return Err(format!(
+                "{label}: exited with {:?}, expected {status}\n--- stdout\n{}--- stderr\n{}---",
+                run.status, run.stdout, run.stderr
+            ));
+        }
+        if run.stderr != expected_stderr {
+            return Err(format!(
+                "{label}: standard error differs\n--- expected\n{expected_stderr}--- actual\n{}---",
+                run.stderr
+            ));
+        }
+        match &expected_stdout {
+            Some(expected) if *expected != run.stdout => {
+                return Err(format!(
+                    "{label}: standard output differs\n--- expected\n{expected}--- actual\n{}---",
+                    run.stdout
+                ));
+            }
+            Some(_) => {}
+            None => expected_stdout = Some(run.stdout),
+        }
+    }
+    Ok(())
+}
+
+/// What a program says on standard error with `info` in `MIDNIGHT_THREADS`
+/// starts with.
+const THREADS_SAID: &str = "midnight: threads: ";
+
+/// Every program of `tests/run` with a `NAME.split` file, run with
+/// `MIDNIGHT_THREADS=4,small,info`, says it has four threads and then
+/// exactly the lines of that file, one for each loop the first time it is
+/// split: so a loop that is meant to run in pieces and does not fails
+/// here. With `UPDATE_EXPECT=1` the release run writes the file.
+#[test]
+fn splits_match_expected() {
+    let sources: Vec<PathBuf> = programs("tests/run")
+        .into_iter()
+        .filter(|source| source.with_extension("split").exists())
+        .collect();
+    assert!(
+        !sources.is_empty(),
+        "no program with a .split file under tests/run of the working directory"
+    );
+    let dir = scratch("splits");
+    let jobs: Vec<(&PathBuf, Mode)> = sources
+        .iter()
+        .flat_map(|source| MODES.map(|mode| (source, mode)))
+        .collect();
+    let failures = for_each_parallel(&jobs, |(source, mode)| {
+        let exe = exe_path(&dir, source, *mode);
+        build(source, &exe, *mode)?;
+        let label = format!("{} ({mode:?})", source.display());
+        let mut command = on_cpu(&exe);
+        command.env("MIDNIGHT_THREADS", "4,small,info");
+        let run = run_within(&mut command, RUN_LIMIT);
+        let said = run.stderr.strip_prefix(&format!("{THREADS_SAID}4\n"));
+        let lines: Option<String> = said.and_then(|said| {
+            said.split_inclusive('\n')
+                .map(|line| line.strip_prefix(THREADS_SAID))
+                .collect()
+        });
+        let (Some(0), Some(lines)) = (run.status, lines) else {
+            return Err(format!(
+                "{label}: exited with {:?}\n--- stderr\n{}---",
+                run.status, run.stderr
+            ));
+        };
+        let expected = std::fs::read_to_string(source.with_extension("out"))
+            .map_err(|error| format!("{label}: can't read the expected output: {error}"))?;
+        if run.stdout != expected {
+            return Err(format!(
+                "{label}: standard output differs\n--- expected\n{expected}--- actual\n{}---",
+                run.stdout
+            ));
+        }
+        if update_expect() && *mode == Mode::Debug {
+            return Ok(());
+        }
+        expect(
+            &source.with_extension("split"),
+            &lines,
+            "the lines about split loops",
+        )
+        .map_err(|message| format!("{label}: {message}"))
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs that list their split loops", jobs.len(), failures);
+}
+
+/// Every program with a loop that can be split gives its expected output
+/// for every setting of `MIDNIGHT_THREADS`, as a release and as a debug
+/// build.
+#[test]
+fn thread_programs() {
+    let sources = split_programs();
+    assert!(
+        !sources.is_empty(),
+        "no program with a loop that can be split under tests/ and examples/ of the working directory"
+    );
+    let dir = scratch("threads");
+    let jobs: Vec<(usize, &(PathBuf, bool), Mode)> = sources
+        .iter()
+        .enumerate()
+        .flat_map(|(index, source)| MODES.map(|mode| (index, source, mode)))
+        .collect();
+    let failures = for_each_parallel(&jobs, |(index, (source, stops), mode)| {
+        let stem = source.file_stem().unwrap().to_string_lossy();
+        let exe = dir.join(format!("{index}-{stem}-{mode:?}"));
+        build(source, &exe, *mode)?;
+        run_with_threads(&exe, source, *stops, &format!("{mode:?}"), &THREAD_SETTINGS)
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("programs under several thread counts", jobs.len(), failures);
+}
+
+/// Every program with a loop that can be split, built in release mode with
+/// ThreadSanitizer, gives its expected output with no report.
+#[test]
+fn tsan_programs() {
+    if !tsan_mode() {
+        return;
+    }
+    let sources = split_programs();
+    assert!(
+        !sources.is_empty(),
+        "no program with a loop that can be split under tests/ and examples/ of the working directory"
+    );
+    let dir = scratch("tsan");
+    let jobs: Vec<(usize, &(PathBuf, bool))> = sources.iter().enumerate().collect();
+    let failures = for_each_parallel(&jobs, |(index, (source, stops))| {
+        let stem = source.file_stem().unwrap().to_string_lossy();
+        let exe = dir.join(format!("{index}-{stem}"));
+        let output = midnight()
+            .arg("build")
+            .arg(source)
+            .arg("-o")
+            .arg(&exe)
+            .env(
+                "MIDNIGHT_CFLAGS",
+                format!("{STRICT_CFLAGS} -g -fsanitize=thread"),
+            )
+            .output()
+            .expect("run midnight");
+        if !output.status.success() {
+            return Err(format!(
+                "{} (ThreadSanitizer): build failed\n{}",
+                source.display(),
+                text(&output.stderr)
+            ));
+        }
+        run_with_threads(&exe, source, *stops, "ThreadSanitizer", &TSAN_SETTINGS)
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("programs under ThreadSanitizer", jobs.len(), failures);
+    note(&format!(
+        "tsan_programs: {} programs, each with MIDNIGHT_THREADS={}, with no report",
+        jobs.len(),
+        TSAN_SETTINGS.join(" and ")
+    ));
 }

@@ -1,0 +1,42 @@
+# `rand` in a GPU block that runs on the CPU in pieces. A number depends on
+# the seed, the block, the tick, the entity and how many numbers the run
+# has drawn, and on nothing a thread could change: the rolls below are the
+# same for every number of threads. The entities are in three tables.
+component Dice
+  first: Int32
+  second: Int32
+  unit: Float32
+end
+
+tag Loaded
+tag Lost
+
+gpu system throw
+  each Dice do |dice|
+    dice.first = rand(1000)
+    dice.second = dice.first + rand(1000) * 1000
+    dice.unit = rand
+  end
+end
+
+def show
+  each Dice do |dice|
+    print dice.first, " ", dice.second, " ", (dice.unit * 16777216.0).to_i, "\n"
+  end
+end
+
+4.times do
+  spawn Dice(0, 0, 0.0)
+end
+3.times do
+  spawn Dice(0, 0, 0.0), Loaded
+end
+spawn Dice(0, 0, 0.0), Lost
+spawn Dice(0, 0, 0.0), Loaded, Lost
+World.tick
+show
+World.tick
+show
+srand(99)
+World.tick
+show

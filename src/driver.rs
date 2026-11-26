@@ -7,6 +7,18 @@ const RUNTIME_H: &str = include_str!("../runtime/midnight_rt.h");
 const RUNTIME_C: &str = include_str!("../runtime/midnight_rt.c");
 const GPU_H: &str = include_str!("../runtime/midnight_gpu.h");
 const GPU_C: &str = include_str!("../runtime/midnight_gpu.c");
+const POOL_H: &str = include_str!("../runtime/midnight_pool.h");
+const POOL_C: &str = include_str!("../runtime/midnight_pool.c");
+
+/// What a program needs of the runtime besides `midnight_rt.c`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Parts {
+    /// The program declares a GPU system.
+    pub gpu: bool,
+    /// The program has a loop that can be split across threads: a GPU
+    /// block or an independent `each`.
+    pub threads: bool,
+}
 
 const RELEASE_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off"];
 const DEBUG_FLAGS: &[&str] = &[
@@ -43,12 +55,11 @@ const TARGET_FLAGS: &[&str] = &["-march=x86-64-v3"];
 #[cfg(not(target_arch = "x86_64"))]
 const TARGET_FLAGS: &[&str] = &[];
 
-/// Compiles `c_source` and the runtime into the executable `out`. `gpu`
-/// says whether the program declares a GPU system. The error is a message
-/// ready to print.
-pub fn build(c_source: &str, out: &Path, debug: bool, gpu: bool) -> Result<(), String> {
+/// Compiles `c_source` and the runtime into the executable `out`. The
+/// error is a message ready to print.
+pub fn build(c_source: &str, out: &Path, debug: bool, parts: Parts) -> Result<(), String> {
     let dir = make_build_dir()?;
-    let result = compile_in(&dir, c_source, out, debug, gpu);
+    let result = compile_in(&dir, c_source, out, debug, parts);
     if result.is_ok() {
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -57,10 +68,10 @@ pub fn build(c_source: &str, out: &Path, debug: bool, gpu: bool) -> Result<(), S
 
 /// Compiles into a temporary directory, runs the program with this
 /// process's standard streams, and returns its exit status.
-pub fn run(c_source: &str, debug: bool, gpu: bool) -> Result<u8, String> {
+pub fn run(c_source: &str, debug: bool, parts: Parts) -> Result<u8, String> {
     let dir = make_build_dir()?;
     let exe = dir.join("program");
-    compile_in(&dir, c_source, &exe, debug, gpu)?;
+    compile_in(&dir, c_source, &exe, debug, parts)?;
     let status = Command::new(&exe).status();
     let _ = std::fs::remove_dir_all(&dir);
     let status = status.map_err(|error| format!("midnight: can't run the program: {error}"))?;
@@ -87,8 +98,9 @@ fn compile_in(
     c_source: &str,
     out: &Path,
     debug: bool,
-    gpu: bool,
+    parts: Parts,
 ) -> Result<(), String> {
+    let Parts { gpu, threads } = parts;
     let write = |name: &str, text: &str| {
         std::fs::write(dir.join(name), text).map_err(|error| {
             format!(
@@ -104,6 +116,10 @@ fn compile_in(
     if gpu_flags.is_some() {
         write("midnight_gpu.h", GPU_H)?;
         write("midnight_gpu.c", GPU_C)?;
+    }
+    if threads {
+        write("midnight_pool.h", POOL_H)?;
+        write("midnight_pool.c", POOL_C)?;
     }
 
     let cc = std::env::var("MIDNIGHT_CC").unwrap_or_else(|_| "cc".to_string());
@@ -123,6 +139,11 @@ fn compile_in(
     if gpu_flags.is_some() {
         command.arg("-DMN_GPU");
     }
+    // The runtime reads MIDNIGHT_THREADS and splits loops when the pool is
+    // built with it.
+    if threads {
+        command.args(["-DMN_THREADS", "-pthread"]);
+    }
     command
         .arg("-o")
         .arg(out)
@@ -130,6 +151,9 @@ fn compile_in(
         .arg(dir.join("midnight_rt.c"));
     if gpu_flags.is_some() {
         command.arg(dir.join("midnight_gpu.c"));
+    }
+    if threads {
+        command.arg(dir.join("midnight_pool.c"));
     }
     command.arg("-lm");
     // Libraries come after the files that use them.

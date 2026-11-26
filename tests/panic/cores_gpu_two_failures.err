@@ -1,0 +1,1 @@
+tests/panic/cores_gpu_two_failures.12am:17: runtime error: division by zero

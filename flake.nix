@@ -140,7 +140,12 @@
         ];
 
       # The suite's ThreadSanitizer tests.
-      tsanTestsFor = pkgs: suiteTestsFor pkgs [ "tsan_pool_stress" ];
+      tsanTestsFor =
+        pkgs:
+        suiteTestsFor pkgs [
+          "tsan_pool_stress"
+          "tsan_programs"
+        ];
 
       # The suite's GPU mode on the machine's hardware device.
       gpuTestFor =

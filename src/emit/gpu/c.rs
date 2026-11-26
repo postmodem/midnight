@@ -26,6 +26,7 @@ use super::helpers;
 use super::ir::{BinOp, Cell, Expr, Func, MathFn, Stmt, Storage, Ty, UnOp, Uses, closure};
 use super::layout::{Source, gpu_struct};
 use super::lower::{Block, Column, INNER_ROW, Lowered, ROW};
+use super::weight;
 use super::wgsl;
 
 const OPEN: &str = "\
@@ -244,6 +245,15 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
             let _ = writeln!(out, "    .fill = {name}_fill,");
         }
         let _ = writeln!(out, "    .cpu = {name}_cpu,");
+        let weight = weight::of_block(&gpu.library, block);
+        let _ = writeln!(out, "    .weight = {},", weight.base);
+        let _ = writeln!(out, "    .inner_weight = {},", weight.inner);
+        let file = cx.file(block.span);
+        let _ = writeln!(
+            out,
+            "    .loc = {{{file}, {}}},",
+            cx.sources.line(block.span)
+        );
         let _ = writeln!(out, "    .wgsl = {name}_wgsl,");
         let _ = writeln!(out, "    .fallible = {},", block.uses.fails);
         let sites = if block.uses.fails {
@@ -884,7 +894,8 @@ impl Printer<'_, '_> {
         self.out.push('\n');
     }
 
-    /// A block's C implementation: every row of one table.
+    /// A block's C implementation: the rows of one table that it is
+    /// given.
     fn cpu(&mut self, block: &Block) {
         let prog = self.gpu.prog;
         let direct = Uses::of_stmts(&block.body);
@@ -894,7 +905,7 @@ impl Printer<'_, '_> {
         if block.strict {
             self.line(FENV_ACCESS);
         }
-        self.line("const uint32_t rows = run->uniform[0];");
+        self.line("const uint32_t end = run->end;");
         let state = direct.rand_state
             || direct.fails
             || direct.calls.iter().any(|name| self.state.contains(name));
@@ -936,7 +947,7 @@ impl Printer<'_, '_> {
             self.line("const uint64_t fp_state = mn_strict_enter();");
         }
         self.line(&format!(
-            "for (uint32_t {ROW} = 0; {ROW} < rows; {ROW}++) {{"
+            "for (uint32_t {ROW} = run->first; {ROW} < end; {ROW}++) {{"
         ));
         self.block(&block.body);
         self.line("}");

@@ -15,6 +15,12 @@
 #endif
 #endif
 
+/* MN_THREADS is defined when the program has a loop that can be split, and
+ * midnight_pool.c is then compiled with it. */
+#ifdef MN_THREADS
+#include "midnight_pool.h"
+#endif
+
 #include <errno.h>
 #include <math.h>
 #include <stdarg.h>
@@ -1697,6 +1703,160 @@ void mn_sleep(double seconds) {
     }
 }
 
+/* ---- Several threads ----------------------------------------------------- */
+
+/* A piece is this much work, in the units of a loop's weight. */
+#define MN_PIECE_WORK UINT64_C(25000)
+/* A loop with less work than this runs on the thread that reached it. */
+#define MN_SPLIT_WORK UINT64_C(800000)
+/* One thread takes part for every this much work. */
+#define MN_THREAD_WORK UINT64_C(200000)
+/* Where sums and products of weights stop. */
+#define MN_WORK_MOST (UINT64_C(1) << 62)
+
+#ifdef MN_THREADS
+/* The words of MIDNIGHT_THREADS that are not the pool's. */
+static struct {
+    bool small;
+    bool info;
+} thread_options;
+#endif
+
+/* a * b for weights and row counts: the product, or MN_WORK_MOST when it
+ * would be more. */
+static uint64_t work_mul(uint64_t a, uint64_t b) {
+    if (a != 0 && b > MN_WORK_MOST / a) return MN_WORK_MOST;
+    uint64_t product = a * b;
+    return product > MN_WORK_MOST ? MN_WORK_MOST : product;
+}
+
+/* a + b for weights, neither above MN_WORK_MOST. */
+static uint64_t work_add(uint64_t a, uint64_t b) {
+    uint64_t sum = a + b;
+    return sum > MN_WORK_MOST ? MN_WORK_MOST : sum;
+}
+
+/* How the rows of a loop are divided. */
+typedef struct MnSplit {
+    /* Rows in a piece; the last piece may have fewer. */
+    uint64_t piece_rows;
+    uint64_t pieces;
+    /* How many threads take part: 1 when the loop is not split. */
+    uint32_t threads;
+} MnSplit;
+
+/* Divides a loop of `rows` rows whose runs weigh `weight` each. The size
+ * of a piece and the choice to split depend on those two alone. */
+static MnSplit split_of(uint64_t rows, uint64_t weight) {
+    MnSplit split = {rows, 1, 1};
+#ifdef MN_THREADS
+    uint32_t count = mn_pool_threads();
+    if (count < 2 || rows < 2) return split;
+    if (weight == 0) weight = 1;
+    uint64_t piece_rows = 1;
+    uint64_t threads = rows;
+    if (!thread_options.small) {
+        uint64_t work = work_mul(rows, weight);
+        if (work < MN_SPLIT_WORK) return split;
+        piece_rows = MN_PIECE_WORK / weight;
+        if (piece_rows == 0) piece_rows = 1;
+        threads = work / MN_THREAD_WORK;
+        if (threads < 2) threads = 2;
+    }
+    uint64_t pieces = (rows - 1) / piece_rows + 1;
+    if (threads > pieces) threads = pieces;
+    if (threads > count) threads = count;
+    if (threads < 2) return split;
+    split.piece_rows = piece_rows;
+    split.pieces = pieces;
+    split.threads = (uint32_t)threads;
+#else
+    (void)weight;
+#endif
+    return split;
+}
+
+#ifdef MN_THREADS
+/* With `info`: the line for a loop that is split for the first time. */
+static void split_report(MnLoc loc, uint64_t rows, const MnSplit *split) {
+    if (!thread_options.info) return;
+    fflush(stdout);
+    fprintf(stderr, "midnight: threads: %s:%d: %llu row%s in %llu piece%s on %u threads\n",
+            loc.file, (int)loc.line, (unsigned long long)rows,
+            rows == 1 ? "" : "s", (unsigned long long)split->pieces,
+            split->pieces == 1 ? "" : "s", (unsigned)split->threads);
+}
+#endif
+
+/* The index of the table that holds row `row`, where `starts` has the
+ * number of each table's first row, ascending, and then the number of
+ * rows in all. */
+static uint32_t table_of_row(const uint64_t *starts, uint32_t tables,
+                             uint64_t row) {
+    uint32_t low = 0;
+    uint32_t high = tables;
+    while (high - low > 1) {
+        uint32_t middle = low + (high - low) / 2;
+        if (starts[middle] <= row) {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    return low;
+}
+
+#ifdef MN_THREADS
+/* Reads MIDNIGHT_THREADS and sets the thread count. */
+static void threads_start(void) {
+    MnPoolOptions options = {0, false, false, false};
+    static const struct {
+        const char *word;
+        int which;
+    } words[] = {
+        {"small", 0}, {"reverse", 1}, {"jitter", 2}, {"awake", 3}, {"info", 4},
+    };
+    const size_t word_count = sizeof words / sizeof words[0];
+    thread_options.small = false;
+    thread_options.info = false;
+    const char *list = getenv("MIDNIGHT_THREADS");
+    while (list && *list != '\0') {
+        size_t len = strcspn(list, ",");
+        size_t i = 0;
+        while (i < word_count && (strlen(words[i].word) != len ||
+                                  memcmp(words[i].word, list, len) != 0)) {
+            i++;
+        }
+        uint32_t number = 0;
+        bool digits = len != 0 && len <= 3;
+        for (size_t at = 0; digits && at < len; at++) {
+            digits = list[at] >= '0' && list[at] <= '9';
+            number = number * 10 + (uint32_t)(list[at] - '0');
+        }
+        if (i < word_count) {
+            switch (words[i].which) {
+            case 0: thread_options.small = true; break;
+            case 1: options.reverse = true; break;
+            case 2: options.jitter = true; break;
+            case 3: options.awake = true; break;
+            default: thread_options.info = true; break;
+            }
+        } else if (digits && number >= 1 && number <= MN_POOL_MAX) {
+            options.threads = number;
+        } else if (len != 0) {
+            fprintf(stderr, "midnight: MIDNIGHT_THREADS: unknown word `%.*s`\n",
+                    (int)len, list);
+        }
+        list += len;
+        if (*list == ',') list++;
+    }
+    mn_pool_start(&options);
+    if (thread_options.info) {
+        fprintf(stderr, "midnight: threads: %u\n", (unsigned)mn_pool_threads());
+    }
+}
+#endif
+
 /* ---- GPU systems --------------------------------------------------------- */
 
 bool mn_gpu_active = false;
@@ -1753,6 +1913,14 @@ typedef struct MnGpuScratch {
     /* The block that ran for the first time before this one. */
     struct MnGpuScratch *next;
     uint32_t *uniform;
+    /* For a run on the CPU: the outer query's tables that have rows.
+     * `starts` has the number of each one's first row, the rows being
+     * numbered through the tables in order, and then the number of rows
+     * in all; `outer` has each one's outer columns, outer_count for each
+     * table. */
+    uint32_t table_count;
+    uint32_t table_capacity;
+    uint64_t *starts;
     void **outer;
     const void **inner;
     /* One buffer per inner column, grown as needed. */
@@ -1763,6 +1931,9 @@ typedef struct MnGpuScratch {
     /* The `info` line that says why the block runs on the CPU has been
      * printed. */
     bool reported;
+    /* The `info` line that says how the block is split has been
+     * printed. */
+    bool split_reported;
 } MnGpuScratch;
 
 /* The block that ran for the first time most recently. */
@@ -1775,7 +1946,6 @@ static MnGpuScratch *gpu_scratch(MnGpuBlock *block) {
     scratch->next = gpu_blocks;
     gpu_blocks = scratch;
     scratch->uniform = mn_calloc(block->uniform_words, sizeof(uint32_t));
-    scratch->outer = mn_calloc(block->outer_count + 1, sizeof(void *));
     scratch->inner = mn_calloc(block->inner_count + 1, sizeof(void *));
     scratch->snapshots = mn_calloc(block->inner_count + 1, sizeof(void *));
     scratch->snapshot_sizes = mn_calloc(block->inner_count + 1, sizeof(size_t));
@@ -1837,6 +2007,84 @@ static uint32_t gpu_snapshot(const MnGpuBlock *block, MnGpuScratch *scratch) {
     return (uint32_t)rows;
 }
 
+/* Lists the tables of the outer query that have rows, with their outer
+ * columns, and returns the number of rows in all. */
+static uint64_t gpu_tables(const MnGpuBlock *block, MnGpuScratch *scratch) {
+    const MnQuery *query = block->outer;
+    if (query->table_count > scratch->table_capacity) {
+        uint32_t capacity = query->table_capacity;
+        scratch->starts =
+            mn_realloc(scratch->starts, mn_mul((size_t)capacity + 1, sizeof(uint64_t)));
+        scratch->outer = mn_realloc(
+            scratch->outer,
+            mn_mul(mn_mul(capacity, block->outer_count), sizeof(void *)));
+        scratch->table_capacity = capacity;
+    }
+    uint32_t count = 0;
+    uint64_t rows = 0;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        const MnTable *table = query->tables[t];
+        if (table->count == 0) continue;
+        void **outer = scratch->outer + (size_t)count * block->outer_count;
+        for (uint32_t i = 0; i < block->outer_count; i++) {
+            outer[i] = gpu_column(table, &block->outer_columns[i]);
+        }
+        scratch->starts[count++] = rows;
+        rows += table->count;
+    }
+    if (count != 0) scratch->starts[count] = rows;
+    scratch->table_count = count;
+    return rows;
+}
+
+/* The lowest failure site one thread has recorded. */
+typedef struct GpuError {
+    _Alignas(64) uint32_t site;
+} GpuError;
+
+/* A run of a block on the CPU. */
+typedef struct GpuLoop {
+    const MnGpuBlock *block;
+    const MnGpuScratch *scratch;
+    uint64_t rows;
+    uint64_t piece_rows;
+    /* One for each thread taking part, when the run is split. */
+    GpuError *errors;
+} GpuLoop;
+
+/* Runs the rows numbered `from` up to `to`, table after table. */
+static void gpu_rows(const GpuLoop *loop, uint64_t from, uint64_t to,
+                     uint32_t *error) {
+    const MnGpuScratch *scratch = loop->scratch;
+    const MnGpuBlock *block = loop->block;
+    uint32_t t = table_of_row(scratch->starts, scratch->table_count, from);
+    while (from < to) {
+        uint64_t start = scratch->starts[t];
+        uint64_t stop = scratch->starts[t + 1] < to ? scratch->starts[t + 1] : to;
+        MnGpuRun run = {scratch->uniform,
+                        scratch->outer + (size_t)t * block->outer_count,
+                        scratch->inner,
+                        error,
+                        (uint32_t)(from - start),
+                        (uint32_t)(stop - start)};
+        block->cpu(&run);
+        from = stop;
+        t++;
+    }
+}
+
+#ifdef MN_THREADS
+static void gpu_piece(void *context, uint64_t piece, uint32_t thread) {
+    GpuLoop *loop = context;
+    uint64_t from = piece * loop->piece_rows;
+    uint64_t to = loop->rows - from < loop->piece_rows ? loop->rows
+                                                        : from + loop->piece_rows;
+    uint32_t error = UINT32_MAX;
+    gpu_rows(loop, from, to, &error);
+    if (error < loop->errors[thread].site) loop->errors[thread].site = error;
+}
+#endif
+
 void mn_gpu_run(MnGpuBlock *block) {
     MnGpuScratch *scratch = gpu_scratch(block);
     MnQuery *query = block->outer;
@@ -1866,16 +2114,33 @@ void mn_gpu_run(MnGpuBlock *block) {
     }
 
     uniform[1] = gpu_snapshot(block, scratch);
+    uint64_t rows = gpu_tables(block, scratch);
+    if (rows == 0) return;
+    uint64_t weight =
+        work_add(block->weight, work_mul(block->inner_weight, uniform[1]));
+    MnSplit split = split_of(rows, weight);
+    GpuLoop loop = {block, scratch, rows, split.piece_rows, NULL};
     uint32_t error = UINT32_MAX;
-    MnGpuRun run = {uniform, scratch->outer, scratch->inner, &error};
-    for (uint32_t t = 0; t < query->table_count; t++) {
-        const MnTable *table = query->tables[t];
-        if (table->count == 0) continue;
-        uniform[0] = table->count;
-        for (uint32_t i = 0; i < block->outer_count; i++) {
-            scratch->outer[i] = gpu_column(table, &block->outer_columns[i]);
+    if (split.threads < 2) {
+        gpu_rows(&loop, 0, rows, &error);
+    } else {
+#ifdef MN_THREADS
+        if (!scratch->split_reported) {
+            scratch->split_reported = true;
+            split_report(block->loc, rows, &split);
         }
-        block->cpu(&run);
+        GpuError errors[MN_POOL_MAX];
+        for (uint32_t t = 0; t < split.threads; t++) {
+            errors[t].site = UINT32_MAX;
+        }
+        loop.errors = errors;
+        MnPoolLoop pieces = {gpu_piece, NULL, &loop, split.pieces,
+                             split.threads};
+        mn_pool_loop(&pieces);
+        for (uint32_t t = 0; t < split.threads; t++) {
+            if (errors[t].site < error) error = errors[t].site;
+        }
+#endif
     }
     if (error != UINT32_MAX) {
         const MnGpuSite *site = &block->sites[error];
@@ -2031,6 +2296,7 @@ static void gpu_finish(void) {
             free(scratch->snapshots[i]);
         }
         free(scratch->uniform);
+        free(scratch->starts);
         free(scratch->outer);
         free(scratch->inner);
         free(scratch->snapshots);
@@ -2058,6 +2324,9 @@ void mn_start(const MnProgram *program) {
     w->table_map = mn_calloc(w->table_map_capacity, sizeof(uint32_t));
     table_for_set(w->scratch_set, 0);
     mn_srand(MN_DEFAULT_SEED);
+#ifdef MN_THREADS
+    threads_start();
+#endif
 #ifdef MN_GPU_SYSTEMS
     gpu_start();
 #endif
@@ -2114,6 +2383,9 @@ void mn_finish(void) {
     gpu_stats_line();
     fflush(stdout);
     gpu_finish();
+#ifdef MN_THREADS
+    mn_pool_finish();
+#endif
 #ifdef MN_DEBUG
     world_destroy();
     if (mn_live_buffers != 0) {

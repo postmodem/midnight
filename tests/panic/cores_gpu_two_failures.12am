@@ -1,0 +1,31 @@
+# Two operations fail in a GPU block whose rows are in three tables, each
+# in a row of its own. The row that comes first fails on the later line
+# and the last row on the earlier one. In pieces on several threads as on
+# one, the error is the operation that is earliest in the source.
+# Expected: division by zero, on the line of the `/`
+component Gauge
+  reading: UInt8
+  scale: Int32
+  boost: Int32
+end
+
+tag Spare
+tag Worn
+
+gpu system adjust
+  each Gauge do |gauge|
+    ratio = 100 / gauge.scale
+    gauge.reading = ratio + gauge.boost
+  end
+end
+
+spawn Gauge(0, 1, 200)
+3.times do
+  spawn Gauge(0, 2, 1)
+end
+4.times do
+  spawn Gauge(0, 5, 3), Spare
+end
+spawn Gauge(0, 4, 2), Worn
+spawn Gauge(0, 0, 0), Worn
+World.tick

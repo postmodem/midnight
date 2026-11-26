@@ -119,7 +119,7 @@ fn run(args: &Args) -> u8 {
         print!("{}", emit::emit_wgsl(&program, &sources));
         return 0;
     }
-    let Some((c_source, gpu)) = compile(&args.file, args.command == "check") else {
+    let Some((c_source, parts)) = compile(&args.file, args.command == "check") else {
         return FAILURE;
     };
     match args.command.as_str() {
@@ -133,7 +133,7 @@ fn run(args: &Args) -> u8 {
                 .out
                 .clone()
                 .unwrap_or_else(|| default_output(&args.file));
-            match driver::build(&c_source, &out, args.debug, gpu) {
+            match driver::build(&c_source, &out, args.debug, parts) {
                 Ok(()) => 0,
                 Err(message) => {
                     eprintln!("{message}");
@@ -141,7 +141,7 @@ fn run(args: &Args) -> u8 {
                 }
             }
         }
-        "run" => match driver::run(&c_source, args.debug, gpu) {
+        "run" => match driver::run(&c_source, args.debug, parts) {
             Ok(status) => status,
             Err(message) => {
                 eprintln!("{message}");
@@ -153,15 +153,16 @@ fn run(args: &Args) -> u8 {
 }
 
 /// Runs the front end and, unless `check_only`, the emitter. Returns the
-/// generated C and whether the program declares a GPU system. Prints
+/// generated C and what the program needs of the runtime. Prints
 /// diagnostics and returns `None` when the program has errors.
-fn compile(path: &Path, check_only: bool) -> Option<(String, bool)> {
+fn compile(path: &Path, check_only: bool) -> Option<(String, driver::Parts)> {
     let (program, sources) = check_file(path)?;
     if check_only {
-        return Some((String::new(), false));
+        return Some((String::new(), driver::Parts::default()));
     }
     let gpu = program.systems.iter().any(|system| system.gpu);
-    Some((emit::emit(&program, &sources), gpu))
+    let parts = driver::Parts { gpu, threads: gpu };
+    Some((emit::emit(&program, &sources), parts))
 }
 
 /// Runs the front end. Prints diagnostics and returns `None` when the
