@@ -25,11 +25,11 @@ def above?(a: Row, b: Row) -> Bool
   a.name < b.name
 end
 
-def score(m: Match) -> String
+def result_text(m: Match) -> String
   "#{m.home} #{m.home_goals}-#{m.away_goals} #{m.away}"
 end
 
-system play
+system announce
   round = Time.tick + 1
   if round == 1
     emit Match("Bees", "Ants", 2, 1)
@@ -54,7 +54,7 @@ system play
   end
 end
 
-system record
+system score
   on Match do |m|
     each Team do |t|
       if t.name == m.home || t.name == m.away
@@ -71,7 +71,7 @@ end
 system table
   results = ""
   on Match do |m|
-    results += score(m) + ", "
+    results += result_text(m) + ", "
   end
   puts "round #{Time.tick + 1}: #{results}"
   rows: [Row] = []

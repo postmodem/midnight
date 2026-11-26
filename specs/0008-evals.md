@@ -80,6 +80,7 @@ evals/
     given/           files copied beside TASK.md (optional)
     check.drive      the commands the grader runs a program with (optional)
     loops            where named loops must run (optional)
+    systems          the systems the program must declare (optional)
   results/DATE-COMMIT[-LABEL].json   a run's results
   results/DATE-COMMIT[-LABEL].md     its report
   runs/              transcripts, call logs and programs, ignored by git
@@ -211,6 +212,14 @@ cap, and one program graded at a time:
    gpu`. In what `midnight loops solution.12am` prints, columns are
    separated by two or more spaces; at least one line has `WHERE` as its
    second column, and every such line has `PLACE` as its last.
+4. **Systems:** when the task has a `systems` file, each of its lines is
+   `NAME` or `NAME each`. One of the program's files declares the system
+   (`system NAME`, `gpu system NAME` or `strict gpu system NAME`) on a
+   line of its own, and with `each`, the system has a loop: a line of
+   what `midnight loops solution.12am` prints has that declaration's words
+   as its second column, or has `def F` there for a function `F` whose
+   name the system's body names (the lines from the declaration to the
+   next `end` at the start of a line).
 
 A run **passes** when all its checks do. It **fails** when a check fails,
 when there is no `solution.12am`, when the time limit ended it
@@ -275,7 +284,8 @@ For each run the results file holds:
 
 The results file also records the commit, Midnight's version, the Ruby
 version, for each task a hash of `TASK.md`, `expected.out`, `check.drive`,
-`loops` and `given/`, and for the kit each source path with its hash.
+`loops`, `systems` and `given/`, and for the kit each source path with its
+hash.
 
 A diagnostic is **Ruby-shaped** when the name in its first backticked
 span is Ruby's in that place and Midnight's is not:
@@ -357,7 +367,12 @@ exactly `expected.out`:
 - `TASK.md` shows the first lines of the expected output, never all of it.
 - `TASK.md` asks for what to build, in the domain's words, and names a
   language construct only where a check needs it (a system's name for
-  `loops`) or where the construct is the point (a GPU system, a window).
+  `loops` or `systems`) or where the construct is the point (a GPU system,
+  a window).
+- A task whose point is entities, systems, events or structural changes
+  says what is an entity and which systems the program has, by name, in
+  the order they run, and has a `systems` file, so a program that does
+  the work some other way fails. Controls name no construct.
 - Every program of a task builds and runs in under 5 seconds on the
   development machine.
 - The reference solution is written as the documentation teaches and is
@@ -365,7 +380,8 @@ exactly `expected.out`:
   correct program, with its entities spawned in another order and in other
   tables and, where the task allows it, its formulas written differently.
   Every program in `wrong/` fails at least one check; a task with a
-  `loops` file has one that prints `expected.out` and fails only `loops`.
+  `loops` file has one that prints `expected.out` and fails only `loops`,
+  and a task with a `systems` file one that fails only `systems`.
 - A **control** has `control: yes` and an empty `ruby:`: the way a Ruby
   programmer would write it is Midnight, and it prints only what does not
   depend on order (totals, counts, the state of one entity or resource).
@@ -431,7 +447,8 @@ root, and refuses to start elsewhere. Its commands:
 - `grade TASK FILE`: grades one program against one task.
 - `self-test`: every reference solution and every program in `right/`
   passes; every program in `wrong/` fails; for a task with `loops`, one
-  program in `wrong/` prints `expected.out` and fails only `loops`; a
+  program in `wrong/` prints `expected.out` and fails only `loops`, and
+  likewise for `systems`; a
   repair's given `solution.12am` fails; the output shown in `TASK.md` is a
   proper prefix of `expected.out`; every program of a task builds and runs
   in under 5 seconds; the reference runs with status 0 with each file of
@@ -455,7 +472,7 @@ included), and the wrapper, called directly with no agent.
   `solution.12am` and every program in `right/` builds and, run as grading
   runs it (window programs with `no_display`), prints exactly
   `expected.out` with status 0, in release and debug, and meets every
-  `loops` line; every program in `wrong/` does not pass all three checks.
+  `loops` and `systems` line; every program in `wrong/` fails a check.
   A change to the language that breaks a task's program breaks the suite,
   and the task is updated with it.
 - The reference solutions of `swarm`, `ledger` and `crowd` also run in

@@ -33,8 +33,9 @@ entity.
 
 The program runs 15 ticks. Each tick has four steps, in this order. Each
 step is a system of its own, and the four systems run once a tick, in the
-order given. Each step finishes for every animal before the next step
-begins.
+order given. The systems are named after their steps: `hunt`, `foxes`,
+`rabbits` and `report`. Each step finishes for every animal before the
+next step begins.
 
 1. **Hunt.** All the foxes hunt at the same time. Each fox picks the
    lowest-numbered rabbit at its own place, if there is one. When two or

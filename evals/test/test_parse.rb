@@ -49,6 +49,31 @@ class ParseTest < Minitest::Test
     FileUtils.rm_rf(dir)
   end
 
+  def test_systems_check
+    dir = Eval::Env.mktemp
+    File.write(File.join(dir, "meta"), "areas: ecs\n")
+    File.write(File.join(dir, "systems"), "hunt each\nreport\n")
+    assert_equal [["hunt", true], ["report", false]], Eval::Task.new(dir).systems
+    File.write(File.join(dir, "systems"), "hunt all\n")
+    assert_raises(Eval::Failure) { Eval::Task.new(dir).systems }
+
+    prog = File.join(dir, "prog")
+    FileUtils.mkdir_p(File.join(prog, "lib"))
+    File.write(File.join(prog, "solution.12am"), "require \"lib/more\"\nsystem hunt\nend\n# system report\n")
+    File.write(File.join(prog, "lib", "more.12am"), "  gpu system settle\nend\n")
+    loops = "solution.12am:3  system hunt  each Fox  one core: prints at line 4\n"
+    wanted = [["hunt", true], ["settle", false], ["report", false]]
+    assert_equal ["report"], Eval::Grade.missing_systems(prog, loops, wanted)
+    assert_equal ["hunt each", "report"], Eval::Grade.missing_systems(prog, nil, wanted)
+
+    File.write(File.join(prog, "solution.12am"), "system hunt\n  chase(1)\nend\n\nsystem report\n  puts 1\nend\n")
+    helper = "solution.12am:9  def chase  each Fox  cores\n"
+    assert_empty Eval::Grade.missing_systems(prog, helper, [["hunt", true], ["report", false]])
+    assert_equal ["report each"], Eval::Grade.missing_systems(prog, helper, [["report", true]])
+  ensure
+    FileUtils.rm_rf(dir)
+  end
+
   def test_loops_check
     out = "s.12am:4  system walk   each Pos  cores\n" \
           "s.12am:9  system walk   each Vel  one core: assigns `best` at line 10\n" \

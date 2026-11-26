@@ -327,6 +327,17 @@ module Eval
       Dir.glob("*.12am", base: path(kind)).sort.map { |f| path(kind, f) }
     end
 
+    # Each line of `systems` as [name, each?].
+    def systems
+      return [] unless exist?("systems")
+
+      read("systems").each_line.map(&:split).reject(&:empty?).map do |name, each, extra|
+        raise Failure, "#{@name}/systems: `#{[name, each, extra].compact.join(' ')}` is not `NAME [each]`" if extra || (each && each != "each")
+
+        [name, each == "each"]
+      end
+    end
+
     # Each line of `loops` as [where, place].
     def loops
       return [] unless exist?("loops")
@@ -344,7 +355,7 @@ module Eval
     # A hash of what the agent is given and graded against.
     def sha256
       d = Digest::SHA256.new
-      %w[TASK.md expected.out check.drive loops].each do |f|
+      %w[TASK.md expected.out check.drive loops systems].each do |f|
         d << "#{f}\0#{exist?(f) ? read(f) : ''}\0"
       end
       given_files.each { |f| d << "given/#{f}\0#{read('given', f)}\0" }
@@ -887,10 +898,18 @@ module Eval
       else
         checks["output"] = false
       end
-      unless task.loops.empty?
+      unless task.loops.empty? && task.systems.empty?
         l = Guard.capture(env, [compiler, "loops", "solution.12am"], chdir: dir, limit: LIMIT, cap: CAP)
-        checks["loops"] = l[:status].zero? && loops_ok?(l[:out], task.loops)
+        loops = l[:status].zero? ? l[:out] : nil
+      end
+      unless task.loops.empty?
+        checks["loops"] = !loops.nil? && loops_ok?(loops, task.loops)
         notes["loops"] = l[:out].lines.first(10).join unless checks["loops"]
+      end
+      unless task.systems.empty?
+        missing = missing_systems(dir, loops, task.systems)
+        checks["systems"] = missing.empty?
+        notes["systems"] = "missing: #{missing.join(', ')}" unless missing.empty?
       end
       verdict = checks.values.all? ? "pass" : "fail"
       { "verdict" => verdict, "checks" => checks, "notes" => notes, "sha256" => sha, "stdout" => stdout }
@@ -901,6 +920,32 @@ module Eval
       w = want.lines
       i = (0...[g.size, w.size].max).find { |k| g[k] != w[k] }
       "line #{i + 1}: got #{g[i].to_s.chomp.inspect}, want #{w[i].to_s.chomp.inspect}"
+    end
+
+    DECLARATION = /^\s*(?:strict\s+)?(?:gpu\s+)?system\s+([a-z_][A-Za-z0-9_]*[?!]?)/
+
+    # The [name, each] of `systems` a program in dir does not meet: a
+    # system it does not declare on a line of its own, or, with each, one
+    # with no loop: `midnight loops` (loops, nil when it failed) shows none
+    # under the system, and none in a function whose name the system's
+    # body (its declaration to the next `end` at the start of a line) has.
+    def missing_systems(dir, loops, wanted)
+      bodies = {}
+      Dir.glob("**/*.12am", base: dir).each do |f|
+        lines = File.read(File.join(dir, f)).scrub.lines
+        lines.each_with_index do |line, i|
+          m = line.match(DECLARATION) or next
+          stop = (i + 1...lines.size).find { |k| lines[k].match?(/\Aend\b/) } || lines.size
+          bodies[m[1]] = lines[i + 1...stop].join
+        end
+      end
+      rows = loops.to_s.lines.map { |l| l.chomp.split(/ {2,}/)[1].to_s }
+      functions = rows.filter_map { |w| w[/\Adef ([A-Za-z_][A-Za-z0-9_]*[?!]?)\z/, 1] }.uniq
+      wanted.reject do |name, each|
+        body = bodies[name]
+        body && (!each || rows.any? { |w| w.match?(/\A(?:strict )?(?:gpu )?system #{Regexp.escape(name)}\z/) } ||
+                 functions.any? { |fn| body.match?(/(?<![A-Za-z0-9_])#{Regexp.escape(fn)}(?![A-Za-z0-9_])/) })
+      end.map { |name, each| each ? "#{name} each" : name }
     end
 
     # Whether `midnight loops` output meets every [where, place].
@@ -1884,13 +1929,16 @@ module Eval
           check.(secs < BUILD_SECONDS, "#{rel(task, prog)} took #{secs.round(1)} s")
         end
         only_loops = false
+        only_systems = false
         task.programs("wrong").each do |prog|
           g, secs = timed { Grade.grade(task, prog, compiler: compiler) }
           check.(g["verdict"] != "pass", "#{rel(task, prog)} passes")
           check.(secs < BUILD_SECONDS, "#{rel(task, prog)} took #{secs.round(1)} s")
-          only_loops ||= g["checks"]["build"] && g["checks"]["output"] && g["checks"]["loops"] == false
+          only_loops ||= g["checks"].reject { |k, _| k == "loops" }.values.all? && g["checks"]["loops"] == false
+          only_systems ||= g["checks"].reject { |k, _| k == "systems" }.values.all? && g["checks"]["systems"] == false
         end
         check.(only_loops, "no program in wrong/ fails only `loops`") unless task.loops.empty?
+        check.(only_systems, "no program in wrong/ fails only `systems`") unless task.systems.empty?
         if task.repair?
           g = Grade.grade(task, task.path("given", "solution.12am"), compiler: compiler)
           check.(g["verdict"] != "pass", "the given solution.12am passes")
@@ -1987,7 +2035,10 @@ module Eval
 
     def grade(argv)
       usage! unless argv.size == 2
-      task = Task.new(File.join(ROOT, "evals", "tasks", argv[0]))
+      dir = File.join(ROOT, "evals", "tasks", argv[0])
+      raise Failure, "no task `#{argv[0]}`" unless File.file?(File.join(dir, "meta"))
+
+      task = Task.new(dir)
       src = File.expand_path(argv[1])
       src = File.dirname(src) if File.basename(src) == "solution.12am"
       g = Grade.grade(task, src)
