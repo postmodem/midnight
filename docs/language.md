@@ -1,28 +1,13 @@
 # The Midnight language
 
-This document describes Midnight 0.9: the language core specified by
-[`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
-systems specified by
-[`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), what moves
-between CPU and GPU memory, specified by
-[`specs/0003-moving-less.md`](../specs/0003-moving-less.md), strict GPU
-systems, specified by
-[`specs/0004-strict-gpu-systems.md`](../specs/0004-strict-gpu-systems.md),
-loops on several cores, specified by
-[`specs/0005-several-cores.md`](../specs/0005-several-cores.md), a
-window, specified by [`specs/0006-a-window.md`](../specs/0006-a-window.md),
-the keyboard and the mouse, specified by
-[`specs/0007-keyboard-and-mouse.md`](../specs/0007-keyboard-and-mouse.md),
-drawing, specified by
-[`specs/0009-drawing.md`](../specs/0009-drawing.md), and driving every
-program, specified by
-[`specs/0010-json-and-driving.md`](../specs/0010-json-and-driving.md).
-It is the reference for what a program means. Where the compiler and this
-document disagree, one of them has a bug.
+This is Midnight 0.9.
 
-Midnight is a compiled, statically typed language built around the
-entity-component-system (ECS) pattern. Its syntax borrows from Ruby. Source
-files end in `.12am`.
+Midnight is a compiled, statically typed language for games and
+simulations, built around the entity-component-system (ECS) pattern. Its
+syntax borrows from Ruby. Source files end in `.12am`.
+
+This document is the reference for what a program means. Where the
+compiler and this document disagree, one of them has a bug.
 
 ## A first program
 
@@ -3168,3 +3153,10 @@ structures, so a nested `each` visits every pair; `Math` functions other
 than `Math.sqrt`, and `**` other than a square, in a strict GPU system; a
 draw in a loop inside a GPU block, in its nested `each` and in a function
 a GPU system calls; and the use of more than one GPU.
+
+## Specs
+
+Each change to the language starts from a spec in [`specs/`](../specs/),
+which says what the change is for, how it was tested and measured, and
+where it ended up differing from its design. This document holds the
+language as those specs left it.
