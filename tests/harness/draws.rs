@@ -302,6 +302,7 @@ chmod 755 solution
 
 #[test]
 fn the_check_grades_and_keeps_the_answers() {
+    let _turn = crate::help::grading();
     let f = Fixture::new(false);
     let task = f.task();
     let keep = f.dir.path("keep");
@@ -363,6 +364,7 @@ fn the_check_grades_and_keeps_the_answers() {
 
 #[test]
 fn self_test_wants_a_wrong_program_that_fails_only_draws() {
+    let _turn = crate::help::grading();
     let f = Fixture::new(false);
     let w = |rel: &str, text: &str| {
         f.dir.write(&format!("task/{rel}"), text);

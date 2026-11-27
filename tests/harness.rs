@@ -108,6 +108,14 @@ pub mod help {
         }
     }
 
+    static GRADING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// A turn of the tests that grade: the self-test times each grade,
+    /// waiting for grading's lock included.
+    pub fn grading() -> std::sync::MutexGuard<'static, ()> {
+        GRADING.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// The real path of `sh` on PATH, for the first line of a script.
     pub fn sh() -> String {
         crate::tools::which("sh").expect("sh on the PATH")

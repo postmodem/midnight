@@ -281,6 +281,7 @@ fn grades_with_the_real_compiler() {
     if compiler.is_empty() {
         return;
     }
+    let _turn = crate::help::grading();
     let d = Temp::new();
     d.write("tasks/greet/TASK.md", "Print this.\n\n```\nhello\n```\n");
     d.write("tasks/greet/meta", "areas: ecs\n");
