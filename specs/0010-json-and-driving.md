@@ -1,6 +1,6 @@
 # 0010 — JSON output, and driving every program
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0009
 
 ## Goal
@@ -174,8 +174,9 @@ first.
   for `Float`. The text forms of `draws`, `query` and `resource` use the
   same rule. It differs from the shortest 32-bit text for two values
   only, `7.038531e-26` and `-7.038531e-26`, which a 64-bit reader would
-  round to the next 32-bit value; they are written `7.0385309e-26` and
-  `-7.0385309e-26`.
+  round to the next 32-bit value; they are written `7.0385307e-26` and
+  `-7.0385307e-26`, the nearer of the eight-digit texts that read back
+  both ways.
 
 A `Color` is an array of its four bytes, `[r, g, b, a]`, wherever it
 appears. An entity is a string, the text `to_s` gives it:
@@ -507,7 +508,7 @@ generated table of fields, and the Outcome says so.
 
 The text form of `draws` takes the `Float32` rule too, so that one
 implementation serves both forms: the two values ±7.038531e-26 print as
-±7.0385309e-26. No expected file of the suite holds either.
+±7.0385307e-26. No expected file of the suite holds either.
 
 ### The compiler
 
@@ -630,7 +631,7 @@ it: `.draws`, `.queries` and `.frames` each hold their own.
   build, split across threads: each text reads back as the same value
   through `strtof` and through `strtod` rounded to 32 bits, and no text
   with fewer significant digits does both. Without the variable it checks
-  every power of two, ±7.0385309e-26 and a fixed sample of a million
+  every power of two, ±7.0385307e-26 and a fixed sample of a million
   patterns.
 - **Untestable on demand.** `gpu_error`, `window_error`,
   `out_of_memory` and `buffers_alive` are held by a unit test of the
@@ -725,8 +726,64 @@ it: `.draws`, `.queries` and `.frames` each hold their own.
 - Every finite 32-bit value's shortest text, read as a 64-bit number and
   rounded to 32 bits, gives the same value, but for ±7.038531e-26, where
   the 64-bit reading falls between two 32-bit values and rounds the
-  other way; ±7.0385309e-26 reads back exactly both ways. The runtime's
+  other way; ±7.0385307e-26 reads back exactly both ways. The runtime's
   own search of `%.*e` with `strtof`, tried at every power of two and on
   a sample of one pattern in 997, finds the same pair and no other.
 - A `draws` answer with named members and colors as objects is about
   1.8 times the bytes of one with arrays of numbers.
+
+## Outcome
+
+Implemented, with the differences listed under "Differences from the
+design". All twelve criteria pass on x86_64-linux: a Ryzen 9 9950X3D
+beside an RTX 5090, its integrated Radeon through RADV and `llvmpipe`,
+both of Mesa 26.1.8, `wgpu-native` 27.0.4.0, SDL 3.4.10, sway 1.12, clang
+21.1.8.
+
+### Acceptance criteria
+
+| # | Result |
+| - | ------ |
+| 1 | `fail_programs_in_json`: for each of the 370 programs of `tests/fail`, `check --format json` gives the messages, labels, notes, files, lines, columns and marker widths of its `.err`, positions that agree with their bytes in the file, and the totals line. |
+| 2 | `plan_and_loops_in_json` gives the lines of all 56 `.plan` and `.loops` files. |
+| 3 | Every JSON form the suite reads goes through the strict reader of `tests/json_lines/mod.rs` (one object a line, `kind` first, no spaces, Midnight's escapes only, the `midnight` line first). The nine `tests/json` files match. |
+| 4 | `programs_in_json`: all 415 programs of `tests/run`, `examples` and `tests/panic`, in both build modes, print with `MIDNIGHT_FORMAT=json` what they print without it, and their standard error is JSON lines that say what the text says. |
+| 5 | `run_both_forms` holds the answers of every `.draws`, `.queries` and `.split` program, every case of `drive_errors`, `drive_answers` and `query_errors`, every run-time error of `tests/panic`, and in GPU mode the `.stats` and `.frames` programs, to their text form. |
+| 6 | `a_program_without_a_window_is_driven`: ticks, the end of the commands and of the program, a pending `tick`, and every command of the window as an error. |
+| 7 | The tick rule: `input_keys` and `input_focus` take `tick` lines before `Window.open` and between their windows, with their `.out` unchanged; `drive_errors` has a program waiting for commands after its `World.run`. |
+| 8 | `queries_match_expected` gives the three `.queries` files in release and debug; `thread_programs` gives them for its six settings; `gpu_programs` gives them exactly on the RTX 5090, RADV and `llvmpipe`, and `gpu_stats_match_expected` holds `query_gpu.stats`, whose ticks before each answer count its download. |
+| 9 | `float32_text_round_trips` with `MIDNIGHT_TEST_FLOAT32=1`: all 4,294,967,296 patterns in 561 s on 32 threads. |
+| 10 | Every suite, the GPU modes on all three devices, ThreadSanitizer, the window tests (`window_shown_takes_no_resize` among them) and `nix flake check` pass. |
+| 11 | The build cost below is within the bound: the formatters stay generated. |
+| 12 | The reference says 0.9 and `midnight --version` prints `midnight 0.9.0`. `docs/json.md` documents every kind. The README's commands work as written, all but the two that open a window on the desktop, which were not run from the development session. `tests/COVERAGE.md` has "Driving" and "JSON output". |
+
+### Measured
+
+The generated C and the build time (median of five) of the two programs
+the spec names, with the compiler before the formatters (`6db236f`) and
+after:
+
+| Program | C before | C after | Release before | Release after | Debug before | Debug after |
+| ------- | -------- | ------- | -------------- | ------------- | ------------ | ----------- |
+| `tests/run/draw_unfit.12am` (500 components) | 1,306,280 B | 1,551,962 B | 1.76 s | 2.12 s (1.20×) | 1.13 s | 1.31 s |
+| `examples/flock.12am` | 17,939 B | 18,847 B | 1.34 s | 1.45 s | 0.57 s | 0.59 s |
+
+### Differences from the design
+
+- `c_compiler` has an optional `message`, the system's reason, for a C
+  compiler that did not start; `no_flags`'s `message` is the text's line
+  without `midnight: `.
+- A filter written with a space before its colon (`with : X`) is read as
+  the source reads it: `with` is a name where a term stands, and the error
+  says `` `with` is not a component or tag of this program ``.
+- The suite checks the text and JSON of `query` and `resource` against
+  each other by their leaves (numbers as written, strings unescaped,
+  Booleans), since JSON has no struct names and does not tell an enum
+  from a string; every other line is compared exactly.
+- `window_event` has no JSON test: only a window shown on a desktop writes
+  it.
+- The resource structs of generated code are named (`struct Res_Score`),
+  so that a resource's formatters can take its address.
+- `resize` and `scale` in a program that is not headless are now reached
+  only with a shown window; `window_shown_takes_no_resize` holds their
+  error in window mode.

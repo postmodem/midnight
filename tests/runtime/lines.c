@@ -8,7 +8,7 @@
  *       Checks the Float32 rule: each text reads back as the same value
  *       through strtof and through strtod rounded to 32 bits, and no text
  *       with fewer significant digits does both. `all` checks every finite
- *       pattern, `sample` every power of two, ±7.0385309e-26 and a fixed
+ *       pattern, `sample` every power of two, ±7.0385307e-26 and a fixed
  *       sample of a million patterns. Prints the number checked.
  *   lines gpu_error | window_error | out_of_memory | buffers_alive
  *       Writes that line, in the format MIDNIGHT_FORMAT asks for, and ends
@@ -108,7 +108,7 @@ static int float32(bool all, unsigned threads) {
             patterns[count++] = 1u << shift;
             patterns[count++] = (1u << shift) | 0x80000000u;
         }
-        float special = 7.0385309e-26f;
+        float special = 7.0385307e-26f;
         uint32_t bits;
         memcpy(&bits, &special, sizeof bits);
         patterns[count++] = bits;
