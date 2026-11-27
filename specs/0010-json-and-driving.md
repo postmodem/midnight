@@ -1,6 +1,6 @@
 # 0010 — JSON output, and driving every program
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0009
 
 ## Goal
