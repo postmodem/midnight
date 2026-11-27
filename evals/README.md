@@ -37,7 +37,7 @@ same commit. Its options:
 | `--jobs J` | 4 | sessions at a time |
 | `--label L` | none | added to the results file's name |
 
-A full run is 130 sessions. It writes `evals/results/DATE-COMMIT[-LABEL].json`
+A run is one session for each task, model and trial. It writes `evals/results/DATE-COMMIT[-LABEL].json`
 after every session and the report, the `.md` beside it, at the end. A
 usage limit stops it with the command that continues it (`--resume`),
 which runs every trial that has no grade yet. An API error or a lapsed
@@ -55,8 +55,8 @@ are not committed.
 
 A kit is a file of `SOURCE DEST` lines, `SOURCE` a path from the
 repository's root (a directory stands for every file under it), `DEST` a
-path under the agent's `docs/`. `evals/kit` gives the reference, the README
-and the examples. To measure other documentation, commit a kit and its
+path under the agent's `docs/`. `evals/kit` gives the reference, the README,
+`docs/running.md` and the examples. To measure other documentation, commit a kit and its
 files and pass `--kit`; `evals/test/kit-no-structural/kit` is one, the
 reference with a section cut.
 
@@ -204,10 +204,8 @@ again before any run made after the language changed.
 - An idea for an eval starts as a spike: a few sessions on a rough task,
   read by hand. Only a spike that shows the eval can tell something
   becomes tasks, trials and an entry in `ledger.md`.
-- There are no tasks now. The thirteen of spec 0008 and the four
-  drawing tasks of spec 0009 were removed after 0009; their files are in
-  the history (`git show 0483b58:evals/tasks`), and `ledger.md` says what
-  each set showed.
+- There are no tasks now. `ledger.md` says what earlier sets showed and
+  where their files are in the history.
 - When a task is added or changed, as above.
 
 ## What a result decides
