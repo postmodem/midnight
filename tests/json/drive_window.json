@@ -1,0 +1,14 @@
+{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"answer","name":"tick","command":"tick","line":1,"tick":1,"ran":1,"ended":false}
+{"kind":"answer","name":"draws","command":"draws","line":2,"tick":1,"frame_tick":1,"width":64,"height":48,"background":[10,20,30,128],"draws":[{"shape":"rect","x":7.0385307e-26,"y":1.5,"width":4.0,"height":2.0,"color":[1,2,3,255]},{"shape":"circle","x":10.0,"y":10.0,"radius":2.25,"color":[4,5,6,7]},{"shape":"line","x1":0.0,"y1":0.0,"x2":8.0,"y2":8.0,"width":1.0,"color":[8,9,10,255]},{"shape":"triangle","x1":-1.0,"y1":0.0,"x2":5.0,"y2":5.0,"x3":0.0,"y3":9.0,"color":[11,12,13,255]}]}
+{"kind":"answer","name":"resize","command":"resize 80 60","line":3,"tick":1}
+{"kind":"answer","name":"scale","command":"scale 1.5","line":4,"tick":1}
+{"kind":"answer","name":"key","command":"key down A","line":5,"tick":1}
+{"kind":"answer","name":"mouse","command":"mouse move 3 4","line":6,"tick":1}
+{"kind":"answer","name":"scroll","command":"scroll 0 1","line":7,"tick":1}
+{"kind":"answer","name":"tick","command":"tick 2","line":8,"tick":3,"ran":2,"ended":false}
+{"kind":"answer","name":"blur","command":"blur","line":9,"tick":3}
+{"kind":"answer","name":"focus","command":"focus","line":10,"tick":3}
+{"kind":"answer","name":"close","command":"close","line":11,"tick":3}
+{"kind":"answer","name":"tick","command":"tick","line":12,"tick":4,"ran":1,"ended":false}
+{"kind":"drive_error","file":"tests/json/drive_window.drive","line":13,"message":"unknown command `bogus\u0001é�`"}

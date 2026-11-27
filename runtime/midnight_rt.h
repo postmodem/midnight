@@ -48,6 +48,20 @@
  *     midnight: 2 buffers still alive at exit
  *
  * to standard error and exits with status 70.
+ *
+ * MIDNIGHT_FORMAT=json, which mn_start reads before anything else, makes
+ * every line the runtime writes to standard error one JSON object, as
+ * docs/json.md lists them, after a first line
+ *
+ *     {"kind":"midnight","format":1,"version":"0.9.0"}
+ *
+ * A run-time error is then
+ *
+ *     {"kind":"runtime_error","file":FILE,"line":LINE,"message":MESSAGE}
+ *
+ * and the buffers line {"kind":"buffers_alive","count":2}. Standard output
+ * is the same in both forms, and is written out before each line on
+ * standard error.
  */
 
 #ifndef MIDNIGHT_RT_H
@@ -99,6 +113,9 @@ typedef struct MnProgram {
     /* Releases what constants and resources own. Called by mn_finish when
      * MN_DEBUG is defined, before the buffer check. */
     void (*drop_globals)(void);
+    /* The version of the compiler that built the program, which the first
+     * line of the JSON form names. */
+    const char *version;
 } MnProgram;
 
 /* Call once, first. The program description must outlive the program. */
@@ -506,6 +523,21 @@ void mn_sb_entity(MnBuilder *sb, MnEntity e);
 MnString mn_sb_finish(MnBuilder *sb);
 /* Writes the text to standard output and frees the builder's storage. */
 void mn_sb_write(MnBuilder *sb);
+
+/* JSON values, as docs/json.md writes them:
+ *   mn_json_bytes    a string: `"` and `\` escaped with a backslash, \n \r
+ *                    \t, \u00xx for the other bytes below 0x20 and 0x7f,
+ *                    U+FFFD for a byte that is not part of valid UTF-8,
+ *                    every other character as itself
+ *   mn_json_float    a Float: its text form, or "NaN", "Infinity" or
+ *                    "-Infinity" as strings
+ *   mn_json_float32  a Float32: the fewest digits that read back as the
+ *                    same 32-bit value both as a 32-bit number and as a
+ *                    64-bit number rounded to 32 bits; non-finite values as
+ *                    for Float */
+void mn_json_bytes(MnBuilder *sb, const char *bytes, int64_t len);
+void mn_json_float(MnBuilder *sb, double value);
+void mn_json_float32(MnBuilder *sb, float value);
 
 /* ---- Output -------------------------------------------------------------- */
 

@@ -137,3 +137,66 @@ writes the first line and nothing else.
 | `runs`    | `gpu`, `cores` or `one_core` |
 | `reason`  | optional: for `one_core`, the text after `one core: ` |
 | `rule`    | optional: for `one_core`, the number of the rule of an independent `each` it breaks, as "Several cores" in the reference numbers them |
+
+## Programs
+
+A built program reads `MIDNIGHT_FORMAT` before any other variable. With
+`json` it writes the first line before anything else, and from then on
+every line it writes to standard error is a JSON object; `text` (the
+default) keeps the text, and any other value is reported once and the
+program writes text. Standard output is the program's, byte for byte the
+same in both forms. `midnight run --format json` sets the variable for
+the program it starts, and `--format text` takes it away; the program's
+lines then follow the compiler's, beginning with the program's own first
+line.
+
+Standard output is written out before each line on standard error, so
+when both go to one pipe the lines arrive in the order they happened. A
+line on standard error that does not begin with `{` was written by
+something other than Midnight, such as a sanitizer or a driver.
+
+A JSON line has no prefix: the `midnight: TOPIC:` of the text is its
+kind.
+
+| Kind | When | Members |
+| ---- | ---- | ------- |
+| `runtime_error` | a run-time error | `file`, `line`, `message`: the text's three parts |
+| `gpu_error` | `midnight: GPU error: …` | `message` |
+| `window_error` | `midnight: window error: …` | `message` |
+| `out_of_memory` | `midnight: out of memory` | none |
+| `buffers_alive` | a debug build's buffers at exit | `count` |
+| `unknown_word` | a word a variable does not have | `variable`, `word` |
+| `gpu_device` | `MIDNIGHT_GPU=info`, the device | `device` (optional: absent for no device) |
+| `gpu_strict` | `MIDNIGHT_GPU=info`, the strict check | `passed`, `difference` (optional: the device and the first difference, when it failed) |
+| `gpu_cpu_block` | `MIDNIGHT_GPU=info`, a block on the CPU | `system`, `each`, `reason` |
+| `threads` | `MIDNIGHT_THREADS=info`, at start | `threads` |
+| `threads_split` | `MIDNIGHT_THREADS=info`, a loop's first split | `file`, `line`, `rows`, `pieces`, `threads` |
+| `window_opened` | `MIDNIGHT_WINDOW=info` | `width`, `height`, `pixel_width`, `pixel_height`, `shown` (`headless`, `wayland`, `x11` or `cocoa`), `present` (optional: `mailbox`, `immediate` or `fifo`; absent headless), `driven` |
+| `window_event` | `MIDNIGHT_WINDOW=info`, a shown window | `event`: `focused` or `pointer_inside` |
+| `stats` | `MIDNIGHT_GPU=stats` | `tick` (the tick the line counts), `uploads`, `downloads`, `rows_up`, `rows_down`, `submissions`, `waits` |
+| `answer` | each drive command carried out | below |
+| `drive_error` | a command that stops the program | `file`, `line`, `message` |
+| `drive_unopened` | a file of commands that can't be opened | `file`, `message` |
+
+### `answer`
+
+Every answer has `name` (the command's first word), `command` (the line
+as written, the spaces around it removed), `line` (its line in the file)
+and `tick` (the value of `Time.tick` when it is answered: one more than
+the tick that last ended), then members by command:
+
+| Command | Members |
+| ------- | ------- |
+| `tick`, `tick N` | `ran` (the ticks that ran), `ended` (true when the program ended first) |
+| `resize`, `scale`, `close`, the keyboard and mouse commands | none |
+| `capture FILE` | `file`, `frame_tick`, `pixel_width`, `pixel_height`, `crc` (eight hex digits, as the text) |
+| `draws` | `frame_tick`, `width`, `height`, `background` (a color, with the `a` the program gave it), `draws`: an array of shapes |
+
+A shape is an object with `shape` (`rect`, `circle`, `line` or
+`triangle`) and its arguments under the names of the reference's table
+(`x`, `y`, `width`, `height`, `radius`, `x1` … `y3`), each a `Float32`,
+then `color`:
+
+```json
+{"kind":"answer","name":"draws","command":"draws","line":2,"tick":1,"frame_tick":1,"width":64,"height":48,"background":[10,20,30,255],"draws":[{"shape":"circle","x":10.0,"y":10.0,"radius":2.25,"color":[4,5,6,7]}]}
+```

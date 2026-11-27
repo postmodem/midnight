@@ -230,17 +230,19 @@ fn no_display(command: &mut Command) {
 fn drive_file(source: &Path, captures: bool) -> PathBuf {
     static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     let dir = DIR.get_or_init(|| scratch("drives"));
-    let commands = std::fs::read_to_string(source.with_extension("drive")).unwrap_or_default();
-    let kept: String = commands
-        .split_inclusive('\n')
-        .map(|line| {
-            let command = line.trim_start();
-            if !captures && (command.starts_with("capture ") || command.starts_with("capture\t")) {
-                "\n"
+    let commands = std::fs::read(source.with_extension("drive")).unwrap_or_default();
+    let kept: Vec<u8> = commands
+        .split_inclusive(|&byte| byte == b'\n')
+        .flat_map(|line| {
+            let command = line.trim_ascii_start();
+            if !captures && (command.starts_with(b"capture ") || command.starts_with(b"capture\t"))
+            {
+                b"\n"
             } else {
                 line
             }
         })
+        .copied()
         .collect();
     let name = format!(
         "{}{}.drive",
@@ -931,7 +933,9 @@ fn json_programs() {
                 let exe = exe_path(&dir, source, Mode::Release);
                 build(source, &exe, Mode::Release)?;
                 let mut command = on_cpu(&exe, source);
-                command.env("MIDNIGHT_FORMAT", "json");
+                command
+                    .env("MIDNIGHT_FORMAT", "json")
+                    .env("MIDNIGHT_DRIVE", source.with_extension("drive"));
                 run_within(&mut command, RUN_LIMIT).stderr
             }
             other => return Err(label(format!("unknown command `{other}`"))),
@@ -1607,13 +1611,15 @@ const DEVICE_THREADS: &str = "4,small";
 /// a block must say it. A program with a window runs headless with its
 /// commands, `capture` left out; the answers to them are not in `stderr`,
 /// and those of `draws` are in `draws`.
-fn run_on_device(
+/// The command of [`run_on_device`]: headless, `MIDNIGHT_GPU` with `info`
+/// and `more`, on `device`.
+fn device_command(
     exe: &Path,
     source: &Path,
     device: Device,
     more: &[&str],
     threads: Option<&str>,
-) -> Result<DeviceRun, String> {
+) -> Command {
     let mut command = Command::new(exe);
     headless(&mut command, source, false);
     if let Some(threads) = threads {
@@ -1628,7 +1634,19 @@ fn run_on_device(
             .env_remove("VK_ADD_DRIVER_FILES");
     }
     command.env("MIDNIGHT_GPU", words.join(","));
-    let output = command.output().expect("run program");
+    command
+}
+
+fn run_on_device(
+    exe: &Path,
+    source: &Path,
+    device: Device,
+    more: &[&str],
+    threads: Option<&str>,
+) -> Result<DeviceRun, String> {
+    let output = device_command(exe, source, device, more, threads)
+        .output()
+        .expect("run program");
 
     let mut run = DeviceRun {
         status: output.status.code(),
@@ -2104,6 +2122,12 @@ fn gpu_stats_match_expected() {
                 ));
             }
             devices.lock().unwrap().insert(run.device);
+            // The device, strict and `stats` lines say the same in JSON.
+            if words.len() == 1 && threads.is_none() {
+                let mut command = device_command(&exe, source, device, &words, None);
+                run_both_forms(&mut command, RUN_LIMIT)
+                    .map_err(|message| format!("{label}: {message}"))?;
+            }
             // Only the release run may write the expected file; debug must
             // match it.
             if update_expect() && *mode == Mode::Debug {
@@ -2247,7 +2271,8 @@ fn window_frames() {
         headless(&mut command, source, true);
         on_device(&mut command, device);
         command.current_dir(&files);
-        let mut run = run_within(&mut command, RUN_LIMIT);
+        let mut run =
+            run_both_forms(&mut command, RUN_LIMIT).map_err(|e| format!("{label}: {e}"))?;
         let said = device_said(&mut run, device).map_err(|message| format!("{label}: {message}"));
         if run.status != Some(0) || !run.stderr.is_empty() {
             return Err(format!(
@@ -3191,6 +3216,8 @@ struct TimedRun {
     /// The answers to `MIDNIGHT_DRIVE`'s commands, without their
     /// `midnight: drive: `. They are not in `stderr`.
     drive: String,
+    /// Standard error as the program wrote it, answers included.
+    raw: String,
     /// The program was still running when the limit passed, and was killed.
     timed_out: bool,
 }
@@ -3230,15 +3257,44 @@ fn run_within(command: &mut Command, limit: Duration) -> TimedRun {
             }
             std::thread::sleep(Duration::from_millis(2));
         };
-        let (drive, stderr) = split_drive(&text(&read_err.join().expect("read standard error")));
+        let raw = text(&read_err.join().expect("read standard error"));
+        let (drive, stderr) = split_drive(&raw);
         TimedRun {
             status: if timed_out { None } else { status.code() },
             stdout: text(&read_out.join().expect("read standard output")),
             stderr,
             drive,
+            raw,
             timed_out,
         }
     })
+}
+
+/// Runs `command` as it is, then again with `MIDNIGHT_FORMAT=json`, and
+/// checks that the two say the same: the same status and standard output,
+/// a JSON form on standard error, and its lines, written as text, the
+/// standard error of the first run. Returns the first run.
+fn run_both_forms(command: &mut Command, limit: Duration) -> Result<TimedRun, String> {
+    let plain = run_within(command, limit);
+    command.env("MIDNIGHT_FORMAT", "json");
+    let json = run_within(command, limit);
+    command.env_remove("MIDNIGHT_FORMAT");
+    let differs = |what: &str, plain: &str, json: &str| {
+        format!("{what} differs in JSON\n--- text\n{plain}--- JSON\n{json}---")
+    };
+    if plain.status != json.status || plain.stdout != json.stdout {
+        return Err(differs(
+            &format!("status {:?} or standard output", json.status),
+            &plain.stdout,
+            &json.stdout,
+        ));
+    }
+    let lines = json_lines::parse_form(&json.raw).map_err(|e| format!("{e}\n{}", json.raw))?;
+    let said = json_lines::runtime_text(&lines)?;
+    if said != plain.raw {
+        return Err(differs("standard error", &plain.raw, &said));
+    }
+    Ok(plain)
 }
 
 /// Whether `MIDNIGHT_TEST_TSAN` asks for the ThreadSanitizer tests.
@@ -3527,7 +3583,7 @@ fn splits_match_expected() {
         let label = format!("{} ({mode:?})", source.display());
         let mut command = on_cpu(&exe, source);
         command.env("MIDNIGHT_THREADS", "4,small,info");
-        let run = run_within(&mut command, RUN_LIMIT);
+        let run = run_both_forms(&mut command, RUN_LIMIT).map_err(|e| format!("{label}: {e}"))?;
         let said = run.stderr.strip_prefix(&format!("{THREADS_SAID}4\n"));
         let lines: Option<String> = said.and_then(|said| {
             said.split_inclusive('\n')
@@ -3642,7 +3698,8 @@ fn threads_said(dir: &Path, source: &Path, threads: &str) -> String {
     build(source, &exe, Mode::Release).unwrap_or_else(|message| panic!("{message}"));
     let mut command = on_cpu(&exe, source);
     command.env("MIDNIGHT_THREADS", threads);
-    let run = run_within(&mut command, RUN_LIMIT);
+    let run = run_both_forms(&mut command, RUN_LIMIT)
+        .unwrap_or_else(|message| panic!("{}: {message}", source.display()));
     let expected = std::fs::read_to_string(source.with_extension("out")).expect("read .out");
     assert_eq!(
         (run.status, run.stdout.as_str()),
@@ -3699,8 +3756,8 @@ fn build_text(dir: &Path, name: &str, text: &str) -> PathBuf {
 }
 
 /// Runs a program with no device, `MIDNIGHT_WINDOW` set to `words` and the
-/// commands in `commands`, written to `dir/NAME.drive`. Returns the run
-/// and the name of the file of commands.
+/// commands in `commands`, written to `dir/NAME.drive`, in both forms.
+/// Returns the run and the name of the file of commands.
 fn drive(dir: &Path, exe: &Path, name: &str, words: &str, commands: &str) -> (TimedRun, String) {
     let file = dir.join(format!("{name}.drive"));
     std::fs::write(&file, commands).expect("write commands");
@@ -3710,10 +3767,225 @@ fn drive(dir: &Path, exe: &Path, name: &str, words: &str, commands: &str) -> (Ti
         .env("MIDNIGHT_WINDOW", words)
         .env("MIDNIGHT_DRIVE", &file);
     no_display(&mut command);
-    (
-        run_within(&mut command, PANIC_LIMIT),
-        file.to_string_lossy().into_owned(),
-    )
+    let run = run_both_forms(&mut command, PANIC_LIMIT)
+        .unwrap_or_else(|message| panic!("{name}: {message}"));
+    (run, file.to_string_lossy().into_owned())
+}
+
+/// Every program of `tests/run`, `examples` and `tests/panic`, in both
+/// build modes and both forms: with `MIDNIGHT_FORMAT=json` it prints what
+/// it prints without, and its standard error is that of the text form as
+/// JSON lines.
+#[test]
+fn programs_in_json() {
+    let dir = scratch("programs-json");
+    let mut sources = programs("tests/run");
+    sources.extend(examples());
+    sources.extend(programs("tests/panic"));
+    let jobs: Vec<(&PathBuf, Mode)> = sources
+        .iter()
+        .flat_map(|source| MODES.map(|mode| (source, mode)))
+        .collect();
+    let failures = for_each_parallel(&jobs, |(source, mode)| {
+        let label = |message: String| format!("{} ({mode:?}): {message}", source.display());
+        let exe = exe_path(&dir, source, *mode);
+        build(source, &exe, *mode)?;
+        let run = run_both_forms(&mut on_cpu(&exe, source), RUN_LIMIT).map_err(label)?;
+        let out = source.with_extension("out");
+        if out.exists() && std::fs::read_to_string(&out).unwrap() != run.stdout {
+            return Err(label("standard output differs from its `.out`".to_string()));
+        }
+        Ok(())
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("programs in JSON", jobs.len(), failures);
+}
+
+/// Builds `tests/runtime/lines.c` in release mode, or with `MN_DEBUG`.
+fn build_lines(dir: &Path, debug: bool) -> PathBuf {
+    let exe = dir.join(if debug { "lines-debug" } else { "lines" });
+    let mut args: Vec<OsString> = ["-std=c11", "-pthread", "-ffp-contract=off"]
+        .map(OsString::from)
+        .to_vec();
+    args.push(if debug { "-DMN_DEBUG" } else { "-O2" }.into());
+    args.extend(STRICT_CFLAGS.split_whitespace().map(OsString::from));
+    args.extend([
+        "-o".into(),
+        exe.clone().into(),
+        "tests/runtime/lines.c".into(),
+        "-lm".into(),
+    ]);
+    let args: Vec<&OsStr> = args.iter().map(OsString::as_os_str).collect();
+    cc(&args);
+    exe
+}
+
+/// Each finite `Float32`'s text reads back as the same value through
+/// `strtof` and through `strtod` rounded to 32 bits, and no text with
+/// fewer significant digits does both: every pattern with
+/// `MIDNIGHT_TEST_FLOAT32=1`, otherwise every power of two, the two values
+/// the rule changes and a million others.
+#[test]
+fn float32_text_round_trips() {
+    let dir = scratch("float32");
+    let exe = build_lines(&dir, false);
+    let all = std::env::var_os("MIDNIGHT_TEST_FLOAT32").is_some();
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let output = Command::new(&exe)
+        .args(["float32", if all { "all" } else { "sample" }])
+        .arg(threads.to_string())
+        .output()
+        .expect("run the Float32 check");
+    let said = text(&output.stdout);
+    assert!(output.status.success(), "{said}{}", text(&output.stderr));
+    note(said.trim_end());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The lines no program can be made to write on demand, in both forms: a
+/// GPU error, a window error, running out of memory (the runtime's and the
+/// pool's) and buffers alive at exit.
+#[test]
+fn lines_no_program_writes_on_demand() {
+    let dir = scratch("lines");
+    let exe = build_lines(&dir, true);
+    let first = "{\"kind\":\"midnight\",\"format\":1,\"version\":\"test\"}\n";
+    for (mode, status, text_line, json_line) in [
+        (
+            "gpu_error",
+            Some(70),
+            "midnight: GPU error: lost the device\n",
+            "{\"kind\":\"gpu_error\",\"message\":\"lost the device\"}\n",
+        ),
+        (
+            "window_error",
+            Some(70),
+            "midnight: window error: lost the \"window\"\n",
+            "{\"kind\":\"window_error\",\"message\":\"lost the \\\"window\\\"\"}\n",
+        ),
+        (
+            "out_of_memory",
+            None,
+            "midnight: out of memory\n",
+            "{\"kind\":\"out_of_memory\"}\n",
+        ),
+        (
+            "buffers_alive",
+            Some(70),
+            "midnight: 1 buffer still alive at exit\n",
+            "{\"kind\":\"buffers_alive\",\"count\":1}\n",
+        ),
+    ] {
+        let run = |format: &str| {
+            let output = Command::new(&exe)
+                .arg(mode)
+                .env("MIDNIGHT_FORMAT", format)
+                .output()
+                .expect("run the lines");
+            (output.status.code(), text(&output.stderr))
+        };
+        assert_eq!(run("text"), (status, text_line.to_string()), "{mode}");
+        assert_eq!(
+            run("json"),
+            (status, format!("{first}{json_line}")),
+            "{mode}"
+        );
+    }
+
+    let pool = dir.join("pool-line");
+    cc(&[
+        OsStr::new("-std=c11"),
+        OsStr::new("-pthread"),
+        OsStr::new("-o"),
+        pool.as_os_str(),
+        OsStr::new("tests/runtime/pool_line.c"),
+    ]);
+    for (word, line) in [
+        ("json", "{\"kind\":\"out_of_memory\"}\n"),
+        ("text", "midnight: out of memory\n"),
+    ] {
+        let output = Command::new(&pool)
+            .arg(word)
+            .output()
+            .expect("run the pool line");
+        assert_eq!(
+            (output.status.code(), text(&output.stderr).as_str()),
+            (None, line)
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `MIDNIGHT_FORMAT` takes `text` or `json`; any other value is reported
+/// once and the program writes text.
+#[test]
+fn the_format_variable_takes_one_word() {
+    let dir = scratch("format-variable");
+    let exe = dir.join("hello");
+    build(Path::new("examples/hello.12am"), &exe, Mode::Release)
+        .unwrap_or_else(|message| panic!("{message}"));
+    let run = |value: &str| {
+        let output = Command::new(&exe)
+            .env("MIDNIGHT_FORMAT", value)
+            .output()
+            .expect("run hello");
+        (text(&output.stdout), text(&output.stderr))
+    };
+    let plain = run("text");
+    assert_eq!(plain.1, "");
+    assert_eq!(run(""), plain);
+    for value in ["JSON", "json,text", "xml"] {
+        assert_eq!(
+            run(value),
+            (
+                plain.0.clone(),
+                format!("midnight: MIDNIGHT_FORMAT: unknown word `{value}`\n")
+            ),
+            "{value}"
+        );
+    }
+    let (stdout, stderr) = run("json");
+    assert_eq!(stdout, plain.0);
+    assert_eq!(json_lines::parse_form(&stderr), Ok(vec![]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `midnight run --format json` writes the compiler's lines, then the
+/// program's, which begin with its own first line; `--format text` takes
+/// `MIDNIGHT_FORMAT` away from the program.
+#[test]
+fn run_passes_the_format() {
+    let output = midnight()
+        .args(["run", "tests/run/gpu_transfers.12am", "--format", "json"])
+        .env("MIDNIGHT_GPU", "off,bogus")
+        .env_remove("MIDNIGHT_GPU_FLAGS")
+        .env_remove("MIDNIGHT_FORMAT")
+        .output()
+        .expect("run midnight");
+    assert_eq!(output.status.code(), Some(0));
+    let stderr = text(&output.stderr);
+    let first = json_first_line();
+    let (compiler, program) = stderr[first.len()..]
+        .split_once(&first)
+        .unwrap_or_else(|| panic!("no second first line:\n{stderr}"));
+    assert!(stderr.starts_with(&first), "{stderr}");
+    assert!(compiler.contains("\"kind\":\"no_flags\""), "{compiler}");
+    assert_eq!(
+        program,
+        "{\"kind\":\"unknown_word\",\"variable\":\"MIDNIGHT_GPU\",\"word\":\"bogus\"}\n"
+    );
+    let output = midnight()
+        .args(["run", "tests/run/gpu_transfers.12am", "--format", "text"])
+        .env("MIDNIGHT_GPU", "off,bogus")
+        .env("MIDNIGHT_FORMAT", "json")
+        .output()
+        .expect("run midnight");
+    let stderr = text(&output.stderr);
+    assert!(
+        stderr.ends_with("midnight: MIDNIGHT_GPU: unknown word `bogus`\n"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains('{'), "{stderr}");
 }
 
 /// Every way a command can be wrong stops the program with status 1 and a
@@ -4331,6 +4603,7 @@ impl Shown {
             stdout: text(&stdout),
             stderr,
             drive,
+            raw: self.said.clone(),
             timed_out,
         }
     }

@@ -43,6 +43,9 @@ typedef struct MnPoolOptions {
     bool jitter;
     /* Threads never block: one with nothing to do keeps polling. */
     bool awake;
+    /* The program writes JSON lines (MIDNIGHT_FORMAT=json): the pool's own
+     * out-of-memory line is then {"kind":"out_of_memory"}. */
+    bool json;
 } MnPoolOptions;
 
 /* Sets the options and the thread count. Call before the first loop, and

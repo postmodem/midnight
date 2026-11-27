@@ -1,0 +1,12 @@
+# json: run
+# A run-time error, after output.
+
+component Health
+  hp: Int
+end
+
+e = spawn Health(3)
+puts "before"
+e.despawn
+World.tick
+puts e[Health].hp

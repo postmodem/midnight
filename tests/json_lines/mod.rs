@@ -210,6 +210,224 @@ pub fn parse_form(text: &str) -> Result<Vec<Value>, String> {
     Ok(values)
 }
 
+/// `N word` or `N words`.
+fn counted(n: i64, word: &str) -> String {
+    if n == 1 {
+        format!("{n} {word}")
+    } else {
+        format!("{n} {word}s")
+    }
+}
+
+/// A number of an answer as the text writes it: its JSON text, or a
+/// non-finite one's string.
+fn number_text(value: &Value) -> Result<String, String> {
+    match value {
+        Value::Number(text) => Ok(text.clone()),
+        Value::Str(text) if matches!(text.as_str(), "NaN" | "Infinity" | "-Infinity") => {
+            Ok(text.clone())
+        }
+        other => Err(format!("not a number: {}", other.text())),
+    }
+}
+
+/// A color `[r,g,b,a]` as the text writes it: `Color(r, g, b, a)`.
+fn color_text(value: &Value) -> Result<String, String> {
+    let bytes: Vec<i64> = value
+        .as_array()
+        .ok_or("a color is an array")?
+        .iter()
+        .map(|byte| byte.as_i64().filter(|b| (0..=255).contains(b)))
+        .collect::<Option<_>>()
+        .ok_or_else(|| format!("not a color: {}", value.text()))?;
+    if bytes.len() != 4 {
+        return Err(format!("not a color: {}", value.text()));
+    }
+    Ok(format!(
+        "Color({}, {}, {}, {})",
+        bytes[0], bytes[1], bytes[2], bytes[3]
+    ))
+}
+
+/// The argument names of each shape, in the order of its statement.
+const SHAPES: [(&str, &[&str]); 4] = [
+    ("rect", &["x", "y", "width", "height"]),
+    ("circle", &["x", "y", "radius"]),
+    ("line", &["x1", "y1", "x2", "y2", "width"]),
+    ("triangle", &["x1", "y1", "x2", "y2", "x3", "y3"]),
+];
+
+/// The text of an answer, each line without `midnight: drive: `.
+fn answer_text(line: &Value) -> Result<Vec<String>, String> {
+    let command = line.str("command")?;
+    let name = line.str("name")?;
+    if command.split([' ', '\t']).next() != Some(name) {
+        return Err(format!(
+            "`name` is not the command's first word: {}",
+            line.text()
+        ));
+    }
+    line.int("line")?;
+    line.int("tick")?;
+    Ok(match name {
+        "tick" if line.bool("ended")? => vec![format!(
+            "{command}: the program ended after {}",
+            counted(line.int("ran")?, "tick")
+        )],
+        "tick" => {
+            line.int("ran")?;
+            vec![command.to_string()]
+        }
+        "capture" => {
+            line.str("file")?;
+            vec![format!(
+                "{command}: {}, {}x{}, crc {}",
+                counted(line.int("frame_tick")?, "tick"),
+                line.int("pixel_width")?,
+                line.int("pixel_height")?,
+                line.str("crc")?
+            )]
+        }
+        "draws" => {
+            let draws = line.array("draws")?;
+            let mut lines = vec![
+                format!(
+                    "draws: {}, {}x{}, {}",
+                    counted(line.int("frame_tick")?, "tick"),
+                    line.int("width")?,
+                    line.int("height")?,
+                    counted(draws.len() as i64, "draw")
+                ),
+                format!(
+                    "  Window.background = {}",
+                    color_text(line.get("background").ok_or("no background")?)?
+                ),
+            ];
+            for draw in draws {
+                let shape = draw.str("shape")?;
+                let (_, names) = SHAPES
+                    .iter()
+                    .find(|(name, _)| *name == shape)
+                    .ok_or_else(|| format!("no shape `{shape}`"))?;
+                let mut args = Vec::new();
+                for name in names.iter() {
+                    args.push(number_text(draw.get(name).ok_or(format!("no `{name}`"))?)?);
+                }
+                args.push(color_text(draw.get("color").ok_or("no color")?)?);
+                lines.push(format!("  Draw.{shape}({})", args.join(", ")));
+            }
+            lines
+        }
+        _ => vec![command.to_string()],
+    })
+}
+
+/// The text a program writes to standard error for the JSON lines it
+/// wrote with `MIDNIGHT_FORMAT=json`, its first line left out.
+pub fn runtime_text(lines: &[Value]) -> Result<String, String> {
+    let mut out = String::new();
+    for line in lines {
+        let text = match line.kind() {
+            "runtime_error" => format!(
+                "{}:{}: runtime error: {}",
+                line.str("file")?,
+                line.int("line")?,
+                line.str("message")?
+            ),
+            "gpu_error" => format!("midnight: GPU error: {}", line.str("message")?),
+            "window_error" => format!("midnight: window error: {}", line.str("message")?),
+            "out_of_memory" => "midnight: out of memory".to_string(),
+            "buffers_alive" => format!(
+                "midnight: {} still alive at exit",
+                counted(line.int("count")?, "buffer")
+            ),
+            "unknown_word" => format!(
+                "midnight: {}: unknown word `{}`",
+                line.str("variable")?,
+                line.str("word")?
+            ),
+            "gpu_device" => match line.get("device") {
+                Some(device) => format!("midnight: gpu: {}", device.as_str().ok_or("device")?),
+                None => "midnight: gpu: no device".to_string(),
+            },
+            "gpu_strict" if line.bool("passed")? => {
+                "midnight: gpu: strict check passed".to_string()
+            }
+            "gpu_strict" => format!(
+                "midnight: gpu: strict blocks run on the CPU: {}",
+                line.str("difference")?
+            ),
+            "gpu_cpu_block" => format!(
+                "midnight: gpu: {} (each {}) runs on the CPU: {}",
+                line.str("system")?,
+                line.int("each")?,
+                line.str("reason")?
+            ),
+            "threads" => format!("midnight: threads: {}", line.int("threads")?),
+            "threads_split" => format!(
+                "midnight: threads: {}:{}: {} in {} on {} threads",
+                line.str("file")?,
+                line.int("line")?,
+                counted(line.int("rows")?, "row"),
+                counted(line.int("pieces")?, "piece"),
+                line.int("threads")?
+            ),
+            "window_opened" => {
+                let mut text = format!(
+                    "midnight: window: {}x{} points, {}x{} pixels, {}",
+                    line.int("width")?,
+                    line.int("height")?,
+                    line.int("pixel_width")?,
+                    line.int("pixel_height")?,
+                    line.str("shown")?
+                );
+                if let Some(present) = line.get("present") {
+                    text.push_str(&format!(", {}", present.as_str().ok_or("present")?));
+                }
+                if line.bool("driven")? {
+                    text.push_str("\nmidnight: window: input from commands");
+                }
+                text
+            }
+            "window_event" => match line.str("event")? {
+                "focused" => "midnight: window: focused".to_string(),
+                "pointer_inside" => "midnight: window: pointer inside".to_string(),
+                other => return Err(format!("no window event `{other}`")),
+            },
+            "stats" => format!(
+                "midnight: gpu: tick {}: {}, {}, {} up, {} down, {}, {}",
+                line.int("tick")?,
+                counted(line.int("uploads")?, "upload"),
+                counted(line.int("downloads")?, "download"),
+                counted(line.int("rows_up")?, "row"),
+                counted(line.int("rows_down")?, "row"),
+                counted(line.int("submissions")?, "submission"),
+                counted(line.int("waits")?, "wait")
+            ),
+            "answer" => answer_text(line)?
+                .iter()
+                .map(|text| format!("midnight: drive: {text}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            "drive_error" => format!(
+                "midnight: drive: {}:{}: {}",
+                line.str("file")?,
+                line.int("line")?,
+                line.str("message")?
+            ),
+            "drive_unopened" => format!(
+                "midnight: drive: can't open {}: {}",
+                line.str("file")?,
+                line.str("message")?
+            ),
+            other => return Err(format!("no kind `{other}` in a program: {}", line.text())),
+        };
+        out.push_str(&text);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
 struct Reader<'a> {
     bytes: &'a [u8],
     pos: usize,

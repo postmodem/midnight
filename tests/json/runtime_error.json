@@ -1,0 +1,2 @@
+{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"runtime_error","file":"tests/json/runtime_error.12am","line":12,"message":"Entity(0v1) is not alive"}

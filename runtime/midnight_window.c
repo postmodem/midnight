@@ -65,14 +65,9 @@ static _Noreturn void window_fail(const char *format, ...)
     __attribute__((format(printf, 1, 2)));
 
 static _Noreturn void window_fail(const char *format, ...) {
-    fflush(stdout);
-    fputs("midnight: window error: ", stderr);
     va_list args;
     va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    fputc('\n', stderr);
-    mn_leave(70);
+    mn_device_fail(true, format, args);
 }
 
 static WGPUStringView view(const char *text) {

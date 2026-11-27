@@ -1,0 +1,13 @@
+tick
+draws
+resize 80 60
+scale 1.5
+key down A
+mouse move 3 4
+scroll 0 1
+tick 2
+blur
+focus
+close
+tick
+bogusÃ©ÿ

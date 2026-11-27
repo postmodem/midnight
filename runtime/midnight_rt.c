@@ -53,6 +53,227 @@ _Noreturn void mn_leave(int status) {
 
 _Noreturn void mn_out_of_memory(void);
 
+/* ---- Lines on standard error --------------------------------------------- */
+
+#define MN_MAYBE_UNUSED __attribute__((unused))
+
+/* The most bytes of a text form. */
+enum { MN_INT_TEXT = 20, MN_FLOAT_TEXT = 32, MN_ENTITY_TEXT = 32 };
+
+/* MIDNIGHT_FORMAT=json: every line on standard error is one JSON object. */
+static bool json_lines;
+
+static int format_number(double value, bool single, char *out);
+
+/* Writes one whole line to standard error, standard output written out
+ * first. Every line the runtime writes goes through here but the
+ * out-of-memory lines, which allocate nothing. */
+static void say(const char *bytes, size_t len) {
+    fflush(stdout);
+    fwrite(bytes, 1, len, stderr);
+}
+
+/* Formats as vprintf does, into new memory. */
+static char *vformat(const char *format, va_list args) {
+    va_list again;
+    va_copy(again, args);
+    int len = vsnprintf(NULL, 0, format, again);
+    va_end(again);
+    size_t size = (size_t)(len < 0 ? 0 : len) + 1;
+    char *text = malloc(size);
+    if (!text) mn_out_of_memory();
+    vsnprintf(text, size, format, args);
+    return text;
+}
+
+/* Says a line of text, formatted as printf does; `format` ends in a
+ * newline. */
+static void say_text(const char *format, ...) __attribute__((format(printf, 1, 2)));
+static void say_text(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    char *text = vformat(format, args);
+    va_end(args);
+    say(text, strlen(text));
+    free(text);
+}
+
+static void j_lit(MnBuilder *b, const char *text) {
+    mn_sb_bytes(b, text, (int64_t)strlen(text));
+}
+
+/* Begins a line: `{"kind":"KIND"`. */
+static void j_begin(MnBuilder *b, const char *kind) {
+    j_lit(b, "{\"kind\":\"");
+    j_lit(b, kind);
+    j_lit(b, "\"");
+}
+
+/* A member's key, after another member. */
+static void j_key(MnBuilder *b, const char *key) {
+    j_lit(b, ",\"");
+    j_lit(b, key);
+    j_lit(b, "\":");
+}
+
+static void j_str(MnBuilder *b, const char *key, const char *text) {
+    j_key(b, key);
+    mn_json_bytes(b, text, (int64_t)strlen(text));
+}
+
+static void j_int(MnBuilder *b, const char *key, int64_t value) {
+    j_key(b, key);
+    mn_sb_int(b, value);
+}
+
+static MN_MAYBE_UNUSED void j_bool(MnBuilder *b, const char *key, bool value) {
+    j_key(b, key);
+    mn_sb_bool(b, value);
+}
+
+/* Ends the line, says it and frees the builder's storage. */
+static void j_say(MnBuilder *b) {
+    j_lit(b, "}\n");
+    say(b->bytes, (size_t)b->len);
+    free(b->bytes);
+    *b = (MnBuilder){0};
+}
+
+void mn_json_bytes(MnBuilder *b, const char *bytes, int64_t len) {
+    static const char hex[] = "0123456789abcdef";
+    const unsigned char *at = (const unsigned char *)bytes;
+    const unsigned char *end = at + (len > 0 ? len : 0);
+    mn_sb_bytes(b, "\"", 1);
+    while (at < end) {
+        unsigned char c = *at;
+        if (c == '"' || c == '\\') {
+            char escaped[2] = {'\\', (char)c};
+            mn_sb_bytes(b, escaped, 2);
+            at++;
+        } else if (c == '\n' || c == '\r' || c == '\t') {
+            char escaped[2] = {'\\', c == '\n' ? 'n' : c == '\r' ? 'r' : 't'};
+            mn_sb_bytes(b, escaped, 2);
+            at++;
+        } else if (c < 0x20 || c == 0x7f) {
+            char escaped[6] = {'\\', 'u', '0', '0', hex[c >> 4], hex[c & 15]};
+            mn_sb_bytes(b, escaped, 6);
+            at++;
+        } else if (c < 0x80) {
+            mn_sb_bytes(b, (const char *)at, 1);
+            at++;
+        } else {
+            /* A UTF-8 sequence, or U+FFFD for a byte that does not begin
+             * a valid one. */
+            int need = c >= 0xc2 && c <= 0xdf   ? 1
+                       : c >= 0xe0 && c <= 0xef ? 2
+                       : c >= 0xf0 && c <= 0xf4 ? 3
+                                                : -1;
+            bool valid = need > 0 && end - at > need;
+            for (int i = 1; valid && i <= need; i++) {
+                valid = (at[i] & 0xc0) == 0x80;
+            }
+            if (valid && c == 0xe0) valid = at[1] >= 0xa0;
+            if (valid && c == 0xed) valid = at[1] < 0xa0;
+            if (valid && c == 0xf0) valid = at[1] >= 0x90;
+            if (valid && c == 0xf4) valid = at[1] < 0x90;
+            if (valid) {
+                mn_sb_bytes(b, (const char *)at, need + 1);
+                at += need + 1;
+            } else {
+                mn_sb_bytes(b, "\xef\xbf\xbd", 3);
+                at++;
+            }
+        }
+    }
+    mn_sb_bytes(b, "\"", 1);
+}
+
+/* A non-finite number as JSON: "NaN", "Infinity" or "-Infinity". */
+static bool json_non_finite(MnBuilder *b, double value) {
+    if (value == value && value - value == 0.0) return false;
+    j_lit(b, value != value ? "\"NaN\"" : value < 0 ? "\"-Infinity\"" : "\"Infinity\"");
+    return true;
+}
+
+void mn_json_float(MnBuilder *b, double value) {
+    if (json_non_finite(b, value)) return;
+    char text[MN_FLOAT_TEXT];
+    mn_sb_bytes(b, text, format_number(value, false, text));
+}
+
+void mn_json_float32(MnBuilder *b, float value) {
+    if (json_non_finite(b, value)) return;
+    char text[MN_FLOAT_TEXT];
+    mn_sb_bytes(b, text, format_number(value, true, text));
+}
+
+/* Says that a variable has a word it does not know. */
+static void say_unknown_word(const char *variable, const char *word, size_t len) {
+    if (!json_lines) {
+        say_text("midnight: %s: unknown word `%.*s`\n", variable, (int)len, word);
+        return;
+    }
+    MnBuilder b = {0};
+    j_begin(&b, "unknown_word");
+    j_str(&b, "variable", variable);
+    j_key(&b, "word");
+    mn_json_bytes(&b, word, (int64_t)len);
+    j_say(&b);
+}
+
+/* Reads MIDNIGHT_FORMAT and, for JSON, says the first line. */
+static void format_start(const MnProgram *program) {
+    const char *format = getenv("MIDNIGHT_FORMAT");
+    bool known = !format || *format == '\0' || strcmp(format, "text") == 0;
+    if (format && strcmp(format, "json") == 0) {
+        known = true;
+        json_lines = true;
+        MnBuilder b = {0};
+        j_begin(&b, "midnight");
+        j_int(&b, "format", 1);
+        j_str(&b, "version", program->version ? program->version : "");
+        j_say(&b);
+    }
+    if (!known) say_unknown_word("MIDNIGHT_FORMAT", format, strlen(format));
+}
+
+/* The line of a run-time error, in new memory, ending in a newline. */
+static char *error_line(MnLoc loc, const char *format, va_list args) {
+    char *message = vformat(format, args);
+    MnBuilder b = {0};
+    if (json_lines) {
+        j_begin(&b, "runtime_error");
+        j_str(&b, "file", loc.file);
+        j_int(&b, "line", loc.line);
+        j_str(&b, "message", message);
+        j_lit(&b, "}\n");
+    } else {
+        j_lit(&b, loc.file);
+        j_lit(&b, ":");
+        mn_sb_int(&b, loc.line);
+        j_lit(&b, ": runtime error: ");
+        j_lit(&b, message);
+        j_lit(&b, "\n");
+    }
+    mn_sb_bytes(&b, "", 1);
+    free(message);
+    return b.bytes;
+}
+
+_Noreturn void mn_device_fail(bool window, const char *format, va_list args);
+_Noreturn void mn_device_fail(bool window, const char *format, va_list args) {
+    char *message = vformat(format, args);
+    if (json_lines) {
+        MnBuilder b = {0};
+        j_begin(&b, window ? "window_error" : "gpu_error");
+        j_str(&b, "message", message);
+        j_say(&b);
+    } else {
+        say_text("midnight: %s error: %s\n", window ? "window" : "GPU", message);
+    }
+    mn_leave(70);
+}
+
 #ifdef MN_THREADS
 _Thread_local struct MnLoopThread *mn_loop_thread;
 
@@ -70,36 +291,16 @@ static unsigned char *piece_bytes(struct MnLoopThread *thread, uint32_t kind,
 
 _Noreturn void mn_panic(MnLoc loc, const char *format, ...) {
     va_list args;
+    va_start(args, format);
+    char *line = error_line(loc, format, args);
+    va_end(args);
 #ifdef MN_THREADS
     /* In a piece the error is kept, and reported if no earlier row
      * fails. */
     struct MnLoopThread *thread = mn_loop_thread;
-    if (thread) {
-        va_start(args, format);
-        int said = vsnprintf(NULL, 0, format, args);
-        va_end(args);
-        int head = snprintf(NULL, 0, "%s:%d: runtime error: ", loc.file,
-                            (int)loc.line);
-        size_t size = (size_t)(head < 0 ? 0 : head) +
-                      (size_t)(said < 0 ? 0 : said) + 2;
-        char *text = malloc(size);
-        if (!text) mn_out_of_memory();
-        int at = snprintf(text, size, "%s:%d: runtime error: ", loc.file,
-                          (int)loc.line);
-        va_start(args, format);
-        at += vsnprintf(text + at, size - (size_t)at, format, args);
-        va_end(args);
-        text[at] = '\n';
-        text[at + 1] = '\0';
-        piece_fail(thread, text);
-    }
+    if (thread) piece_fail(thread, line);
 #endif
-    fflush(stdout);
-    fprintf(stderr, "%s:%d: runtime error: ", loc.file, (int)loc.line);
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    fputc('\n', stderr);
+    say(line, strlen(line));
     mn_leave(1);
 }
 
@@ -121,7 +322,8 @@ _Noreturn void mn_exit(int64_t status) {
 
 _Noreturn void mn_out_of_memory(void) {
     fflush(stdout);
-    fputs("midnight: out of memory\n", stderr);
+    fputs(json_lines ? "{\"kind\":\"out_of_memory\"}\n" : "midnight: out of memory\n",
+          stderr);
     abort();
 }
 
@@ -988,6 +1190,8 @@ static struct {
     char *tick_text;
     int64_t ticks_left;
     int64_t ticks_run;
+    /* The line of the `tick` command being carried out. */
+    int64_t tick_line;
 
     /* The last frame: its size in pixels and in points, its background,
      * and the value of Time.tick when it was made. Its draws are
@@ -1010,17 +1214,38 @@ static struct {
     int64_t due;
 } win;
 
-/* Prints a command's answer. */
+/* Says a line of a command's text answer: `midnight: drive: ` and it. */
 static void drive_answer(const char *format, ...)
     __attribute__((format(printf, 1, 2)));
 static void drive_answer(const char *format, ...) {
     va_list args;
-    fflush(stdout);
-    fputs("midnight: drive: ", stderr);
     va_start(args, format);
-    vfprintf(stderr, format, args);
+    char *text = vformat(format, args);
     va_end(args);
-    fputc('\n', stderr);
+    say_text("midnight: drive: %s\n", text);
+    free(text);
+}
+
+/* Begins the JSON of the answer to `command`, the command on `line` of
+ * the file: its name, the command, the line, and Time.tick. */
+static void answer_begin(MnBuilder *b, const char *command, int64_t line) {
+    j_begin(b, "answer");
+    j_key(b, "name");
+    mn_json_bytes(b, command, (int64_t)strcspn(command, " \t"));
+    j_str(b, "command", command);
+    j_int(b, "line", line);
+    j_int(b, "tick", mn_time.tick);
+}
+
+/* Answers a command that has nothing to say but itself. */
+static void drive_answer_command(const char *text) {
+    if (!json_lines) {
+        drive_answer("%s", text);
+        return;
+    }
+    MnBuilder b = {0};
+    answer_begin(&b, text, win.drive_line);
+    j_say(&b);
 }
 
 /* Reports a command that can't be carried out and ends the program. */
@@ -1028,13 +1253,20 @@ static _Noreturn void drive_fail(const char *format, ...)
     __attribute__((format(printf, 1, 2)));
 static _Noreturn void drive_fail(const char *format, ...) {
     va_list args;
-    fflush(stdout);
-    fprintf(stderr, "midnight: drive: %s:%lld: ", win.drive_name,
-            (long long)win.drive_line);
     va_start(args, format);
-    vfprintf(stderr, format, args);
+    char *message = vformat(format, args);
     va_end(args);
-    fputc('\n', stderr);
+    if (json_lines) {
+        MnBuilder b = {0};
+        j_begin(&b, "drive_error");
+        j_str(&b, "file", win.drive_name);
+        j_int(&b, "line", win.drive_line);
+        j_str(&b, "message", message);
+        j_say(&b);
+    } else {
+        say_text("midnight: drive: %s:%lld: %s\n", win.drive_name,
+                 (long long)win.drive_line, message);
+    }
     mn_leave(1);
 }
 
@@ -1400,6 +1632,18 @@ bool mn_button_released(uint32_t button) {
 /* What the desktop says. A driven window takes its input from its
  * commands, and these drop what they are given. */
 
+/* With `info`: says what happened to a shown window. */
+static void window_event(const char *event, const char *text) {
+    if (!json_lines) {
+        say_text("midnight: window: %s\n", text);
+        return;
+    }
+    MnBuilder b = {0};
+    j_begin(&b, "window_event");
+    j_str(&b, "event", event);
+    j_say(&b);
+}
+
 void mn_window_key(uint32_t key, bool down) {
     if (win.drive_name || key >= MN_KEY_COUNT) return;
     input_happened(down ? HAPPENED_KEY_DOWN : HAPPENED_KEY_UP, key, 0.0, 0.0);
@@ -1412,10 +1656,7 @@ void mn_window_button(uint32_t button, bool down, double x, double y) {
 
 void mn_window_move(double x, double y) {
     if (win.drive_name) return;
-    if (input.desktop_left && win.info) {
-        fflush(stdout);
-        fputs("midnight: window: pointer inside\n", stderr);
-    }
+    if (input.desktop_left && win.info) window_event("pointer_inside", "pointer inside");
     input.desktop_left = false;
     input_happened(HAPPENED_MOVE, 0, x, y);
 }
@@ -1433,10 +1674,7 @@ void mn_window_wheel(double x, double y) {
 
 void mn_window_focus(bool gained) {
     if (win.drive_name) return;
-    if (gained && win.info) {
-        fflush(stdout);
-        fputs("midnight: window: focused\n", stderr);
-    }
+    if (gained && win.info) window_event("focused", "focused");
     input_happened(gained ? HAPPENED_FOCUS : HAPPENED_BLUR, 0, 0.0, 0.0);
 }
 #endif
@@ -1587,7 +1825,7 @@ static bool drive_input(const char *text, char **words, int count) {
     } else {
         return false;
     }
-    drive_answer("%s", text);
+    drive_answer_command(text);
     return true;
 }
 
@@ -1612,8 +1850,7 @@ static void window_start(void) {
         } else if (len == 4 && memcmp(list, "info", 4) == 0) {
             win.info = true;
         } else if (len != 0) {
-            fprintf(stderr, "midnight: MIDNIGHT_WINDOW: unknown word `%.*s`\n",
-                    (int)len, list);
+            say_unknown_word("MIDNIGHT_WINDOW", list, len);
         }
         list += len;
         if (*list == ',') list++;
@@ -1657,6 +1894,55 @@ static int drive_words(char *text, char **words, int most) {
 
 static void window_capture(const char *text, const char *file);
 static int format_number(double value, bool single, char *out);
+
+/* A color as JSON: `[r,g,b,a]`. */
+static void json_color(MnBuilder *b, MnColor color) {
+    char text[24];
+    int len = snprintf(text, sizeof text, "[%u,%u,%u,%u]", (unsigned)color.r,
+                       (unsigned)color.g, (unsigned)color.b, (unsigned)color.a);
+    mn_sb_bytes(b, text, len);
+}
+
+/* Answers `draws` with a JSON line: the frame, its background and an
+ * object for each draw that is not of nothing. */
+static void draws_json(const MnDraws *frame, const char *command) {
+    static const char *const shapes[] = {"", "rect", "circle", "line", "triangle"};
+    static const char *const names[][6] = {
+        {""},
+        {"x", "y", "width", "height"},
+        {"x", "y", "radius"},
+        {"x1", "y1", "x2", "y2", "width"},
+        {"x1", "y1", "x2", "y2", "x3", "y3"},
+    };
+    static const int numbers[] = {0, 4, 3, 5, 6};
+    MnBuilder b = {0};
+    answer_begin(&b, command, win.drive_line);
+    j_int(&b, "frame_tick", win.frame_tick);
+    j_int(&b, "width", win.frame_point_width);
+    j_int(&b, "height", win.frame_point_height);
+    j_key(&b, "background");
+    json_color(&b, win.frame_background);
+    j_key(&b, "draws");
+    j_lit(&b, "[");
+    bool first = true;
+    for (size_t i = 0; i < frame->len; i++) {
+        const MnDraw *draw = &frame->data[i];
+        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TRIANGLE) continue;
+        j_lit(&b, first ? "{\"shape\":\"" : ",{\"shape\":\"");
+        first = false;
+        j_lit(&b, shapes[draw->kind]);
+        j_lit(&b, "\"");
+        for (int n = 0; n < numbers[draw->kind]; n++) {
+            j_key(&b, names[draw->kind][n]);
+            mn_json_float32(&b, draw->n[n]);
+        }
+        j_key(&b, "color");
+        json_color(&b, draw->color);
+        j_lit(&b, "}");
+    }
+    j_lit(&b, "]");
+    j_say(&b);
+}
 
 /* Answers `draws`: the last frame as text, a line for the frame, one for
  * its background and one for each draw that is not of nothing. */
@@ -1716,6 +2002,11 @@ static void window_draws(void) {
     for (size_t i = 0; i < frame->len; i++) {
         if (frame->data[i].kind != MN_DRAW_NOTHING) listed++;
     }
+    if (json_lines) {
+        draws_json(frame, "draws");
+        free(gathered);
+        return;
+    }
     drive_answer("draws: %lld tick%s, %lldx%lld, %zu draw%s",
                  (long long)win.frame_tick, win.frame_tick == 1 ? "" : "s",
                  (long long)win.frame_point_width,
@@ -1770,6 +2061,7 @@ static bool drive_command(char *text) {
         strcpy(win.tick_text, text);
         win.ticks_left = ticks;
         win.ticks_run = 0;
+        win.tick_line = win.drive_line;
         runs = true;
     } else if (strcmp(name, "resize") == 0 || strcmp(name, "scale") == 0) {
         if (!win.headless) {
@@ -1820,7 +2112,7 @@ static bool drive_command(char *text) {
         }
         win.pixel_width = scaled(win.width);
         win.pixel_height = scaled(win.height);
-        drive_answer("%s", text);
+        drive_answer_command(text);
     } else if (strcmp(name, "draws") == 0) {
         if (count != 1) drive_fail("`draws` takes nothing");
         window_draws();
@@ -1834,7 +2126,7 @@ static bool drive_command(char *text) {
         input.commands.left = true;
         memset(input.commands.keys, 0, sizeof input.commands.keys);
         memset(input.commands.buttons, 0, sizeof input.commands.buttons);
-        drive_answer("%s", text);
+        drive_answer_command(text);
     } else if (drive_input(text, words, count)) {
     } else {
         drive_fail("unknown command `%s`", name);
@@ -1851,9 +2143,16 @@ static bool drive_until_tick(void) {
     if (!win.drive) {
         win.drive = fopen(win.drive_name, "r");
         if (!win.drive) {
-            fflush(stdout);
-            fprintf(stderr, "midnight: drive: can't open %s: %s\n",
-                    win.drive_name, strerror(errno));
+            if (json_lines) {
+                MnBuilder b = {0};
+                j_begin(&b, "drive_unopened");
+                j_str(&b, "file", win.drive_name);
+                j_str(&b, "message", strerror(errno));
+                j_say(&b);
+            } else {
+                say_text("midnight: drive: can't open %s: %s\n", win.drive_name,
+                         strerror(errno));
+            }
             mn_leave(1);
         }
     }
@@ -1881,13 +2180,18 @@ static bool drive_until_tick(void) {
  * number that ran when the program ended first. */
 static void drive_tick_answer(bool ending) {
     if (!win.tick_text) return;
-    if (win.ticks_left == 0) {
+    if (win.ticks_left != 0 && !ending) return;
+    if (json_lines) {
+        MnBuilder b = {0};
+        answer_begin(&b, win.tick_text, win.tick_line);
+        j_int(&b, "ran", win.ticks_run);
+        j_bool(&b, "ended", win.ticks_left != 0);
+        j_say(&b);
+    } else if (win.ticks_left == 0) {
         drive_answer("%s", win.tick_text);
-    } else if (ending) {
+    } else {
         drive_answer("%s: the program ended after %lld tick%s", win.tick_text,
                      (long long)win.ticks_run, win.ticks_run == 1 ? "" : "s");
-    } else {
-        return;
     }
     free(win.tick_text);
     win.tick_text = NULL;
@@ -2043,13 +2347,25 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
 #ifdef MN_FRAMES
     if (win.shown) window_draw();
 #endif
-    if (win.info) {
-        fflush(stdout);
-        fprintf(stderr,
-                "midnight: window: %lldx%lld points, %lldx%lld pixels, %s\n",
-                (long long)win.width, (long long)win.height,
-                (long long)win.pixel_width, (long long)win.pixel_height, how);
-        if (win.drive_name) fputs("midnight: window: input from commands\n", stderr);
+    if (win.info && json_lines) {
+        /* `how` is `headless`, or the driver and the present mode. */
+        size_t driver = strcspn(how, ",");
+        MnBuilder b = {0};
+        j_begin(&b, "window_opened");
+        j_int(&b, "width", win.width);
+        j_int(&b, "height", win.height);
+        j_int(&b, "pixel_width", win.pixel_width);
+        j_int(&b, "pixel_height", win.pixel_height);
+        j_key(&b, "shown");
+        mn_json_bytes(&b, how, (int64_t)driver);
+        if (how[driver] == ',') j_str(&b, "present", how + driver + 2);
+        j_bool(&b, "driven", win.drive_name != NULL);
+        j_say(&b);
+    } else if (win.info) {
+        say_text("midnight: window: %lldx%lld points, %lldx%lld pixels, %s\n",
+                 (long long)win.width, (long long)win.height,
+                 (long long)win.pixel_width, (long long)win.pixel_height, how);
+        if (win.drive_name) say_text("midnight: window: input from commands\n");
     }
 }
 
@@ -2365,6 +2681,19 @@ static void window_capture(const char *text, const char *file) {
     if (!written) {
         drive_fail("can't capture: can't write %s: %s", file, strerror(errno));
     }
+    if (json_lines) {
+        char hex[9];
+        snprintf(hex, sizeof hex, "%08x", (unsigned)crc);
+        MnBuilder b = {0};
+        answer_begin(&b, text, win.drive_line);
+        j_str(&b, "file", file);
+        j_int(&b, "frame_tick", win.frame_tick);
+        j_int(&b, "pixel_width", frame.width);
+        j_int(&b, "pixel_height", frame.height);
+        j_str(&b, "crc", hex);
+        j_say(&b);
+        return;
+    }
     drive_answer("%s: %lld tick%s, %ux%u, crc %08x", text, (long long)win.frame_tick,
                  win.frame_tick == 1 ? "" : "s", frame.width, frame.height,
                  (unsigned)crc);
@@ -2460,8 +2789,6 @@ void mn_stop(void) { mn_world.stop_requested = true; }
 
 /* Each writes at `out` and returns the number of bytes written. */
 
-enum { MN_INT_TEXT = 20, MN_FLOAT_TEXT = 32, MN_ENTITY_TEXT = 32 };
-
 static int format_int(int64_t value, char *out) {
     char digits[20];
     int count = 0;
@@ -2478,11 +2805,15 @@ static int format_int(int64_t value, char *out) {
 
 /* Writes `value` with `precision` significant digits in exponent form and
  * reports whether that text reads back as the same number: as the same
- * 32-bit float when `single`. */
+ * 32-bit float when `single`, read as a 32-bit number and as a 64-bit
+ * number rounded to 32 bits. */
 static bool float_reads_back(double value, bool single, int precision,
                              char *text, size_t size) {
     snprintf(text, size, "%.*e", precision - 1, value);
-    if (single) return strtof(text, NULL) == (float)value;
+    if (single) {
+        return strtof(text, NULL) == (float)value &&
+               (float)strtod(text, NULL) == (float)value;
+    }
     return strtod(text, NULL) == value;
 }
 
@@ -3342,8 +3673,18 @@ static MnSplit split_of(uint64_t rows, uint64_t weight) {
 /* With `info`: the line for a loop that is split for the first time. */
 static void split_report(MnLoc loc, uint64_t rows, const MnSplit *split) {
     if (!thread_options.info) return;
-    fflush(stdout);
-    fprintf(stderr, "midnight: threads: %s:%d: %llu row%s in %llu piece%s on %u threads\n",
+    if (json_lines) {
+        MnBuilder b = {0};
+        j_begin(&b, "threads_split");
+        j_str(&b, "file", loc.file);
+        j_int(&b, "line", loc.line);
+        j_int(&b, "rows", (int64_t)rows);
+        j_int(&b, "pieces", (int64_t)split->pieces);
+        j_int(&b, "threads", split->threads);
+        j_say(&b);
+        return;
+    }
+    say_text("midnight: threads: %s:%d: %llu row%s in %llu piece%s on %u threads\n",
             loc.file, (int)loc.line, (unsigned long long)rows,
             rows == 1 ? "" : "s", (unsigned long long)split->pieces,
             split->pieces == 1 ? "" : "s", (unsigned)split->threads);
@@ -3371,7 +3712,7 @@ static uint32_t table_of_row(const uint64_t *starts, uint32_t tables,
 #ifdef MN_THREADS
 /* Reads MIDNIGHT_THREADS and sets the thread count. */
 static void threads_start(void) {
-    MnPoolOptions options = {0, false, false, false};
+    MnPoolOptions options = {0, false, false, false, false};
     static const struct {
         const char *word;
         int which;
@@ -3406,15 +3747,20 @@ static void threads_start(void) {
         } else if (digits && number >= 1 && number <= MN_POOL_MAX) {
             options.threads = number;
         } else if (len != 0) {
-            fprintf(stderr, "midnight: MIDNIGHT_THREADS: unknown word `%.*s`\n",
-                    (int)len, list);
+            say_unknown_word("MIDNIGHT_THREADS", list, len);
         }
         list += len;
         if (*list == ',') list++;
     }
+    options.json = json_lines;
     mn_pool_start(&options);
-    if (thread_options.info) {
-        fprintf(stderr, "midnight: threads: %u\n", (unsigned)mn_pool_threads());
+    if (thread_options.info && json_lines) {
+        MnBuilder b = {0};
+        j_begin(&b, "threads");
+        j_int(&b, "threads", mn_pool_threads());
+        j_say(&b);
+    } else if (thread_options.info) {
+        say_text("midnight: threads: %u\n", (unsigned)mn_pool_threads());
     }
 }
 #endif
@@ -3594,8 +3940,7 @@ static void loop_failed(void *context, uint64_t piece) {
     (void)context;
     (void)piece;
     pthread_mutex_lock(&loops.lock);
-    fflush(stdout);
-    fputs(loops.failed_text, stderr);
+    say(loops.failed_text, strlen(loops.failed_text));
     mn_leave(1);
 }
 
@@ -4150,8 +4495,17 @@ void mn_gpu_run(MnGpuBlock *block) {
 #endif
     if (gpu_options.info && !scratch->reported) {
         scratch->reported = true;
-        fprintf(stderr, "midnight: gpu: %s (each %u) runs on the CPU: %s\n",
-                block->system, (unsigned)block->each, reason);
+        if (json_lines) {
+            MnBuilder b = {0};
+            j_begin(&b, "gpu_cpu_block");
+            j_str(&b, "system", block->system);
+            j_int(&b, "each", block->each);
+            j_str(&b, "reason", reason);
+            j_say(&b);
+        } else {
+            say_text("midnight: gpu: %s (each %u) runs on the CPU: %s\n",
+                     block->system, (unsigned)block->each, reason);
+        }
     }
 
     uniform[1] = gpu_snapshot(block, scratch);
@@ -4235,12 +4589,31 @@ static void gpu_strict_check(const char *device) {
     }
     if (reason[0] != '\0') mn_gpu_strict_refused = reason;
     if (!gpu_options.info) return;
-    if (mn_gpu_strict_refused) {
-        fprintf(stderr, "midnight: gpu: strict blocks run on the CPU: %s\n",
-                reason);
+    if (json_lines) {
+        MnBuilder b = {0};
+        j_begin(&b, "gpu_strict");
+        j_bool(&b, "passed", !mn_gpu_strict_refused);
+        if (mn_gpu_strict_refused) j_str(&b, "difference", reason);
+        j_say(&b);
+    } else if (mn_gpu_strict_refused) {
+        say_text("midnight: gpu: strict blocks run on the CPU: %s\n", reason);
     } else {
-        fprintf(stderr, "midnight: gpu: strict check passed\n");
+        say_text("midnight: gpu: strict check passed\n");
     }
+}
+#endif
+
+#if defined(MN_GPU_SYSTEMS) || defined(MN_WINDOW)
+/* With `info`: says the device, NULL for none. */
+static MN_MAYBE_UNUSED void gpu_device_line(const char *device) {
+    if (!json_lines) {
+        say_text("midnight: gpu: %s\n", device ? device : "no device");
+        return;
+    }
+    MnBuilder b = {0};
+    j_begin(&b, "gpu_device");
+    if (device) j_str(&b, "device", device);
+    j_say(&b);
 }
 #endif
 
@@ -4273,8 +4646,7 @@ static void gpu_read_options(void) {
         if (i < word_count) {
             *words[i].option = true;
         } else if (len != 0) {
-            fprintf(stderr, "midnight: MIDNIGHT_GPU: unknown word `%.*s`\n",
-                    (int)len, list);
+            say_unknown_word("MIDNIGHT_GPU", list, len);
         }
         list += len;
         if (*list == ',') list++;
@@ -4296,10 +4668,7 @@ static const char *gpu_device_start(struct WGPUSurfaceImpl *surface) {
     if (!gpu_options.off) {
         device = mn_gpu_device_start(gpu_options.software, surface);
     }
-    if (gpu_options.info) {
-        fflush(stdout);
-        fprintf(stderr, "midnight: gpu: %s\n", device ? device : "no device");
-    }
+    if (gpu_options.info) gpu_device_line(device);
     return device;
 }
 #endif
@@ -4313,7 +4682,7 @@ static void gpu_start(void) {
     const char *device = gpu_device_start(NULL);
     if (device && mn_gpu_check) gpu_strict_check(device);
 #else
-    if (gpu_options.info) fprintf(stderr, "midnight: gpu: no device\n");
+    if (gpu_options.info) gpu_device_line(NULL);
 #endif
 }
 
@@ -4333,8 +4702,19 @@ static void gpu_tick_end(void) {
 static void gpu_stats_line(void) {
     if (!stats_pending) return;
     stats_pending = false;
-    fflush(stdout);
-    fprintf(stderr,
+    if (json_lines) {
+        MnBuilder b = {0};
+        j_begin(&b, "stats");
+        j_int(&b, "tick", mn_time.tick - 1);
+        j_int(&b, "uploads", (int64_t)mn_gpu_uploads);
+        j_int(&b, "downloads", (int64_t)mn_gpu_downloads);
+        j_int(&b, "rows_up", (int64_t)mn_gpu_rows_up);
+        j_int(&b, "rows_down", (int64_t)mn_gpu_rows_down);
+        j_int(&b, "submissions", (int64_t)mn_gpu_submissions);
+        j_int(&b, "waits", (int64_t)mn_gpu_waits);
+        j_say(&b);
+    } else {
+        say_text(
             "midnight: gpu: tick %lld: %llu upload%s, %llu download%s, "
             "%llu row%s up, %llu row%s down, %llu submission%s, %llu wait%s\n",
             (long long)(mn_time.tick - 1), (unsigned long long)mn_gpu_uploads,
@@ -4347,6 +4727,7 @@ static void gpu_stats_line(void) {
             (unsigned long long)mn_gpu_submissions,
             mn_gpu_submissions == 1 ? "" : "s",
             (unsigned long long)mn_gpu_waits, mn_gpu_waits == 1 ? "" : "s");
+    }
     mn_gpu_uploads = 0;
     mn_gpu_downloads = 0;
     mn_gpu_rows_up = 0;
@@ -4384,6 +4765,7 @@ static void gpu_finish(void) {
 /* ---- Start and finish ---------------------------------------------------- */
 
 void mn_start(const MnProgram *program) {
+    format_start(program);
     MnWorld *w = &mn_world;
     memset(w, 0, sizeof *w);
     w->program = program;
@@ -4454,6 +4836,19 @@ static void world_destroy(void) {
 }
 #endif
 
+/* Says how many string and list buffers are still alive at exit. */
+static MN_MAYBE_UNUSED void say_buffers_alive(int64_t count) {
+    if (!json_lines) {
+        say_text("midnight: %lld buffer%s still alive at exit\n", (long long)count,
+                 count == 1 ? "" : "s");
+        return;
+    }
+    MnBuilder b = {0};
+    j_begin(&b, "buffers_alive");
+    j_int(&b, "count", count);
+    j_say(&b);
+}
+
 void mn_finish(void) {
 #ifdef MN_WINDOW
     window_finish();
@@ -4468,8 +4863,7 @@ void mn_finish(void) {
 #ifdef MN_DEBUG
     world_destroy();
     if (mn_live_buffers != 0) {
-        fprintf(stderr, "midnight: %lld buffer%s still alive at exit\n",
-                (long long)mn_live_buffers, mn_live_buffers == 1 ? "" : "s");
+        say_buffers_alive(mn_live_buffers);
         mn_leave(70);
     }
 #endif

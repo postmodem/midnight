@@ -140,9 +140,12 @@ static struct {
     .fail_mutex = PTHREAD_MUTEX_INITIALIZER,
 };
 
-static _Noreturn void pool_abort(const char *what) {
+/* Says the pool is out of memory, as text or as JSON, and aborts. */
+static _Noreturn void pool_out_of_memory(void) {
     fflush(stdout);
-    fprintf(stderr, "midnight: %s\n", what);
+    fputs(pool.options.json ? "{\"kind\":\"out_of_memory\"}\n"
+                            : "midnight: out of memory\n",
+          stderr);
     abort();
 }
 
@@ -249,7 +252,7 @@ void mn_pool_start(const MnPoolOptions *options) {
     pool.created = 0;
     void *memory = NULL;
     if (posix_memalign(&memory, _Alignof(Worker), threads * sizeof(Worker)) != 0) {
-        pool_abort("out of memory");
+        pool_out_of_memory();
     }
     pool.workers = memory;
     memset(pool.workers, 0, threads * sizeof(Worker));

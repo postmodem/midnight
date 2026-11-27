@@ -616,10 +616,11 @@ impl<'a> Cx<'a> {
         }
         let _ = writeln!(
             out,
-            "static const MnProgram program = {{\n    {},\n    {},\n    {},\n    drop_globals,\n}};\n",
+            "static const MnProgram program = {{\n    {},\n    {},\n    {},\n    drop_globals,\n    \"{}\",\n}};\n",
             table("component_info", prog.components.len()),
             table("event_info", prog.events.len()),
             table("systems", prog.systems.len()),
+            env!("CARGO_PKG_VERSION"),
         );
         out
     }

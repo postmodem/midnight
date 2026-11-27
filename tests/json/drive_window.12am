@@ -1,0 +1,16 @@
+# json: run
+# A driven window: every answer but `capture`, each shape with a number
+# that only the Float32 rule writes so, a translucent background, and a
+# command that holds a control character, non-ASCII text and a byte that is
+# not UTF-8.
+
+system show
+  Window.background = Color(10, 20, 30, 128)
+  Draw.rect(0.000000000000000000000000070385306918512091, 1.5, 4, 2, Color(1, 2, 3))
+  Draw.circle(10, 10, 2.25, Color(4, 5, 6, 7))
+  Draw.line(0, 0, 8, 8, 1, Color(8, 9, 10))
+  Draw.triangle(-1, 0, 5, 5, 0, 9, Color(11, 12, 13))
+end
+
+Window.open("json", 64, 48)
+World.run

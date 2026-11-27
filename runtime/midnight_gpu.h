@@ -22,10 +22,16 @@
 
 #include "midnight_rt.h"
 
+#include <stdarg.h>
+
 /* ---- In midnight_rt.c ---------------------------------------------------- */
 
 _Noreturn void mn_leave(int status);
 _Noreturn void mn_out_of_memory(void);
+/* Writes `midnight: GPU error: MESSAGE`, or `midnight: window error:
+ * MESSAGE` when `window`, in the program's format, and exits with status
+ * 70. */
+_Noreturn void mn_device_fail(bool window, const char *format, va_list args);
 void *mn_malloc(size_t size);
 void *mn_calloc(size_t count, size_t size);
 void *mn_realloc(void *memory, size_t size);
