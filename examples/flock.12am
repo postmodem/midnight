@@ -1,5 +1,5 @@
 # 100,000 points swirl around the middle of the window, each pulled toward
-# it and drawn as one pixel coloured by its speed: slow points are blue,
+# it and drawn as one pixel colored by its speed: slow points are blue,
 # fast ones yellow. A GPU system moves them and draws them, so after the
 # first tick, which sends their columns, nothing moves between CPU and GPU
 # memory: the frame is made from the records the GPU system wrote.

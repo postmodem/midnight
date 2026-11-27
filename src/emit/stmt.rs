@@ -971,7 +971,7 @@ impl<'a> FnCx<'a, '_> {
         let mut exprs: Vec<&'a Expr> = nums.iter().collect();
         exprs.push(color);
         let values = self.operands(&exprs, Want::Peek);
-        let (color_value, nums) = values.split_last().expect("a draw has a colour");
+        let (color_value, nums) = values.split_last().expect("a draw has a color");
         let color_name = self.declare(&color.ty, &color_value.c);
         let record = self.tmp();
         self.line(&format!("MnDraw *const {record} = mn_draw();"));

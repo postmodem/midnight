@@ -1,4 +1,4 @@
-# The frame Window.open showed, in the colour before it.
+# The frame Window.open showed, in the color before it.
 capture open.png
 tick
 capture first.png

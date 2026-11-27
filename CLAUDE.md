@@ -288,8 +288,8 @@ command that needs it.
     in a directory of its own, and requires `NAME.out`, exactly the answers
     in `NAME.frames`, and each captured file to be a PNG of the size and
     pixels (by CRC-32) its answer gives. The answers are the same on every
-    device. `frames_are_the_colours_painted`, which needs no device, holds
-    the CRCs in those files to the colours the programs paint: change it
+    device. `frames_are_the_colors_painted`, which needs no device, holds
+    the CRCs in those files to the colors the programs paint: change it
     with them.
   - `window_drawn` runs every program of `tests/run` and `examples` whose
     commands have a `draws` on the line before a `capture`, headless, in
@@ -298,7 +298,7 @@ command that needs it.
     `tests/render/mod.rs`, the reference renderer, makes of that `draws`
     answer: every byte equal, but for a pixel under translucent draws,
     which may differ by one for each of them. The renderer states
-    "Which pixels a shape covers" and "Colour" apart from the shaders and
+    "Which pixels a shape covers" and "Color" apart from the shaders and
     has unit tests of its own.
   - The first three and `window_frames` print the device they ran on. In
     GPU mode `UPDATE_EXPECT=1` rewrites `.stats` and `.frames` files and no

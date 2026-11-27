@@ -40,7 +40,7 @@ loop.
 ## Non-goals
 
 - Everything listed under "Not in 0.1" in `docs/language.md`.
-- Running systems in parallel, or analysing which systems could be.
+- Running systems in parallel, or analyzing which systems could be.
 - Storage layouts other than one array per component per table: no per-field
   arrays, and no sparse storage for components that are added and removed
   often.
@@ -174,7 +174,7 @@ the tables reached by adding or removing one component. Arrays grow by
 doubling.
 
 **Compact layout.** A component is a C struct with no header. The compiler
-orders its fields by decreasing alignment, which minimises padding; source
+orders its fields by decreasing alignment, which minimizes padding; source
 order is kept for construction and `to_s`. `Bool` is one byte. An enum is the
 smallest unsigned integer that holds its variants. Compact field types map to
 the C type of that width. A string or a list is one pointer.
@@ -232,7 +232,7 @@ compiler generates a copy function and a destructor. Counts are not atomic.
 
 **All-zero bytes are a valid value of every type:** `0`, `0.0`, `false`, the
 empty string, the empty list, `Entity.none`, and the first variant of an
-enum. The runtime relies on this to initialise storage.
+enum. The runtime relies on this to initialize storage.
 
 **Determinism.** Nothing in the runtime depends on addresses, hash order of
 pointers or wall-clock time, apart from `clock`, `sleep` and `srand` with no
@@ -334,7 +334,7 @@ specs/          one spec per change
 ### Open questions for planning
 
 - **Hardening flags.** nixpkgs' clang wrapper adds hardening flags (fortify
-  needs optimisation and warns at `-O0`). Planning must settle which to
+  needs optimization and warns at `-O0`). Planning must settle which to
   disable for debug builds so that `-Werror` test builds are clean.
 - **Sanitizers on darwin.** LeakSanitizer is not available on every darwin
   target. The debug-mode buffer accounting does not depend on it; planning
@@ -463,7 +463,7 @@ status.
 ### Open questions, settled
 
 - **Hardening flags.** The compiler wrapper's fortify flag needs
-  optimisation and can't be undone by a later flag, so the flake clears
+  optimization and can't be undone by a later flag, so the flake clears
   `NIX_HARDENING_ENABLE` in the dev shell, in the package's check phase and
   in the `midnight` wrapper. Programs are built with the flags of the mode
   table and no others.

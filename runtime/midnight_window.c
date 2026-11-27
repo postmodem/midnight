@@ -84,7 +84,7 @@ static WGPUStringView view(const char *text) {
 /* Renders the records of a frame. Each record is an instance of six
  * vertices: the smallest upright rectangle of pixels that holds its shape,
  * one pixel larger on every side and cut to the frame. The fragment stage
- * decides which pixels the shape covers, from the pixel's centre in
+ * decides which pixels the shape covers, from the pixel's center in
  * points, by the tests of the reference's "Which pixels a shape covers".
  * Every product there passes through `mul`, an exclusive-or of its bits
  * with a word that is zero and known only when the shader runs, so that
@@ -161,7 +161,7 @@ static const char *SHAPE_WGSL =
     "  return bitcast<f32>(bitcast<u32>(x * y) ^ u.zbits);\n"
     "}\n"
     "\n"
-    /* Whether a centre exactly on an edge of direction d, with the inside
+    /* Whether a center exactly on an edge of direction d, with the inside
      * on its right, counts: a left edge or a top edge, y down. */
     "fn on_edge_counts(d: vec2<f32>) -> bool {\n"
     "  return d.y < 0.0 || (d.y == 0.0 && d.x > 0.0);\n"
@@ -298,7 +298,7 @@ static void shapes_make(void) {
     win.shape_group = wgpuDeviceCreateBindGroup(device, &group_descriptor);
 
     /* A record: the kind and the first three numbers, then the other three
-     * and the colour, each as 32-bit words. */
+     * and the color, each as 32-bit words. */
     WGPUVertexAttribute attributes[2] = {0};
     attributes[0].format = WGPUVertexFormat_Uint32x4;
     attributes[0].offset = 0;
@@ -312,7 +312,7 @@ static void shapes_make(void) {
     records.attributeCount = 2;
     records.attributes = attributes;
 
-    /* The colour over the frame by its alpha; the frame's alpha stays. */
+    /* The color over the frame by its alpha; the frame's alpha stays. */
     WGPUBlendState blend = {0};
     blend.color.operation = WGPUBlendOperation_Add;
     blend.color.srcFactor = WGPUBlendFactor_SrcAlpha;

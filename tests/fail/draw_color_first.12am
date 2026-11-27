@@ -1,4 +1,4 @@
-# expect: a draw with its colour first says the colour goes last
+# expect: a draw with its color first says the color goes last
 # at: line 6, the `Color` given first
 
 Window.open("Shapes", 64, 48)

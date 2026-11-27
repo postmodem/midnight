@@ -533,7 +533,7 @@ and the hardware device.
 
 1. **Counting.** `stats` prints rows (0 for now), submissions and waits;
    `NAME.stats` files and `gpu_stats_match_expected`; the four benchmarks
-   in `bench/` and `bench-gpu`. Expected files record today's behaviour and
+   in `bench/` and `bench-gpu`. Expected files record today's behavior and
    change in the diffs of the slices that follow.
 2. **One submission, one pass.** The open encoder and pass, the six points
    of submission, the rule for queue writes, the submit call after a GPU
@@ -661,7 +661,7 @@ are within the estimates' precision.
 `gpu_rows_spawn`, `gpu_rows_despawn`, `gpu_rows_add_remove`,
 `gpu_rows_poke`, `gpu_rows_grow`, `gpu_overwrite_cpu`, `gpu_overwrite_gpu`,
 `gpu_rare_assign`, `gpu_batch` and `gpu_queue_order`, each with a `.stats`
-file that was recorded in slice 1 on 0.2.7's behaviour and changed in the
+file that was recorded in slice 1 on 0.2.7's behavior and changed in the
 diff of each slice that followed. Each line of the final files was checked
 by hand against the design. Two things they show that the design did not
 spell out:

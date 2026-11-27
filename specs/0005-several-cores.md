@@ -38,7 +38,7 @@ is.
 `midnight loops FILE` prints where each loop of a program runs, and for a
 loop that stays on one core, what keeps it there.
 
-Measurements on the development machine, summarised under "Measured in
+Measurements on the development machine, summarized under "Measured in
 planning", fixed the shape of the design.
 
 ## Scope
@@ -602,8 +602,8 @@ per record, and one thread loses 6 % to it. With 1 % of rows appending,
 sixteen threads take 80 µs where one takes 1,076.
 
 **Sums.** A 64-bit integer sum over a million rows takes 59 µs on one
-thread (clang vectorises it) and 9.9 on eight, with the same total. A
-`Float` sum is 362 µs on one thread and is not vectorised. Summed in
+thread (clang vectorizes it) and 9.9 on eight, with the same total. A
+`Float` sum is 362 µs on one thread and is not vectorized. Summed in
 pieces of 4,096 rows joined in order, it gives one result for every
 thread count from 1 to 32, and that result differs from the one-thread
 loop's in the last bits, for `Float32` values and for `Float` alike.

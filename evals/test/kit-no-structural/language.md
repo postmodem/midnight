@@ -678,7 +678,7 @@ puts "closed after #{Time.tick} ticks"
 
 A program can open a window, keep real time while it is open, learn that
 it was resized or closed, and show a frame at the end of every tick. A
-frame is the window's background colour and nothing more.
+frame is the window's background color and nothing more.
 
 The names `Window`, `Color`, `WindowResized` and `WindowClosed` are built
 in and can't be declared by a program. A program that names `Window`, one
@@ -700,7 +700,7 @@ struct Color
 end
 ```
 
-Its components are the bytes of an sRGB colour, the numbers a paint
+Its components are the bytes of an sRGB color, the numbers a paint
 program or a style sheet shows: `Color(255, 128, 0)` is orange. It is a
 plain value with the rules of any struct, and may be a field of a
 component. A component out of range is the error it is for any `UInt8`.
@@ -736,7 +736,7 @@ reached through a function inside an `each`. It is also a run-time error
 when a window is already open, when `width` or `height` is less than 1 or
 more than 8192, and when no window can be shown (see
 [Without a display](#without-a-display)). When it returns, the window is
-open, shows a frame of the background colour, and the four sizes hold what
+open, shows a frame of the background color, and the four sizes hold what
 the desktop gave it, which need not be what was asked for. A window may be
 opened again after it was closed.
 
@@ -2178,7 +2178,7 @@ match it and reads only the arrays of the components named as terms.
 
 **Memory per entity** is the size of its components plus 20 bytes. A
 component's size is the size of its fields, which the compiler orders to
-minimise padding (construction and `to_s` keep the declared order). `Bool` and enum fields take one byte. Tags take none.
+minimize padding (construction and `to_s` keep the declared order). `Bool` and enum fields take one byte. Tags take none.
 Strings and lists take 8 bytes in the component and keep their contents
 elsewhere. The size of a component that a GPU block writes is rounded up to
 a multiple of 4 bytes, wherever the program runs: a GPU stores whole 32-bit

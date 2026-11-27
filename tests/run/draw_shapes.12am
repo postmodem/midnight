@@ -1,5 +1,5 @@
 # Each shape is listed as the statement that made it, with its numbers as
-# 32-bit floats and its colour with four bytes: `Int` arguments, shapes
+# 32-bit floats and its color with four bytes: `Int` arguments, shapes
 # partly and wholly outside the window, sizes that draw nothing (zero and
 # negative), a NaN in each position of one shape, `Infinity`, `-0.0`, a
 # number in exponent form, and numbers that 32 bits round. A draw that

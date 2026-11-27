@@ -106,7 +106,7 @@ static struct {
     /* Guards the loop count, `asleep` and `caller_parked` wherever a
      * thread blocks on them. */
     pthread_mutex_t mutex;
-    /* Signalled when the last thread leaves a loop the caller waits for. */
+    /* Signaled when the last thread leaves a loop the caller waits for. */
     pthread_cond_t done;
 #endif
     /* Held by the thread that reports a failed loop. */

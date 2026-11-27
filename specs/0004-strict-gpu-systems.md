@@ -36,7 +36,7 @@ A strict GPU system gives the same bits on every device it runs on and on
 the CPU. It costs more on the GPU; the default stays as it is.
 
 Measurements on three drivers (an RTX 5090, Mesa's RADV on an RDNA 2
-iGPU, and llvmpipe), summarised under "Measured in planning", showed that
+iGPU, and llvmpipe), summarized under "Measured in planning", showed that
 this can be done with ordinary shader code.
 
 ## Scope
@@ -380,7 +380,7 @@ and RADV on the Ryzen's iGPU (`VK_DRIVER_FILES` set to Mesa's
 - **The CPU path of a strict block flushes subnormals; ordinary code does
   not.** Agreement needs the flush; nothing else should change.
 - **Every device is checked at start-up.** The barrier rests on driver
-  behaviour that no specification promises. Running strict blocks on the
+  behavior that no specification promises. Running strict blocks on the
   CPU after a failed check keeps the guarantee, as a GPU system without a
   device already does.
 - **`/` and `sqrt` as exact integer code** in the shader: the device's

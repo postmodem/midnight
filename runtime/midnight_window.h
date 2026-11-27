@@ -11,7 +11,7 @@
  * Everything here is called from the thread that runs the ticks.
  *
  * A frame is rendered into a texture midnight_window.c owns, RGBA8Unorm, of
- * the frame's size, holding colour bytes as they are. A window that is
+ * the frame's size, holding color bytes as they are. A window that is
  * shown gets the texture by one more pass that copies each texel, so a
  * frame read back is the same with a window and without one.
  */

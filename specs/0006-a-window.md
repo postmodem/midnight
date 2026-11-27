@@ -24,7 +24,7 @@ World.run
 puts "closed after #{Time.tick} ticks"
 ```
 
-A frame is the window's background colour and nothing more. Drawing comes
+A frame is the window's background color and nothing more. Drawing comes
 in the specs that follow, keyboard and mouse in the next one; both build on
 what this one fixes: where the window comes from, how a tick relates to a
 frame and to the clock, how window events enter a program, and how a
@@ -38,7 +38,7 @@ output and writes the same pictures on every machine. The test suite runs
 windowed programs that way, and so does anyone, person or agent, who wants
 to see what a program shows without putting it on a screen.
 
-Measurements on the development machine, summarised under "Measured in
+Measurements on the development machine, summarized under "Measured in
 planning", fixed the shape of the design.
 
 ## Scope
@@ -97,7 +97,7 @@ struct Color
 end
 ```
 
-Its components are the bytes of an sRGB colour, the numbers a paint
+Its components are the bytes of an sRGB color, the numbers a paint
 program or a style sheet shows: `Color(255, 128, 0)` is orange. It is a
 plain value with the rules of any struct, and may be a field of a
 component. A component out of range is the error it is for any `UInt8`.
@@ -130,7 +130,7 @@ run-time error while a tick is in progress. It is a run-time error when a
 window is already open, when `width` or `height` is less than 1 or more
 than the largest frame the device draws, and when no window can be shown
 (see "Without a display"). When it returns, the window is open, shows a
-frame of the background colour, and the four sizes hold what the desktop
+frame of the background color, and the four sizes hold what the desktop
 gave it, which need not be what was asked for. A window may be opened
 again after it was closed.
 
@@ -343,7 +343,7 @@ window needs of the device.
   one, a window that is resizable and counts in pixels of the display, no
   signal handlers of its own, and its D-Bus connection shut at the end. It
   is called from the thread that runs the ticks and from no other. A
-  headless program never initialises it.
+  headless program never initializes it.
 - **Events** are taken once a tick. A change of size configures the
   surface again and makes a new frame texture.
 - **A frame is not presented** while SDL says the window is hidden,
@@ -377,7 +377,7 @@ ends with no sanitizer report.
 On a Ryzen 9 9950X3D with an RTX 5090 (driver 595) and the Ryzen's own
 GPU (RADV), NixOS 26.05, SDL 3.4.10, `wgpu-native` 27.0.4.0, Mesa 26.1.8
 and sway 1.12, with a hand-written program that opens a window, presents a
-changing clear colour and runs a compute pass on the same device. Every
+changing clear color and runs a compute pass on the same device. Every
 window was inside a headless sway on a socket of its own.
 
 - **One device serves both.** Compute and frames went through one device
@@ -480,7 +480,7 @@ window was inside a headless sway on a socket of its own.
   - `window_resized`: a resize by the compositor arrives as one event.
 - `tests/COVERAGE.md` maps "The window" to these.
 - `examples/window.12am`: a window whose background drifts through
-  colours until it is closed.
+  colors until it is closed.
 
 ### Slices
 
@@ -565,7 +565,7 @@ All run on x86_64-linux, on the development machine.
 - **One frame for each tick, shown without waiting.** The picture is the
   state after a tick, so there is nothing to show between two. A present
   that cannot wait leaves the pace to the clock alone.
-- **Colours are bytes.** Bytes are what a person types and what a picture
+- **Colors are bytes.** Bytes are what a person types and what a picture
   file holds, and they are the values every device reproduces exactly,
   which is what lets a capture be compared with a file.
 - **Points for sizes, pixels beside them.** A program that asks for 800 by
@@ -622,7 +622,7 @@ beside an RTX 5090, `llvmpipe` from Mesa 26.1.8, SDL 3.4.10,
 - 120 ticks of a shown window, from `Window.open` returning to the end of
   the last: 1.9834 to 1.9870 s in every case, against 119/60 = 1.9833 s
   for the waits alone.
-- A capture of one colour: 12.9 KB for 800 by 600 pixels, 50 KB for 1600
+- A capture of one color: 12.9 KB for 800 by 600 pixels, 50 KB for 1600
   by 1200 (7.7 MB of pixels).
 - `examples/window.12am` shown in the compositor for six seconds: 293
   ticks in 4.88 s of simulated time, the rest of the six being the build

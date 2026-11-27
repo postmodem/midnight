@@ -1,5 +1,5 @@
 # expect: a draw takes its numbers and then a `Color`, every one, by position; the label gives the statement's form
-# at: line 8, three arguments to `Draw.circle`; line 9, a `String` for `y`; line 10, a number for the colour; line 11, an argument by name
+# at: line 8, three arguments to `Draw.circle`; line 9, a `String` for `y`; line 10, a number for the color; line 11, an argument by name
 
 Window.open("Shapes", 64, 48)
 

@@ -1,4 +1,4 @@
-error: `Draw.circle` takes its colour last
+error: `Draw.circle` takes its color last
  --> tests/fail/draw_color_first.12am:6:15
   |
 6 |   Draw.circle(Color(255, 0, 0), 10, 10, 4)

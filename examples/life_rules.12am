@@ -14,11 +14,11 @@ def cell_index(x: Int, y: Int) -> Int
 end
 
 # Whether a square holds a live cell in the next generation, given whether
-# it holds one now and how many of its eight neighbours do.
-def alive_next?(alive: Bool, neighbours: Int) -> Bool
+# it holds one now and how many of its eight neighbors do.
+def alive_next?(alive: Bool, neighbors: Int) -> Bool
   if alive
-    neighbours == 2 || neighbours == 3
+    neighbors == 2 || neighbors == 3
   else
-    neighbours == 3
+    neighbors == 3
   end
 end

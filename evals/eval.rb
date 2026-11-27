@@ -1267,7 +1267,7 @@ module Eval
 
     # Whether the shape of line got is a rectangle with want's width and
     # height at want's place plus half its width and half its height.
-    def by_centre?(got, want)
+    def by_center?(got, want)
       g = shape(got.to_s)
       w = shape(want.to_s)
       return false unless g["kind"] == "rect" && w["kind"] == "rect"
@@ -1895,12 +1895,12 @@ module Eval
     # it, the graded runs that built and failed it, by how their answers
     # first differ; then the runs whose first differing shape is the
     # expected one with two numbers exchanged, and those whose first
-    # differing shape is the expected rectangle placed by its centre.
+    # differing shape is the expected rectangle placed by its center.
     def draws(tasks, models, cells)
       out = +"\n## Draws\n\n"
       hows = %w[answers frame missing extra order differs cut]
       swapped = []
-      centred = []
+      centered = []
       rows = tasks.product(models).filter_map do |t, m|
         rs = cells[[t, m]].select { |r| r["checks"].to_h.key?("draws") }
         next if rs.empty?
@@ -1912,7 +1912,7 @@ module Eval
           next unless d["how"] == "differs"
 
           swapped << name if Draws.swapped?(d["got"], d["want"])
-          centred << name if Draws.by_centre?(d["got"], d["want"])
+          centered << name if Draws.by_center?(d["got"], d["want"])
         end
         tally = failed.map { |r| r.dig("draws", "how") }.tally
         ["`#{t}`", "`#{m}`", rs.size, failed.size, *hows.map { |h| tally[h].to_i }]
@@ -1920,7 +1920,7 @@ module Eval
       out << table(["Task", "Model", "Graded", "Built and failed draws", *hows.map(&:capitalize)], rows)
       out << "\nHow each run's answers first differ from the expected ones.\n\n"
       out << "- Two numbers exchanged: #{swapped.empty? ? 'none' : swapped.join(', ')}\n"
-      out << "- A rectangle placed by its centre: #{centred.empty? ? 'none' : centred.join(', ')}\n"
+      out << "- A rectangle placed by its center: #{centered.empty? ? 'none' : centered.join(', ')}\n"
       out
     end
 

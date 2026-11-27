@@ -1,5 +1,5 @@
 //! End-to-end tests: every program under `tests/` and `examples/` is
-//! compiled by the `midnight` binary and its behaviour compared with the
+//! compiled by the `midnight` binary and its behavior compared with the
 //! expected files next to it.
 //!
 //! - `tests/run/NAME.12am` + `NAME.out`: builds in release and debug mode;
@@ -936,7 +936,7 @@ fn compare_output(expected: &str, actual: &str, tolerance: Option<f64>) -> Resul
 
 /// Compares the answers to `draws` commands with the expected ones. With
 /// no tolerance the two must be equal. With one they must have the same
-/// lines, and a line that draws must have the same shape and colour and
+/// lines, and a line that draws must have the same shape and color and
 /// each of the shape's numbers within `tolerance * max(1, |expected|)` of
 /// the expected one; every other line must be equal. Returns the largest
 /// difference between two numbers, as a multiple of `max(1, |expected|)`.
@@ -2196,10 +2196,10 @@ fn frame_crc(width: u32, height: u32, rgb: [u8; 3]) -> u32 {
 }
 
 /// The CRCs in the `.frames` files of the frame programs are those of the
-/// colours the programs paint: in `frame_bytes`, every value of a byte in
+/// colors the programs paint: in `frame_bytes`, every value of a byte in
 /// each of red, green and blue.
 #[test]
-fn frames_are_the_colours_painted() {
+fn frames_are_the_colors_painted() {
     let answers = std::fs::read_to_string("tests/run/frame_bytes.frames").expect("read answers");
     let crcs: Vec<u32> = answers
         .lines()

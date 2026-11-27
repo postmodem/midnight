@@ -6,14 +6,14 @@
  *
  * `window` opens a window, makes a wgpu surface from its native handles
  * and a device that can draw to it, and shows a frame sixty times a
- * second. A frame is a texture the program owns, cleared to one colour
+ * second. A frame is a texture the program owns, cleared to one color
  * and drawn to the surface by a triangle that covers it. After 30 frames
  * the owned texture is read back and written to CAPTURE.ppm, and
  * `smoke: shown` is printed. The program ends with status 0 when the
  * window is closed from outside, and with status 1 when it is not closed
  * within 20 seconds or something fails.
  *
- * `compare` requires every pixel of the capture to be the colour the
+ * `compare` requires every pixel of the capture to be the color the
  * frames are cleared to, and the pixel at the same place in SCREEN.ppm (a
  * picture of the compositor's output, with the window at its top left)
  * to be the same. */
@@ -137,22 +137,22 @@ static int compare(const char *capture_path, const char *screen_path) {
                 sw, sh);
         return 1;
     }
-    size_t wrong_colour = 0, wrong_screen = 0;
+    size_t wrong_color = 0, wrong_screen = 0;
     for (uint32_t y = 0; y < ch; y++) {
         for (uint32_t x = 0; x < cw; x++) {
             const unsigned char *c = capture + ((size_t)y * cw + x) * 3;
             const unsigned char *s = screen + ((size_t)y * sw + x) * 3;
-            wrong_colour += memcmp(c, FRAME_COLOR, 3) != 0;
+            wrong_color += memcmp(c, FRAME_COLOR, 3) != 0;
             wrong_screen += memcmp(c, s, 3) != 0;
         }
     }
     printf("smoke: capture %ux%u, screen %ux%u, pixel 0 of the screen %u,%u,%u: "
            "%zu pixels of the capture not %u,%u,%u, %zu not on the screen\n",
-           cw, ch, sw, sh, screen[0], screen[1], screen[2], wrong_colour, FRAME_COLOR[0],
+           cw, ch, sw, sh, screen[0], screen[1], screen[2], wrong_color, FRAME_COLOR[0],
            FRAME_COLOR[1], FRAME_COLOR[2], wrong_screen);
     free(capture);
     free(screen);
-    return wrong_colour != 0 || wrong_screen != 0;
+    return wrong_color != 0 || wrong_screen != 0;
 }
 
 /* ---- The device ----------------------------------------------------------- */

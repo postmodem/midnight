@@ -548,7 +548,7 @@ The reference's "What a GPU system costs" carries these figures.
   `midnight_gpu.c` defines `dlopen` to jump to the C library's, which
   leaves the caller as it was. Fixed in 0.2.4; until then debug builds ran
   on another adapter or on the CPU. The suite's hardware mode now runs
-  debug builds too, and `gpu_driver_finds_its_parts` checks the behaviour
+  debug builds too, and `gpu_driver_finds_its_parts` checks the behavior
   with a stand-in driver on any device.
 - **Leaks a driver leaves are passed over.** In a debug build, LeakSanitizer
   skips a leak whose allocation came through a library that is no longer

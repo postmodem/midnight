@@ -11,7 +11,7 @@ Most Midnight code is written by agents, through agentic engineering, and
 reviewed by people. So:
 
 - Reading is optimized for both. A program says what it does in the
-  order it happens, without hidden behaviour, and one person can review an
+  order it happens, without hidden behavior, and one person can review an
   agent's program without running it in their head.
 - Writing is optimized for agents. Where the two pull apart, the form an
   agent writes correctly the first time wins over the form a person types

@@ -523,7 +523,7 @@ impl Shape {
         }
     }
 
-    /// The names of its numbers, in order; the colour comes after them.
+    /// The names of its numbers, in order; the color comes after them.
     pub fn params(self) -> &'static [&'static str] {
         match self {
             Shape::Rect => &["x", "y", "width", "height"],

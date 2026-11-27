@@ -334,7 +334,7 @@ run inside `tests/window/compositor.sh`.
 | --- | --- |
 | `Window`, `Color`, `WindowResized`, `WindowClosed` are built in and can't be declared | `fail/window_builtin_window`, `fail/window_builtin_color`, `fail/window_builtin_event` |
 | A program that names `Color` alone has no window; `Color`'s fields, the default alpha, a plain value, a field of a component | `color` |
-| A component of `Color` out of range is the error of any `UInt8` | `frame_bytes` (the colours of 256 ticks, wrapped with `% 256` where they would not fit) |
+| A component of `Color` out of range is the error of any `UInt8` | `frame_bytes` (the colors of 256 ticks, wrapped with `% 256` where they would not fit) |
 | The fields of `Window`: 0 before a window is opened, the sizes asked for headless, kept after a close; `background` starts black and is assigned, also a field of it | `window_fields` |
 | Assigning a field other than `background` is a compile error | `fail/window_readonly_size` |
 | An unknown member of `Window` | `fail/window_unknown_member` |
@@ -350,8 +350,8 @@ run inside `tests/window/compositor.sh`.
 | Closing the window ends `World.run`, after one last tick | `window_events`, `window_runs_out`, `examples/window`; with a window: `window_closes` |
 | A loop of the program's own on `Window.open?` | `window_loop` |
 | Ticks keep real time while a window is shown: 120 ticks at 60 Hz, at 144 Hz, on a workspace that is not shown | `window_keeps_time` |
-| A frame for each tick, of the pixel size, filled with the background, alpha ignored | `frame_sizes`, `frame_bytes`; `frames_are_the_colours_painted` |
-| Every byte of a colour is exact in a frame, on every device | `frame_bytes`, `window_frames` on hardware and `llvmpipe`; `frames_are_the_colours_painted` |
+| A frame for each tick, of the pixel size, filled with the background, alpha ignored | `frame_sizes`, `frame_bytes`; `frames_are_the_colors_painted` |
+| Every byte of a color is exact in a frame, on every device | `frame_bytes`, `window_frames` on hardware and `llvmpipe`; `frames_are_the_colors_painted` |
 | A frame shown in a window is the frame captured | `window_shown` |
 | `MIDNIGHT_WINDOW`: `headless`, `info`, an unknown word; read by a program with a window only | `only_programs_with_a_window_read_the_window_variables`; `info` of a shown window: `window_shown`, `window_keeps_time` |
 | No window can be shown: built without the flags, `MIDNIGHT_GPU` has `off`, no display found | `a_window_built_without_the_flags_runs_headless`, `a_window_that_cannot_be_shown_is_an_error` |
@@ -382,9 +382,9 @@ reference renderer, `tests/render/mod.rs`, at four scales.
 | A draw with no window open evaluates its arguments and is dropped; a window opened again | `draw_window` |
 | Order: systems in source order, statements in theirs, entities in visiting order; an argument that draws comes first | `draw_order`, `draw_mixed` |
 | A program that draws and opens no window | `fail/draw_without_window` |
-| The names of other toolkits, unknown members, a colour first, shapes not in 0.8 | `fail/draw_shape_names`, `fail/draw_unknown_member`, `fail/draw_color_first`, `fail/draw_not_shapes` |
+| The names of other toolkits, unknown members, a color first, shapes not in 0.8 | `fail/draw_shape_names`, `fail/draw_unknown_member`, `fail/draw_color_first`, `fail/draw_not_shapes` |
 | Which pixels a shape covers: the examples, shared edges, a line one point wide, shapes far larger than the frame, the cut to the frame | the renderer's unit tests `the_examples_of_the_reference`, `rectangles_side_by_side_neither_overlap_nor_leave_a_gap`, `triangles_that_share_edges_cover_each_pixel_once`, `a_line_one_point_wide_is_one_row_or_column`, `shapes_far_larger_than_the_frame`, `a_frame_of_every_size_is_covered_by_its_own_rectangle`; on devices `draw_many`, `draw_huge` in `window_drawn` and `window_frames` |
-| Colour: the bytes as they are, the rule for a translucent draw, a pixel under translucent draws within one step of the rule for each | `the_colour_rule`; `draw_layers`, `examples/shapes` in `window_drawn` |
+| Color: the bytes as they are, the rule for a translucent draw, a pixel under translucent draws within one step of the rule for each | `the_color_rule`; `draw_layers`, `examples/shapes` in `window_drawn` |
 | An opaque frame is the same bytes on every device | the `.frames` files of `draw_many` and `draw_huge`, in `window_frames` on hardware and `llvmpipe` |
 | A draw in a GPU block: in the block, in an arm, after `next`; reached in one tick and not the next; several tables; a strict system; a block that only draws | `draw_gpu`, `draw_gpu_strict`, `draw_mixed`; on a device `gpu_programs` requires the `.draws` |
 | A draw in a loop inside a GPU block, in its nested `each`, in a function a GPU system calls | `fail/draw_gpu_places` |
@@ -518,7 +518,7 @@ CPU implementation's; what they claim is that a device prints the same
 bytes after structural changes, and in `gpu_big_table` every row is checked
 by the program itself.
 
-| Behaviour | Files |
+| Behavior | Files |
 | --- | --- |
 | A block with no nested `each` updates its entities in place | `gpu_block_plain` |
 | The gravity system of the specification | `gpu_gravity` |
@@ -833,7 +833,7 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 
 | Fact | Files |
 | --- | --- |
-| A component's fields are ordered to minimise padding; `Bool` and enum fields take one byte | `layout` (the size is asserted by a separate harness step) |
+| A component's fields are ordered to minimize padding; `Bool` and enum fields take one byte | `layout` (the size is asserted by a separate harness step) |
 | A component a GPU block writes is rounded up to a multiple of 4 bytes; one that GPU blocks only read keeps its size | `gpu_odd_row_size`, `gpu_field_types` (the generated C asserts the size and every offset of each component a GPU block names); the unit tests `a_written_component_is_whole_words` and `a_read_only_column_can_have_rows_of_any_size` in `src/emit/tests/gpu.rs` |
 | What a GPU system costs: the fixed cost of a block, the cost of a transfer, the copy a nested `each` reads | not observable from a program's output; `nix run .#bench-gpu` measures the first two |
 | What moves, row by row, and how often the program waits for the GPU | see [What moves](#what-moves) |

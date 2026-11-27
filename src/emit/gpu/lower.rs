@@ -984,7 +984,7 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 let mut exprs: Vec<&'a TExpr> = nums.iter().collect();
                 exprs.push(color);
                 let mut values = self.operands(&exprs);
-                let mut color = values.pop().expect("a draw has a colour");
+                let mut color = values.pop().expect("a draw has a color");
                 if !color.e.is_path() {
                     color = self.temp(color);
                 }

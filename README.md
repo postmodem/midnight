@@ -7,7 +7,7 @@ a careful C programmer would, runs your loops on one core, on every core
 or on the GPU, and tells you what it decided and why.
 
 It is written mostly by AI agents and read by agents and people, so it
-favours code that says exactly what it does, output that is the same on
+favors code that says exactly what it does, output that is the same on
 every run, and errors that say how to fix them where they can.
 [`docs/principles.md`](docs/principles.md) has the whole idea.
 
@@ -164,7 +164,7 @@ nix run . -- plan tests/plan/reader.12am
 nix run . -- run examples/nbody.12am
 
 # Windows: 100,000 points moved and drawn on the GPU,
-# and a window whose colour follows the pointer (Escape ends it)
+# and a window whose color follows the pointer (Escape ends it)
 nix run . -- run examples/flock.12am
 nix run . -- run examples/input.12am
 

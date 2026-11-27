@@ -144,7 +144,7 @@ one, and meets the task's `loops` and `systems` files. The check **draws**
 reads every answer of `draws` in the standard error of the run that
 printed the output, and compares what each draws, not its text: the
 frame's tick, size and background, then the shapes, each as its kind,
-its numbers as 32-bit floats and its colour. With `draws: in order` in
+its numbers as 32-bit floats and its color. With `draws: in order` in
 `meta` the shapes are compared in order; with `draws: any order`, as a
 set with counts. It fails when standard error was cut at 1 MB. `grade` and
 `self-test` use the compiler `MIDNIGHT_BIN` names, or build the working

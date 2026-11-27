@@ -439,7 +439,7 @@ static inline void table_replacing(MnTable *table, uint32_t row,
 }
 
 /* Adds a row for `e` and returns its index. The row's values are not
- * initialised. */
+ * initialized. */
 static inline uint32_t table_append(MnTable *table, MnEntity e) {
     if (table->count == table->capacity) table_grow(table);
     uint32_t row = table->count++;

@@ -257,7 +257,7 @@ static inline void *mn_column(const MnTable *table, uint32_t component) {
 /* ---- Queries ----------------------------------------------------------- */
 
 /* The tables one `each` or `World.count` matches. Generated code keeps one
- * static MnQuery per use, initialised with its component lists and zeros
+ * static MnQuery per use, initialized with its component lists and zeros
  * elsewhere:
  *
  *     static const uint32_t q0_with[] = {0, 1};
@@ -314,7 +314,7 @@ static inline void mn_defer_leave(void) {
 }
 
 /* The component list of one `spawn` or `add` in the source. Generated code
- * keeps one static MnBundle per use, initialised with its list and zeros
+ * keeps one static MnBundle per use, initialized with its list and zeros
  * elsewhere; the runtime caches what it likes in the other fields. No
  * component is listed twice. */
 typedef struct MnBundle {
@@ -469,7 +469,7 @@ MnString mn_entity_to_s(MnEntity e);
 
 /* ---- String builder ----------------------------------------------------- */
 
-/* Accumulates text for interpolation, `to_s` and output. Zero-initialise
+/* Accumulates text for interpolation, `to_s` and output. Zero-initialize
  * it; then append; then end with exactly one of mn_sb_finish or
  * mn_sb_write. Its storage is not a counted buffer.
  *
@@ -922,7 +922,7 @@ bool mn_button_released(uint32_t button);
  * A program that has a draw statement has a window. A draw is a record of
  * 32 bytes, MnDraw: its kind, the shape's numbers in the order of the
  * statement's arguments, each rounded to the nearest 32-bit float, unused
- * ones zero, and the four bytes of its colour. All-zero bytes are a draw of
+ * ones zero, and the four bytes of its color. All-zero bytes are a draw of
  * nothing. Generated code asserts the layout.
  *
  * While a window is open, the runtime keeps every draw since the last
@@ -1105,7 +1105,7 @@ typedef struct MnGpuBlock {
     bool strict;
     /* The number of its draw statements (see "Drawing"). */
     uint32_t draws;
-    /* Runtime-private. Initialise to NULL. */
+    /* Runtime-private. Initialize to NULL. */
     void *state;
 } MnGpuBlock;
 
@@ -1363,7 +1363,7 @@ typedef struct MnLoop {
     uint32_t wrote_count;
     /* Where the `each` is, for messages. */
     MnLoc loc;
-    /* Runtime-private. Initialise to false. */
+    /* Runtime-private. Initialize to false. */
     bool reported;
 } MnLoop;
 

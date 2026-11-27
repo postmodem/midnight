@@ -79,7 +79,7 @@ typedef struct Column {
     uint32_t listed_count;
     uint32_t listed_capacity;
     /* What rows handled alone have cost since a block last used the column
-     * or it last travelled whole, in bytes of the column moved whole. */
+     * or it last traveled whole, in bytes of the column moved whole. */
     uint64_t charge;
     /* The round trip that last brought rows of the column back, when it
      * is gpu.trip: that trip is charged already. */

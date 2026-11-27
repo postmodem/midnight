@@ -15,9 +15,9 @@ end
 
 tag Alive
 
-# How many live neighbours each square has, indexed by `cell_index`.
+# How many live neighbors each square has, indexed by `cell_index`.
 resource Board
-  neighbours: [Int] = []
+  neighbors: [Int] = []
 end
 
 system draw
@@ -38,13 +38,13 @@ system draw
 end
 
 # Each live cell adds one to the count of the eight squares around it.
-system count_neighbours
-  Board.neighbours = [0] * (WIDTH * HEIGHT)
+system count_neighbors
+  Board.neighbors = [0] * (WIDTH * HEIGHT)
   each Cell, with: Alive do |cell|
     -1.upto(1) do |dy|
       -1.upto(1) do |dx|
         next if dx == 0 && dy == 0
-        Board.neighbours[cell_index(cell.x + dx, cell.y + dy)] += 1
+        Board.neighbors[cell_index(cell.x + dx, cell.y + dy)] += 1
       end
     end
   end
@@ -54,15 +54,15 @@ end
 # and `remove` inside `each` are queued until that loop ends.
 system step
   each Entity, Cell, with: Alive do |e, cell|
-    count = Board.neighbours[cell_index(cell.x, cell.y)]
+    count = Board.neighbors[cell_index(cell.x, cell.y)]
     e.remove(Alive) unless alive_next?(true, count)
   end
 
   # The deaths above have been applied by now, so this loop also visits the
   # squares that just emptied. None of them fills again: a cell dies with
-  # the wrong number of neighbours for a birth.
+  # the wrong number of neighbors for a birth.
   each Entity, Cell, without: Alive do |e, cell|
-    count = Board.neighbours[cell_index(cell.x, cell.y)]
+    count = Board.neighbors[cell_index(cell.x, cell.y)]
     e.add(Alive) if alive_next?(false, count)
   end
 end

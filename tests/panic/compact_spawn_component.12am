@@ -2,7 +2,7 @@
 # that does not fit.
 # Expected: 40000 does not fit in Int16
 component Altitude
-  metres: Int16
+  meters: Int16
 end
 
 h = 20000

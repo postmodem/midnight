@@ -1,4 +1,4 @@
-# A window whose background drifts through the colours until it is closed.
+# A window whose background drifts through the colors until it is closed.
 #
 # Shows the window: opening it, its background, its events, and the end of
 # World.run when it is closed. Run it headless, with its commands, to see

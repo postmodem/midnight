@@ -1,6 +1,6 @@
 # Many shapes of the four kinds at places from a fixed sequence of numbers,
-# opaque: corners and centres on whole points, halves, eighths of a point
-# and finer, so that pixel centres lie exactly on many edges at every
+# opaque: corners and centers on whole points, halves, eighths of a point
+# and finer, so that pixel centers lie exactly on many edges at every
 # scale. Every pixel is the one the reference's tests give, on every
 # device, and the frame is the same bytes on all of them.
 

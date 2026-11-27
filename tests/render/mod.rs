@@ -1,5 +1,5 @@
 //! The reference renderer: the pixels a list of draws must give, by "Which
-//! pixels a shape covers" and "Colour" in the reference, in 32-bit
+//! pixels a shape covers" and "Color" in the reference, in 32-bit
 //! arithmetic. It states the rules apart from the runtime's shaders, so
 //! that each is a check on the other.
 
@@ -25,7 +25,7 @@ impl Shape {
 }
 
 /// One draw: its shape, its numbers in the order of the statement's
-/// arguments (unused ones zero) and its colour.
+/// arguments (unused ones zero) and its color.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Draw {
     pub shape: Shape,
@@ -101,13 +101,13 @@ pub fn parse(answer: &str) -> Result<Frame, String> {
     })
 }
 
-/// Whether a centre exactly on an edge of direction `(dx, dy)`, with the
+/// Whether a center exactly on an edge of direction `(dx, dy)`, with the
 /// shape on its right, counts: a left edge, or a top edge, y down.
 fn on_edge_counts(dx: f32, dy: f32) -> bool {
     dy < 0.0 || (dy == 0.0 && dx > 0.0)
 }
 
-/// The test of the edge from `a` to `b` at the centre `c`, computed from
+/// The test of the edge from `a` to `b` at the center `c`, computed from
 /// the edge's ends in one order whichever way it runs.
 fn edge(a: (f32, f32), b: (f32, f32), c: (f32, f32)) -> bool {
     let b_first = b.0 < a.0 || (b.0 == a.0 && b.1 < a.1);
@@ -119,7 +119,7 @@ fn edge(a: (f32, f32), b: (f32, f32), c: (f32, f32)) -> bool {
     e > 0.0 || (e == 0.0 && on_edge_counts(b.0 - a.0, b.1 - a.1))
 }
 
-/// Whether `draw` covers the pixel whose centre is `(px, py)` in points.
+/// Whether `draw` covers the pixel whose center is `(px, py)` in points.
 pub fn covers(draw: &Draw, px: f32, py: f32) -> bool {
     let n = draw.n;
     if n.iter().any(|number| number.is_nan()) {
@@ -211,7 +211,7 @@ fn bounds(draw: &Draw) -> ((f32, f32), (f32, f32)) {
     }
 }
 
-/// The pixels, of `count` of `step` points each, whose centres may lie
+/// The pixels, of `count` of `step` points each, whose centers may lie
 /// from `low` to `high`, with two more on each side.
 fn pixel_span(low: f32, high: f32, step: f32, count: u32) -> std::ops::Range<u32> {
     if low.is_nan() || high.is_nan() {
@@ -387,17 +387,17 @@ mod tests {
 
     #[test]
     fn triangles_that_share_edges_cover_each_pixel_once() {
-        // A fan around a centre, corners on a circle, and a square split on
-        // a diagonal that runs through pixel centres.
-        let centre = (64.3f32, 63.7f32);
+        // A fan around a center, corners on a circle, and a square split on
+        // a diagonal that runs through pixel centers.
+        let center = (64.3f32, 63.7f32);
         let corner = |k: u32| {
             let angle = k as f32 * std::f32::consts::TAU / 7.0;
-            (centre.0 + 50.0 * angle.cos(), centre.1 + 47.0 * angle.sin())
+            (center.0 + 50.0 * angle.cos(), center.1 + 47.0 * angle.sin())
         };
         let mut fan: Vec<Draw> = (0..7)
             .map(|k| {
                 let (a, b) = (corner(k), corner(k + 1));
-                draw(Shape::Triangle, &[centre.0, centre.1, a.0, a.1, b.0, b.1])
+                draw(Shape::Triangle, &[center.0, center.1, a.0, a.1, b.0, b.1])
             })
             .collect();
         fan.push(draw(Shape::Triangle, &[0.5, 0.5, 20.5, 0.5, 20.5, 20.5]));
@@ -411,12 +411,12 @@ mod tests {
             }
             assert!(count.iter().all(|&n| n <= 1), "{pixels:?}");
         }
-        // Each centre on the diagonal is in one of the two halves.
+        // Each center on the diagonal is in one of the two halves.
         let halves = &fan[7..];
         for i in 1..20u32 {
             let (px, py) = (i as f32 + 0.5, i as f32 + 0.5);
             let inside = halves.iter().filter(|t| covers(t, px, py)).count();
-            assert_eq!(inside, 1, "the centre ({px}, {py})");
+            assert_eq!(inside, 1, "the center ({px}, {py})");
         }
     }
 
@@ -552,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    fn the_colour_rule() {
+    fn the_color_rule() {
         for a in 0..=255u8 {
             for (c, d) in [
                 (0u8, 255u8),

@@ -40,7 +40,7 @@ component Body
   mass: Float32
 end
 
-# Pulls each body towards every body, then moves it.
+# Pulls each body toward every body, then moves it.
 #
 # The block of the outer `each` runs once for every body, as if all at once.
 # The nested `each` shows every body as it was when the tick began, `a`

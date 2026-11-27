@@ -566,7 +566,7 @@ impl Checker<'_> {
             && first.ty == color
         {
             self.err_label(
-                format!("`{statement}` takes its colour last"),
+                format!("`{statement}` takes its color last"),
                 first.span,
                 format!("write {form}"),
             );

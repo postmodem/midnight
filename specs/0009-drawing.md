@@ -60,8 +60,8 @@ picture.
 ### How this serves the principles
 
 - **Agents write, people review.** A draw is where the source says it is,
-  in the order it happens. There is no drawing state: a shape's colour
-  and size are its arguments. Position first and colour last is the order
+  in the order it happens. There is no drawing state: a shape's color
+  and size are its arguments. Position first and color last is the order
   of the same call in the toolkits these names come from.
 - **The domain is in the language.** The compiler sees every draw: it
   keeps a loop that draws on the cores, turns a draw in a GPU system into
@@ -78,7 +78,7 @@ picture.
   and since no program can read a frame, no output depends on the
   difference.
 - **Errors teach.** The names other toolkits use for these calls are
-  recognised, and the message says what to write.
+  recognized, and the message says what to write.
 
 ## Scope
 
@@ -86,12 +86,12 @@ picture.
 - The frame as a list of draws, fixed when a tick ends; the order of
   draws; what a draw does while no window is open.
 - Draws in an `each` on several cores, and draws in a GPU system.
-- Which pixels each shape covers, and how a colour with an alpha below
+- Which pixels each shape covers, and how a color with an alpha below
   255 is laid over what is under it.
 - The command `draws`.
 - The runtime's shape pipeline on the device, for the CPU's list and for
   the records GPU blocks write; a frame texture and a surface that hold
-  colour bytes as they are.
+  color bytes as they are.
 - A renderer in the test suite that makes the pixels a list of draws
   must give, which the frames of every device are held to.
 - A comparison by the evals, before the pipeline is built, of this form
@@ -110,12 +110,12 @@ picture.
 - A camera, a view transform, a logical size that differs from the
   window's, rotation of a shape as an argument.
 - Smoothed edges. A pixel is covered or it is not.
-- Blending other than laying a colour over what is under it.
+- Blending other than laying a color over what is under it.
 - Drawing into anything but the window's frame, and keeping a frame's
   pixels for the next one.
 - Reading a frame's pixels in a program. Nothing a program computes can
   depend on a picture.
-- Commands that look at pixels: the colour at a position, a part of a
+- Commands that look at pixels: the color at a position, a part of a
   frame, a comparison of two frames.
 - Arguments of a draw given by name.
 - Three dimensions.
@@ -207,7 +207,7 @@ error: nothing opens a window for `Draw.rect` to draw in
 
 A frame has `Window.pixel_width` by `Window.pixel_height` pixels. The
 pixel in column `i` and row `j`, counted from 0 at the top left, has its
-**centre** at the point
+**center** at the point
 
 ```
 ((i + 0.5) * (width / pixel_width), (j + 0.5) * (height / pixel_height))
@@ -215,14 +215,14 @@ pixel in column `i` and row `j`, counted from 0 at the top left, has its
 
 with `width` and `height` the window's size in points, each division and
 each product one 32-bit operation: at a scale of 1 that is
-`(i + 0.5, j + 0.5)`. **A shape covers the pixels whose centres are
+`(i + 0.5, j + 0.5)`. **A shape covers the pixels whose centers are
 inside it.** A pixel is covered or it is not; no edge is smoothed.
 
-- **Rectangle.** A centre `(px, py)` is inside when
+- **Rectangle.** A center `(px, py)` is inside when
   `x <= px < x + width` and `y <= py < y + height`.
-- **Circle.** Inside when the centre is nearer to `x`, `y` than `radius`.
-- **Triangle.** Inside when the centre is on the inner side of all three
-  edges. A centre exactly on an edge is inside when that edge is a left
+- **Circle.** Inside when the center is nearer to `x`, `y` than `radius`.
+- **Triangle.** Inside when the center is on the inner side of all three
+  edges. A center exactly on an edge is inside when that edge is a left
   edge, one with the triangle to its right, or a top edge, one that is
   level with the triangle below it. An edge's test is computed from its
   two ends in one order, whichever triangle it belongs to, so two
@@ -230,7 +230,7 @@ inside it.** A pixel is covered or it is not; no edge is smoothed.
   cover each pixel along it once. A triangle with no area covers
   nothing.
 - **Line.** The pixels of the rectangle that is `width` thick and runs
-  along the line from end to end, a centre exactly on one of its two
+  along the line from end to end, a center exactly on one of its two
   long edges counting for the left or the top one of the two, and the
   pixels of a circle of radius `width / 2` around each end. A line whose
   ends are the same point is that circle.
@@ -240,11 +240,11 @@ So at a scale of 1 `Draw.rect(10, 20, 30, 5, c)` covers exactly columns
 the 32-bit sum of the first's `x` and `width`, as with whole numbers and
 halves it always is, neither overlap nor leave a gap. And
 `Draw.line(0, 10, 100, 10, 1, c)` is one row of pixels, columns 0 to 99
-of row 9, whose centres lie at 9.5 on the upper of its two long edges.
+of row 9, whose centers lie at 9.5 on the upper of its two long edges.
 
 **The tests, exactly.** Every step is one 32-bit `Float` operation,
 rounded on its own, on the numbers as the draw keeps them. `(px, py)` is
-the centre.
+the center.
 
 - **Nothing.** A draw covers no pixel when one of its numbers is a NaN;
   when a rectangle's `width` or `height`, a circle's `radius` or a
@@ -260,28 +260,28 @@ the centre.
   1), with `l` the end of the edge that has the smaller `x`, or the
   smaller `y` when the `x`s are equal, and `h` the other end:
   `e = (hx - lx) * (py - ly) - (hy - ly) * (px - lx)`, negated when `l`
-  is `b`. The centre is inside when every `e` is positive, or zero on an
+  is `b`. The center is inside when every `e` is positive, or zero on an
   edge with `by < ay` (a left edge) or with `by == ay` and `bx > ax` (a
   top edge).
 - **Line:** with `d` the vector from the first end to the second and `q`
-  the vector from the first end to the centre:
+  the vector from the first end to the center:
   `t = q.x * d.x + q.y * d.y`, `s = q.x * d.y - q.y * d.x` and
-  `l = d.x * d.x + d.y * d.y`. The centre is in the body when `l > 0`,
+  `l = d.x * d.x + d.y * d.y`. The center is in the body when `l > 0`,
   `0 <= t`, `t <= l`, and `(4 * s) * s` is less than
   `(width * width) * l`, or equal to it with `s > 0` and `d` pointing up
   or level to the right (`d.y < 0`, or `d.y == 0` and `d.x > 0`), or
   equal to it with `s < 0` and `d` pointing down or level to the left
   (`d.y > 0`, or `d.y == 0` and `d.x < 0`). It is in an end when, with
-  `h = width * 0.5` and `e` the vector from that end to the centre,
+  `h = width * 0.5` and `e` the vector from that end to the center,
   `e.x * e.x + e.y * e.y < h * h`.
 
-### Colour
+### Color
 
-- A draw whose colour has an `a` of 255 gives each pixel it covers its
+- A draw whose color has an `a` of 255 gives each pixel it covers its
   `r`, `g` and `b`.
-- With an `a` from 1 to 254 the colour is laid over what the pixel
+- With an `a` from 1 to 254 the color is laid over what the pixel
   holds. For each of red, green and blue, with `c` the byte of the
-  colour and `d` the byte the pixel holds, the pixel becomes
+  color and `d` the byte the pixel holds, the pixel becomes
 
   ```
   (a * c + (255 - a) * d) / 255, rounded to the nearest whole number
@@ -350,9 +350,9 @@ The window's "Determinism" says of a frame:
   with a number that is infinite, or below about 1.18e-38 in magnitude
   and not zero, or whose test overflows. On the devices measured, every
   pixel was the one the same arithmetic gives on the CPU.
-- **A colour with an `a` of 255** gives exactly its bytes on every
+- **A color with an `a` of 255** gives exactly its bytes on every
   device.
-- **A colour with an `a` from 1 to 254** may be rounded differently by a
+- **A color with an `a` from 1 to 254** may be rounded differently by a
   device: each of a pixel's three bytes may differ from the rule above
   by one for each such draw over the pixel since the last draw with an
   `a` of 255 covered it.
@@ -387,7 +387,7 @@ midnight: drive:   Draw.circle(197.0, 96.0, 4.0, Color(255, 200, 0, 255))
   changes nothing in the picture.
 - A draw is printed as the statement that made it, with the numbers it
   keeps: each as the shortest text that reads back as the same 32-bit
-  `Float`, in the form `to_s` gives a `Float`, and the colour with its
+  `Float`, in the form `to_s` gives a `Float`, and the color with its
   four bytes. A draw that covers nothing is printed like any other.
   `draws` prints the 32-bit number; `puts` of a `Float32` field holding
   the same value prints it as the 64-bit `Float` it is read as.
@@ -427,10 +427,10 @@ What follows from this:
   draw in the GPU system moves nothing.
 - **Keep the draw statements of a GPU block few.** Each costs 32 bytes
   for every entity, reached or not.
-- **Build a GPU block's colours from numbers the compiler can bound.** A
+- **Build a GPU block's colors from numbers the compiler can bound.** A
   `Color` built from a number it cannot bound is a store that can fail,
   and makes the block wait as any operation that can fail does: `clamp`
-  each number to 0 and 255, or read the colour from a component, a
+  each number to 0 and 255, or read the color from a component, a
   constant or a resource field.
 - **`draws` is for looking and for tests.** On a device it brings a GPU
   block's records back behind a wait.
@@ -465,7 +465,7 @@ again on the implementation.
   - a `Color` as the first argument:
 
     ```
-    error: `Draw.circle` takes its colour last
+    error: `Draw.circle` takes its color last
        |               ^^^^^^^^^^^^^^ write `Draw.circle(x, y, radius, color)`
     ```
 
@@ -526,7 +526,7 @@ renders.
 - `MnDraw`, the record: the kind as a 32-bit word (0 nothing, 1
   rectangle, 2 circle, 3 line, 4 triangle), six 32-bit floats in the
   order of the statement's arguments, unused ones zero, and the four
-  bytes of the colour. All-zero bytes are a draw of nothing. Generated
+  bytes of the color. All-zero bytes are a draw of nothing. Generated
   code asserts the layout, and it is the layout of the records a shader
   writes.
 - The function generated code calls for a draw, which returns the record
@@ -579,7 +579,7 @@ a buffer of the block's records, written by the block's shader, which
 
 **In `midnight_window.c`**:
 
-- **The frame texture is `RGBA8Unorm`** and holds colour bytes as they
+- **The frame texture is `RGBA8Unorm`** and holds color bytes as they
   are. The background is cleared as each byte divided by 255.
 - **The surface** is configured with the first of `RGBA8Unorm` and
   `BGRA8Unorm` that it lists, and the pass that shows a frame copies
@@ -595,7 +595,7 @@ a buffer of the block's records, written by the block's shader, which
   than zero, gets no pixels. A triangle's `w` is computed in the
   fragment stage, behind the barrier as every product there. The record
   is passed on unchanged. The fragment stage takes the pixel's
-  centre from its position, turns it into points by multiplying each
+  center from its position, turns it into points by multiplying each
   coordinate by a number the CPU computed (`width / pixel_width` and
   `height / pixel_height`, each one 32-bit division), makes the tests of
   "Which pixels a shape covers" operation for operation, and discards
@@ -607,8 +607,8 @@ a buffer of the block's records, written by the block's shader, which
   operation on its own. The test uses no value the device interpolates,
   no square root and no division. The rasterizer's own edges, lines,
   samplers and multisampling take no part in which pixels are covered.
-- **Colour** is the device's blending of the colour's bytes over the
-  frame's, by the colour's `a`, with the frame's own alpha left at 255.
+- **Color** is the device's blending of the color's bytes over the
+  frame's, by the color's `a`, with the frame's own alpha left at 255.
 - **A frame's spans are rendered in order**: an array of CPU records is
   sent to a buffer and rendered, in parts when it is larger than the
   largest buffer, and a block's records are rendered from where the
@@ -629,7 +629,7 @@ renders and never decides what is in a frame.
 
 The test suite holds a renderer of its own, in Rust: from the text of a
 `draws` answer and a pixel size it makes the frame's pixels by "Which
-pixels a shape covers" and "Colour", in 32-bit arithmetic, and for each
+pixels a shape covers" and "Color", in 32-bit arithmetic, and for each
 pixel the number of draws with an `a` from 1 to 254 that cover it since
 the last draw with an `a` of 255 did. A frame from a device **agrees**
 with it when every pixel's three bytes are within that number of the
@@ -707,7 +707,7 @@ World.run
   device, and none of the four tasks needs a GPU system.
 - "Drawing" is written for the components with the same examples in its
   form and within a tenth of `main`'s length in lines. "Which pixels a
-  shape covers", "Colour", the command `draws` but for the lines it
+  shape covers", "Color", the command `draws` but for the lines it
   prints, and everything of the window are the same text. The README's
   paragraph on drawing and `examples/shapes.12am` are in its form.
 - Slice 1's programs that draw are written in its form; the `Line` of
@@ -742,14 +742,14 @@ for `gauge`; that spec's table of areas gains `draw`. They are in the
 same directories on both branches:
 
 - `poster`: a still picture with one of each shape at stated places,
-  sizes and colours, and three shapes that overlap in a stated order;
+  sizes and colors, and three shapes that overlap in a stated order;
 - `drift`: entities that move and are drawn each tick, some of which
   leave the window and are despawned while new ones are spawned;
 - `gauge`: a bar whose length follows a number that keys change, and a
   marker that is drawn only while a key is held;
 - `retouch`: a given program whose picture is wrong in three ways (an
-  order of overlap, a rectangle placed by its centre, two bytes of a
-  colour exchanged), to repair.
+  order of overlap, a rectangle placed by its center, two bytes of a
+  color exchanged), to repair.
 
 The tasks are chosen so that neither form has the easier set: what is
 alive is drawn (`drift`) and a picture stays (`poster`) with less to
@@ -758,7 +758,7 @@ write in the component form, and a shape is drawn or not by a condition
 of each task by form beside the pooled counts.
 
 `TASK.md` is the same file on both branches. It states what each frame
-holds: every shape, with its numbers and its colour, when it is in the
+holds: every shape, with its numbers and its color, when it is in the
 frame and when it is not, and, for a task compared in order, which shape
 comes after which. It says that a frame holds those shapes and no other:
 one draw for each, none of no size, none with an `a` of 0 and none that
@@ -775,7 +775,7 @@ them no two shapes of one frame belong to two entities of one kind, so
 the order of a query decides nothing. `drift` is compared in any order,
 and asks for no overlap that the order decides. Each task uses numbers
 that are not symmetric, so that two arguments exchanged, or a corner
-taken for a centre, changes the list; every number a task draws is exact
+taken for a center, changes the list; every number a task draws is exact
 in 24 bits; and the answers of a task's commands are under 1 MB
 together.
 
@@ -796,7 +796,7 @@ removed, as a `.draws` file of the suite does; it is the same file on
 both branches. The check **draws** takes, from the standard error of the
 run that the output check makes, the lines of every `draws` answer, and
 turns each line, of either form, into what it draws: the kind of shape,
-its numbers in the statement's order and the four bytes of its colour, a
+its numbers in the statement's order and the four bytes of its color, a
 `layer` left out; and the first two lines into the tick, the window's
 size and the background. It does the same with the lines of
 `expected.draws`, and requires the two to be equal: line for line with
@@ -938,21 +938,21 @@ many translucent.
 - **Upright rectangles** gave the same bytes on the three devices with
   corners on whole pixels and on 1/16 and 1/256 of one, and shared edges
   left no gap and no pixel covered twice.
-- **A fragment's position** was the pixel's centre, exactly, on all
+- **A fragment's position** was the pixel's center, exactly, on all
   three, at both sizes.
 - **The tests of this spec in a fragment stage**, every product behind
-  the barrier, for 5,000 shapes of each kind, shapes with a pixel centre
+  the barrier, for 5,000 shapes of each kind, shapes with a pixel center
   exactly on an edge, and fans of triangles that share edges, at scales
   of 1, 1.25, 1.5 and 2: the same bytes on the three devices, and the
   bytes the same arithmetic gives on the CPU, in every picture. Without
   the barrier `llvmpipe` still gave the CPU's bytes and the two others
-  did not: in 14 of 100 pictures of shapes with a centre on an edge, by
+  did not: in 14 of 100 pictures of shapes with a center on an edge, by
   1 to 6 pixels a picture, all but one at scales of 1.25 and 1.5, and in
   1 of 100 pictures each of lines, of triangles and of the kinds mixed,
   by one pixel. A test fed by a value the device interpolated across the
   shape differed between every two devices, in 15 of 21 pictures of
   circles with numbers on a grid.
-- **An edge between two triangles**, within rounding of a pixel centre,
+- **An edge between two triangles**, within rounding of a pixel center,
   20 million times on the CPU: with each triangle computing the edge
   from its own corners the pixel was in both 849,455 times and in
   neither 834,576 times; with the edge computed from its two ends in one
@@ -974,7 +974,7 @@ many translucent.
   rule by more than the number of translucent draws over it, and with 1,
   2 and 3 such draws some pixel differed by that much. On an
   `RGBA8UnormSrgb` target the devices differed by 1 to 2 under one layer
-  and by up to 4 under many. Colours with an alpha of 0 or 255 gave the
+  and by up to 4 under many. Colors with an alpha of 0 or 255 gave the
   same bytes everywhere.
 - **Clearing an `RGBA8Unorm` texture** to a byte divided by 255 left
   that byte, for every value in every channel, on all three.
@@ -1012,7 +1012,7 @@ many translucent.
   and 13 ms. Reading back a frame of that size took about half a
   millisecond on all three.
 
-Not measured: a surface outside Wayland, and an output with colour
+Not measured: a surface outside Wayland, and an output with color
 management or more than 8 bits; on a device, a shape with a NaN, with a
 size that is not greater than zero, with an infinity or with numbers
 large enough for a test to overflow, and a shape far larger than the
@@ -1066,9 +1066,9 @@ these three.
   line one point wide along whole and half coordinates in both
   directions and along a diagonal; a circle with a negative radius, a
   line with a negative width and a NaN in each position of one shape; a
-  shape far larger than the frame; the colour rule for every `a` on a
+  shape far larger than the frame; the color rule for every `a` on a
   few bytes; scales of 1, 1.25, 1.5 and 2.
-- `frames_are_the_colours_painted` stays a test that needs no device. It
+- `frames_are_the_colors_painted` stays a test that needs no device. It
   gives the reference renderer the size and the background of each frame
   of the two programs it holds today, with no draws, and requires the
   CRC-32 of its pixels to be the one in the `.frames` file.
@@ -1112,9 +1112,9 @@ these three.
   answer, the pooled line of `compare`, and the kept programs.
 - `tests/COVERAGE.md` gains "Drawing".
 - `examples/shapes.12am`, with `.drive`, `.draws` and `.out`: each
-  shape, an order of overlap and a translucent colour.
+  shape, an order of overlap and a translucent color.
   `examples/flock.12am`, with `.drive` and `.out` and no `.draws`: a GPU
-  system that moves 100,000 points and draws them, each coloured by its
+  system that moves 100,000 points and draws them, each colored by its
   speed through `clamp`. Its commands have one `draws` before one
   `capture`, after the ticks that `MIDNIGHT_GPU=stats` is read for.
 
@@ -1248,17 +1248,17 @@ All run on x86_64-linux, on the development machine.
 - **One name, `Draw`.** Every shape this spec has lives under it, so
   programs keep the names `Line`, `Rect` and `Circle` for their own
   types and `draw` for their own system.
-- **The arguments are the whole shape.** Colour, size and thickness are
+- **The arguments are the whole shape.** Color, size and thickness are
   written at the draw. No setting made earlier in a program changes what
   a draw means.
-- **Position first, colour last, by position.** It is the order of the
-  same calls in the toolkits the names come from, and a colour in the
+- **Position first, color last, by position.** It is the order of the
+  same calls in the toolkits the names come from, and a color in the
   wrong place is a type error with a message that says so.
 - **Order is the order of the program.** It is total and costs nothing,
   and it is the order a reader sees.
 - **Points, from the top left, y down.** It is where the pointer already
   is: a click at `Mouse.x`, `Mouse.y` lands on what was drawn there.
-- **A rectangle by its corner, a circle by its centre.** A rectangle
+- **A rectangle by its corner, a circle by its center.** A rectangle
   from `x` to `x + width` covers whole pixels at whole numbers; a circle
   is where its entity is.
 - **The frame is a list.** A list fixed at the end of a tick is the same
@@ -1271,12 +1271,12 @@ All run on x86_64-linux, on the development machine.
 - **Coverage is decided for each pixel, by rules in the reference.**
   Which pixels the edge of a slanted shape covers is the part of drawing
   devices were measured to disagree on when it is left to them. Decided
-  from the pixel's centre it is a definition, the same on the devices
+  from the pixel's center it is a definition, the same on the devices
   measured and on the CPU, and a level line one point wide is one row of
   pixels wherever it lies.
 - **Hard edges.** A covered-or-not pixel keeps an opaque frame exact on
   every device and keeps thin lines sharp.
-- **Colour bytes as they are.** A colour reaches the frame with no
+- **Color bytes as they are.** A color reaches the frame with no
   conversion, so an opaque draw is exact everywhere, and a translucent
   one mixes the numbers a person typed.
 - **Translucent pixels may differ by a step.** Devices round the mix
@@ -1409,7 +1409,7 @@ reached. 4: no row of the thirteen marked, in either run after; not
 reached.
 
 **What the evals added.** The review of the tasks across the forms
-found five holes in them before any run, three of which favoured the
+found five holes in them before any run, three of which favored the
 statements. The first audit found that agents keep scratch files outside
 their directory, which the preamble now forbids, and a correct program
 counted as escaped for a refused call, which now goes for review. The
@@ -1423,7 +1423,7 @@ measure of spec 0008 ("Since: what the evals became" there).
 ### Differences from the design
 
 - **Choices the design left open.** The typed program has
-  `StmtKind::Draw` with its shape, numbers, colour and the span of its
+  `StmtKind::Draw` with its shape, numbers, color and the span of its
   name. The error for a program that draws and opens no window is raised
   at the first draw in source order once the whole program is checked. A
   draw while no window is open fills a record of its thread's own that

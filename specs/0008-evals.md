@@ -496,7 +496,7 @@ One more area, `draw`, is drawing, with its check **draws** (spec 0009):
 
 | Task | Program | Areas |
 | ---- | ------- | ----- |
-| `poster` | A still picture: one of each shape at stated places, sizes and colours, and three that overlap in a stated order | draw, window |
+| `poster` | A still picture: one of each shape at stated places, sizes and colors, and three that overlap in a stated order | draw, window |
 | `drift` | Entities that move and are drawn each tick; some leave the window and are despawned while new ones are spawned | draw, window |
 | `gauge` | A bar whose length follows a number that keys change, and a marker drawn only while a key is held | draw, window, input |
 | `retouch` | Repair: a program whose picture is wrong in three ways | repair, draw, window |

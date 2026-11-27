@@ -712,7 +712,7 @@ puts "closed after #{Time.tick} ticks"
 
 A program can open a window, keep real time while it is open, learn that
 it was resized or closed, and show a frame at the end of every tick. A
-frame is the window's background colour with the shapes the tick drew
+frame is the window's background color with the shapes the tick drew
 over it: see [Drawing](#drawing).
 
 The names `Window`, `Color`, `WindowResized` and `WindowClosed` are built
@@ -735,7 +735,7 @@ struct Color
 end
 ```
 
-Its components are the bytes of an sRGB colour, the numbers a paint
+Its components are the bytes of an sRGB color, the numbers a paint
 program or a style sheet shows: `Color(255, 128, 0)` is orange. It is a
 plain value with the rules of any struct, and may be a field of a
 component. A component out of range is the error it is for any `UInt8`.
@@ -771,7 +771,7 @@ reached through a function inside an `each`. It is also a run-time error
 when a window is already open, when `width` or `height` is less than 1 or
 more than 8192, and when no window can be shown (see
 [Without a display](#without-a-display)). When it returns, the window is
-open, shows a frame of the background colour, and the four sizes hold what
+open, shows a frame of the background color, and the four sizes hold what
 the desktop gave it, which need not be what was asked for. A window may be
 opened again after it was closed.
 
@@ -1001,7 +1001,7 @@ A program draws with statements. `Draw.rect`, `Draw.circle`, `Draw.line`
 and `Draw.triangle` each add one shape to the frame the tick ends with,
 and what is drawn later covers what was drawn earlier: systems in their
 order, statements in theirs. Nothing is drawn that the source does not
-draw, and there is no drawing state: a shape's position, size and colour
+draw, and there is no drawing state: a shape's position, size and color
 are its arguments.
 
 `Draw` is a built-in name and can't be declared by a program. A program
@@ -1085,10 +1085,10 @@ error: nothing opens a window for `Draw.rect` to draw in
 The compiler knows the names other toolkits give these calls. `Draw.rectangle`,
 `Draw.ellipse`, `draw_circle`, `fill_rect` and a `Circle` that is
 constructed or spawned are errors that name the statement to write, and a
-colour given first is an error that says the colour goes last:
+color given first is an error that says the color goes last:
 
 ```
-error: `Draw.circle` takes its colour last
+error: `Draw.circle` takes its color last
   --> balls.12am:20:17
    |
 20 |     Draw.circle(Color(255, 200, 0), ball.x, ball.y, 4)
@@ -1099,7 +1099,7 @@ error: `Draw.circle` takes its colour last
 
 A frame has `Window.pixel_width` by `Window.pixel_height` pixels. The pixel
 in column `i` and row `j`, counted from 0 at the top left, has its
-**centre** at the point
+**center** at the point
 
 ```
 ((i + 0.5) * (width / pixel_width), (j + 0.5) * (height / pixel_height))
@@ -1107,21 +1107,21 @@ in column `i` and row `j`, counted from 0 at the top left, has its
 
 with `width` and `height` the window's size in points, each division and
 each product one 32-bit operation: at a scale of 1 that is
-`(i + 0.5, j + 0.5)`. **A shape covers the pixels whose centres are inside
+`(i + 0.5, j + 0.5)`. **A shape covers the pixels whose centers are inside
 it.** A pixel is covered or it is not; no edge is smoothed.
 
-- **Rectangle.** A centre `(px, py)` is inside when `x <= px < x + width`
+- **Rectangle.** A center `(px, py)` is inside when `x <= px < x + width`
   and `y <= py < y + height`.
-- **Circle.** Inside when the centre is nearer to `x`, `y` than `radius`.
-- **Triangle.** Inside when the centre is on the inner side of all three
-  edges. A centre exactly on an edge is inside when that edge is a left
+- **Circle.** Inside when the center is nearer to `x`, `y` than `radius`.
+- **Triangle.** Inside when the center is on the inner side of all three
+  edges. A center exactly on an edge is inside when that edge is a left
   edge, one with the triangle to its right, or a top edge, one that is
   level with the triangle below it. An edge's test is computed from its two
   ends in one order, whichever triangle it belongs to, so two triangles
   that share an edge, with the same numbers for its two ends, cover each
   pixel along it once. A triangle with no area covers nothing.
 - **Line.** The pixels of the rectangle that is `width` thick and runs
-  along the line from end to end, a centre exactly on one of its two long
+  along the line from end to end, a center exactly on one of its two long
   edges counting for the left or the top one of the two, and the pixels of
   a circle of radius `width / 2` around each end. A line whose ends are
   the same point is that circle.
@@ -1131,11 +1131,11 @@ to 39 of rows 20 to 24. Two rectangles of which the second's `x` is the
 32-bit sum of the first's `x` and `width`, as with whole numbers and halves
 it always is, neither overlap nor leave a gap. And
 `Draw.line(0, 10, 100, 10, 1, c)` is one row of pixels, columns 0 to 99 of
-row 9, whose centres lie at 9.5 on the upper of its two long edges.
+row 9, whose centers lie at 9.5 on the upper of its two long edges.
 
 **The tests, exactly.** Every step is one 32-bit `Float` operation, rounded
 on its own, on the numbers as the draw keeps them. `(px, py)` is the
-centre.
+center.
 
 - **Nothing.** A draw covers no pixel when one of its numbers is a NaN;
   when a rectangle's `width` or `height`, a circle's `radius` or a line's
@@ -1151,26 +1151,26 @@ centre.
   end of the edge that has the smaller `x`, or the smaller `y` when the
   `x`s are equal, and `h` the other end:
   `e = (hx - lx) * (py - ly) - (hy - ly) * (px - lx)`, negated when `l` is
-  `b`. The centre is inside when every `e` is positive, or zero on an edge
+  `b`. The center is inside when every `e` is positive, or zero on an edge
   with `by < ay` (a left edge) or with `by == ay` and `bx > ax` (a top
   edge).
 - **Line:** with `d` the vector from the first end to the second and `q`
-  the vector from the first end to the centre:
+  the vector from the first end to the center:
   `t = q.x * d.x + q.y * d.y`, `s = q.x * d.y - q.y * d.x` and
-  `l = d.x * d.x + d.y * d.y`. The centre is in the body when `l > 0`,
+  `l = d.x * d.x + d.y * d.y`. The center is in the body when `l > 0`,
   `0 <= t`, `t <= l`, and `(4 * s) * s` is less than `(width * width) * l`,
   or equal to it with `s > 0` and `d` pointing up or level to the right
   (`d.y < 0`, or `d.y == 0` and `d.x > 0`), or equal to it with `s < 0` and
   `d` pointing down or level to the left (`d.y > 0`, or `d.y == 0` and
   `d.x < 0`). It is in an end when, with `h = width * 0.5` and `e` the
-  vector from that end to the centre, `e.x * e.x + e.y * e.y < h * h`.
+  vector from that end to the center, `e.x * e.x + e.y * e.y < h * h`.
 
-### Colour
+### Color
 
-- A draw whose colour has an `a` of 255 gives each pixel it covers its
+- A draw whose color has an `a` of 255 gives each pixel it covers its
   `r`, `g` and `b`.
-- With an `a` from 1 to 254 the colour is laid over what the pixel holds.
-  For each of red, green and blue, with `c` the byte of the colour and `d`
+- With an `a` from 1 to 254 the color is laid over what the pixel holds.
+  For each of red, green and blue, with `c` the byte of the color and `d`
   the byte the pixel holds, the pixel becomes
 
   ```
@@ -1246,8 +1246,8 @@ no reason for a draw.
   computed as above, are equal or one 32-bit step apart, and for a shape
   with a number that is infinite, or below about 1.18e-38 in magnitude and
   not zero, or whose test overflows.
-- **A colour with an `a` of 255** gives exactly its bytes on every device.
-- **A colour with an `a` from 1 to 254** may be rounded differently by a
+- **A color with an `a` of 255** gives exactly its bytes on every device.
+- **A color with an `a` from 1 to 254** may be rounded differently by a
   device: each of a pixel's three bytes may differ from the rule above by
   one for each such draw over the pixel since the last draw with an `a` of
   255 covered it.
@@ -1282,7 +1282,7 @@ midnight: drive:   Draw.circle(197.0, 96.0, 4.0, Color(255, 200, 0, 255))
   changes nothing in the picture.
 - A draw is printed as the statement that made it, with the numbers it
   keeps: each as the shortest text that reads back as the same 32-bit
-  `Float`, in the form `to_s` gives a `Float`, and the colour with its four
+  `Float`, in the form `to_s` gives a `Float`, and the color with its four
   bytes. A draw that covers nothing is printed like any other. `draws`
   prints the 32-bit number; `puts` of a `Float32` field holding the same
   value prints it as the 64-bit `Float` it is read as.
@@ -2578,7 +2578,7 @@ match it and reads only the arrays of the components named as terms.
 
 **Memory per entity** is the size of its components plus 20 bytes. A
 component's size is the size of its fields, which the compiler orders to
-minimise padding (construction and `to_s` keep the declared order). `Bool` and enum fields take one byte. Tags take none.
+minimize padding (construction and `to_s` keep the declared order). `Bool` and enum fields take one byte. Tags take none.
 Strings and lists take 8 bytes in the component and keep their contents
 elsewhere. The size of a component that a GPU block writes is rounded up to
 a multiple of 4 bytes, wherever the program runs: a GPU stores whole 32-bit
@@ -2861,10 +2861,10 @@ What follows from this:
 - **Keep the draw statements of a GPU block few.** Each costs 32 bytes for
   every entity, reached or not, and some devices spend time on a record
   that is not used.
-- **Build a GPU block's colours from numbers the compiler can bound.** A
+- **Build a GPU block's colors from numbers the compiler can bound.** A
   `Color` built from a number it cannot bound is a store that can fail,
   and makes the block wait as any operation that can fail does: `clamp`
-  each number to 0 and 255, or read the colour from a component, a
+  each number to 0 and 255, or read the color from a component, a
   constant or a resource field.
 - **`draws` is for looking and for tests.** On a device it brings a GPU
   block's records back behind a wait.
@@ -3029,7 +3029,7 @@ rectangles, ellipses, arcs, polygons of more than three corners, curves
 and paths; any order but the program's, such as layers, sorting by a key
 or a depth buffer; a camera, a view transform, a logical size that
 differs from the window's, and rotating a shape by an argument; smoothed
-edges; blending other than laying a colour over what is under it;
+edges; blending other than laying a color over what is under it;
 drawing into anything but the window's frame, and keeping a frame's
 pixels for the next one; reading a frame's pixels in a program, and
 commands that look at pixels; arguments of a draw given by name; three

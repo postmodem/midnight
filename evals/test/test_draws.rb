@@ -88,7 +88,7 @@ class DrawsTest < Minitest::Test
     assert_equal "frame", diff(ANSWER.sub("320x200", "200x320"), any: true)["how"]
   end
 
-  def test_swapped_and_by_centre
+  def test_swapped_and_by_center
     want = "Draw.rect(10.0, 20.0, 30.0, 6.0, Color(40, 40, 60, 255))"
     assert D.swapped?("Draw.rect(20.0, 10.0, 30.0, 6.0, Color(40, 40, 60, 255))", want)
     assert D.swapped?("Draw.rect(10.0, 20.0, 6.0, 30.0, Color(40, 40, 60, 255))", want)
@@ -96,9 +96,9 @@ class DrawsTest < Minitest::Test
     refute D.swapped?("Draw.rect(20.0, 10.0, 30.0, 6.0, Color(40, 40, 61, 255))", want)
     refute D.swapped?(want, want)
     refute D.swapped?(nil, want)
-    assert D.by_centre?("Draw.rect(25.0, 23.0, 30.0, 6.0, Color(0, 0, 0, 255))", want)
-    refute D.by_centre?("Draw.rect(-5.0, 17.0, 30.0, 6.0, Color(40, 40, 60, 255))", want)
-    refute D.by_centre?("Draw.circle(25.0, 23.0, 30.0, Color(40, 40, 60, 255))", want)
+    assert D.by_center?("Draw.rect(25.0, 23.0, 30.0, 6.0, Color(0, 0, 0, 255))", want)
+    refute D.by_center?("Draw.rect(-5.0, 17.0, 30.0, 6.0, Color(40, 40, 60, 255))", want)
+    refute D.by_center?("Draw.circle(25.0, 23.0, 30.0, Color(40, 40, 60, 255))", want)
   end
 
   def test_a_draws_answer_is_one_record
@@ -225,7 +225,7 @@ class DrawsTest < Minitest::Test
     assert_includes text, "## Draws"
     assert_match(/\| `poster` \| `haiku` \| 3 \| 3 \| 0 \| 0 \| 1 \| 0 \| 0 \| 2 \| 0 \|/, text)
     assert_includes text, "- Two numbers exchanged: poster/haiku/1.1\n"
-    assert_includes text, "- A rectangle placed by its centre: poster/haiku/2.1\n"
+    assert_includes text, "- A rectangle placed by its center: poster/haiku/2.1\n"
     refute_includes Eval::Report.render(results("results-a.json")), "## Draws"
   end
 end

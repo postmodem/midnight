@@ -1,6 +1,6 @@
 # Every value of a byte, in each of red, green and blue, is exactly that
 # byte in a captured frame, on every device: tick k paints the background
-# k, 255 - k and 7k modulo 256, and the capture after it holds that colour.
+# k, 255 - k and 7k modulo 256, and the capture after it holds that color.
 
 Window.open("Bytes", 16, 8)
 

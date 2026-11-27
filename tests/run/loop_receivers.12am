@@ -1,5 +1,5 @@
 # Counting-loop receivers: a negative literal (the `-` belongs to the
-# literal), a list length, a parenthesised expression, and struct fields.
+# literal), a list length, a parenthesized expression, and struct fields.
 
 struct Span
   from: Int
