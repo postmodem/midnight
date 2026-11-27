@@ -185,14 +185,16 @@ them.
 
 ## Status
 
-Midnight 0.8 is the language core, GPU systems, the rules that move only
-what is needed between CPU and GPU memory, strict GPU systems, loops on
-several cores, a window, the keyboard and the mouse, and drawing. It is
-tested on `x86_64-linux`, GPU systems on an NVIDIA device, on an AMD iGPU
-through Mesa's RADV, and on Mesa's software Vulkan, and the window on
-Wayland; the flake also offers `aarch64-linux`, `x86_64-darwin` and
-`aarch64-darwin`, which evaluate but have not been run. What 0.8 leaves
-out is listed at the end of the reference.
+Midnight is at 0.8 and young. Until 1.0 a better syntax is worth a
+breaking change, and every spec that changes the language raises the
+minor version. There is no text, sound, sprites or 3D yet, and no files
+or command-line arguments; [Not in 0.8](docs/language.md#not-in-08) lists
+everything the language leaves out.
+
+It is tested on `x86_64-linux`: GPU systems on an NVIDIA device, on an AMD
+iGPU through Mesa's RADV and on Mesa's software Vulkan, and the window on
+Wayland. The flake also offers `aarch64-linux`, `x86_64-darwin` and
+`aarch64-darwin`, which evaluate but have not been run.
 
 ## License
 
