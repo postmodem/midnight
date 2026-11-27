@@ -1,13 +1,19 @@
 # Midnight
 
-Midnight is a compiled, statically typed language for games and
-simulations, written mostly by AI agents and read by agents and people.
-Entities, components, systems, queries, resources and events are language
-constructs, not a library. A system runs on one core, on every core or on
-the GPU. Its output does not depend on the number of threads, and with
-`strict`, not on the GPU. The compiler tells you what moves between CPU
-and GPU memory and where each loop runs, rather than leaving you to guess.
+**A compiled language for games and simulations.**
+
+You write entities, components and systems. Midnight lays the data out as
+a careful C programmer would, runs your loops on one core, on every core
+or on the GPU, and tells you what it decided and why.
+
+It is written mostly by AI agents and read by agents and people, so it
+favours code that says exactly what it does, output that is the same on
+every run, and errors that say how to fix them where they can.
+[`docs/principles.md`](docs/principles.md) has the whole idea.
+
 Source files end in `.12am`.
+
+## A first look
 
 ```ruby
 component Position
@@ -44,20 +50,44 @@ Time.dt = 0.5
 end
 ```
 
+```
+Entity(0v1) is at (0.5, 1.0)
+Entity(1v1) is at (5.0, 5.0)
+Entity(0v1) is at (1.0, 2.0)
+Entity(1v1) is at (5.0, 5.0)
+Entity(0v1) is at (1.5, 3.0)
+Entity(1v1) is at (5.0, 5.0)
+```
+
+Entities, components, systems, queries, resources and events are part of
+the language, not a library, so the compiler sees all of them. That is
+what lets it do the rest of this page.
+
 ## What it does
 
-**Data laid out by hand, without writing it by hand.** Components live in
-contiguous arrays, with no per-object headers and fields as small as you
-declare them. The `move` system above compiles to a counted loop over two
-arrays that the C compiler vectorizes.
+### Data laid out for you
 
-**GPU systems.** A system marked `gpu` runs its queries as compute shaders
-over those same arrays, and on the CPU, with the same meaning, where there
-is no GPU. Data stays on the device between ticks unless the CPU needs it,
-and `midnight plan` prints what moves. A GPU system agrees closely with its
-CPU run and with other GPUs, but not to the last bit; declared `strict gpu
-system`, it gives the same bits on every device and on the CPU, at a cost
-in speed.
+Components live in contiguous arrays, with no per-object headers and
+fields as small as you declare them.
+
+The `move` system above compiles to a counted loop over two arrays, which
+the C compiler vectorizes.
+
+### Every core
+
+A loop whose runs cannot affect one another, like `move`, runs on every
+core of the machine. The compiler finds those loops itself; there is
+nothing to annotate.
+
+The program prints exactly what it prints on one thread, every time.
+`midnight loops` says where each loop runs, and what keeps one on a
+single core.
+
+### The GPU
+
+Mark a system `gpu` and its queries run as compute shaders over those
+same arrays. Where there is no GPU, they run on the CPU with the same
+meaning.
 
 ```ruby
 component Body
@@ -75,19 +105,19 @@ gpu system drift
 end
 ```
 
-**Every core.** A loop whose runs cannot affect one another, like `move`
-above, runs on every core of the machine, and so does a GPU system when it
-runs on the CPU. The compiler finds those loops, and the program prints
-exactly what it prints on one thread. `midnight loops` says where each loop
-runs, and what keeps one on a single core.
+Data stays on the device between ticks unless the CPU needs it, and
+`midnight plan` prints exactly what moves.
 
-**A window, drawing, keyboard and mouse.** `Window.open` shows a window
-(through [SDL 3](https://libsdl.org), on the same device as GPU systems),
-and a tick ends with a frame of what it drew. Four statements draw:
-`Draw.rect`, `Draw.circle`, `Draw.line` and `Draw.triangle`, in GPU systems
-too, where nothing travels back to the CPU. The keyboard and the mouse are
-the built-in resources `Keyboard` and `Mouse`, as they were when the tick
-began, plus an event for each press and release.
+A GPU system agrees closely with its CPU run and with other GPUs, but not
+to the last bit. Declare it `strict gpu system` and it gives the same bits
+on every device and on the CPU, at a cost in speed.
+
+### A window, shapes, keyboard and mouse
+
+`Window.open` shows a window, and every tick ends with a frame of what it
+drew. Four statements draw: `Draw.rect`, `Draw.circle`, `Draw.line` and
+`Draw.triangle`. They work in GPU systems too, where nothing travels back
+to the CPU.
 
 ```ruby
 system show
@@ -99,37 +129,51 @@ system show
 end
 ```
 
-**Headless and driven.** Any program with a window also runs with no
-display, driven by a file of commands that step it, give it input, print
-its frames as text and capture them as PNG files. The same commands give
-the same output on every machine, so an agent can check a game the way it
-checks any other program.
+The keyboard and the mouse are the built-in resources `Keyboard` and
+`Mouse`, as they were when the tick began, with an event for each press
+and release. Windows come from [SDL 3](https://libsdl.org) and are drawn
+on the same device as GPU systems.
+
+### Headless, and driven by commands
+
+Any program with a window also runs with no display at all. A file of
+commands steps it, gives it keys and clicks, prints its frames as text and
+captures them as PNG files.
+
+The same commands give the same output on every machine, so an agent can
+check a game the way it checks any other program.
 
 ## Try it
 
-Everything runs through [Nix](https://nixos.org) with flakes enabled; nothing
-else needs to be installed, not even a C compiler.
+Everything runs through [Nix](https://nixos.org) with flakes enabled.
+Nothing else needs to be installed, not even a C compiler.
 
 ```sh
+# Programs that print
 nix run . -- run examples/hello.12am
 nix run . -- run examples/battle.12am
 nix run . -- run --debug examples/life.12am
-nix run . -- check examples/bounce.12am
 nix run . -- build examples/move.12am -o move && ./move
-nix run . -- run examples/nbody.12am
-nix run . -- plan tests/plan/reader.12am
+
+# What the compiler sees
+nix run . -- check examples/bounce.12am
 nix run . -- loops examples/bounce.12am
+nix run . -- plan tests/plan/reader.12am
+
+# The GPU: gravity among bodies
+nix run . -- run examples/nbody.12am
+
+# Windows: 100,000 points moved and drawn on the GPU,
+# and a window whose colour follows the pointer (Escape ends it)
 nix run . -- run examples/flock.12am
 nix run . -- run examples/input.12am
+
+# The same kind of program headless: each frame printed as the
+# statements that drew it, and saved as shapes.png and shapes-cloud.png
 MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/shapes.drive nix run . -- run examples/shapes.12am
 ```
 
-`nbody` is gravity among bodies on the GPU, `flock` a GPU system that moves
-and draws 100,000 points, and `input` a window whose colour follows the
-pointer, where a click prints where it was and Escape ends it. The last
-line prints each frame of `shapes` as the statements that drew it and
-writes `shapes.png` and `shapes-cloud.png`. [`examples/`](examples/) has
-them all, each with its expected output.
+[`examples/`](examples/) has them all, each with its expected output.
 
 ## The compiler
 
@@ -144,9 +188,11 @@ midnight emit-wgsl FILE                  print the shader of every GPU block
 midnight --version | --help
 ```
 
-`build` names the executable after the file, without its extension, unless
-`-o` says otherwise. `run` exits with the program's status. The compiler
-exits 0 on success, 1 when the program has errors and 2 on a usage error.
+`build` names the executable after the file, without its extension,
+unless `-o` says otherwise. `run` exits with the program's status. The
+compiler exits 0 on success, 1 when the program has errors and 2 on a
+usage error.
+
 Errors come with the source line and, where possible, a suggestion:
 
 ```
@@ -158,38 +204,36 @@ error: unknown component `Postion`
 ```
 
 The compiler is Rust with no dependencies beyond the standard library. It
-emits C11, built together with a small runtime by a C compiler, and a WGSL
-shader for each loop of a GPU system, run through
+emits C11, which a C compiler builds together with a small runtime, and a
+WGSL shader for each loop of a GPU system, which runs through
 [`wgpu-native`](https://github.com/gfx-rs/wgpu-native).
 
 ## Documentation
 
-- [`docs/principles.md`](docs/principles.md): what Midnight is for and how
-  it is built.
-- [`docs/language.md`](docs/language.md): the language reference, with what
-  each construct costs.
-- [`docs/running.md`](docs/running.md): the variables a program reads to
-  choose its device and threads, and to run headless and driven.
-- [`docs/building.md`](docs/building.md): build modes, C flags, and what a
-  program is linked against.
-- [`docs/development.md`](docs/development.md): working on Midnight: the
-  layout of the repository and every kind of test.
-- [`bench/README.md`](bench/README.md): the benchmarks.
-- [`specs/`](specs/): one spec per change, with its acceptance criteria and
-  outcome.
+| Read this                                      | For                                                   |
+| ---------------------------------------------- | ----------------------------------------------------- |
+| [`docs/language.md`](docs/language.md)         | The language reference, with what each construct costs |
+| [`docs/principles.md`](docs/principles.md)     | What Midnight is for, and how it is built             |
+| [`docs/running.md`](docs/running.md)           | Choosing the device and threads; running headless and driven |
+| [`docs/building.md`](docs/building.md)         | Build modes, C flags, and what a program links against |
+| [`docs/development.md`](docs/development.md)   | Working on Midnight: the repository and its tests     |
+| [`bench/README.md`](bench/README.md)           | The benchmarks                                        |
+| [`specs/`](specs/)                             | One spec per change, with its acceptance criteria and outcome |
 
 The evals measure how well agents write Midnight from its documentation
 alone. They run only when a spec asks them a question, and its Outcome
-says what they showed; [`evals/README.md`](evals/README.md) says how to run
-them.
+says what they showed. [`evals/README.md`](evals/README.md) says how to
+run them.
 
 ## Status
 
 Midnight is at 0.8 and young. Until 1.0 a better syntax is worth a
 breaking change, and every spec that changes the language raises the
-minor version. There is no text, sound, sprites or 3D yet, and no files
-or command-line arguments; [Not in 0.8](docs/language.md#not-in-08) lists
-everything the language leaves out.
+minor version.
+
+There is no text, sound, sprites or 3D yet, and no files or command-line
+arguments. [Not in 0.8](docs/language.md#not-in-08) lists everything the
+language leaves out.
 
 It is tested on `x86_64-linux`: GPU systems on an NVIDIA device, on an AMD
 iGPU through Mesa's RADV and on Mesa's software Vulkan, and the window on
