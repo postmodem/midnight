@@ -102,6 +102,26 @@ const char *mn_gpu_device_check(const MnGpuCheck *check, uint32_t *out);
 /* Releases what mn_gpu_device_run kept for a block. */
 void mn_gpu_device_forget(void *state);
 
+struct WGPUBufferImpl;
+
+/* The draw records a block wrote on the device for one table of its outer
+ * query: `state` is what mn_gpu_device_run kept for the block, `table` the
+ * table's place in the query, `count` the number of records (the rows the
+ * table had when the block ran, times the block's draw statements). They
+ * are good until the block runs again. */
+typedef struct MnGpuRecords {
+    void *state;
+    uint32_t table;
+    uint64_t count;
+} MnGpuRecords;
+
+/* The buffer that holds them, from record 0, for the window to render. */
+struct WGPUBufferImpl *mn_gpu_records(const MnGpuRecords *records);
+
+/* Copies each of `count` sets of records to CPU memory, one after another
+ * at `out`, behind one wait for the device. Counts a download for each. */
+void mn_gpu_records_read(const MnGpuRecords *records, size_t count, MnDraw *out);
+
 /* Call before a row leaves a table, when the table's last row is about to
  * take its place in CPU memory. Patches the GPU copy of each column: the
  * last row's value is moved in GPU memory when CPU memory lacks it, and is

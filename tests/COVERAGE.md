@@ -541,7 +541,7 @@ by the program itself.
 | A call whose value is unused still draws | `gpu_statements` |
 | `rand` follows the hash chain of the reference | `gpu_rand` (its numbers were compared with a separate C program) |
 | A comparison with NaN, and a `Math` function outside its domain, on a GPU | not covered: the result is not specified |
-| A block that does not fit the device runs on the CPU | not covered: it needs a device with small limits |
+| A block that does not fit the device runs on the CPU | `draw_unfit` (999 column buffers and its records make 1,000 storage buffers, more than any device binds; `gpu_programs` and `window_drawn` require the `info` line its `# on the CPU:` line states). Other limits are not covered: they need a device with small limits |
 | `World.tick` returns when the GPU has finished the tick's work | not observable from a program's output; not covered |
 | A GPU system between ordinary systems that read and write the same components, and top-level code between ticks | `gpu_with_cpu_systems`, `gpu_index_from_cpu` |
 | On a device, the uploads and downloads `MIDNIGHT_GPU=stats` counts in a tick are the ones `midnight plan` lists; a column no ordinary code uses moves once | `gpu_transfers` |

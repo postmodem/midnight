@@ -1,0 +1,2539 @@
+# on the CPU: it binds 1000 storage buffers and the device binds at most 999
+# A GPU block that draws and fits no device: a bind group has at most 1000
+# bindings, so a device binds at most 999 storage buffers. The block reads
+# 500 components and its nested `each` 499, which would fit; its records
+# make 1000, so it runs on the CPU. Its draws keep their place between an
+# ordinary system's under them and another's over them, in two tables.
+
+component Spot
+  x: Float32
+  y: Float32
+end
+
+tag Big
+
+component C1
+  v: Float32 = 0
+end
+component C2
+  v: Float32 = 0
+end
+component C3
+  v: Float32 = 0
+end
+component C4
+  v: Float32 = 0
+end
+component C5
+  v: Float32 = 0
+end
+component C6
+  v: Float32 = 0
+end
+component C7
+  v: Float32 = 0
+end
+component C8
+  v: Float32 = 0
+end
+component C9
+  v: Float32 = 0
+end
+component C10
+  v: Float32 = 0
+end
+component C11
+  v: Float32 = 0
+end
+component C12
+  v: Float32 = 0
+end
+component C13
+  v: Float32 = 0
+end
+component C14
+  v: Float32 = 0
+end
+component C15
+  v: Float32 = 0
+end
+component C16
+  v: Float32 = 0
+end
+component C17
+  v: Float32 = 0
+end
+component C18
+  v: Float32 = 0
+end
+component C19
+  v: Float32 = 0
+end
+component C20
+  v: Float32 = 0
+end
+component C21
+  v: Float32 = 0
+end
+component C22
+  v: Float32 = 0
+end
+component C23
+  v: Float32 = 0
+end
+component C24
+  v: Float32 = 0
+end
+component C25
+  v: Float32 = 0
+end
+component C26
+  v: Float32 = 0
+end
+component C27
+  v: Float32 = 0
+end
+component C28
+  v: Float32 = 0
+end
+component C29
+  v: Float32 = 0
+end
+component C30
+  v: Float32 = 0
+end
+component C31
+  v: Float32 = 0
+end
+component C32
+  v: Float32 = 0
+end
+component C33
+  v: Float32 = 0
+end
+component C34
+  v: Float32 = 0
+end
+component C35
+  v: Float32 = 0
+end
+component C36
+  v: Float32 = 0
+end
+component C37
+  v: Float32 = 0
+end
+component C38
+  v: Float32 = 0
+end
+component C39
+  v: Float32 = 0
+end
+component C40
+  v: Float32 = 0
+end
+component C41
+  v: Float32 = 0
+end
+component C42
+  v: Float32 = 0
+end
+component C43
+  v: Float32 = 0
+end
+component C44
+  v: Float32 = 0
+end
+component C45
+  v: Float32 = 0
+end
+component C46
+  v: Float32 = 0
+end
+component C47
+  v: Float32 = 0
+end
+component C48
+  v: Float32 = 0
+end
+component C49
+  v: Float32 = 0
+end
+component C50
+  v: Float32 = 0
+end
+component C51
+  v: Float32 = 0
+end
+component C52
+  v: Float32 = 0
+end
+component C53
+  v: Float32 = 0
+end
+component C54
+  v: Float32 = 0
+end
+component C55
+  v: Float32 = 0
+end
+component C56
+  v: Float32 = 0
+end
+component C57
+  v: Float32 = 0
+end
+component C58
+  v: Float32 = 0
+end
+component C59
+  v: Float32 = 0
+end
+component C60
+  v: Float32 = 0
+end
+component C61
+  v: Float32 = 0
+end
+component C62
+  v: Float32 = 0
+end
+component C63
+  v: Float32 = 0
+end
+component C64
+  v: Float32 = 0
+end
+component C65
+  v: Float32 = 0
+end
+component C66
+  v: Float32 = 0
+end
+component C67
+  v: Float32 = 0
+end
+component C68
+  v: Float32 = 0
+end
+component C69
+  v: Float32 = 0
+end
+component C70
+  v: Float32 = 0
+end
+component C71
+  v: Float32 = 0
+end
+component C72
+  v: Float32 = 0
+end
+component C73
+  v: Float32 = 0
+end
+component C74
+  v: Float32 = 0
+end
+component C75
+  v: Float32 = 0
+end
+component C76
+  v: Float32 = 0
+end
+component C77
+  v: Float32 = 0
+end
+component C78
+  v: Float32 = 0
+end
+component C79
+  v: Float32 = 0
+end
+component C80
+  v: Float32 = 0
+end
+component C81
+  v: Float32 = 0
+end
+component C82
+  v: Float32 = 0
+end
+component C83
+  v: Float32 = 0
+end
+component C84
+  v: Float32 = 0
+end
+component C85
+  v: Float32 = 0
+end
+component C86
+  v: Float32 = 0
+end
+component C87
+  v: Float32 = 0
+end
+component C88
+  v: Float32 = 0
+end
+component C89
+  v: Float32 = 0
+end
+component C90
+  v: Float32 = 0
+end
+component C91
+  v: Float32 = 0
+end
+component C92
+  v: Float32 = 0
+end
+component C93
+  v: Float32 = 0
+end
+component C94
+  v: Float32 = 0
+end
+component C95
+  v: Float32 = 0
+end
+component C96
+  v: Float32 = 0
+end
+component C97
+  v: Float32 = 0
+end
+component C98
+  v: Float32 = 0
+end
+component C99
+  v: Float32 = 0
+end
+component C100
+  v: Float32 = 0
+end
+component C101
+  v: Float32 = 0
+end
+component C102
+  v: Float32 = 0
+end
+component C103
+  v: Float32 = 0
+end
+component C104
+  v: Float32 = 0
+end
+component C105
+  v: Float32 = 0
+end
+component C106
+  v: Float32 = 0
+end
+component C107
+  v: Float32 = 0
+end
+component C108
+  v: Float32 = 0
+end
+component C109
+  v: Float32 = 0
+end
+component C110
+  v: Float32 = 0
+end
+component C111
+  v: Float32 = 0
+end
+component C112
+  v: Float32 = 0
+end
+component C113
+  v: Float32 = 0
+end
+component C114
+  v: Float32 = 0
+end
+component C115
+  v: Float32 = 0
+end
+component C116
+  v: Float32 = 0
+end
+component C117
+  v: Float32 = 0
+end
+component C118
+  v: Float32 = 0
+end
+component C119
+  v: Float32 = 0
+end
+component C120
+  v: Float32 = 0
+end
+component C121
+  v: Float32 = 0
+end
+component C122
+  v: Float32 = 0
+end
+component C123
+  v: Float32 = 0
+end
+component C124
+  v: Float32 = 0
+end
+component C125
+  v: Float32 = 0
+end
+component C126
+  v: Float32 = 0
+end
+component C127
+  v: Float32 = 0
+end
+component C128
+  v: Float32 = 0
+end
+component C129
+  v: Float32 = 0
+end
+component C130
+  v: Float32 = 0
+end
+component C131
+  v: Float32 = 0
+end
+component C132
+  v: Float32 = 0
+end
+component C133
+  v: Float32 = 0
+end
+component C134
+  v: Float32 = 0
+end
+component C135
+  v: Float32 = 0
+end
+component C136
+  v: Float32 = 0
+end
+component C137
+  v: Float32 = 0
+end
+component C138
+  v: Float32 = 0
+end
+component C139
+  v: Float32 = 0
+end
+component C140
+  v: Float32 = 0
+end
+component C141
+  v: Float32 = 0
+end
+component C142
+  v: Float32 = 0
+end
+component C143
+  v: Float32 = 0
+end
+component C144
+  v: Float32 = 0
+end
+component C145
+  v: Float32 = 0
+end
+component C146
+  v: Float32 = 0
+end
+component C147
+  v: Float32 = 0
+end
+component C148
+  v: Float32 = 0
+end
+component C149
+  v: Float32 = 0
+end
+component C150
+  v: Float32 = 0
+end
+component C151
+  v: Float32 = 0
+end
+component C152
+  v: Float32 = 0
+end
+component C153
+  v: Float32 = 0
+end
+component C154
+  v: Float32 = 0
+end
+component C155
+  v: Float32 = 0
+end
+component C156
+  v: Float32 = 0
+end
+component C157
+  v: Float32 = 0
+end
+component C158
+  v: Float32 = 0
+end
+component C159
+  v: Float32 = 0
+end
+component C160
+  v: Float32 = 0
+end
+component C161
+  v: Float32 = 0
+end
+component C162
+  v: Float32 = 0
+end
+component C163
+  v: Float32 = 0
+end
+component C164
+  v: Float32 = 0
+end
+component C165
+  v: Float32 = 0
+end
+component C166
+  v: Float32 = 0
+end
+component C167
+  v: Float32 = 0
+end
+component C168
+  v: Float32 = 0
+end
+component C169
+  v: Float32 = 0
+end
+component C170
+  v: Float32 = 0
+end
+component C171
+  v: Float32 = 0
+end
+component C172
+  v: Float32 = 0
+end
+component C173
+  v: Float32 = 0
+end
+component C174
+  v: Float32 = 0
+end
+component C175
+  v: Float32 = 0
+end
+component C176
+  v: Float32 = 0
+end
+component C177
+  v: Float32 = 0
+end
+component C178
+  v: Float32 = 0
+end
+component C179
+  v: Float32 = 0
+end
+component C180
+  v: Float32 = 0
+end
+component C181
+  v: Float32 = 0
+end
+component C182
+  v: Float32 = 0
+end
+component C183
+  v: Float32 = 0
+end
+component C184
+  v: Float32 = 0
+end
+component C185
+  v: Float32 = 0
+end
+component C186
+  v: Float32 = 0
+end
+component C187
+  v: Float32 = 0
+end
+component C188
+  v: Float32 = 0
+end
+component C189
+  v: Float32 = 0
+end
+component C190
+  v: Float32 = 0
+end
+component C191
+  v: Float32 = 0
+end
+component C192
+  v: Float32 = 0
+end
+component C193
+  v: Float32 = 0
+end
+component C194
+  v: Float32 = 0
+end
+component C195
+  v: Float32 = 0
+end
+component C196
+  v: Float32 = 0
+end
+component C197
+  v: Float32 = 0
+end
+component C198
+  v: Float32 = 0
+end
+component C199
+  v: Float32 = 0
+end
+component C200
+  v: Float32 = 0
+end
+component C201
+  v: Float32 = 0
+end
+component C202
+  v: Float32 = 0
+end
+component C203
+  v: Float32 = 0
+end
+component C204
+  v: Float32 = 0
+end
+component C205
+  v: Float32 = 0
+end
+component C206
+  v: Float32 = 0
+end
+component C207
+  v: Float32 = 0
+end
+component C208
+  v: Float32 = 0
+end
+component C209
+  v: Float32 = 0
+end
+component C210
+  v: Float32 = 0
+end
+component C211
+  v: Float32 = 0
+end
+component C212
+  v: Float32 = 0
+end
+component C213
+  v: Float32 = 0
+end
+component C214
+  v: Float32 = 0
+end
+component C215
+  v: Float32 = 0
+end
+component C216
+  v: Float32 = 0
+end
+component C217
+  v: Float32 = 0
+end
+component C218
+  v: Float32 = 0
+end
+component C219
+  v: Float32 = 0
+end
+component C220
+  v: Float32 = 0
+end
+component C221
+  v: Float32 = 0
+end
+component C222
+  v: Float32 = 0
+end
+component C223
+  v: Float32 = 0
+end
+component C224
+  v: Float32 = 0
+end
+component C225
+  v: Float32 = 0
+end
+component C226
+  v: Float32 = 0
+end
+component C227
+  v: Float32 = 0
+end
+component C228
+  v: Float32 = 0
+end
+component C229
+  v: Float32 = 0
+end
+component C230
+  v: Float32 = 0
+end
+component C231
+  v: Float32 = 0
+end
+component C232
+  v: Float32 = 0
+end
+component C233
+  v: Float32 = 0
+end
+component C234
+  v: Float32 = 0
+end
+component C235
+  v: Float32 = 0
+end
+component C236
+  v: Float32 = 0
+end
+component C237
+  v: Float32 = 0
+end
+component C238
+  v: Float32 = 0
+end
+component C239
+  v: Float32 = 0
+end
+component C240
+  v: Float32 = 0
+end
+component C241
+  v: Float32 = 0
+end
+component C242
+  v: Float32 = 0
+end
+component C243
+  v: Float32 = 0
+end
+component C244
+  v: Float32 = 0
+end
+component C245
+  v: Float32 = 0
+end
+component C246
+  v: Float32 = 0
+end
+component C247
+  v: Float32 = 0
+end
+component C248
+  v: Float32 = 0
+end
+component C249
+  v: Float32 = 0
+end
+component C250
+  v: Float32 = 0
+end
+component C251
+  v: Float32 = 0
+end
+component C252
+  v: Float32 = 0
+end
+component C253
+  v: Float32 = 0
+end
+component C254
+  v: Float32 = 0
+end
+component C255
+  v: Float32 = 0
+end
+component C256
+  v: Float32 = 0
+end
+component C257
+  v: Float32 = 0
+end
+component C258
+  v: Float32 = 0
+end
+component C259
+  v: Float32 = 0
+end
+component C260
+  v: Float32 = 0
+end
+component C261
+  v: Float32 = 0
+end
+component C262
+  v: Float32 = 0
+end
+component C263
+  v: Float32 = 0
+end
+component C264
+  v: Float32 = 0
+end
+component C265
+  v: Float32 = 0
+end
+component C266
+  v: Float32 = 0
+end
+component C267
+  v: Float32 = 0
+end
+component C268
+  v: Float32 = 0
+end
+component C269
+  v: Float32 = 0
+end
+component C270
+  v: Float32 = 0
+end
+component C271
+  v: Float32 = 0
+end
+component C272
+  v: Float32 = 0
+end
+component C273
+  v: Float32 = 0
+end
+component C274
+  v: Float32 = 0
+end
+component C275
+  v: Float32 = 0
+end
+component C276
+  v: Float32 = 0
+end
+component C277
+  v: Float32 = 0
+end
+component C278
+  v: Float32 = 0
+end
+component C279
+  v: Float32 = 0
+end
+component C280
+  v: Float32 = 0
+end
+component C281
+  v: Float32 = 0
+end
+component C282
+  v: Float32 = 0
+end
+component C283
+  v: Float32 = 0
+end
+component C284
+  v: Float32 = 0
+end
+component C285
+  v: Float32 = 0
+end
+component C286
+  v: Float32 = 0
+end
+component C287
+  v: Float32 = 0
+end
+component C288
+  v: Float32 = 0
+end
+component C289
+  v: Float32 = 0
+end
+component C290
+  v: Float32 = 0
+end
+component C291
+  v: Float32 = 0
+end
+component C292
+  v: Float32 = 0
+end
+component C293
+  v: Float32 = 0
+end
+component C294
+  v: Float32 = 0
+end
+component C295
+  v: Float32 = 0
+end
+component C296
+  v: Float32 = 0
+end
+component C297
+  v: Float32 = 0
+end
+component C298
+  v: Float32 = 0
+end
+component C299
+  v: Float32 = 0
+end
+component C300
+  v: Float32 = 0
+end
+component C301
+  v: Float32 = 0
+end
+component C302
+  v: Float32 = 0
+end
+component C303
+  v: Float32 = 0
+end
+component C304
+  v: Float32 = 0
+end
+component C305
+  v: Float32 = 0
+end
+component C306
+  v: Float32 = 0
+end
+component C307
+  v: Float32 = 0
+end
+component C308
+  v: Float32 = 0
+end
+component C309
+  v: Float32 = 0
+end
+component C310
+  v: Float32 = 0
+end
+component C311
+  v: Float32 = 0
+end
+component C312
+  v: Float32 = 0
+end
+component C313
+  v: Float32 = 0
+end
+component C314
+  v: Float32 = 0
+end
+component C315
+  v: Float32 = 0
+end
+component C316
+  v: Float32 = 0
+end
+component C317
+  v: Float32 = 0
+end
+component C318
+  v: Float32 = 0
+end
+component C319
+  v: Float32 = 0
+end
+component C320
+  v: Float32 = 0
+end
+component C321
+  v: Float32 = 0
+end
+component C322
+  v: Float32 = 0
+end
+component C323
+  v: Float32 = 0
+end
+component C324
+  v: Float32 = 0
+end
+component C325
+  v: Float32 = 0
+end
+component C326
+  v: Float32 = 0
+end
+component C327
+  v: Float32 = 0
+end
+component C328
+  v: Float32 = 0
+end
+component C329
+  v: Float32 = 0
+end
+component C330
+  v: Float32 = 0
+end
+component C331
+  v: Float32 = 0
+end
+component C332
+  v: Float32 = 0
+end
+component C333
+  v: Float32 = 0
+end
+component C334
+  v: Float32 = 0
+end
+component C335
+  v: Float32 = 0
+end
+component C336
+  v: Float32 = 0
+end
+component C337
+  v: Float32 = 0
+end
+component C338
+  v: Float32 = 0
+end
+component C339
+  v: Float32 = 0
+end
+component C340
+  v: Float32 = 0
+end
+component C341
+  v: Float32 = 0
+end
+component C342
+  v: Float32 = 0
+end
+component C343
+  v: Float32 = 0
+end
+component C344
+  v: Float32 = 0
+end
+component C345
+  v: Float32 = 0
+end
+component C346
+  v: Float32 = 0
+end
+component C347
+  v: Float32 = 0
+end
+component C348
+  v: Float32 = 0
+end
+component C349
+  v: Float32 = 0
+end
+component C350
+  v: Float32 = 0
+end
+component C351
+  v: Float32 = 0
+end
+component C352
+  v: Float32 = 0
+end
+component C353
+  v: Float32 = 0
+end
+component C354
+  v: Float32 = 0
+end
+component C355
+  v: Float32 = 0
+end
+component C356
+  v: Float32 = 0
+end
+component C357
+  v: Float32 = 0
+end
+component C358
+  v: Float32 = 0
+end
+component C359
+  v: Float32 = 0
+end
+component C360
+  v: Float32 = 0
+end
+component C361
+  v: Float32 = 0
+end
+component C362
+  v: Float32 = 0
+end
+component C363
+  v: Float32 = 0
+end
+component C364
+  v: Float32 = 0
+end
+component C365
+  v: Float32 = 0
+end
+component C366
+  v: Float32 = 0
+end
+component C367
+  v: Float32 = 0
+end
+component C368
+  v: Float32 = 0
+end
+component C369
+  v: Float32 = 0
+end
+component C370
+  v: Float32 = 0
+end
+component C371
+  v: Float32 = 0
+end
+component C372
+  v: Float32 = 0
+end
+component C373
+  v: Float32 = 0
+end
+component C374
+  v: Float32 = 0
+end
+component C375
+  v: Float32 = 0
+end
+component C376
+  v: Float32 = 0
+end
+component C377
+  v: Float32 = 0
+end
+component C378
+  v: Float32 = 0
+end
+component C379
+  v: Float32 = 0
+end
+component C380
+  v: Float32 = 0
+end
+component C381
+  v: Float32 = 0
+end
+component C382
+  v: Float32 = 0
+end
+component C383
+  v: Float32 = 0
+end
+component C384
+  v: Float32 = 0
+end
+component C385
+  v: Float32 = 0
+end
+component C386
+  v: Float32 = 0
+end
+component C387
+  v: Float32 = 0
+end
+component C388
+  v: Float32 = 0
+end
+component C389
+  v: Float32 = 0
+end
+component C390
+  v: Float32 = 0
+end
+component C391
+  v: Float32 = 0
+end
+component C392
+  v: Float32 = 0
+end
+component C393
+  v: Float32 = 0
+end
+component C394
+  v: Float32 = 0
+end
+component C395
+  v: Float32 = 0
+end
+component C396
+  v: Float32 = 0
+end
+component C397
+  v: Float32 = 0
+end
+component C398
+  v: Float32 = 0
+end
+component C399
+  v: Float32 = 0
+end
+component C400
+  v: Float32 = 0
+end
+component C401
+  v: Float32 = 0
+end
+component C402
+  v: Float32 = 0
+end
+component C403
+  v: Float32 = 0
+end
+component C404
+  v: Float32 = 0
+end
+component C405
+  v: Float32 = 0
+end
+component C406
+  v: Float32 = 0
+end
+component C407
+  v: Float32 = 0
+end
+component C408
+  v: Float32 = 0
+end
+component C409
+  v: Float32 = 0
+end
+component C410
+  v: Float32 = 0
+end
+component C411
+  v: Float32 = 0
+end
+component C412
+  v: Float32 = 0
+end
+component C413
+  v: Float32 = 0
+end
+component C414
+  v: Float32 = 0
+end
+component C415
+  v: Float32 = 0
+end
+component C416
+  v: Float32 = 0
+end
+component C417
+  v: Float32 = 0
+end
+component C418
+  v: Float32 = 0
+end
+component C419
+  v: Float32 = 0
+end
+component C420
+  v: Float32 = 0
+end
+component C421
+  v: Float32 = 0
+end
+component C422
+  v: Float32 = 0
+end
+component C423
+  v: Float32 = 0
+end
+component C424
+  v: Float32 = 0
+end
+component C425
+  v: Float32 = 0
+end
+component C426
+  v: Float32 = 0
+end
+component C427
+  v: Float32 = 0
+end
+component C428
+  v: Float32 = 0
+end
+component C429
+  v: Float32 = 0
+end
+component C430
+  v: Float32 = 0
+end
+component C431
+  v: Float32 = 0
+end
+component C432
+  v: Float32 = 0
+end
+component C433
+  v: Float32 = 0
+end
+component C434
+  v: Float32 = 0
+end
+component C435
+  v: Float32 = 0
+end
+component C436
+  v: Float32 = 0
+end
+component C437
+  v: Float32 = 0
+end
+component C438
+  v: Float32 = 0
+end
+component C439
+  v: Float32 = 0
+end
+component C440
+  v: Float32 = 0
+end
+component C441
+  v: Float32 = 0
+end
+component C442
+  v: Float32 = 0
+end
+component C443
+  v: Float32 = 0
+end
+component C444
+  v: Float32 = 0
+end
+component C445
+  v: Float32 = 0
+end
+component C446
+  v: Float32 = 0
+end
+component C447
+  v: Float32 = 0
+end
+component C448
+  v: Float32 = 0
+end
+component C449
+  v: Float32 = 0
+end
+component C450
+  v: Float32 = 0
+end
+component C451
+  v: Float32 = 0
+end
+component C452
+  v: Float32 = 0
+end
+component C453
+  v: Float32 = 0
+end
+component C454
+  v: Float32 = 0
+end
+component C455
+  v: Float32 = 0
+end
+component C456
+  v: Float32 = 0
+end
+component C457
+  v: Float32 = 0
+end
+component C458
+  v: Float32 = 0
+end
+component C459
+  v: Float32 = 0
+end
+component C460
+  v: Float32 = 0
+end
+component C461
+  v: Float32 = 0
+end
+component C462
+  v: Float32 = 0
+end
+component C463
+  v: Float32 = 0
+end
+component C464
+  v: Float32 = 0
+end
+component C465
+  v: Float32 = 0
+end
+component C466
+  v: Float32 = 0
+end
+component C467
+  v: Float32 = 0
+end
+component C468
+  v: Float32 = 0
+end
+component C469
+  v: Float32 = 0
+end
+component C470
+  v: Float32 = 0
+end
+component C471
+  v: Float32 = 0
+end
+component C472
+  v: Float32 = 0
+end
+component C473
+  v: Float32 = 0
+end
+component C474
+  v: Float32 = 0
+end
+component C475
+  v: Float32 = 0
+end
+component C476
+  v: Float32 = 0
+end
+component C477
+  v: Float32 = 0
+end
+component C478
+  v: Float32 = 0
+end
+component C479
+  v: Float32 = 0
+end
+component C480
+  v: Float32 = 0
+end
+component C481
+  v: Float32 = 0
+end
+component C482
+  v: Float32 = 0
+end
+component C483
+  v: Float32 = 0
+end
+component C484
+  v: Float32 = 0
+end
+component C485
+  v: Float32 = 0
+end
+component C486
+  v: Float32 = 0
+end
+component C487
+  v: Float32 = 0
+end
+component C488
+  v: Float32 = 0
+end
+component C489
+  v: Float32 = 0
+end
+component C490
+  v: Float32 = 0
+end
+component C491
+  v: Float32 = 0
+end
+component C492
+  v: Float32 = 0
+end
+component C493
+  v: Float32 = 0
+end
+component C494
+  v: Float32 = 0
+end
+component C495
+  v: Float32 = 0
+end
+component C496
+  v: Float32 = 0
+end
+component C497
+  v: Float32 = 0
+end
+component C498
+  v: Float32 = 0
+end
+component C499
+  v: Float32 = 0
+end
+
+system under
+  Draw.rect(4, 4, 40, 30, Color(200, 0, 0))
+end
+
+gpu system wide
+  each Spot, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31, C32, C33, C34, C35, C36, C37, C38, C39, C40, C41, C42, C43, C44, C45, C46, C47, C48, C49, C50, C51, C52, C53, C54, C55, C56, C57, C58, C59, C60, C61, C62, C63, C64, C65, C66, C67, C68, C69, C70, C71, C72, C73, C74, C75, C76, C77, C78, C79, C80, C81, C82, C83, C84, C85, C86, C87, C88, C89, C90, C91, C92, C93, C94, C95, C96, C97, C98, C99, C100, C101, C102, C103, C104, C105, C106, C107, C108, C109, C110, C111, C112, C113, C114, C115, C116, C117, C118, C119, C120, C121, C122, C123, C124, C125, C126, C127, C128, C129, C130, C131, C132, C133, C134, C135, C136, C137, C138, C139, C140, C141, C142, C143, C144, C145, C146, C147, C148, C149, C150, C151, C152, C153, C154, C155, C156, C157, C158, C159, C160, C161, C162, C163, C164, C165, C166, C167, C168, C169, C170, C171, C172, C173, C174, C175, C176, C177, C178, C179, C180, C181, C182, C183, C184, C185, C186, C187, C188, C189, C190, C191, C192, C193, C194, C195, C196, C197, C198, C199, C200, C201, C202, C203, C204, C205, C206, C207, C208, C209, C210, C211, C212, C213, C214, C215, C216, C217, C218, C219, C220, C221, C222, C223, C224, C225, C226, C227, C228, C229, C230, C231, C232, C233, C234, C235, C236, C237, C238, C239, C240, C241, C242, C243, C244, C245, C246, C247, C248, C249, C250, C251, C252, C253, C254, C255, C256, C257, C258, C259, C260, C261, C262, C263, C264, C265, C266, C267, C268, C269, C270, C271, C272, C273, C274, C275, C276, C277, C278, C279, C280, C281, C282, C283, C284, C285, C286, C287, C288, C289, C290, C291, C292, C293, C294, C295, C296, C297, C298, C299, C300, C301, C302, C303, C304, C305, C306, C307, C308, C309, C310, C311, C312, C313, C314, C315, C316, C317, C318, C319, C320, C321, C322, C323, C324, C325, C326, C327, C328, C329, C330, C331, C332, C333, C334, C335, C336, C337, C338, C339, C340, C341, C342, C343, C344, C345, C346, C347, C348, C349, C350, C351, C352, C353, C354, C355, C356, C357, C358, C359, C360, C361, C362, C363, C364, C365, C366, C367, C368, C369, C370, C371, C372, C373, C374, C375, C376, C377, C378, C379, C380, C381, C382, C383, C384, C385, C386, C387, C388, C389, C390, C391, C392, C393, C394, C395, C396, C397, C398, C399, C400, C401, C402, C403, C404, C405, C406, C407, C408, C409, C410, C411, C412, C413, C414, C415, C416, C417, C418, C419, C420, C421, C422, C423, C424, C425, C426, C427, C428, C429, C430, C431, C432, C433, C434, C435, C436, C437, C438, C439, C440, C441, C442, C443, C444, C445, C446, C447, C448, C449, C450, C451, C452, C453, C454, C455, C456, C457, C458, C459, C460, C461, C462, C463, C464, C465, C466, C467, C468, C469, C470, C471, C472, C473, C474, C475, C476, C477, C478, C479, C480, C481, C482, C483, C484, C485, C486, C487, C488, C489, C490, C491, C492, C493, C494, C495, C496, C497, C498, C499 do |spot, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48, c49, c50, c51, c52, c53, c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68, c69, c70, c71, c72, c73, c74, c75, c76, c77, c78, c79, c80, c81, c82, c83, c84, c85, c86, c87, c88, c89, c90, c91, c92, c93, c94, c95, c96, c97, c98, c99, c100, c101, c102, c103, c104, c105, c106, c107, c108, c109, c110, c111, c112, c113, c114, c115, c116, c117, c118, c119, c120, c121, c122, c123, c124, c125, c126, c127, c128, c129, c130, c131, c132, c133, c134, c135, c136, c137, c138, c139, c140, c141, c142, c143, c144, c145, c146, c147, c148, c149, c150, c151, c152, c153, c154, c155, c156, c157, c158, c159, c160, c161, c162, c163, c164, c165, c166, c167, c168, c169, c170, c171, c172, c173, c174, c175, c176, c177, c178, c179, c180, c181, c182, c183, c184, c185, c186, c187, c188, c189, c190, c191, c192, c193, c194, c195, c196, c197, c198, c199, c200, c201, c202, c203, c204, c205, c206, c207, c208, c209, c210, c211, c212, c213, c214, c215, c216, c217, c218, c219, c220, c221, c222, c223, c224, c225, c226, c227, c228, c229, c230, c231, c232, c233, c234, c235, c236, c237, c238, c239, c240, c241, c242, c243, c244, c245, c246, c247, c248, c249, c250, c251, c252, c253, c254, c255, c256, c257, c258, c259, c260, c261, c262, c263, c264, c265, c266, c267, c268, c269, c270, c271, c272, c273, c274, c275, c276, c277, c278, c279, c280, c281, c282, c283, c284, c285, c286, c287, c288, c289, c290, c291, c292, c293, c294, c295, c296, c297, c298, c299, c300, c301, c302, c303, c304, c305, c306, c307, c308, c309, c310, c311, c312, c313, c314, c315, c316, c317, c318, c319, c320, c321, c322, c323, c324, c325, c326, c327, c328, c329, c330, c331, c332, c333, c334, c335, c336, c337, c338, c339, c340, c341, c342, c343, c344, c345, c346, c347, c348, c349, c350, c351, c352, c353, c354, c355, c356, c357, c358, c359, c360, c361, c362, c363, c364, c365, c366, c367, c368, c369, c370, c371, c372, c373, c374, c375, c376, c377, c378, c379, c380, c381, c382, c383, c384, c385, c386, c387, c388, c389, c390, c391, c392, c393, c394, c395, c396, c397, c398, c399, c400, c401, c402, c403, c404, c405, c406, c407, c408, c409, c410, c411, c412, c413, c414, c415, c416, c417, c418, c419, c420, c421, c422, c423, c424, c425, c426, c427, c428, c429, c430, c431, c432, c433, c434, c435, c436, c437, c438, c439, c440, c441, c442, c443, c444, c445, c446, c447, c448, c449, c450, c451, c452, c453, c454, c455, c456, c457, c458, c459, c460, c461, c462, c463, c464, c465, c466, c467, c468, c469, c470, c471, c472, c473, c474, c475, c476, c477, c478, c479, c480, c481, c482, c483, c484, c485, c486, c487, c488, c489, c490, c491, c492, c493, c494, c495, c496, c497, c498, c499|
+    s = 0.0
+    s += c1.v
+    s += c2.v
+    s += c3.v
+    s += c4.v
+    s += c5.v
+    s += c6.v
+    s += c7.v
+    s += c8.v
+    s += c9.v
+    s += c10.v
+    s += c11.v
+    s += c12.v
+    s += c13.v
+    s += c14.v
+    s += c15.v
+    s += c16.v
+    s += c17.v
+    s += c18.v
+    s += c19.v
+    s += c20.v
+    s += c21.v
+    s += c22.v
+    s += c23.v
+    s += c24.v
+    s += c25.v
+    s += c26.v
+    s += c27.v
+    s += c28.v
+    s += c29.v
+    s += c30.v
+    s += c31.v
+    s += c32.v
+    s += c33.v
+    s += c34.v
+    s += c35.v
+    s += c36.v
+    s += c37.v
+    s += c38.v
+    s += c39.v
+    s += c40.v
+    s += c41.v
+    s += c42.v
+    s += c43.v
+    s += c44.v
+    s += c45.v
+    s += c46.v
+    s += c47.v
+    s += c48.v
+    s += c49.v
+    s += c50.v
+    s += c51.v
+    s += c52.v
+    s += c53.v
+    s += c54.v
+    s += c55.v
+    s += c56.v
+    s += c57.v
+    s += c58.v
+    s += c59.v
+    s += c60.v
+    s += c61.v
+    s += c62.v
+    s += c63.v
+    s += c64.v
+    s += c65.v
+    s += c66.v
+    s += c67.v
+    s += c68.v
+    s += c69.v
+    s += c70.v
+    s += c71.v
+    s += c72.v
+    s += c73.v
+    s += c74.v
+    s += c75.v
+    s += c76.v
+    s += c77.v
+    s += c78.v
+    s += c79.v
+    s += c80.v
+    s += c81.v
+    s += c82.v
+    s += c83.v
+    s += c84.v
+    s += c85.v
+    s += c86.v
+    s += c87.v
+    s += c88.v
+    s += c89.v
+    s += c90.v
+    s += c91.v
+    s += c92.v
+    s += c93.v
+    s += c94.v
+    s += c95.v
+    s += c96.v
+    s += c97.v
+    s += c98.v
+    s += c99.v
+    s += c100.v
+    s += c101.v
+    s += c102.v
+    s += c103.v
+    s += c104.v
+    s += c105.v
+    s += c106.v
+    s += c107.v
+    s += c108.v
+    s += c109.v
+    s += c110.v
+    s += c111.v
+    s += c112.v
+    s += c113.v
+    s += c114.v
+    s += c115.v
+    s += c116.v
+    s += c117.v
+    s += c118.v
+    s += c119.v
+    s += c120.v
+    s += c121.v
+    s += c122.v
+    s += c123.v
+    s += c124.v
+    s += c125.v
+    s += c126.v
+    s += c127.v
+    s += c128.v
+    s += c129.v
+    s += c130.v
+    s += c131.v
+    s += c132.v
+    s += c133.v
+    s += c134.v
+    s += c135.v
+    s += c136.v
+    s += c137.v
+    s += c138.v
+    s += c139.v
+    s += c140.v
+    s += c141.v
+    s += c142.v
+    s += c143.v
+    s += c144.v
+    s += c145.v
+    s += c146.v
+    s += c147.v
+    s += c148.v
+    s += c149.v
+    s += c150.v
+    s += c151.v
+    s += c152.v
+    s += c153.v
+    s += c154.v
+    s += c155.v
+    s += c156.v
+    s += c157.v
+    s += c158.v
+    s += c159.v
+    s += c160.v
+    s += c161.v
+    s += c162.v
+    s += c163.v
+    s += c164.v
+    s += c165.v
+    s += c166.v
+    s += c167.v
+    s += c168.v
+    s += c169.v
+    s += c170.v
+    s += c171.v
+    s += c172.v
+    s += c173.v
+    s += c174.v
+    s += c175.v
+    s += c176.v
+    s += c177.v
+    s += c178.v
+    s += c179.v
+    s += c180.v
+    s += c181.v
+    s += c182.v
+    s += c183.v
+    s += c184.v
+    s += c185.v
+    s += c186.v
+    s += c187.v
+    s += c188.v
+    s += c189.v
+    s += c190.v
+    s += c191.v
+    s += c192.v
+    s += c193.v
+    s += c194.v
+    s += c195.v
+    s += c196.v
+    s += c197.v
+    s += c198.v
+    s += c199.v
+    s += c200.v
+    s += c201.v
+    s += c202.v
+    s += c203.v
+    s += c204.v
+    s += c205.v
+    s += c206.v
+    s += c207.v
+    s += c208.v
+    s += c209.v
+    s += c210.v
+    s += c211.v
+    s += c212.v
+    s += c213.v
+    s += c214.v
+    s += c215.v
+    s += c216.v
+    s += c217.v
+    s += c218.v
+    s += c219.v
+    s += c220.v
+    s += c221.v
+    s += c222.v
+    s += c223.v
+    s += c224.v
+    s += c225.v
+    s += c226.v
+    s += c227.v
+    s += c228.v
+    s += c229.v
+    s += c230.v
+    s += c231.v
+    s += c232.v
+    s += c233.v
+    s += c234.v
+    s += c235.v
+    s += c236.v
+    s += c237.v
+    s += c238.v
+    s += c239.v
+    s += c240.v
+    s += c241.v
+    s += c242.v
+    s += c243.v
+    s += c244.v
+    s += c245.v
+    s += c246.v
+    s += c247.v
+    s += c248.v
+    s += c249.v
+    s += c250.v
+    s += c251.v
+    s += c252.v
+    s += c253.v
+    s += c254.v
+    s += c255.v
+    s += c256.v
+    s += c257.v
+    s += c258.v
+    s += c259.v
+    s += c260.v
+    s += c261.v
+    s += c262.v
+    s += c263.v
+    s += c264.v
+    s += c265.v
+    s += c266.v
+    s += c267.v
+    s += c268.v
+    s += c269.v
+    s += c270.v
+    s += c271.v
+    s += c272.v
+    s += c273.v
+    s += c274.v
+    s += c275.v
+    s += c276.v
+    s += c277.v
+    s += c278.v
+    s += c279.v
+    s += c280.v
+    s += c281.v
+    s += c282.v
+    s += c283.v
+    s += c284.v
+    s += c285.v
+    s += c286.v
+    s += c287.v
+    s += c288.v
+    s += c289.v
+    s += c290.v
+    s += c291.v
+    s += c292.v
+    s += c293.v
+    s += c294.v
+    s += c295.v
+    s += c296.v
+    s += c297.v
+    s += c298.v
+    s += c299.v
+    s += c300.v
+    s += c301.v
+    s += c302.v
+    s += c303.v
+    s += c304.v
+    s += c305.v
+    s += c306.v
+    s += c307.v
+    s += c308.v
+    s += c309.v
+    s += c310.v
+    s += c311.v
+    s += c312.v
+    s += c313.v
+    s += c314.v
+    s += c315.v
+    s += c316.v
+    s += c317.v
+    s += c318.v
+    s += c319.v
+    s += c320.v
+    s += c321.v
+    s += c322.v
+    s += c323.v
+    s += c324.v
+    s += c325.v
+    s += c326.v
+    s += c327.v
+    s += c328.v
+    s += c329.v
+    s += c330.v
+    s += c331.v
+    s += c332.v
+    s += c333.v
+    s += c334.v
+    s += c335.v
+    s += c336.v
+    s += c337.v
+    s += c338.v
+    s += c339.v
+    s += c340.v
+    s += c341.v
+    s += c342.v
+    s += c343.v
+    s += c344.v
+    s += c345.v
+    s += c346.v
+    s += c347.v
+    s += c348.v
+    s += c349.v
+    s += c350.v
+    s += c351.v
+    s += c352.v
+    s += c353.v
+    s += c354.v
+    s += c355.v
+    s += c356.v
+    s += c357.v
+    s += c358.v
+    s += c359.v
+    s += c360.v
+    s += c361.v
+    s += c362.v
+    s += c363.v
+    s += c364.v
+    s += c365.v
+    s += c366.v
+    s += c367.v
+    s += c368.v
+    s += c369.v
+    s += c370.v
+    s += c371.v
+    s += c372.v
+    s += c373.v
+    s += c374.v
+    s += c375.v
+    s += c376.v
+    s += c377.v
+    s += c378.v
+    s += c379.v
+    s += c380.v
+    s += c381.v
+    s += c382.v
+    s += c383.v
+    s += c384.v
+    s += c385.v
+    s += c386.v
+    s += c387.v
+    s += c388.v
+    s += c389.v
+    s += c390.v
+    s += c391.v
+    s += c392.v
+    s += c393.v
+    s += c394.v
+    s += c395.v
+    s += c396.v
+    s += c397.v
+    s += c398.v
+    s += c399.v
+    s += c400.v
+    s += c401.v
+    s += c402.v
+    s += c403.v
+    s += c404.v
+    s += c405.v
+    s += c406.v
+    s += c407.v
+    s += c408.v
+    s += c409.v
+    s += c410.v
+    s += c411.v
+    s += c412.v
+    s += c413.v
+    s += c414.v
+    s += c415.v
+    s += c416.v
+    s += c417.v
+    s += c418.v
+    s += c419.v
+    s += c420.v
+    s += c421.v
+    s += c422.v
+    s += c423.v
+    s += c424.v
+    s += c425.v
+    s += c426.v
+    s += c427.v
+    s += c428.v
+    s += c429.v
+    s += c430.v
+    s += c431.v
+    s += c432.v
+    s += c433.v
+    s += c434.v
+    s += c435.v
+    s += c436.v
+    s += c437.v
+    s += c438.v
+    s += c439.v
+    s += c440.v
+    s += c441.v
+    s += c442.v
+    s += c443.v
+    s += c444.v
+    s += c445.v
+    s += c446.v
+    s += c447.v
+    s += c448.v
+    s += c449.v
+    s += c450.v
+    s += c451.v
+    s += c452.v
+    s += c453.v
+    s += c454.v
+    s += c455.v
+    s += c456.v
+    s += c457.v
+    s += c458.v
+    s += c459.v
+    s += c460.v
+    s += c461.v
+    s += c462.v
+    s += c463.v
+    s += c464.v
+    s += c465.v
+    s += c466.v
+    s += c467.v
+    s += c468.v
+    s += c469.v
+    s += c470.v
+    s += c471.v
+    s += c472.v
+    s += c473.v
+    s += c474.v
+    s += c475.v
+    s += c476.v
+    s += c477.v
+    s += c478.v
+    s += c479.v
+    s += c480.v
+    s += c481.v
+    s += c482.v
+    s += c483.v
+    s += c484.v
+    s += c485.v
+    s += c486.v
+    s += c487.v
+    s += c488.v
+    s += c489.v
+    s += c490.v
+    s += c491.v
+    s += c492.v
+    s += c493.v
+    s += c494.v
+    s += c495.v
+    s += c496.v
+    s += c497.v
+    s += c498.v
+    s += c499.v
+    n = 0.0
+    each C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31, C32, C33, C34, C35, C36, C37, C38, C39, C40, C41, C42, C43, C44, C45, C46, C47, C48, C49, C50, C51, C52, C53, C54, C55, C56, C57, C58, C59, C60, C61, C62, C63, C64, C65, C66, C67, C68, C69, C70, C71, C72, C73, C74, C75, C76, C77, C78, C79, C80, C81, C82, C83, C84, C85, C86, C87, C88, C89, C90, C91, C92, C93, C94, C95, C96, C97, C98, C99, C100, C101, C102, C103, C104, C105, C106, C107, C108, C109, C110, C111, C112, C113, C114, C115, C116, C117, C118, C119, C120, C121, C122, C123, C124, C125, C126, C127, C128, C129, C130, C131, C132, C133, C134, C135, C136, C137, C138, C139, C140, C141, C142, C143, C144, C145, C146, C147, C148, C149, C150, C151, C152, C153, C154, C155, C156, C157, C158, C159, C160, C161, C162, C163, C164, C165, C166, C167, C168, C169, C170, C171, C172, C173, C174, C175, C176, C177, C178, C179, C180, C181, C182, C183, C184, C185, C186, C187, C188, C189, C190, C191, C192, C193, C194, C195, C196, C197, C198, C199, C200, C201, C202, C203, C204, C205, C206, C207, C208, C209, C210, C211, C212, C213, C214, C215, C216, C217, C218, C219, C220, C221, C222, C223, C224, C225, C226, C227, C228, C229, C230, C231, C232, C233, C234, C235, C236, C237, C238, C239, C240, C241, C242, C243, C244, C245, C246, C247, C248, C249, C250, C251, C252, C253, C254, C255, C256, C257, C258, C259, C260, C261, C262, C263, C264, C265, C266, C267, C268, C269, C270, C271, C272, C273, C274, C275, C276, C277, C278, C279, C280, C281, C282, C283, C284, C285, C286, C287, C288, C289, C290, C291, C292, C293, C294, C295, C296, C297, C298, C299, C300, C301, C302, C303, C304, C305, C306, C307, C308, C309, C310, C311, C312, C313, C314, C315, C316, C317, C318, C319, C320, C321, C322, C323, C324, C325, C326, C327, C328, C329, C330, C331, C332, C333, C334, C335, C336, C337, C338, C339, C340, C341, C342, C343, C344, C345, C346, C347, C348, C349, C350, C351, C352, C353, C354, C355, C356, C357, C358, C359, C360, C361, C362, C363, C364, C365, C366, C367, C368, C369, C370, C371, C372, C373, C374, C375, C376, C377, C378, C379, C380, C381, C382, C383, C384, C385, C386, C387, C388, C389, C390, C391, C392, C393, C394, C395, C396, C397, C398, C399, C400, C401, C402, C403, C404, C405, C406, C407, C408, C409, C410, C411, C412, C413, C414, C415, C416, C417, C418, C419, C420, C421, C422, C423, C424, C425, C426, C427, C428, C429, C430, C431, C432, C433, C434, C435, C436, C437, C438, C439, C440, C441, C442, C443, C444, C445, C446, C447, C448, C449, C450, C451, C452, C453, C454, C455, C456, C457, C458, C459, C460, C461, C462, C463, C464, C465, C466, C467, C468, C469, C470, C471, C472, C473, C474, C475, C476, C477, C478, C479, C480, C481, C482, C483, C484, C485, C486, C487, C488, C489, C490, C491, C492, C493, C494, C495, C496, C497, C498, C499 do |d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21, d22, d23, d24, d25, d26, d27, d28, d29, d30, d31, d32, d33, d34, d35, d36, d37, d38, d39, d40, d41, d42, d43, d44, d45, d46, d47, d48, d49, d50, d51, d52, d53, d54, d55, d56, d57, d58, d59, d60, d61, d62, d63, d64, d65, d66, d67, d68, d69, d70, d71, d72, d73, d74, d75, d76, d77, d78, d79, d80, d81, d82, d83, d84, d85, d86, d87, d88, d89, d90, d91, d92, d93, d94, d95, d96, d97, d98, d99, d100, d101, d102, d103, d104, d105, d106, d107, d108, d109, d110, d111, d112, d113, d114, d115, d116, d117, d118, d119, d120, d121, d122, d123, d124, d125, d126, d127, d128, d129, d130, d131, d132, d133, d134, d135, d136, d137, d138, d139, d140, d141, d142, d143, d144, d145, d146, d147, d148, d149, d150, d151, d152, d153, d154, d155, d156, d157, d158, d159, d160, d161, d162, d163, d164, d165, d166, d167, d168, d169, d170, d171, d172, d173, d174, d175, d176, d177, d178, d179, d180, d181, d182, d183, d184, d185, d186, d187, d188, d189, d190, d191, d192, d193, d194, d195, d196, d197, d198, d199, d200, d201, d202, d203, d204, d205, d206, d207, d208, d209, d210, d211, d212, d213, d214, d215, d216, d217, d218, d219, d220, d221, d222, d223, d224, d225, d226, d227, d228, d229, d230, d231, d232, d233, d234, d235, d236, d237, d238, d239, d240, d241, d242, d243, d244, d245, d246, d247, d248, d249, d250, d251, d252, d253, d254, d255, d256, d257, d258, d259, d260, d261, d262, d263, d264, d265, d266, d267, d268, d269, d270, d271, d272, d273, d274, d275, d276, d277, d278, d279, d280, d281, d282, d283, d284, d285, d286, d287, d288, d289, d290, d291, d292, d293, d294, d295, d296, d297, d298, d299, d300, d301, d302, d303, d304, d305, d306, d307, d308, d309, d310, d311, d312, d313, d314, d315, d316, d317, d318, d319, d320, d321, d322, d323, d324, d325, d326, d327, d328, d329, d330, d331, d332, d333, d334, d335, d336, d337, d338, d339, d340, d341, d342, d343, d344, d345, d346, d347, d348, d349, d350, d351, d352, d353, d354, d355, d356, d357, d358, d359, d360, d361, d362, d363, d364, d365, d366, d367, d368, d369, d370, d371, d372, d373, d374, d375, d376, d377, d378, d379, d380, d381, d382, d383, d384, d385, d386, d387, d388, d389, d390, d391, d392, d393, d394, d395, d396, d397, d398, d399, d400, d401, d402, d403, d404, d405, d406, d407, d408, d409, d410, d411, d412, d413, d414, d415, d416, d417, d418, d419, d420, d421, d422, d423, d424, d425, d426, d427, d428, d429, d430, d431, d432, d433, d434, d435, d436, d437, d438, d439, d440, d441, d442, d443, d444, d445, d446, d447, d448, d449, d450, d451, d452, d453, d454, d455, d456, d457, d458, d459, d460, d461, d462, d463, d464, d465, d466, d467, d468, d469, d470, d471, d472, d473, d474, d475, d476, d477, d478, d479, d480, d481, d482, d483, d484, d485, d486, d487, d488, d489, d490, d491, d492, d493, d494, d495, d496, d497, d498, d499|
+      n += d1.v
+      n += d2.v
+      n += d3.v
+      n += d4.v
+      n += d5.v
+      n += d6.v
+      n += d7.v
+      n += d8.v
+      n += d9.v
+      n += d10.v
+      n += d11.v
+      n += d12.v
+      n += d13.v
+      n += d14.v
+      n += d15.v
+      n += d16.v
+      n += d17.v
+      n += d18.v
+      n += d19.v
+      n += d20.v
+      n += d21.v
+      n += d22.v
+      n += d23.v
+      n += d24.v
+      n += d25.v
+      n += d26.v
+      n += d27.v
+      n += d28.v
+      n += d29.v
+      n += d30.v
+      n += d31.v
+      n += d32.v
+      n += d33.v
+      n += d34.v
+      n += d35.v
+      n += d36.v
+      n += d37.v
+      n += d38.v
+      n += d39.v
+      n += d40.v
+      n += d41.v
+      n += d42.v
+      n += d43.v
+      n += d44.v
+      n += d45.v
+      n += d46.v
+      n += d47.v
+      n += d48.v
+      n += d49.v
+      n += d50.v
+      n += d51.v
+      n += d52.v
+      n += d53.v
+      n += d54.v
+      n += d55.v
+      n += d56.v
+      n += d57.v
+      n += d58.v
+      n += d59.v
+      n += d60.v
+      n += d61.v
+      n += d62.v
+      n += d63.v
+      n += d64.v
+      n += d65.v
+      n += d66.v
+      n += d67.v
+      n += d68.v
+      n += d69.v
+      n += d70.v
+      n += d71.v
+      n += d72.v
+      n += d73.v
+      n += d74.v
+      n += d75.v
+      n += d76.v
+      n += d77.v
+      n += d78.v
+      n += d79.v
+      n += d80.v
+      n += d81.v
+      n += d82.v
+      n += d83.v
+      n += d84.v
+      n += d85.v
+      n += d86.v
+      n += d87.v
+      n += d88.v
+      n += d89.v
+      n += d90.v
+      n += d91.v
+      n += d92.v
+      n += d93.v
+      n += d94.v
+      n += d95.v
+      n += d96.v
+      n += d97.v
+      n += d98.v
+      n += d99.v
+      n += d100.v
+      n += d101.v
+      n += d102.v
+      n += d103.v
+      n += d104.v
+      n += d105.v
+      n += d106.v
+      n += d107.v
+      n += d108.v
+      n += d109.v
+      n += d110.v
+      n += d111.v
+      n += d112.v
+      n += d113.v
+      n += d114.v
+      n += d115.v
+      n += d116.v
+      n += d117.v
+      n += d118.v
+      n += d119.v
+      n += d120.v
+      n += d121.v
+      n += d122.v
+      n += d123.v
+      n += d124.v
+      n += d125.v
+      n += d126.v
+      n += d127.v
+      n += d128.v
+      n += d129.v
+      n += d130.v
+      n += d131.v
+      n += d132.v
+      n += d133.v
+      n += d134.v
+      n += d135.v
+      n += d136.v
+      n += d137.v
+      n += d138.v
+      n += d139.v
+      n += d140.v
+      n += d141.v
+      n += d142.v
+      n += d143.v
+      n += d144.v
+      n += d145.v
+      n += d146.v
+      n += d147.v
+      n += d148.v
+      n += d149.v
+      n += d150.v
+      n += d151.v
+      n += d152.v
+      n += d153.v
+      n += d154.v
+      n += d155.v
+      n += d156.v
+      n += d157.v
+      n += d158.v
+      n += d159.v
+      n += d160.v
+      n += d161.v
+      n += d162.v
+      n += d163.v
+      n += d164.v
+      n += d165.v
+      n += d166.v
+      n += d167.v
+      n += d168.v
+      n += d169.v
+      n += d170.v
+      n += d171.v
+      n += d172.v
+      n += d173.v
+      n += d174.v
+      n += d175.v
+      n += d176.v
+      n += d177.v
+      n += d178.v
+      n += d179.v
+      n += d180.v
+      n += d181.v
+      n += d182.v
+      n += d183.v
+      n += d184.v
+      n += d185.v
+      n += d186.v
+      n += d187.v
+      n += d188.v
+      n += d189.v
+      n += d190.v
+      n += d191.v
+      n += d192.v
+      n += d193.v
+      n += d194.v
+      n += d195.v
+      n += d196.v
+      n += d197.v
+      n += d198.v
+      n += d199.v
+      n += d200.v
+      n += d201.v
+      n += d202.v
+      n += d203.v
+      n += d204.v
+      n += d205.v
+      n += d206.v
+      n += d207.v
+      n += d208.v
+      n += d209.v
+      n += d210.v
+      n += d211.v
+      n += d212.v
+      n += d213.v
+      n += d214.v
+      n += d215.v
+      n += d216.v
+      n += d217.v
+      n += d218.v
+      n += d219.v
+      n += d220.v
+      n += d221.v
+      n += d222.v
+      n += d223.v
+      n += d224.v
+      n += d225.v
+      n += d226.v
+      n += d227.v
+      n += d228.v
+      n += d229.v
+      n += d230.v
+      n += d231.v
+      n += d232.v
+      n += d233.v
+      n += d234.v
+      n += d235.v
+      n += d236.v
+      n += d237.v
+      n += d238.v
+      n += d239.v
+      n += d240.v
+      n += d241.v
+      n += d242.v
+      n += d243.v
+      n += d244.v
+      n += d245.v
+      n += d246.v
+      n += d247.v
+      n += d248.v
+      n += d249.v
+      n += d250.v
+      n += d251.v
+      n += d252.v
+      n += d253.v
+      n += d254.v
+      n += d255.v
+      n += d256.v
+      n += d257.v
+      n += d258.v
+      n += d259.v
+      n += d260.v
+      n += d261.v
+      n += d262.v
+      n += d263.v
+      n += d264.v
+      n += d265.v
+      n += d266.v
+      n += d267.v
+      n += d268.v
+      n += d269.v
+      n += d270.v
+      n += d271.v
+      n += d272.v
+      n += d273.v
+      n += d274.v
+      n += d275.v
+      n += d276.v
+      n += d277.v
+      n += d278.v
+      n += d279.v
+      n += d280.v
+      n += d281.v
+      n += d282.v
+      n += d283.v
+      n += d284.v
+      n += d285.v
+      n += d286.v
+      n += d287.v
+      n += d288.v
+      n += d289.v
+      n += d290.v
+      n += d291.v
+      n += d292.v
+      n += d293.v
+      n += d294.v
+      n += d295.v
+      n += d296.v
+      n += d297.v
+      n += d298.v
+      n += d299.v
+      n += d300.v
+      n += d301.v
+      n += d302.v
+      n += d303.v
+      n += d304.v
+      n += d305.v
+      n += d306.v
+      n += d307.v
+      n += d308.v
+      n += d309.v
+      n += d310.v
+      n += d311.v
+      n += d312.v
+      n += d313.v
+      n += d314.v
+      n += d315.v
+      n += d316.v
+      n += d317.v
+      n += d318.v
+      n += d319.v
+      n += d320.v
+      n += d321.v
+      n += d322.v
+      n += d323.v
+      n += d324.v
+      n += d325.v
+      n += d326.v
+      n += d327.v
+      n += d328.v
+      n += d329.v
+      n += d330.v
+      n += d331.v
+      n += d332.v
+      n += d333.v
+      n += d334.v
+      n += d335.v
+      n += d336.v
+      n += d337.v
+      n += d338.v
+      n += d339.v
+      n += d340.v
+      n += d341.v
+      n += d342.v
+      n += d343.v
+      n += d344.v
+      n += d345.v
+      n += d346.v
+      n += d347.v
+      n += d348.v
+      n += d349.v
+      n += d350.v
+      n += d351.v
+      n += d352.v
+      n += d353.v
+      n += d354.v
+      n += d355.v
+      n += d356.v
+      n += d357.v
+      n += d358.v
+      n += d359.v
+      n += d360.v
+      n += d361.v
+      n += d362.v
+      n += d363.v
+      n += d364.v
+      n += d365.v
+      n += d366.v
+      n += d367.v
+      n += d368.v
+      n += d369.v
+      n += d370.v
+      n += d371.v
+      n += d372.v
+      n += d373.v
+      n += d374.v
+      n += d375.v
+      n += d376.v
+      n += d377.v
+      n += d378.v
+      n += d379.v
+      n += d380.v
+      n += d381.v
+      n += d382.v
+      n += d383.v
+      n += d384.v
+      n += d385.v
+      n += d386.v
+      n += d387.v
+      n += d388.v
+      n += d389.v
+      n += d390.v
+      n += d391.v
+      n += d392.v
+      n += d393.v
+      n += d394.v
+      n += d395.v
+      n += d396.v
+      n += d397.v
+      n += d398.v
+      n += d399.v
+      n += d400.v
+      n += d401.v
+      n += d402.v
+      n += d403.v
+      n += d404.v
+      n += d405.v
+      n += d406.v
+      n += d407.v
+      n += d408.v
+      n += d409.v
+      n += d410.v
+      n += d411.v
+      n += d412.v
+      n += d413.v
+      n += d414.v
+      n += d415.v
+      n += d416.v
+      n += d417.v
+      n += d418.v
+      n += d419.v
+      n += d420.v
+      n += d421.v
+      n += d422.v
+      n += d423.v
+      n += d424.v
+      n += d425.v
+      n += d426.v
+      n += d427.v
+      n += d428.v
+      n += d429.v
+      n += d430.v
+      n += d431.v
+      n += d432.v
+      n += d433.v
+      n += d434.v
+      n += d435.v
+      n += d436.v
+      n += d437.v
+      n += d438.v
+      n += d439.v
+      n += d440.v
+      n += d441.v
+      n += d442.v
+      n += d443.v
+      n += d444.v
+      n += d445.v
+      n += d446.v
+      n += d447.v
+      n += d448.v
+      n += d449.v
+      n += d450.v
+      n += d451.v
+      n += d452.v
+      n += d453.v
+      n += d454.v
+      n += d455.v
+      n += d456.v
+      n += d457.v
+      n += d458.v
+      n += d459.v
+      n += d460.v
+      n += d461.v
+      n += d462.v
+      n += d463.v
+      n += d464.v
+      n += d465.v
+      n += d466.v
+      n += d467.v
+      n += d468.v
+      n += d469.v
+      n += d470.v
+      n += d471.v
+      n += d472.v
+      n += d473.v
+      n += d474.v
+      n += d475.v
+      n += d476.v
+      n += d477.v
+      n += d478.v
+      n += d479.v
+      n += d480.v
+      n += d481.v
+      n += d482.v
+      n += d483.v
+      n += d484.v
+      n += d485.v
+      n += d486.v
+      n += d487.v
+      n += d488.v
+      n += d489.v
+      n += d490.v
+      n += d491.v
+      n += d492.v
+      n += d493.v
+      n += d494.v
+      n += d495.v
+      n += d496.v
+      n += d497.v
+      n += d498.v
+      n += d499.v
+    end
+    Draw.circle(spot.x + s, spot.y + n, 9, Color(0, 200, 0, 160))
+    Draw.rect(spot.x - 2, spot.y - 2, 4, 4, Color(0, 0, 255))
+    spot.x += 6
+  end
+end
+
+system over
+  Draw.line(0, 20, 64, 20, 3, Color(255, 255, 0))
+  Draw.rect(10, 10, 30, 20, Color(255, 255, 255, 96))
+end
+
+spawn Spot(12, 14), C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31, C32, C33, C34, C35, C36, C37, C38, C39, C40, C41, C42, C43, C44, C45, C46, C47, C48, C49, C50, C51, C52, C53, C54, C55, C56, C57, C58, C59, C60, C61, C62, C63, C64, C65, C66, C67, C68, C69, C70, C71, C72, C73, C74, C75, C76, C77, C78, C79, C80, C81, C82, C83, C84, C85, C86, C87, C88, C89, C90, C91, C92, C93, C94, C95, C96, C97, C98, C99, C100, C101, C102, C103, C104, C105, C106, C107, C108, C109, C110, C111, C112, C113, C114, C115, C116, C117, C118, C119, C120, C121, C122, C123, C124, C125, C126, C127, C128, C129, C130, C131, C132, C133, C134, C135, C136, C137, C138, C139, C140, C141, C142, C143, C144, C145, C146, C147, C148, C149, C150, C151, C152, C153, C154, C155, C156, C157, C158, C159, C160, C161, C162, C163, C164, C165, C166, C167, C168, C169, C170, C171, C172, C173, C174, C175, C176, C177, C178, C179, C180, C181, C182, C183, C184, C185, C186, C187, C188, C189, C190, C191, C192, C193, C194, C195, C196, C197, C198, C199, C200, C201, C202, C203, C204, C205, C206, C207, C208, C209, C210, C211, C212, C213, C214, C215, C216, C217, C218, C219, C220, C221, C222, C223, C224, C225, C226, C227, C228, C229, C230, C231, C232, C233, C234, C235, C236, C237, C238, C239, C240, C241, C242, C243, C244, C245, C246, C247, C248, C249, C250, C251, C252, C253, C254, C255, C256, C257, C258, C259, C260, C261, C262, C263, C264, C265, C266, C267, C268, C269, C270, C271, C272, C273, C274, C275, C276, C277, C278, C279, C280, C281, C282, C283, C284, C285, C286, C287, C288, C289, C290, C291, C292, C293, C294, C295, C296, C297, C298, C299, C300, C301, C302, C303, C304, C305, C306, C307, C308, C309, C310, C311, C312, C313, C314, C315, C316, C317, C318, C319, C320, C321, C322, C323, C324, C325, C326, C327, C328, C329, C330, C331, C332, C333, C334, C335, C336, C337, C338, C339, C340, C341, C342, C343, C344, C345, C346, C347, C348, C349, C350, C351, C352, C353, C354, C355, C356, C357, C358, C359, C360, C361, C362, C363, C364, C365, C366, C367, C368, C369, C370, C371, C372, C373, C374, C375, C376, C377, C378, C379, C380, C381, C382, C383, C384, C385, C386, C387, C388, C389, C390, C391, C392, C393, C394, C395, C396, C397, C398, C399, C400, C401, C402, C403, C404, C405, C406, C407, C408, C409, C410, C411, C412, C413, C414, C415, C416, C417, C418, C419, C420, C421, C422, C423, C424, C425, C426, C427, C428, C429, C430, C431, C432, C433, C434, C435, C436, C437, C438, C439, C440, C441, C442, C443, C444, C445, C446, C447, C448, C449, C450, C451, C452, C453, C454, C455, C456, C457, C458, C459, C460, C461, C462, C463, C464, C465, C466, C467, C468, C469, C470, C471, C472, C473, C474, C475, C476, C477, C478, C479, C480, C481, C482, C483, C484, C485, C486, C487, C488, C489, C490, C491, C492, C493, C494, C495, C496, C497, C498, C499
+spawn Spot(30, 26), C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31, C32, C33, C34, C35, C36, C37, C38, C39, C40, C41, C42, C43, C44, C45, C46, C47, C48, C49, C50, C51, C52, C53, C54, C55, C56, C57, C58, C59, C60, C61, C62, C63, C64, C65, C66, C67, C68, C69, C70, C71, C72, C73, C74, C75, C76, C77, C78, C79, C80, C81, C82, C83, C84, C85, C86, C87, C88, C89, C90, C91, C92, C93, C94, C95, C96, C97, C98, C99, C100, C101, C102, C103, C104, C105, C106, C107, C108, C109, C110, C111, C112, C113, C114, C115, C116, C117, C118, C119, C120, C121, C122, C123, C124, C125, C126, C127, C128, C129, C130, C131, C132, C133, C134, C135, C136, C137, C138, C139, C140, C141, C142, C143, C144, C145, C146, C147, C148, C149, C150, C151, C152, C153, C154, C155, C156, C157, C158, C159, C160, C161, C162, C163, C164, C165, C166, C167, C168, C169, C170, C171, C172, C173, C174, C175, C176, C177, C178, C179, C180, C181, C182, C183, C184, C185, C186, C187, C188, C189, C190, C191, C192, C193, C194, C195, C196, C197, C198, C199, C200, C201, C202, C203, C204, C205, C206, C207, C208, C209, C210, C211, C212, C213, C214, C215, C216, C217, C218, C219, C220, C221, C222, C223, C224, C225, C226, C227, C228, C229, C230, C231, C232, C233, C234, C235, C236, C237, C238, C239, C240, C241, C242, C243, C244, C245, C246, C247, C248, C249, C250, C251, C252, C253, C254, C255, C256, C257, C258, C259, C260, C261, C262, C263, C264, C265, C266, C267, C268, C269, C270, C271, C272, C273, C274, C275, C276, C277, C278, C279, C280, C281, C282, C283, C284, C285, C286, C287, C288, C289, C290, C291, C292, C293, C294, C295, C296, C297, C298, C299, C300, C301, C302, C303, C304, C305, C306, C307, C308, C309, C310, C311, C312, C313, C314, C315, C316, C317, C318, C319, C320, C321, C322, C323, C324, C325, C326, C327, C328, C329, C330, C331, C332, C333, C334, C335, C336, C337, C338, C339, C340, C341, C342, C343, C344, C345, C346, C347, C348, C349, C350, C351, C352, C353, C354, C355, C356, C357, C358, C359, C360, C361, C362, C363, C364, C365, C366, C367, C368, C369, C370, C371, C372, C373, C374, C375, C376, C377, C378, C379, C380, C381, C382, C383, C384, C385, C386, C387, C388, C389, C390, C391, C392, C393, C394, C395, C396, C397, C398, C399, C400, C401, C402, C403, C404, C405, C406, C407, C408, C409, C410, C411, C412, C413, C414, C415, C416, C417, C418, C419, C420, C421, C422, C423, C424, C425, C426, C427, C428, C429, C430, C431, C432, C433, C434, C435, C436, C437, C438, C439, C440, C441, C442, C443, C444, C445, C446, C447, C448, C449, C450, C451, C452, C453, C454, C455, C456, C457, C458, C459, C460, C461, C462, C463, C464, C465, C466, C467, C468, C469, C470, C471, C472, C473, C474, C475, C476, C477, C478, C479, C480, C481, C482, C483, C484, C485, C486, C487, C488, C489, C490, C491, C492, C493, C494, C495, C496, C497, C498, C499
+spawn Spot(20, 36), C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31, C32, C33, C34, C35, C36, C37, C38, C39, C40, C41, C42, C43, C44, C45, C46, C47, C48, C49, C50, C51, C52, C53, C54, C55, C56, C57, C58, C59, C60, C61, C62, C63, C64, C65, C66, C67, C68, C69, C70, C71, C72, C73, C74, C75, C76, C77, C78, C79, C80, C81, C82, C83, C84, C85, C86, C87, C88, C89, C90, C91, C92, C93, C94, C95, C96, C97, C98, C99, C100, C101, C102, C103, C104, C105, C106, C107, C108, C109, C110, C111, C112, C113, C114, C115, C116, C117, C118, C119, C120, C121, C122, C123, C124, C125, C126, C127, C128, C129, C130, C131, C132, C133, C134, C135, C136, C137, C138, C139, C140, C141, C142, C143, C144, C145, C146, C147, C148, C149, C150, C151, C152, C153, C154, C155, C156, C157, C158, C159, C160, C161, C162, C163, C164, C165, C166, C167, C168, C169, C170, C171, C172, C173, C174, C175, C176, C177, C178, C179, C180, C181, C182, C183, C184, C185, C186, C187, C188, C189, C190, C191, C192, C193, C194, C195, C196, C197, C198, C199, C200, C201, C202, C203, C204, C205, C206, C207, C208, C209, C210, C211, C212, C213, C214, C215, C216, C217, C218, C219, C220, C221, C222, C223, C224, C225, C226, C227, C228, C229, C230, C231, C232, C233, C234, C235, C236, C237, C238, C239, C240, C241, C242, C243, C244, C245, C246, C247, C248, C249, C250, C251, C252, C253, C254, C255, C256, C257, C258, C259, C260, C261, C262, C263, C264, C265, C266, C267, C268, C269, C270, C271, C272, C273, C274, C275, C276, C277, C278, C279, C280, C281, C282, C283, C284, C285, C286, C287, C288, C289, C290, C291, C292, C293, C294, C295, C296, C297, C298, C299, C300, C301, C302, C303, C304, C305, C306, C307, C308, C309, C310, C311, C312, C313, C314, C315, C316, C317, C318, C319, C320, C321, C322, C323, C324, C325, C326, C327, C328, C329, C330, C331, C332, C333, C334, C335, C336, C337, C338, C339, C340, C341, C342, C343, C344, C345, C346, C347, C348, C349, C350, C351, C352, C353, C354, C355, C356, C357, C358, C359, C360, C361, C362, C363, C364, C365, C366, C367, C368, C369, C370, C371, C372, C373, C374, C375, C376, C377, C378, C379, C380, C381, C382, C383, C384, C385, C386, C387, C388, C389, C390, C391, C392, C393, C394, C395, C396, C397, C398, C399, C400, C401, C402, C403, C404, C405, C406, C407, C408, C409, C410, C411, C412, C413, C414, C415, C416, C417, C418, C419, C420, C421, C422, C423, C424, C425, C426, C427, C428, C429, C430, C431, C432, C433, C434, C435, C436, C437, C438, C439, C440, C441, C442, C443, C444, C445, C446, C447, C448, C449, C450, C451, C452, C453, C454, C455, C456, C457, C458, C459, C460, C461, C462, C463, C464, C465, C466, C467, C468, C469, C470, C471, C472, C473, C474, C475, C476, C477, C478, C479, C480, C481, C482, C483, C484, C485, C486, C487, C488, C489, C490, C491, C492, C493, C494, C495, C496, C497, C498, C499, Big
+
+Window.open("Unfit", 64, 48)
+World.tick
+World.tick
+puts "ticks: #{Time.tick}"

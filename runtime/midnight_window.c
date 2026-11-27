@@ -444,7 +444,8 @@ static WGPURenderPassEncoder frame_pass(WGPUCommandEncoder encoder,
 }
 
 /* Records the rendering of `frame` into the frame texture: the background,
- * then each span's records in order. Records are sent to the buffer of
+ * then each span's records in order, those of a GPU block from the buffer
+ * the block wrote them to. Records in CPU memory are sent to the buffer of
  * records at places no recorded command reads; when the frame has more
  * than the buffer holds, the commands so far are submitted and recording
  * goes on in a new encoder, which is returned. */
@@ -462,7 +463,9 @@ static WGPUCommandEncoder frame_record(WGPUCommandEncoder encoder,
     wgpuQueueWriteBuffer(mn_gpu_queue(), win.shape_uniform, 0, uniform, sizeof uniform);
 
     uint64_t total = 0;
-    for (size_t s = 0; s < frame->span_count; s++) total += frame->spans[s].count;
+    for (size_t s = 0; s < frame->span_count; s++) {
+        if (frame->spans[s].records) total += frame->spans[s].count;
+    }
     uint64_t most = mn_gpu_largest_buffer() / sizeof(MnDraw);
     if (most > total) most = total;
     if (most != 0) records_size(most);
@@ -471,6 +474,15 @@ static WGPUCommandEncoder frame_record(WGPUCommandEncoder encoder,
     uint64_t used = 0;
     for (size_t s = 0; s < frame->span_count; s++) {
         const MnSpan *span = &frame->spans[s];
+        if (!span->records) {
+            /* Records a block wrote on the device are drawn where they are. */
+            uint64_t bytes = (uint64_t)span->count * sizeof(MnDraw);
+            if (bytes == 0) continue;
+            wgpuRenderPassEncoderSetVertexBuffer(pass, 0, mn_gpu_records(&span->on_device),
+                                                 0, bytes);
+            wgpuRenderPassEncoderDraw(pass, 6, (uint32_t)span->count, 0, 0);
+            continue;
+        }
         if (span->count != 0) mn_gpu_uploads++;
         size_t done = 0;
         while (done < span->count) {

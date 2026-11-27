@@ -1047,11 +1047,35 @@ typedef struct MnDraws {
     size_t capacity;
 } MnDraws;
 
+/* A span of draws: `count` records of a list's array from `first`, or,
+ * when `state` is not NULL, the records a GPU block wrote on the device for
+ * table `table` of its outer query, `state` being what midnight_gpu.c keeps
+ * for the block. */
+typedef struct DrawSpan {
+    size_t first;
+    size_t count;
+    void *state;
+    uint32_t table;
+} DrawSpan;
+
+/* Draws in the order they were made, as spans. */
+typedef struct DrawList {
+    MnDraws records;
+    DrawSpan *spans;
+    size_t span_count;
+    size_t span_capacity;
+} DrawList;
+
 static struct {
-    /* The draws since the last frame, in the order they were made. */
-    MnDraws list;
+    /* The draws since the last frame. */
+    DrawList list;
     /* The draws of the last frame. */
-    MnDraws frame;
+    DrawList frame;
+#ifdef MN_FRAMES
+    /* The last frame's spans as midnight_window.c is given them. */
+    MnSpan *view;
+    size_t view_capacity;
+#endif
 } drawing;
 
 /* What a draw is given while no window is open. */
@@ -1077,6 +1101,40 @@ static MnDraw *draws_extend(MnDraws *draws, size_t more) {
     return first;
 }
 
+static DrawSpan *list_span(DrawList *list) {
+    if (list->span_count == list->span_capacity) {
+        size_t capacity = list->span_capacity ? list->span_capacity * 2 : 16;
+        list->spans = mn_realloc(list->spans, mn_mul(capacity, sizeof(DrawSpan)));
+        list->span_capacity = capacity;
+    }
+    DrawSpan *span = &list->spans[list->span_count++];
+    memset(span, 0, sizeof *span);
+    return span;
+}
+
+/* Adds `more` records in CPU memory to the end of `list` and returns the
+ * first. */
+static MnDraw *list_extend(DrawList *list, size_t more) {
+    DrawSpan *last = list->span_count ? &list->spans[list->span_count - 1] : NULL;
+    if (!last || last->state) {
+        last = list_span(list);
+        last->first = list->records.len;
+    }
+    last->count += more;
+    return draws_extend(&list->records, more);
+}
+
+static void list_clear(DrawList *list) {
+    list->records.len = 0;
+    list->span_count = 0;
+}
+
+static void list_free(DrawList *list) {
+    free(list->records.data);
+    free(list->spans);
+    memset(list, 0, sizeof *list);
+}
+
 MnDraw *mn_draw(void) {
     MnDraw *record;
     if (!win.open) {
@@ -1090,7 +1148,7 @@ MnDraw *mn_draw(void) {
     }
 #endif
     else {
-        record = draws_extend(&drawing.list, 1);
+        record = list_extend(&drawing.list, 1);
     }
     memset(record, 0, sizeof *record);
     return record;
@@ -1606,7 +1664,54 @@ static void window_draws(void) {
     static const char *const shapes[] = {"", "rect", "circle", "line", "triangle"};
     static const int numbers[] = {0, 4, 3, 5, 6};
     if (!win.open) drive_fail("can't list the draws: no window is open");
-    const MnDraws *frame = &drawing.frame;
+    /* The frame's records in order, those on the device brought back. */
+    const DrawList *list = &drawing.frame;
+    size_t total = 0;
+    size_t on_device = 0;
+    for (size_t s = 0; s < list->span_count; s++) {
+        total += list->spans[s].count;
+        if (list->spans[s].state) on_device++;
+    }
+    const MnDraw *records = list->records.data;
+    MnDraw *gathered = NULL;
+#ifdef MN_GPU
+    if (on_device != 0) {
+        MnGpuRecords *fetch = mn_calloc(on_device, sizeof(MnGpuRecords));
+        size_t fetched = 0;
+        size_t fetched_records = 0;
+        for (size_t s = 0; s < list->span_count; s++) {
+            const DrawSpan *span = &list->spans[s];
+            if (!span->state) continue;
+            fetch[fetched].state = span->state;
+            fetch[fetched].table = span->table;
+            fetch[fetched].count = span->count;
+            fetched++;
+            fetched_records += span->count;
+        }
+        MnDraw *back = mn_calloc(fetched_records, sizeof(MnDraw));
+        mn_gpu_records_read(fetch, on_device, back);
+        free(fetch);
+        gathered = mn_calloc(total, sizeof(MnDraw));
+        size_t at = 0;
+        size_t from_back = 0;
+        for (size_t s = 0; s < list->span_count; s++) {
+            const DrawSpan *span = &list->spans[s];
+            const MnDraw *source = span->state ? back + from_back
+                                               : list->records.data + span->first;
+            if (span->count != 0) {
+                memcpy(gathered + at, source, span->count * sizeof(MnDraw));
+            }
+            if (span->state) from_back += span->count;
+            at += span->count;
+        }
+        free(back);
+        records = gathered;
+    }
+#else
+    (void)on_device;
+#endif
+    const MnDraws frame_records = {(MnDraw *)records, total, total};
+    const MnDraws *frame = &frame_records;
     size_t listed = 0;
     for (size_t i = 0; i < frame->len; i++) {
         if (frame->data[i].kind != MN_DRAW_NOTHING) listed++;
@@ -1635,6 +1740,7 @@ static void window_draws(void) {
                  (unsigned)draw->color.b, (unsigned)draw->color.a);
         drive_answer("%s", line);
     }
+    free(gathered);
 }
 
 /* Carries out one command, given without its line break and without the
@@ -1798,10 +1904,10 @@ static void window_frame(void) {
     win.frame_background = window->background;
     win.frame_tick = mn_time.tick;
     win.frame_number++;
-    MnDraws frame = drawing.frame;
+    DrawList frame = drawing.frame;
     drawing.frame = drawing.list;
     drawing.list = frame;
-    drawing.list.len = 0;
+    list_clear(&drawing.list);
 }
 
 /* Shows a window of win.width by win.height points titled `title` and
@@ -1831,26 +1937,42 @@ static const char *window_show(MnString title, const char **how) {
 }
 
 #ifdef MN_FRAMES
-/* The last frame, for midnight_window.c, its draws in `span`. */
-static MnFrame frame_now(MnSpan *span) {
-    span->records = drawing.frame.data;
-    span->count = drawing.frame.len;
+/* The last frame, for midnight_window.c. */
+static MnFrame frame_now(void) {
+    const DrawList *list = &drawing.frame;
+    if (list->span_count > drawing.view_capacity) {
+        drawing.view =
+            mn_realloc(drawing.view, mn_mul(list->span_count, sizeof(MnSpan)));
+        drawing.view_capacity = list->span_count;
+    }
+    for (size_t s = 0; s < list->span_count; s++) {
+        const DrawSpan *from = &list->spans[s];
+        MnSpan *span = &drawing.view[s];
+        memset(span, 0, sizeof *span);
+        span->count = from->count;
+        if (from->state) {
+            span->on_device.state = from->state;
+            span->on_device.table = from->table;
+            span->on_device.count = from->count;
+        } else {
+            span->records = list->records.data + from->first;
+        }
+    }
     MnFrame frame = {0};
     frame.width = win.frame_width;
     frame.height = win.frame_height;
     frame.point_width = win.frame_point_width;
     frame.point_height = win.frame_point_height;
     frame.background = win.frame_background;
-    frame.spans = span;
-    frame.span_count = 1;
+    frame.spans = drawing.view;
+    frame.span_count = list->span_count;
     frame.number = win.frame_number;
     return frame;
 }
 
 /* Renders the last frame and shows it on the desktop. */
 static void window_draw(void) {
-    MnSpan span;
-    MnFrame frame = frame_now(&span);
+    MnFrame frame = frame_now();
     mn_window_draw(&frame);
 }
 #endif
@@ -1916,7 +2038,7 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     window->pixel_width = win.pixel_width;
     window->pixel_height = win.pixel_height;
     window->open = true;
-    drawing.list.len = 0;
+    list_clear(&drawing.list);
     window_frame();
 #ifdef MN_FRAMES
     if (win.shown) window_draw();
@@ -2011,8 +2133,8 @@ static void window_tick_begin(void) {
         win.closing = false;
         window->open = false;
         window_hide();
-        drawing.list.len = 0;
-        drawing.frame.len = 0;
+        list_clear(&drawing.list);
+        list_clear(&drawing.frame);
         mn_emit(mn_window_program->closed);
         mn_stop();
     }
@@ -2227,8 +2349,7 @@ static void window_capture(const char *text, const char *file) {
     (void)text;
     drive_fail("can't capture: the program was built without the window flags");
 #else
-    MnSpan span;
-    MnFrame frame = frame_now(&span);
+    MnFrame frame = frame_now();
     size_t size = (size_t)frame.width * frame.height * 4;
     unsigned char *rgba = mn_malloc(size);
     const char *unable = mn_window_read(&frame, rgba);
@@ -2267,8 +2388,11 @@ static void window_finish(void) {
     win.drive = NULL;
     win.drive_done = true;
     win.open = false;
-    free(drawing.list.data);
-    free(drawing.frame.data);
+    list_free(&drawing.list);
+    list_free(&drawing.frame);
+#ifdef MN_FRAMES
+    free(drawing.view);
+#endif
     memset(&drawing, 0, sizeof drawing);
     window_hide();
 #ifdef MN_FRAMES
@@ -3527,7 +3651,7 @@ static void stretch_append(const MnStretch *stretch) {
         mn_world.deferred_count += (uint32_t)stretch->count;
     } else if (stretch->kind == 1 + mn_world.program->event_count) {
 #ifdef MN_WINDOW
-        memcpy(draws_extend(&drawing.list, (size_t)stretch->count),
+        memcpy(list_extend(&drawing.list, (size_t)stretch->count),
                bytes->data + stretch->begin, size);
 #endif
     } else {
@@ -3935,7 +4059,7 @@ static MnDraw *gpu_records(const MnGpuBlock *block, MnGpuScratch *scratch,
                            uint64_t rows) {
     size_t count = mn_mul((size_t)rows, block->draws);
 #ifdef MN_WINDOW
-    if (win.open) return draws_extend(&drawing.list, count);
+    if (win.open) return list_extend(&drawing.list, count);
 #endif
     if (count > scratch->record_capacity) {
         scratch->records =
@@ -3944,6 +4068,23 @@ static MnDraw *gpu_records(const MnGpuBlock *block, MnGpuScratch *scratch,
     }
     return scratch->records;
 }
+
+#if defined(MN_WINDOW) && defined(MN_GPU)
+/* Adds to the list the records a block that draws wrote on the device: one
+ * span for each table of its outer query that has rows, in the query's
+ * order. */
+static void gpu_device_spans(const MnGpuBlock *block, void *state) {
+    const MnQuery *query = block->outer;
+    for (uint32_t t = 0; t < query->table_count; t++) {
+        uint32_t rows = query->tables[t]->count;
+        if (rows == 0) continue;
+        DrawSpan *span = list_span(&drawing.list);
+        span->count = (size_t)rows * block->draws;
+        span->state = state;
+        span->table = t;
+    }
+}
+#endif
 
 /* Runs the rows numbered `from` up to `to`, table after table. */
 static void gpu_rows(const GpuLoop *loop, uint64_t from, uint64_t to,
@@ -4000,7 +4141,12 @@ void mn_gpu_run(MnGpuBlock *block) {
     const char *reason = "no device";
 #ifdef MN_GPU
     reason = mn_gpu_device_run(block, uniform, &scratch->device);
-    if (!reason) return;
+    if (!reason) {
+#ifdef MN_WINDOW
+        if (block->draws != 0 && win.open) gpu_device_spans(block, scratch->device);
+#endif
+        return;
+    }
 #endif
     if (gpu_options.info && !scratch->reported) {
         scratch->reported = true;

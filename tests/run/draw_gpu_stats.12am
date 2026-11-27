@@ -1,0 +1,29 @@
+# A GPU system that moves and draws 100,000 entities: after the first
+# tick, which sends their columns, nothing moves between CPU and GPU
+# memory. The window is headless and asked for no frame and no draws.
+
+component Dot
+  x: Float32
+  y: Float32
+  vx: Float32
+end
+
+gpu system fly
+  each Dot do |dot|
+    dot.x += dot.vx
+    dot.x -= 320 if dot.x >= 320
+    Draw.rect(dot.x, dot.y, 1, 1, Color(255, 255, 255))
+  end
+end
+
+Window.open("Dots", 320, 200)
+i = 0
+while i < 100000
+  spawn Dot(i % 320, (i / 320) % 200, 0.5 + 0.25 * (i % 7))
+  i += 1
+end
+World.tick
+World.tick
+World.tick
+World.tick
+puts "ticks: #{Time.tick}"

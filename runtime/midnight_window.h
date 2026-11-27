@@ -21,10 +21,15 @@
 
 #include "midnight_rt.h"
 
-/* Draw records of a frame, in CPU memory. */
+#include "midnight_gpu.h"
+
+/* Draw records of a frame: `count` records in CPU memory at `records`, or,
+ * when `records` is NULL, the records a GPU block wrote on the device,
+ * `on_device`. */
 typedef struct MnSpan {
     const MnDraw *records;
     size_t count;
+    MnGpuRecords on_device;
 } MnSpan;
 
 /* A frame: the window's size and background after a tick, and the draws of

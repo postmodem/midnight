@@ -1,0 +1,36 @@
+# `draws` between ticks lists a GPU block's draws, which a device brings
+# back: one download for each table the block ran over, behind one wait.
+# The draws of ordinary systems, under and over the block's, are in CPU
+# memory already.
+
+component Spark
+  x: Float32
+  y: Float32
+end
+
+tag Hot
+
+system under
+  Draw.rect(0, 0, 32, 32, Color(20, 20, 20))
+end
+
+gpu system glow
+  each Spark do |spark|
+    spark.y += 1
+    Draw.circle(spark.x, spark.y, 2, Color(255, 128, 0))
+  end
+end
+
+system over
+  Draw.line(0, 16, 32, 16, 1, Color(0, 0, 255))
+end
+
+spawn Spark(4, 4)
+spawn Spark(12, 4), Hot
+spawn Spark(20, 4)
+spawn Spark(28, 4), Hot
+
+Window.open("Fetch", 32, 32)
+World.tick
+World.tick
+puts "ticks: #{Time.tick}"

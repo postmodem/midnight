@@ -1,0 +1,16 @@
+draws: 1 tick, 32x32, 6 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.rect(0.0, 0.0, 32.0, 32.0, Color(20, 20, 20, 255))
+  Draw.circle(4.0, 5.0, 2.0, Color(255, 128, 0, 255))
+  Draw.circle(20.0, 5.0, 2.0, Color(255, 128, 0, 255))
+  Draw.circle(12.0, 5.0, 2.0, Color(255, 128, 0, 255))
+  Draw.circle(28.0, 5.0, 2.0, Color(255, 128, 0, 255))
+  Draw.line(0.0, 16.0, 32.0, 16.0, 1.0, Color(0, 0, 255, 255))
+draws: 2 ticks, 32x32, 6 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.rect(0.0, 0.0, 32.0, 32.0, Color(20, 20, 20, 255))
+  Draw.circle(4.0, 6.0, 2.0, Color(255, 128, 0, 255))
+  Draw.circle(20.0, 6.0, 2.0, Color(255, 128, 0, 255))
+  Draw.circle(12.0, 6.0, 2.0, Color(255, 128, 0, 255))
+  Draw.circle(28.0, 6.0, 2.0, Color(255, 128, 0, 255))
+  Draw.line(0.0, 16.0, 32.0, 16.0, 1.0, Color(0, 0, 255, 255))

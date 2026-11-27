@@ -50,9 +50,13 @@
 //! `NAME.out`: exactly, or, when the program has a `# tolerance: T` line,
 //! with each `Float` within `T * max(1, |expected|)` of the expected one and
 //! everything else exact. A program whose GPU systems are all strict may not
-//! have the line. A `tests/panic` program must exit 1 with exactly
-//! `NAME.err`. A run in which there is no device, or in which a GPU block
-//! runs on the CPU, fails.
+//! have the line. The answers to its `draws` commands must be `NAME.draws`
+//! when it has one: exactly, or, with the line, each number of a shape
+//! within the same bound and everything else exact. A `tests/panic`
+//! program must exit 1 with exactly `NAME.err`. A run in which there is no
+//! device, or in which a GPU block runs on the CPU, fails, unless the
+//! program has a line `# on the CPU: REASON`: then a block must say it
+//! runs on the CPU for exactly that reason, and none for another.
 //! A program with a strict GPU system must say that the device passed the
 //! strict check, and runs once more with `MIDNIGHT_GPU=strict-cpu`, which
 //! must give the same output with every strict block on the CPU.
@@ -1213,25 +1217,6 @@ fn declares_gpu_system(source: &Path) -> bool {
     std::fs::read_to_string(source).is_ok_and(|program| gpu_system_lines(&program).next().is_some())
 }
 
-/// Whether a GPU system of the program at `source` draws: a line of one,
-/// up to the `end` that closes it, has `Draw.`. Its blocks run on the CPU.
-fn gpu_system_draws(source: &Path) -> bool {
-    let Ok(program) = std::fs::read_to_string(source) else {
-        return false;
-    };
-    let mut inside = false;
-    for line in program.lines() {
-        if line.starts_with("gpu system ") || line.starts_with("strict gpu system ") {
-            inside = true;
-        } else if line.starts_with("end") {
-            inside = false;
-        } else if inside && line.contains("Draw.") {
-            return true;
-        }
-    }
-    false
-}
-
 /// Whether every GPU system of a program that has some is strict.
 fn all_strict(program: &str) -> bool {
     gpu_system_lines(program).all(|line| line.starts_with("strict "))
@@ -1249,6 +1234,53 @@ fn stated_tolerance(program: &str) -> Result<Option<f64>, String> {
     match stated.trim().parse::<f64>() {
         Ok(tolerance) if tolerance.is_finite() && tolerance > 0.0 => Ok(Some(tolerance)),
         _ => Err(format!("`# tolerance:{stated}` is not a positive number")),
+    }
+}
+
+/// The reason a program states in a `# on the CPU: REASON` line, if it has
+/// one: why one of its GPU blocks runs on the CPU on every device.
+fn stated_cpu_reason(program: &str) -> Option<String> {
+    program
+        .lines()
+        .find_map(|line| line.strip_prefix("# on the CPU: "))
+        .map(|reason| reason.trim_end().to_string())
+}
+
+/// The `stated_cpu_reason` of the program at `source`.
+fn cpu_reason_of(source: &Path) -> Option<String> {
+    stated_cpu_reason(&std::fs::read_to_string(source).unwrap_or_default())
+}
+
+/// Standard error without the `info` lines that say a GPU block runs on
+/// the CPU. Each must give `reason`, or, with `strict_cpu`, say that
+/// `MIDNIGHT_GPU` has `strict-cpu`; with a `reason`, at least one must
+/// give it.
+fn cpu_runs_as_stated(
+    stderr: &str,
+    reason: Option<&str>,
+    strict_cpu: bool,
+) -> Result<String, String> {
+    let mut rest = String::new();
+    let mut stated = 0;
+    for line in stderr.split_inclusive('\n') {
+        let said = line.strip_prefix("midnight: gpu: ").map(str::trim_end);
+        let Some((_, why)) = said.and_then(|said| said.split_once(" runs on the CPU: ")) else {
+            rest.push_str(line);
+            continue;
+        };
+        if strict_cpu && line.trim_end().ends_with(STRICT_REFUSED) {
+            continue;
+        }
+        if Some(why) != reason {
+            return Err(said.unwrap().to_string());
+        }
+        stated += 1;
+    }
+    match reason {
+        Some(reason) if stated == 0 => {
+            Err(format!("no GPU block said it runs on the CPU: {reason}"))
+        }
+        _ => Ok(rest),
     }
 }
 
@@ -1356,6 +1388,90 @@ fn compare_output(expected: &str, actual: &str, tolerance: Option<f64>) -> Resul
     Ok(largest)
 }
 
+/// Compares the answers to `draws` commands with the expected ones. With
+/// no tolerance the two must be equal. With one they must have the same
+/// lines, and a line that draws must have the same shape and colour and
+/// each of the shape's numbers within `tolerance * max(1, |expected|)` of
+/// the expected one; every other line must be equal. Returns the largest
+/// difference between two numbers, as a multiple of `max(1, |expected|)`.
+fn compare_draws(expected: &str, actual: &str, tolerance: Option<f64>) -> Result<f64, String> {
+    if expected == actual {
+        return Ok(0.0);
+    }
+    let Some(tolerance) = tolerance else {
+        return Err(first_difference(expected, actual));
+    };
+    if expected.lines().count() != actual.lines().count() {
+        return Err(format!(
+            "{} lines, expected {}",
+            actual.lines().count(),
+            expected.lines().count()
+        ));
+    }
+    // A line that draws: `  Draw.NAME(` and the shape's numbers, then
+    // `Color(...)`.
+    fn parts(line: &str) -> Option<(&str, Vec<&str>, &str)> {
+        let rest = line.strip_prefix("  Draw.")?;
+        let (name, rest) = rest.split_once('(')?;
+        let at = rest.find("Color(")?;
+        let numbers = rest[..at].strip_suffix(", ")?.split(", ").collect();
+        Some((name, numbers, &rest[at..]))
+    }
+    let mut largest: f64 = 0.0;
+    for (index, (expected, actual)) in expected.lines().zip(actual.lines()).enumerate() {
+        if expected == actual {
+            continue;
+        }
+        let differs = || format!("line {}: expected `{expected}`, got `{actual}`", index + 1);
+        let (Some((name, numbers, color)), Some((actual_name, actual_numbers, actual_color))) =
+            (parts(expected), parts(actual))
+        else {
+            return Err(differs());
+        };
+        if name != actual_name || color != actual_color || numbers.len() != actual_numbers.len() {
+            return Err(differs());
+        }
+        for (expected_number, actual_number) in numbers.iter().zip(&actual_numbers) {
+            if expected_number == actual_number {
+                continue;
+            }
+            let (Ok(e), Ok(a)) = (expected_number.parse::<f64>(), actual_number.parse::<f64>())
+            else {
+                return Err(differs());
+            };
+            let difference = (a - e).abs() / e.abs().max(1.0);
+            if difference.is_nan() || difference > tolerance {
+                return Err(format!(
+                    "line {}: {actual_number} is not within {tolerance} of {expected_number}",
+                    index + 1
+                ));
+            }
+            largest = largest.max(difference);
+        }
+    }
+    Ok(largest)
+}
+
+/// The first line in which two texts differ, as a message.
+fn first_difference(expected: &str, actual: &str) -> String {
+    let mut expected_lines = expected.lines();
+    let mut actual_lines = actual.lines();
+    for number in 1.. {
+        match (expected_lines.next(), actual_lines.next()) {
+            (Some(e), Some(a)) if e == a => {}
+            (None, None) => return "the end of the last line differs".to_string(),
+            (e, a) => {
+                return format!(
+                    "line {number}: expected `{}`, got `{}`",
+                    e.unwrap_or("(nothing)"),
+                    a.unwrap_or("(nothing)")
+                );
+            }
+        }
+    }
+    unreachable!()
+}
+
 /// What a program did when it ran on a device.
 struct DeviceRun {
     status: Option<i32>,
@@ -1371,6 +1487,8 @@ struct DeviceRun {
     /// The `info` line that says where strict blocks run, without
     /// `midnight: gpu: `.
     strict: Option<String>,
+    /// The answers to the `draws` commands.
+    draws: String,
 }
 
 /// What one `stats` line counts.
@@ -1437,9 +1555,11 @@ const DEVICE_THREADS: &str = "4,small";
 /// the `info` lines and giving the further words of `MIDNIGHT_GPU` in
 /// `more`, and with `MIDNIGHT_THREADS` set to `threads` when that is
 /// given. Fails when the program finds no such device or runs a GPU block
-/// on the CPU, unless `more` has `strict-cpu` and the block is strict. A
-/// program with a window runs headless with its commands, `capture` left
-/// out, and the answers to them are not in `stderr`.
+/// on the CPU, unless `more` has `strict-cpu` and the block is strict, or
+/// the program states the reason in `# on the CPU: REASON`; with that line,
+/// a block must say it. A program with a window runs headless with its
+/// commands, `capture` left out; the answers to them are not in `stderr`,
+/// and those of `draws` are in `draws`.
 fn run_on_device(
     exe: &Path,
     source: &Path,
@@ -1471,8 +1591,12 @@ fn run_on_device(
         ticks: Vec::new(),
         stats: String::new(),
         strict: None,
+        draws: String::new(),
     };
-    let (_, stderr) = split_drive(&text(&output.stderr));
+    let (answers, stderr) = split_drive(&text(&output.stderr));
+    run.draws = draws_answers(&answers);
+    let reason = cpu_reason_of(source);
+    let stderr = cpu_runs_as_stated(&stderr, reason.as_deref(), more.contains(&"strict-cpu"))?;
     for line in stderr.split_inclusive('\n') {
         let Some(said) = line.strip_prefix("midnight: gpu: ") else {
             run.stderr.push_str(line);
@@ -1492,10 +1616,6 @@ fn run_on_device(
             return Err(format!("no {device:?} device").to_lowercase());
         } else if said == STRICT_PASSED || said.starts_with("strict blocks run on the CPU: ") {
             run.strict = Some(said.to_string());
-        } else if said.contains(" runs on the CPU: ") {
-            if !(more.contains(&"strict-cpu") && said.ends_with(STRICT_REFUSED)) {
-                return Err(said.to_string());
-            }
         } else {
             run.device = said.to_string();
         }
@@ -1518,8 +1638,9 @@ fn run_on_device(
 /// third time with `strict-cpu`, with its strict blocks on the CPU. One
 /// that `stops` must exit 1 with exactly `NAME.err`; any other must exit 0,
 /// print `NAME.out` within the tolerance it states, and print nothing else
-/// to standard error. Returns the device and the largest difference from
-/// `NAME.out`.
+/// to standard error. The answers to `draws` must be `NAME.draws`, when it
+/// exists, within the same tolerance. Returns the device and the largest
+/// difference from `NAME.out` and `NAME.draws`.
 fn run_gpu_program(
     dir: &Path,
     source: &Path,
@@ -1560,6 +1681,12 @@ fn run_gpu_program(
         String::new()
     } else {
         read(&out_path)?
+    };
+    let draws_path = beside(source, "draws");
+    let expected_draws = if draws_path.exists() {
+        Some(read(&draws_path)?)
+    } else {
+        None
     };
     let strict = gpu_system_lines(&program).any(|line| line.starts_with("strict "));
     let mut runs: Vec<(&[&str], Option<&str>)> =
@@ -1604,6 +1731,19 @@ fn run_gpu_program(
             ));
         }
         found.0 = run.device;
+        if let Some(expected_draws) = &expected_draws {
+            match compare_draws(expected_draws, &run.draws, tolerance) {
+                Ok(difference) => found.1 = found.1.max(difference),
+                Err(message) => {
+                    return Err(format!(
+                        "{label}: the `draws` answers differ from {}: {message}\n\
+                         --- expected\n{expected_draws}--- actual\n{}---",
+                        draws_path.display(),
+                        run.draws
+                    ));
+                }
+            }
+        }
         if stops {
             continue;
         }
@@ -1637,10 +1777,7 @@ fn gpu_programs() {
     let mut jobs = Vec::new();
     for (name, sources, stops) in &groups {
         dirs.push(scratch(name));
-        for source in sources
-            .iter()
-            .filter(|source| declares_gpu_system(source) && !gpu_system_draws(source))
-        {
+        for source in sources.iter().filter(|source| declares_gpu_system(source)) {
             for mode in &MODES {
                 jobs.push((dirs.len() - 1, source, *stops, *mode));
             }
@@ -2176,17 +2313,6 @@ fn check_drawn(answers: &str, dir: &Path) -> Result<usize, String> {
     Ok(count)
 }
 
-/// Standard error without the `info` lines that say a GPU block runs on
-/// the CPU, as one that does not fit the device does.
-fn without_cpu_runs(stderr: &str) -> String {
-    stderr
-        .split_inclusive('\n')
-        .filter(|line| {
-            !(line.starts_with("midnight: gpu: ") && line.contains(" runs on the CPU: "))
-        })
-        .collect()
-}
-
 /// The scales `window_drawn` runs each program at besides its own.
 const DRAWN_SCALES: [&str; 3] = ["1.25", "1.5", "2"];
 
@@ -2195,7 +2321,8 @@ const DRAWN_SCALES: [&str; 3] = ["1.25", "1.5", "2"];
 /// device, in release and debug builds, as it is and with a `scale`
 /// command of 1.25, 1.5 and 2 before its commands. It must print
 /// `NAME.out`, and each capture after a `draws` must agree with the
-/// reference renderer's picture of that `draws` answer.
+/// reference renderer's picture of that `draws` answer. No GPU block may
+/// run on the CPU but as the program's `# on the CPU:` line says.
 #[test]
 fn window_drawn() {
     let Some(device) = Device::from_env() else {
@@ -2221,6 +2348,7 @@ fn window_drawn() {
         build(source, &exe, *mode)?;
         let commands =
             std::fs::read_to_string(source.with_extension("drive")).expect("read the commands");
+        let reason = cpu_reason_of(source);
         for scale in &scales {
             let label = format!(
                 "{} ({mode:?}, scale {})",
@@ -2249,7 +2377,8 @@ fn window_drawn() {
             let mut run = run_within(&mut command, RUN_LIMIT);
             let said =
                 device_said(&mut run, device).map_err(|message| format!("{label}: {message}"))?;
-            run.stderr = without_cpu_runs(&run.stderr);
+            run.stderr = cpu_runs_as_stated(&run.stderr, reason.as_deref(), false)
+                .map_err(|message| format!("{label}: {message}"))?;
             if run.status != Some(0) || !run.stderr.is_empty() {
                 return Err(format!(
                     "{label}: exited with {:?}\n--- answers\n{}--- stderr\n{}---",
@@ -2739,6 +2868,98 @@ fn a_program_states_its_tolerance_in_a_comment() {
     assert!(stated_tolerance("# tolerance: small\n").is_err());
     assert!(stated_tolerance("# tolerance: -1\n").is_err());
     assert!(stated_tolerance("# tolerance: 0\n").is_err());
+}
+
+const DRAWS_ANSWER: &str = "draws: 1 tick, 64x48, 2 draws\n  \
+                            Window.background = Color(0, 0, 0, 255)\n  \
+                            Draw.circle(12.5, 1e+30, 9.0, Color(0, 200, 0, 160))\n  \
+                            Draw.line(-0.0, NaN, Infinity, 20.0, 3.0, Color(255, 255, 0, 255))\n";
+
+#[test]
+fn equal_draws_match_with_and_without_a_tolerance() {
+    assert_eq!(compare_draws(DRAWS_ANSWER, DRAWS_ANSWER, None), Ok(0.0));
+    assert_eq!(
+        compare_draws(DRAWS_ANSWER, DRAWS_ANSWER, Some(0.01)),
+        Ok(0.0)
+    );
+    assert_eq!(compare_draws("", "", None), Ok(0.0));
+}
+
+#[test]
+fn without_a_tolerance_draws_must_be_equal() {
+    let near = DRAWS_ANSWER.replace("12.5,", "12.500001,");
+    assert!(compare_draws(DRAWS_ANSWER, &near, None).is_err());
+}
+
+#[test]
+fn a_shape_s_numbers_may_differ_within_the_tolerance() {
+    let near = DRAWS_ANSWER
+        .replace("12.5,", "12.51,")
+        .replace("1e+30,", "1.001e+30,")
+        .replace("20.0,", "20,");
+    let difference = compare_draws(DRAWS_ANSWER, &near, Some(0.002)).unwrap();
+    assert!((difference - 0.001).abs() < 1e-9, "{difference}");
+    let far = DRAWS_ANSWER.replace("12.5,", "12.6,");
+    assert!(compare_draws(DRAWS_ANSWER, &far, Some(0.002)).is_err());
+    let small = DRAWS_ANSWER.replace("-0.0,", "0.001,");
+    assert!(compare_draws(DRAWS_ANSWER, &small, Some(0.002)).is_ok());
+}
+
+#[test]
+fn not_a_number_and_infinity_match_only_themselves() {
+    let number = DRAWS_ANSWER.replace("NaN,", "1.0,");
+    assert!(compare_draws(DRAWS_ANSWER, &number, Some(0.5)).is_err());
+    let finite = DRAWS_ANSWER.replace("Infinity,", "3.4e+38,");
+    assert!(compare_draws(DRAWS_ANSWER, &finite, Some(0.5)).is_err());
+}
+
+#[test]
+fn everything_but_a_shape_s_numbers_must_be_equal_within_a_tolerance() {
+    for (from, to) in [
+        ("Color(0, 200, 0, 160)", "Color(0, 201, 0, 160)"),
+        ("Draw.circle", "Draw.rect"),
+        ("1 tick", "2 ticks"),
+        ("2 draws", "3 draws"),
+        ("Color(0, 0, 0, 255)", "Color(0, 0, 1, 255)"),
+        ("9.0, Color", "9.0, 1.0, Color"),
+    ] {
+        let changed = DRAWS_ANSWER.replace(from, to);
+        assert!(
+            compare_draws(DRAWS_ANSWER, &changed, Some(1.0)).is_err(),
+            "{from} to {to}"
+        );
+    }
+    let fewer = DRAWS_ANSWER.lines().take(3).collect::<Vec<_>>().join("\n") + "\n";
+    assert!(compare_draws(DRAWS_ANSWER, &fewer, Some(1.0)).is_err());
+}
+
+#[test]
+fn a_program_states_why_a_block_runs_on_the_cpu() {
+    let program = "# on the CPU: it binds 1000 storage buffers\n# Wide.\n";
+    assert_eq!(
+        stated_cpu_reason(program).as_deref(),
+        Some("it binds 1000 storage buffers")
+    );
+    assert_eq!(stated_cpu_reason("# Wide.\nputs 1\n"), None);
+}
+
+#[test]
+fn a_block_runs_on_the_cpu_only_as_stated() {
+    let said = "midnight: gpu: wide (each 1) runs on the CPU: it binds 1000\n";
+    let other = "midnight: gpu: narrow (each 1) runs on the CPU: no device\n";
+    let strict = "midnight: gpu: s (each 1) runs on the CPU: MIDNIGHT_GPU has strict-cpu\n";
+    let rest = "midnight: gpu: strict check passed\n";
+    let stderr = format!("{said}{rest}");
+    assert_eq!(
+        cpu_runs_as_stated(&stderr, Some("it binds 1000"), false),
+        Ok(rest.to_string())
+    );
+    assert!(cpu_runs_as_stated(&stderr, None, false).is_err());
+    assert!(cpu_runs_as_stated(rest, Some("it binds 1000"), false).is_err());
+    assert!(cpu_runs_as_stated(&format!("{said}{other}"), Some("it binds 1000"), false).is_err());
+    assert_eq!(cpu_runs_as_stated(strict, None, true), Ok(String::new()));
+    assert!(cpu_runs_as_stated(strict, None, false).is_err());
+    assert_eq!(cpu_runs_as_stated(rest, None, false), Ok(rest.to_string()));
 }
 
 /// A library the stand-in driver opens by name.
@@ -4253,7 +4474,7 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
     let _ = writer.join();
     let mut run = shown.finish(Duration::from_secs(30));
     let said = window_said(&mut run, device);
-    run.stderr = without_cpu_runs(&run.stderr);
+    run.stderr = cpu_runs_as_stated(&run.stderr, cpu_reason_of(source).as_deref(), false)?;
     if run.status != Some(0) || !run.stderr.is_empty() || !taken {
         return Err(format!(
             "exited with {:?}, picture taken {taken}, {said:?}\n--- answers\n{}--- stderr\n{}---",

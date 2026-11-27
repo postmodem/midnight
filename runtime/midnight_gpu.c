@@ -24,6 +24,8 @@
 #define SNAPSHOT_USAGE (WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst)
 #define UNIFORM_USAGE (WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst)
 #define READBACK_USAGE (WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst)
+#define RECORDS_USAGE                                                          \
+    (WGPUBufferUsage_Storage | WGPUBufferUsage_Vertex | WGPUBufferUsage_CopySrc)
 
 /* The largest number of workgroups a dispatch asks for in one dimension:
  * MN_GPU_ROW_SPAN rows. */
@@ -135,6 +137,8 @@ static struct {
     Buffer scratch;
     /* The two zero words a strict block reads. */
     Buffer zeros;
+    /* Where draw records are copied to be read back. */
+    Buffer records_read;
     /* The round trip being put together. */
     uint64_t trip;
     /* The command encoder that records work until it is submitted, and
@@ -1020,11 +1024,13 @@ typedef struct Block {
     WGPUBindGroupLayout layout;
     WGPUComputePipeline pipeline;
     /* The uniform words, the outer columns, the inner columns, the error
-     * word and the zeros. */
+     * word, the zeros and the draw records. */
     uint32_t binding_count;
     /* One per table of the outer query, in the query's order. */
     Target *targets;
     uint32_t target_count;
+    /* When the block draws, the draw records of each table, as `targets`. */
+    Buffer *records;
     /* The uniform words of every table, table t's at t * uniform_stride
      * bytes, and the copy of them in CPU memory that a run fills and
      * writes in one piece. */
@@ -1052,12 +1058,27 @@ static bool block_writes(const MnGpuBlock *block, uint32_t component) {
 
 static uint32_t block_storage_buffers(const MnGpuBlock *block) {
     return block->outer_count + block->inner_count + (block->fallible ? 1 : 0) +
-           (block->strict ? 1 : 0);
+           (block->strict ? 1 : 0) + (block->draws != 0 ? 1 : 0);
 }
 
 /* The binding of the error word: after the uniform words and the columns. */
 static uint32_t error_binding(const MnGpuBlock *block) {
     return 1 + block->outer_count + block->inner_count;
+}
+
+/* The binding of the zeros: after the error word. */
+static uint32_t zeros_binding(const MnGpuBlock *block) {
+    return error_binding(block) + (block->fallible ? 1 : 0);
+}
+
+/* The binding of the draw records: the last. */
+static uint32_t records_binding(const MnGpuBlock *block) {
+    return zeros_binding(block) + (block->strict ? 1 : 0);
+}
+
+/* The bytes of a block's draw records for a table of `rows` rows. */
+static uint64_t records_bytes(const MnGpuBlock *block, uint64_t rows) {
+    return rows * block->draws * sizeof(MnDraw);
 }
 
 /* The distance in bytes from one table's uniform words to the next's. */
@@ -1072,7 +1093,6 @@ static uint64_t block_uniform_stride(const MnGpuBlock *block) {
 static const char *block_unfit(const MnGpuBlock *block) {
     char *reason = gpu.reason;
     size_t room = sizeof gpu.reason;
-    if (block->draws != 0) return "it draws, and draws are made on the CPU";
     uint32_t storage = block_storage_buffers(block);
     if (storage > gpu.max_storage_buffers) {
         snprintf(reason, room,
@@ -1105,6 +1125,14 @@ static const char *block_unfit(const MnGpuBlock *block) {
                      "in one dispatch",
                      (unsigned long long)rows,
                      (unsigned long long)gpu.max_groups * 64);
+            return reason;
+        }
+        if (records_bytes(block, rows) > gpu.max_binding) {
+            snprintf(reason, room,
+                     "its draws take %llu bytes in one table and the device "
+                     "binds at most %llu",
+                     (unsigned long long)records_bytes(block, rows),
+                     (unsigned long long)gpu.max_binding);
             return reason;
         }
         for (uint32_t i = 0; i < block->outer_count; i++) {
@@ -1214,6 +1242,9 @@ static Block *block_make(const MnGpuBlock *block) {
     if (block->fallible) {
         entries[error_binding(block)].buffer.type = WGPUBufferBindingType_Storage;
     }
+    if (block->draws != 0) {
+        entries[records_binding(block)].buffer.type = WGPUBufferBindingType_Storage;
+    }
     WGPUBindGroupLayoutDescriptor layout = {0};
     layout.label = view(name);
     layout.entryCount = count;
@@ -1264,7 +1295,9 @@ void mn_gpu_device_forget(void *block_state) {
         Target *target = &state->targets[t];
         if (target->group) wgpuBindGroupRelease(target->group);
         free(target->serials);
+        if (state->records) buffer_drop(&state->records[t]);
     }
+    free(state->records);
     buffer_drop(&state->uniforms);
     free(state->uniform_words);
     for (uint32_t i = 0; i < state->snapshot_count; i++) {
@@ -1453,13 +1486,18 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         queue_write(&state->error, 0, &none, 4);
         bound[error_binding(block)] = state->error;
     }
-    if (block->strict) bound[state->binding_count - 1] = gpu.zeros;
+    if (block->strict) bound[zeros_binding(block)] = gpu.zeros;
 
     if (state->target_count < outer->table_count) {
+        size_t more = outer->table_count - state->target_count;
         state->targets = mn_realloc(
             state->targets, (size_t)outer->table_count * sizeof(Target));
-        memset(state->targets + state->target_count, 0,
-               (outer->table_count - state->target_count) * sizeof(Target));
+        memset(state->targets + state->target_count, 0, more * sizeof(Target));
+        if (block->draws != 0) {
+            state->records = mn_realloc(
+                state->records, (size_t)outer->table_count * sizeof(Buffer));
+            memset(state->records + state->target_count, 0, more * sizeof(Buffer));
+        }
         state->target_count = outer->table_count;
     }
     size_t stride = state->uniform_stride;
@@ -1488,6 +1526,17 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
                 column_ready(table, column);
             }
             bound[1 + i] = column->buffer;
+        }
+        if (block->draws != 0) {
+            Buffer *records = &state->records[t];
+            uint64_t need = records_bytes(block, table->count);
+            if (records->size < need) {
+                /* Room for as many rows again, when the device has it. */
+                uint64_t roomy = need * 2;
+                if (roomy > gpu.max_binding) roomy = need;
+                buffer_make(records, roomy, RECORDS_USAGE);
+            }
+            bound[records_binding(block)] = *records;
         }
         target_bind(block, state, t);
         uniform[0] = table->count;
@@ -1521,6 +1570,7 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         wgpuComputePassEncoderSetBindGroup(pass, 0, state->targets[t].group, 0,
                                            NULL);
         wgpuComputePassEncoderDispatchWorkgroups(pass, across, down, 1);
+        if (block->draws != 0) buffer_use(&state->records[t]);
 
         for (uint32_t i = 0; i < block->outer_count; i++) {
             Column *column = column_find(table, block->outer_columns[i].component);
@@ -1544,6 +1594,35 @@ const char *mn_gpu_device_run(MnGpuBlock *block, uint32_t *uniform,
         }
     }
     return NULL;
+}
+
+/* ---- Draw records -------------------------------------------------------- */
+
+WGPUBuffer mn_gpu_records(const MnGpuRecords *records) {
+    const Block *state = records->state;
+    return state->records[records->table].handle;
+}
+
+void mn_gpu_records_read(const MnGpuRecords *records, size_t count, MnDraw *out) {
+    uint64_t total = 0;
+    for (size_t i = 0; i < count; i++) total += records[i].count * sizeof(MnDraw);
+    if (total == 0) return;
+    if (gpu.records_read.size < total) {
+        buffer_make(&gpu.records_read, total, READBACK_USAGE);
+    }
+    uint64_t offset = 0;
+    for (size_t i = 0; i < count; i++) {
+        uint64_t bytes = records[i].count * sizeof(MnDraw);
+        if (bytes == 0) continue;
+        Block *state = records[i].state;
+        buffer_copy(&state->records[records[i].table], 0, &gpu.records_read,
+                    offset, bytes);
+        offset += bytes;
+        mn_gpu_downloads++;
+    }
+    encoder_submit();
+    memcpy(out, buffer_read(&gpu.records_read, total), (size_t)total);
+    wgpuBufferUnmap(gpu.records_read.handle);
 }
 
 /* ---- The strict check ---------------------------------------------------- */
@@ -1776,6 +1855,7 @@ void mn_gpu_device_finish(void) {
     buffer_drop(&gpu.readback);
     buffer_drop(&gpu.scratch);
     buffer_drop(&gpu.zeros);
+    buffer_drop(&gpu.records_read);
     free(gpu.bytes);
     free(gpu.contents);
     free(gpu.fetches);
