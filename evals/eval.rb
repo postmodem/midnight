@@ -467,15 +467,22 @@ module Eval
     end
 
     # Each line of `systems` as [name, each?].
+    # The systems a program must declare, in the order they run, as
+    # [name, each]. A last line `others after` says that any other system
+    # runs after them.
     def systems
       return [] unless exist?("systems")
 
-      read("systems").each_line.map(&:split).reject(&:empty?).map do |name, each, extra|
+      lines = read("systems").each_line.map(&:split).reject(&:empty?)
+      lines.pop if lines.last == %w[others after]
+      lines.map do |name, each, extra|
         raise Failure, "#{@name}/systems: `#{[name, each, extra].compact.join(' ')}` is not `NAME [each]`" if extra || (each && each != "each")
 
         [name, each == "each"]
       end
     end
+
+    def others_after? = exist?("systems") && read("systems").each_line.map(&:split).reject(&:empty?).last == %w[others after]
 
     # Each line of `loops` as [where, place].
     def loops
@@ -931,9 +938,9 @@ module Eval
     end
 
     # [found, review, dir]: each word of a shell command that may be a
-    # path, as [word, the directory it is taken from]; what the audit cannot
-    # follow; and the directory the command leaves the shell in. `cd` alone
-    # counts as `~`.
+    # path, as [word, the directory it is taken from, whether it is a word
+    # of a `midnight` command]; what the audit cannot follow; and the
+    # directory the command leaves the shell in. `cd` alone counts as `~`.
     def bash_words(command, cwd)
       dir = cwd
       found = []
@@ -941,7 +948,8 @@ module Eval
       segments(command).each do |seg|
         words = split(seg)
         paths, why = segment_words(words)
-        found.concat(paths.map { |w| [w, dir] })
+        compiler = File.basename(words.drop_while { |w| w.match?(/\A[A-Za-z_][A-Za-z_0-9]*=/) }.first.to_s) == "midnight"
+        found.concat(paths.map { |w| [w, dir, compiler] })
         review.concat(why)
         next unless File.basename(words.first.to_s) == "cd"
 
@@ -1057,8 +1065,9 @@ module Eval
     end
 
     # { "escapes" => the paths outside the allowed places that calls which
-    # ran reached, "review" => what the audit could not follow }. scratch
-    # is Claude Code's directory under /tmp for the run.
+    # ran reached, "review" => what the audit could not follow }. An escape
+    # found in a `midnight` command has "compiler" true. scratch is Claude
+    # Code's directory under /tmp for the run.
     def check(calls, root:, wrapper:, tool_results:, scratch: nil)
       allowed = [root, wrapper, tool_results, scratch].compact
       escapes = []
@@ -1066,7 +1075,7 @@ module Eval
       walk(calls, root) do |c, cwd|
         found, why = paths(c, root, cwd)
         review.concat(why.map { |w| { "tool" => c["tool"], "what" => w } })
-        found.each do |p, dir|
+        found.each do |p, dir, compiler|
           full = expand(p, dir)
           if full.nil?
             review << { "tool" => c["tool"], "what" => "`#{p}` from a directory the audit cannot follow" }
@@ -1075,7 +1084,7 @@ module Eval
           next if full != :outside && %w[/dev/null /dev/stdout /dev/stderr].include?(full)
           next if full != :outside && allowed.any? { |a| Guard.inside?(full, a) }
 
-          escapes << { "tool" => c["tool"], "path" => p }
+          escapes << (compiler ? { "tool" => c["tool"], "path" => p, "compiler" => true } : { "tool" => c["tool"], "path" => p })
         end
       rescue StandardError => e
         review << { "tool" => c["tool"], "what" => "the audit failed: #{e.message}" }
@@ -1084,6 +1093,22 @@ module Eval
     end
 
     def escapes(calls, **places) = check(calls, **places)["escapes"]
+
+    # [escapes, review] once the wrapper's refusals are taken into account.
+    # A refused call goes for review, and so does a path of a `midnight`
+    # command that a refused call named: the compiler did not run with it.
+    # Every other escape stays.
+    def with_refusals(audit, calls)
+      refused = calls.select { |c| c["refused"] }
+      named = lambda do |e|
+        e["compiler"] && refused.any? { |c| c["args"].to_a.include?(e["path"]) || c["caller"].to_h.value?(e["path"]) }
+      end
+      covered, escapes = audit["escapes"].partition(&named)
+      review = audit["review"] +
+               covered.map { |e| { "tool" => e["tool"], "what" => "`#{e['path']}` in a call the wrapper refused" } } +
+               refused.map { |c| { "tool" => "midnight", "what" => "refused: #{c['refused']}" } }
+      [escapes, review]
+    end
   end
 
   # The answers of the command `draws`, read and compared.
@@ -1391,8 +1416,9 @@ module Eval
       end
       unless task.systems.empty?
         missing = missing_systems(dir, loops, task.systems)
-        checks["systems"] = missing.empty?
-        notes["systems"] = "missing: #{missing.join(', ')}" unless missing.empty?
+        order = systems_out_of_order(dir, task.systems, task.others_after?)
+        checks["systems"] = missing.empty? && order.nil?
+        notes["systems"] = [missing.empty? ? nil : "missing: #{missing.join(', ')}", order].compact.join("; ") unless checks["systems"]
       end
       verdict = checks.values.all? ? "pass" : "fail"
       ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round
@@ -1428,6 +1454,41 @@ module Eval
     # with no loop: `midnight loops` (loops, nil when it failed) shows none
     # under the system, and none in a function whose name the system's
     # body (its declaration to the next `end` at the start of a line) has.
+    # The systems of the program whose root is solution.12am in dir, in the
+    # order they run: source order, a required file's systems where its
+    # first `require` stands.
+    def system_order(dir, file = File.join(dir, "solution.12am"), seen = {})
+      real = File.expand_path(file)
+      return [] if seen[real] || !File.file?(real)
+
+      seen[real] = true
+      File.read(real).scrub.lines.flat_map do |line|
+        if (m = line.match(Guard::REQUIRE)) && (path = Guard.require_path(m.post_match))
+          system_order(dir, File.join(File.dirname(real), "#{path}.12am"), seen)
+        elsif (m = line.match(DECLARATION))
+          [m[1]]
+        else
+          []
+        end
+      end
+    end
+
+    # Why the program's systems are not in the order wanted, or nil: the
+    # named ones must run in their order and, with others_after, before any
+    # other. A named system the program does not declare is left to
+    # missing_systems.
+    def systems_out_of_order(dir, wanted, others_after)
+      order = system_order(dir)
+      names = wanted.map(&:first).select { |n| order.include?(n) }
+      named = order.select { |n| names.include?(n) }.uniq
+      return "runs #{named.map { |n| "`#{n}`" }.join(', ')} in that order" unless named == names
+      return nil unless others_after && !names.empty?
+
+      last = order.index(names.last)
+      early = order.first(last).reject { |n| names.include?(n) }
+      early.empty? ? nil : "`#{early.first}` runs before `#{names.last}`"
+    end
+
     def missing_systems(dir, loops, wanted)
       bodies = {}
       Dir.glob("**/*.12am", base: dir).each do |f|
@@ -1883,7 +1944,7 @@ module Eval
       lists = {
         "Compiler bugs" => graded.select { |r| r["compiler_bug"] },
         "Escaped runs" => graded.select { |r| r["outcome"] == "escaped" },
-        "Runs for review (calls the audit could not follow)" => graded.select { |r| r["review"] },
+        "Runs for review (calls the audit could not follow, calls the wrapper refused)" => graded.select { |r| r["review"] },
         "Infrastructure errors" => results["runs"].select { |r| r["outcome"] == "infrastructure" },
         "Timeouts" => graded.select { |r| r["outcome"] == "timeout" },
         "No solution" => graded.select { |r| r["outcome"] == "no solution" },
@@ -2141,7 +2202,7 @@ module Eval
       cmd = [@runner.claude, "-p", "--safe-mode", "--restricted", "--strict-mcp-config",
              "--disable-slash-commands", "--tools", TOOLS.join(","),
              "--allowedTools", "Bash(midnight *)", "Bash(MIDNIGHT_DRIVE=* midnight *)",
-             "Bash(MIDNIGHT_THREADS=* midnight *)", *TOOLS.drop(1),
+             "Bash(MIDNIGHT_THREADS=* midnight *)", "Bash(MIDNIGHT_WINDOW=* midnight *)", *TOOLS.drop(1),
              "--permission-prompts", "none", "--no-session-persistence",
              "--output-format", "stream-json", "--verbose", "--model", @model]
       cmd += ["--effort", @runner.effort] if @runner.effort
@@ -2246,13 +2307,12 @@ module Eval
       audit = Audit.check(tool_calls, root: @root, wrapper: @wrapper,
                                       tool_results: Eval.tool_results_dir(@root),
                                       scratch: Eval.claude_tmp_dir(@root))
-      escapes = audit["escapes"]
-      escapes += calls.select { |c| c["refused"] }.map { |c| { "tool" => "midnight", "path" => c["refused"] } }
+      escapes, review = Audit.with_refusals(audit, calls)
       graded = Grade.grade(@task, program_dir, compiler: @runner.compiler, keep: @keep)
       given_sha = @task.repair? ? Guard.sha256(@task.path("given", "solution.12am")) : nil
       Eval.apply_grade(rec, graded, escaped: !escapes.empty?, timeout: status == :timeout)
       rec["escapes"] = escapes unless escapes.empty?
-      rec["review"] = audit["review"] unless audit["review"].empty?
+      rec["review"] = review unless review.empty?
       rec["calls"] = CallLog.summary(calls)
       rec["diagnostics"] = CallLog.diagnostics(calls).each do |d|
         d["ruby_shaped"] = RubyShaped.ruby_shaped?(d["template"], d["spans"]) if d["kind"] == "error"
@@ -2637,15 +2697,14 @@ module Eval
           problems << "the repository's path #{r} is in the transcript" if text.include?(r)
         end
         problems << "Ruby loaded pwn.rb" if File.exist?(File.join(keep, "files", "loaded.txt"))
-        # Every path the audit found must be one the wrapper refused.
+        # Every path the audit found must be one the wrapper refused, and so
+        # be for review; every refusal must be for review.
         refusals = calls.select { |c| c["refused"] }
-        outside = rec["escapes"].to_a.reject { |e| e["tool"] == "midnight" }.reject do |e|
-          refusals.any? { |c| c["args"].to_a.include?(e["path"]) || c["caller"].to_h.value?(e["path"]) }
-        end
+        outside = rec["escapes"].to_a
         problems << "the audit found paths the wrapper did not refuse: #{outside.map { |e| e['path'] }.inspect}" unless outside.empty?
         refused = refusals.size
-        marked = rec["escapes"].to_a.count { |e| e["tool"] == "midnight" }
-        problems << "#{refused} refusals in the call log, #{marked} marked" unless refused == marked
+        listed = rec["review"].to_a.count { |e| e["tool"] == "midnight" }
+        problems << "#{refused} refusals in the call log, #{listed} for review" unless refused == listed
         puts format("isolation: escape: %d tool calls, %d denied, %d compiler calls, %d refused by the wrapper, " \
                     "dropped %s, %d for review",
                     transcript.tool_calls.size, rec["denied"].to_a.size, calls.size, refused,

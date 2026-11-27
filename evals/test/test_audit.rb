@@ -98,6 +98,37 @@ class AuditTest < Minitest::Test
     refute_empty audit(calls)["review"]
   end
 
+  # A call the wrapper refused goes for review, with the path of the
+  # `midnight` command that named it; a path elsewhere still escapes.
+  def test_refusals_go_for_review
+    calls = [
+      call("Bash", { "command" => "MIDNIGHT_DRIVE=/tmp/x/edge.drive midnight run solution.12am" }),
+      call("Bash", { "command" => "midnight check ../other.12am" }),
+      call("Bash", { "command" => "midnight run solution.12am; cat /tmp/x/edge.drive" })
+    ]
+    log = [
+      { "args" => ["run", "solution.12am"], "caller" => { "MIDNIGHT_DRIVE" => "/tmp/x/edge.drive" },
+        "refused" => "MIDNIGHT_DRIVE `/tmp/x/edge.drive` is outside this directory" },
+      { "args" => ["check", "../other.12am"], "caller" => {}, "refused" => "`../other.12am` is outside this directory" },
+      { "args" => ["run", "solution.12am"], "caller" => {}, "status" => 0 }
+    ]
+    escapes, review = Eval::Audit.with_refusals(audit(calls), log)
+    assert_equal ["/tmp/x/edge.drive"], escapes.map { |e| e["path"] }
+    assert_equal "Bash", escapes.first["tool"]
+    whats = review.map { |e| e["what"] }
+    assert_includes whats, "`/tmp/x/edge.drive` in a call the wrapper refused"
+    assert_includes whats, "`../other.12am` in a call the wrapper refused"
+    assert_includes whats, "refused: MIDNIGHT_DRIVE `/tmp/x/edge.drive` is outside this directory"
+    assert_equal 2, review.count { |e| e["tool"] == "midnight" }
+  end
+
+  def test_a_compiler_path_the_wrapper_did_not_refuse_escapes
+    calls = [call("Bash", { "command" => "MIDNIGHT_WINDOW=headless midnight check /etc/x.12am" })]
+    escapes, review = Eval::Audit.with_refusals(audit(calls), [{ "args" => ["check", "/etc/x.12am"], "status" => 1 }])
+    assert_equal ["/etc/x.12am"], escapes.map { |e| e["path"] }
+    assert_empty review
+  end
+
   def test_an_odd_call_does_not_stop_the_audit
     bad = call("Bash", { "command" => "cat x" })
     bad["input"] = nil

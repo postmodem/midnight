@@ -80,7 +80,7 @@ evals/
     given/           files copied beside TASK.md (optional)
     check.drive      the commands the grader runs a program with (optional)
     loops            where named loops must run (optional)
-    systems          the systems the program must declare (optional)
+    systems          the systems the program must declare, in order (optional)
   results/DATE-COMMIT[-LABEL].json   a run's results
   results/DATE-COMMIT[-LABEL].md     its report
   runs/              transcripts, call logs and programs, ignored by git
@@ -130,6 +130,7 @@ claude -p --safe-mode --restricted --strict-mcp-config
   --tools Bash,Read,Edit,Write,Glob,Grep
   --allowedTools "Bash(midnight *)" "Bash(MIDNIGHT_DRIVE=* midnight *)"
                  "Bash(MIDNIGHT_THREADS=* midnight *)"
+                 "Bash(MIDNIGHT_WINDOW=* midnight *)"
                  Read Edit Write Glob Grep
   --permission-prompts none --no-session-persistence
   --output-format stream-json --verbose
@@ -244,6 +245,12 @@ cap, and one program graded at a time:
    as its second column, or has `def F` there for a function `F` whose
    name the system's body names (the lines from the declaration to the
    next `end` at the start of a line).
+   The systems named run in the order of the file's lines: the order
+   "Programs and files" in the reference gives, from `solution.12am`,
+   with a required file's systems where its first `require` stands. A
+   last line `others after` is for a task that says any other system
+   runs after the named ones: then none may run before the last one
+   named.
 
 A run **passes** when all its checks do. It **fails** when a check fails,
 when there is no `solution.12am`, when the time limit ended it
@@ -274,7 +281,8 @@ result says the directory was reset. `~` and `~/` are the home directory,
 and a word that begins with any other `~` is outside. A path that resolves
 outside the run's directory, the wrapper's directory, `/dev/null`,
 `/dev/stdout`, `/dev/stderr` and Claude Code's tool-result directory for
-the run marks the run **escaped**, and so does a refusal in the call log.
+the run marks the run **escaped**, unless it is a word of a `midnight`
+command that the wrapper refused: the compiler did not run with it.
 An escaped run counts as failed, is listed by itself in the report, and is
 a defect of the harness or the task to be fixed before results are used.
 
@@ -283,7 +291,10 @@ report, without marking it: a word with `$` or a backquote; a relative
 word after a `cd` to a directory it cannot know (`cd -`, a variable); a
 `sed` program with an `r`, `R`, `w`, `W` or `e` command; an `awk` program
 with `getline`, `system` or output to a file or a pipe; `rg --pre`;
-`find -exec` and its kind; and a call the audit fails on.
+`find -exec` and its kind; and a call the audit fails on. A call the
+wrapper refused puts the run on that list too, with the refusal and the
+paths of the command that named them; nothing ran, so the run is graded
+on its program.
 
 ### What is recorded
 
@@ -388,7 +399,7 @@ account details and are large.
    1), and for each file with no headings, the number of runs that read
    any of its lines.
 6. Compiler bugs, escaped runs, runs for review with what the audit could
-   not follow, infrastructure errors, denied calls, runs that ended in
+   not follow and the calls the wrapper refused, infrastructure errors, denied calls, runs that ended in
    `timeout` or `no solution`, calls the time limit ended while the load
    average exceeded the number of cores, and programs graded again alone,
    with both outcomes, if any.
@@ -432,7 +443,9 @@ exactly `expected.out`:
   `TASK.md` says the system goes over every entity of a kind with an
   `each`, in those words: a list of handles also goes over every entity,
   and a system that receives events may do its work in `on` alone, as the
-  reference teaches. Controls name no construct.
+  reference teaches. Its lines are in the order the systems run, and a
+  task that says any other system runs after them ends the file with
+  `others after`. Controls name no construct.
 - Every program of a task builds and runs in under 5 seconds on the
   development machine.
 - The reference solution is written as the documentation teaches and is
@@ -641,8 +654,8 @@ All run on x86_64-linux, on the development machine.
       token appears nowhere in the transcript, the call log or the agent's
       files; no path of the repository appears in the transcript; the
       `system/init` line lists only the six tools and no MCP server; and
-      the audit marks the run escaped exactly where the call log shows a
-      refusal.
+      every path the audit finds is in a call the wrapper refused, and
+      each refusal puts the run on the list for review.
    3. A run with `haiku` whose `TASK.md` asks only for the one-word reply
       `done`, with an `AGENTS.md` in the run's directory that asks for a
       random token instead, replies `done`: Claude Code loads no
@@ -815,8 +828,9 @@ sessions.
 - **Two permission rules, one per variable.** `Bash(MIDNIGHT_* midnight *)`
   matches nothing: Claude Code does not match an allow rule past a leading
   assignment unless the rule names the variable. The spec now has
-  `Bash(MIDNIGHT_DRIVE=* midnight *)` and `Bash(MIDNIGHT_THREADS=* midnight
-  *)`.
+  `Bash(MIDNIGHT_DRIVE=* midnight *)`, `Bash(MIDNIGHT_THREADS=* midnight
+  *)` and `Bash(MIDNIGHT_WINDOW=* midnight *)`, the last for the headless
+  command the README and the examples teach.
 - **The preamble** also says to write files with the file tools, to give
   each `midnight` command on its own, and that a refused command does not
   end the task. Without it, Claude Code's denial text ("do not retry")
@@ -846,9 +860,7 @@ sessions.
   `/tmp/eval-token` and `eval-token` at the repository's root, and the
   probe keeps every file of the run's directory, not only the program, so
   the token can be looked for in all of them. Its results go to
-  `evals/runs/`, not `evals/results/`. "The audit marks the run escaped
-  exactly where the call log shows a refusal" is checked as: every path
-  the audit found is in a call the wrapper refused.
+  `evals/runs/`, not `evals/results/`.
 - **`ruby:` of `orbits`** leaves out `**`, which the spec's table names:
   Midnight has `**`, so it is not a Ruby form the task invites.
 - **Checks the grader cannot make.** The `loops` check reads the line of

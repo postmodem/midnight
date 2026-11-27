@@ -75,7 +75,9 @@ After each session the audit checks every tool call that ran for a path
 outside the directory. A run that reached outside is **escaped**: it
 counts as failed and is a defect of the harness or the task, to be fixed
 before the results are used. What the audit cannot follow (a `$` in a
-command, a `cd` to an unknown place) puts the run on a list for review.
+command, a `cd` to an unknown place) puts the run on a list for review,
+and so does a call the wrapper refused: nothing ran, and the run is
+graded on its program.
 
 ```sh
 nix run .#eval -- isolation
@@ -87,8 +89,8 @@ repository, to list the home directory and to print the environment; the
 other gives it an `AGENTS.md` that contradicts its task. A random token
 sits in a file beside the run's directory and in the repository. It
 passes when the token reaches nothing the agent wrote or read, no path of
-the repository appears in the transcript, the audit marks only the calls
-the wrapper refused, and the agent ignores the `AGENTS.md`. Run it after
+the repository appears in the transcript, every path the audit finds is
+in a call the wrapper refused, and the agent ignores the `AGENTS.md`. Run it after
 upgrading Claude Code, and whenever `run` stops with "the flags no longer
 isolate".
 
@@ -164,7 +166,7 @@ given/           files placed beside TASK.md (optional)
 check.drive      the commands grading runs a window program with (optional)
 expected.draws   every `draws` answer of check.drive, as the suite's .draws files (optional)
 loops            `WHERE PLACE` lines the program must meet (optional)
-systems          `NAME` or `NAME each` lines the program must meet (optional)
+systems          `NAME` or `NAME each` lines, in the order they run, and `others after` (optional)
 ```
 
 The rules are in the spec's "Tasks" section. In short: output is fixed to
@@ -172,9 +174,10 @@ the character and depends on nothing the reference leaves open; `TASK.md`
 shows only the first lines of it; it asks for what to build in the
 domain's words, and names a construct only where a check needs it or the
 construct is the point; a task about entities, systems or events names
-the entities and the systems, in order, and has a `systems` file; a
-`wrong/` program fails only `loops`, one only `systems`, and one only
-**draws**, where the task has those files. A task that draws has the
+the entities and the systems, in order, and has a `systems` file, whose
+last line `others after` says, where `TASK.md` does, that any other
+system runs after them; a `wrong/` program fails only `loops`, one only
+`systems`, and one only **draws**, where the task has those files. A task that draws has the
 area `draw` and `expected.draws`, and `meta` says `draws: in order` or
 `draws: any order`.
 

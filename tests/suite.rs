@@ -662,20 +662,67 @@ fn same_draws(got: &str, want: &str, any_order: bool) -> bool {
     parse(got) == parse(want)
 }
 
-/// The lines of a task's `systems` file as `(name, each)`.
-fn task_systems(task: &Path) -> Vec<(String, bool)> {
+/// The lines of a task's `systems` file as `(name, each)`, in the order
+/// the systems run, and whether its last line is `others after`: any
+/// other system runs after them.
+fn task_systems(task: &Path) -> (Vec<(String, bool)>, bool) {
     let text = std::fs::read_to_string(task.join("systems")).unwrap_or_default();
-    text.lines()
-        .filter_map(|line| {
-            let words: Vec<&str> = line.split_whitespace().collect();
-            match words.as_slice() {
-                [] => None,
-                [name] => Some((name.to_string(), false)),
-                [name, "each"] => Some((name.to_string(), true)),
-                _ => panic!("{}/systems: `{line}` is not `NAME [each]`", task.display()),
-            }
+    let mut lines: Vec<Vec<&str>> = text
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<&str>>())
+        .filter(|words| !words.is_empty())
+        .collect();
+    let others_after = lines
+        .last()
+        .is_some_and(|words| words == &["others", "after"]);
+    if others_after {
+        lines.pop();
+    }
+    let systems = lines
+        .iter()
+        .map(|words| match words.as_slice() {
+            [name] => (name.to_string(), false),
+            [name, "each"] => (name.to_string(), true),
+            _ => panic!(
+                "{}/systems: `{}` is not `NAME [each]`",
+                task.display(),
+                words.join(" ")
+            ),
         })
-        .collect()
+        .collect();
+    (systems, others_after)
+}
+
+/// Why the systems `source` declares are not in the order wanted, or
+/// `None`: the named ones must be declared in their order and, with
+/// `others_after`, before any other. A named system `source` does not
+/// declare is left to `systems_missing`.
+fn systems_out_of_order(
+    source: &Path,
+    wanted: &[(String, bool)],
+    others_after: bool,
+) -> Option<String> {
+    let program = std::fs::read_to_string(source).unwrap_or_default();
+    let order: Vec<&str> = program.lines().filter_map(declared_system).collect();
+    let names: Vec<&str> = wanted
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .filter(|name| order.contains(name))
+        .collect();
+    let named: Vec<&str> = order
+        .iter()
+        .copied()
+        .filter(|n| names.contains(n))
+        .collect();
+    if named != names {
+        return Some(format!("runs {} in that order", named.join(", ")));
+    }
+    let last = names.last().filter(|_| others_after)?;
+    let at = order.iter().position(|n| n == last)?;
+    order[..at]
+        .iter()
+        .find(|n| !names.contains(n))
+        .map(|early| format!("`{early}` runs before `{last}`"))
 }
 
 /// The columns of a line of `midnight loops`, which two or more spaces
@@ -843,7 +890,7 @@ fn eval_checks(dir: &Path, task: &Path, source: &Path, mode: Mode) -> Result<Vec
         }
     }
     let loops = task_loops(task);
-    let systems = task_systems(task);
+    let (systems, others_after) = task_systems(task);
     if !loops.is_empty() || !systems.is_empty() {
         let printed = loops_of(source).unwrap_or_default();
         let missing = loops_missing(&printed, &loops);
@@ -853,6 +900,9 @@ fn eval_checks(dir: &Path, task: &Path, source: &Path, mode: Mode) -> Result<Vec
         let missing = systems_missing(source, &printed, &systems);
         if !missing.is_empty() {
             failed.push(format!("systems: {}", missing.join(", ")));
+        }
+        if let Some(why) = systems_out_of_order(source, &systems, others_after) {
+            failed.push(format!("systems: {why}"));
         }
     }
     Ok(failed)

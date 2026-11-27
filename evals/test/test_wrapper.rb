@@ -212,6 +212,7 @@ class WrapperTest < Minitest::Test
     File.write(File.join(@root, "json.rb"), "File.write(#{ran.inspect}, '')\n")
     [
       { "MIDNIGHT_A" => "1", "RUBYOPT" => "-r./x.rb" },
+      { "MIDNIGHT_WINDOW" => "headless", "RUBYOPT" => "-r./x.rb" },
       { "RUBYLIB" => "." },
       { "RUBY_DEBUG" => "1" },
       { "LD_PRELOAD" => "" },
