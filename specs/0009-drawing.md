@@ -1303,11 +1303,10 @@ All run on x86_64-linux, on the development machine.
 ## Outcome
 
 Implemented, with the differences listed under "Differences from the
-design". Criteria 1 to 9 and 11 pass on x86_64-linux: a Ryzen 9 9950X3D
+design". All eleven criteria pass on x86_64-linux: a Ryzen 9 9950X3D
 beside an RTX 5090 (NVIDIA 595.71.05), its integrated Radeon through
 RADV and `llvmpipe`, both of Mesa 26.1.8, `wgpu-native` 27.0.4.0, SDL
 3.4.10, sway 1.12, clang 21.1.8, Claude Code 2.1.327 for the evals.
-Criterion 10 is run by hand at the desktop.
 
 ### Acceptance criteria
 
@@ -1322,7 +1321,7 @@ Criterion 10 is run by hand at the desktop.
 | 7 | No sanitizer report from any debug run of a program that draws: in the suite, in `window_drawn` and in `window_shown` inside the compositor of the window tests. |
 | 8 | Every window test runs headless or inside `tests/window/compositor.sh`; the draw benchmark runs inside it too. |
 | 9 | Both forms ran the four tasks before slice 3, and the thirteen ran before and after; see "The evals" below. The audits of the failed runs found no correct program rejected and no answer reached from outside a run's directory. |
-| 10 | Run by hand at the desktop: to be recorded. |
+| 10 | Run by hand at the development machine's desktop (Wayland, the RTX 5090), release and debug: `examples/shapes.12am` shows its scene and redraws it to fit when the window is resized, `examples/flock.12am` winds its spiral at the display's pace, and both print their last line and end with status 0 when the window is closed, the debug builds with no sanitizer report. |
 | 11 | The reference says 0.8 and `midnight --version` prints `midnight 0.8.0`. "What a draw costs" has the costs measured on the implementation. The README's commands work as written. `tests/COVERAGE.md` has "Drawing". |
 
 ### Measured
