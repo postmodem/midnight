@@ -1,0 +1,4 @@
+areas: draw window input
+control: no
+ruby: a shape hidden by giving it no size or moving it off the window, a key press taken for a key held, a game loop of its own
+draws: in order

@@ -1,0 +1,65 @@
+# Each part of the picture is an entity of a kind of its own, spawned in
+# another order than it is drawn; one system prints and draws.
+
+component Box
+  x: Float32
+  y: Float32
+  w: Float32
+  h: Float32
+end
+
+tag Sky
+tag Ground
+
+component Sun
+  x: Float
+  y: Float
+  r: Float
+end
+
+component Peak
+  ax: Float
+  ay: Float
+  bx: Float
+  by: Float
+  cx: Float
+  cy: Float
+end
+
+component Path
+  x1: Int
+  y1: Int
+  x2: Int
+  y2: Int
+  width: Int
+end
+
+system report
+  puts "tick #{Time.tick + 1}"
+  each Box, with: Sky do |b|
+    Draw.rect(b.x, b.y, b.w, b.h, Color(40, 70, 130))
+  end
+  each Sun do |s|
+    Draw.circle(s.x, s.y, s.r, Color(250, 210, 60, 255))
+  end
+  each Peak do |p|
+    Draw.triangle(p.ax, p.ay, p.bx, p.by, p.cx, p.cy, Color(90, 80, 70))
+  end
+  each Box, with: Ground do |b|
+    Draw.rect(b.x, b.y, b.w, b.h, Color(50, 110, 40))
+  end
+  each Path do |p|
+    Draw.line(p.x1, p.y1, p.x2, p.y2, p.width, Color(200, 180, 140, 160))
+  end
+end
+
+spawn Path(64, 166, 118, 114, 3)
+spawn Box(8, 112, 224, 56), Ground
+spawn Peak(100, 112, 172, 34, 226, 112)
+spawn Sun(182, 40, 18)
+spawn Box(8, 12, 224, 100), Sky
+
+Window.open("Poster", 240, 180)
+Window.background = Color(20, 24, 36)
+World.run
+puts "closed after #{Time.tick} ticks"

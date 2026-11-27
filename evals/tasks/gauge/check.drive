@@ -1,0 +1,47 @@
+tick 2
+draws
+key ArrowUp
+tick
+key ArrowUp
+key ArrowUp
+tick
+key down Space
+key ArrowUp
+tick
+draws
+key ArrowUp
+tick
+draws
+key up Space
+key ArrowDown
+key ArrowUp
+tick
+draws
+key down ArrowDown
+tick 3
+key up ArrowDown
+key ArrowDown
+tick
+key ArrowDown
+tick
+key ArrowDown
+tick
+key ArrowDown
+tick
+key ArrowDown
+tick
+key ArrowDown
+tick
+key ArrowDown
+tick
+draws
+key ArrowDown
+tick
+key down Space
+tick
+draws
+key up Space
+key ArrowUp
+tick 2
+draws
+close

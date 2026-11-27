@@ -1,0 +1,18 @@
+# Colours given first, as some toolkits take them: a compile error.
+
+system report
+  puts "tick #{Time.tick + 1}"
+end
+
+system show
+  Draw.rect(Color(40, 70, 130), 8, 12, 224, 100)
+  Draw.circle(Color(250, 210, 60), 182, 40, 18)
+  Draw.triangle(Color(90, 80, 70), 100, 112, 172, 34, 226, 112)
+  Draw.rect(Color(50, 110, 40), 8, 112, 224, 56)
+  Draw.line(Color(200, 180, 140, 160), 64, 166, 118, 114, 3)
+end
+
+Window.background = Color(20, 24, 36)
+Window.open("Poster", 240, 180)
+World.run
+puts "closed after #{Time.tick} ticks"

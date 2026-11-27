@@ -1,0 +1,8 @@
+# Commands for trying the program: each line is carried out before the
+# tick it comes before. Run with
+#   MIDNIGHT_DRIVE=try.drive midnight run solution.12am
+tick 3
+draws
+tick 5
+draws
+close

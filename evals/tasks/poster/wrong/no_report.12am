@@ -1,0 +1,24 @@
+# The right output and picture, but the system that prints is not `report`.
+
+SKY = Color(40, 70, 130)
+SUN = Color(250, 210, 60)
+ROCK = Color(90, 80, 70)
+GRASS = Color(50, 110, 40)
+SAND = Color(200, 180, 140, 160)
+
+system announce
+  puts "tick #{Time.tick + 1}"
+end
+
+system show
+  Draw.rect(8, 12, 224, 100, SKY)
+  Draw.circle(182, 40, 18, SUN)
+  Draw.triangle(100, 112, 172, 34, 226, 112, ROCK)
+  Draw.rect(8, 112, 224, 56, GRASS)
+  Draw.line(64, 166, 118, 114, 3, SAND)
+end
+
+Window.background = Color(20, 24, 36)
+Window.open("Poster", 240, 180)
+World.run
+puts "closed after #{Time.tick} ticks"

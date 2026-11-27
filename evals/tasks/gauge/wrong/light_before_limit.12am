@@ -1,0 +1,40 @@
+# The light is drawn before the limit.
+
+resource Gauge
+  level: Int = 5
+  marked: Bool = false
+end
+
+GREEN = Color(60, 200, 90)
+RED = Color(230, 70, 50)
+GREY = Color(90, 90, 90)
+
+system adjust
+  Gauge.level += 1 if Keyboard.pressed?(Key::ArrowUp)
+  Gauge.level -= 1 if Keyboard.pressed?(Key::ArrowDown)
+  Gauge.level = Gauge.level.clamp(0, 12)
+  Gauge.marked = Keyboard.down?(Key::Space)
+end
+
+system report
+  shown = Gauge.marked ? "shown" : "hidden"
+  puts "tick #{Time.tick + 1}: level #{Gauge.level}, marker #{shown}"
+end
+
+system show
+  level = Gauge.level
+  color = level >= 9 ? RED : GREEN
+  Draw.rect(20, 52, 148, 14, Color(70, 70, 80))
+  Draw.rect(22, 54, 12 * level, 10, color) if level > 0
+  Draw.circle(184, 59, 7, level > 0 ? color : GREY)
+  Draw.line(130, 46, 130, 72, 2, Color(255, 255, 255, 96))
+  if Gauge.marked
+    tip = 22 + 12 * level
+    Draw.triangle(tip, 49, tip - 5, 40, tip + 5, 40, Color(250, 240, 120))
+  end
+end
+
+Window.background = Color(30, 30, 34)
+Window.open("Gauge", 200, 120)
+World.run
+puts "closed after #{Time.tick} ticks at level #{Gauge.level}"

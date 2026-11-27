@@ -1,0 +1,4 @@
+areas: draw window
+control: no
+ruby: a list of bubble objects kept beside the entities, a shape left in the frame after its bubble is gone, removing from a collection while iterating it
+draws: any order

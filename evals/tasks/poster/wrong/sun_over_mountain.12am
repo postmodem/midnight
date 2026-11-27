@@ -1,0 +1,18 @@
+# The sun is drawn after the mountain, so it covers the peak.
+
+system report
+  puts "tick #{Time.tick + 1}"
+end
+
+system show
+  Draw.rect(8, 12, 224, 100, Color(40, 70, 130))
+  Draw.triangle(100, 112, 172, 34, 226, 112, Color(90, 80, 70))
+  Draw.circle(182, 40, 18, Color(250, 210, 60))
+  Draw.rect(8, 112, 224, 56, Color(50, 110, 40))
+  Draw.line(64, 166, 118, 114, 3, Color(200, 180, 140, 160))
+end
+
+Window.background = Color(20, 24, 36)
+Window.open("Poster", 240, 180)
+World.run
+puts "closed after #{Time.tick} ticks"
