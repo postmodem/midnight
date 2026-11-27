@@ -1,0 +1,45 @@
+# A small scene drawn with the four shapes: hills, a house with a roof, a
+# kite on its string, and a sun that a translucent cloud drifts across.
+# What is drawn later covers what was drawn earlier: the ground covers the
+# foot of the hill, the roof sits on the house, the cloud lies over the sun.
+#
+#   nix run . -- run examples/shapes.12am
+#
+# Run it headless, with its commands, to see its frames as text:
+#
+#   MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/shapes.drive \
+#     nix run . -- run examples/shapes.12am
+
+component Cloud
+  x: Float
+  speed: Float
+end
+
+system drift
+  each Cloud do |cloud|
+    cloud.x += cloud.speed
+    cloud.x = -60.0 if cloud.x > 320.0
+  end
+end
+
+system sky
+  Draw.circle(250, 50, 24, Color(255, 210, 60))
+  each Cloud do |cloud|
+    Draw.rect(cloud.x, 40, 60, 18, Color(255, 255, 255, 160))
+  end
+end
+
+system land
+  Draw.triangle(-40, 200, 90, 110, 220, 200, Color(60, 130, 70))
+  Draw.rect(0, 170, 320, 30, Color(80, 170, 80))
+  Draw.rect(150, 132, 48, 38, Color(200, 90, 60))
+  Draw.triangle(142, 132, 174, 106, 206, 132, Color(120, 50, 40))
+  Draw.line(40, 168, 90, 70, 1, Color(40, 40, 40))
+  Draw.triangle(90, 70, 102, 58, 108, 80, Color(220, 40, 120))
+end
+
+Window.background = Color(120, 180, 230)
+Window.open("Shapes", 320, 200)
+spawn Cloud(150, 1.5)
+World.run
+puts "closed after #{Time.tick} ticks"

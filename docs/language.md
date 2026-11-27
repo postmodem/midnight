@@ -1,6 +1,6 @@
 # The Midnight language
 
-This document describes Midnight 0.7: the language core specified by
+This document describes Midnight 0.8: the language core specified by
 [`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
 systems specified by
 [`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), what moves
@@ -11,8 +11,10 @@ systems, specified by
 loops on several cores, specified by
 [`specs/0005-several-cores.md`](../specs/0005-several-cores.md), a
 window, specified by [`specs/0006-a-window.md`](../specs/0006-a-window.md),
-and the keyboard and the mouse, specified by
-[`specs/0007-keyboard-and-mouse.md`](../specs/0007-keyboard-and-mouse.md).
+the keyboard and the mouse, specified by
+[`specs/0007-keyboard-and-mouse.md`](../specs/0007-keyboard-and-mouse.md),
+and drawing, specified by
+[`specs/0009-drawing.md`](../specs/0009-drawing.md).
 It is the reference for what a program means. Where the compiler and this
 document disagree, one of them has a bug.
 
@@ -121,9 +123,9 @@ system tag then true unless until when while
 The names `Int`, `Float`, `Bool`, `String`, `Entity`, `World`, `Time`,
 `Math`, `Window`, `Color`, `WindowResized`, `WindowClosed`, `Key`,
 `MouseButton`, `Keyboard`, `Mouse`, `KeyPressed`, `KeyReleased`,
-`MousePressed`, `MouseReleased`, `WindowFocused` and `WindowUnfocused`,
-and the compact type names (`Float32`, `Int8`, `Int16`, `Int32`, `UInt8`,
-`UInt16`, `UInt32`), are built in and can't be redefined.
+`MousePressed`, `MouseReleased`, `WindowFocused`, `WindowUnfocused` and
+`Draw`, and the compact type names (`Float32`, `Int8`, `Int16`, `Int32`,
+`UInt8`, `UInt16`, `UInt32`), are built in and can't be redefined.
 
 **Literals.**
 
@@ -395,7 +397,7 @@ iteration. This holds for every loop form, including `each` and `on`. The
 one exception is the `each` of a [GPU system](#gpu-systems), which `break`
 cannot leave.
 
-Blocks are not values in 0.7. `do |…| … end` is accepted only by the loop
+Blocks are not values in 0.8. `do |…| … end` is accepted only by the loop
 forms in this document.
 
 ## Functions
@@ -710,11 +712,12 @@ puts "closed after #{Time.tick} ticks"
 
 A program can open a window, keep real time while it is open, learn that
 it was resized or closed, and show a frame at the end of every tick. A
-frame is the window's background colour and nothing more.
+frame is the window's background colour with the shapes the tick drew
+over it: see [Drawing](#drawing).
 
 The names `Window`, `Color`, `WindowResized` and `WindowClosed` are built
 in and can't be declared by a program. A program that names `Window`, one
-of the two events, or something of the
+of the two events, `Draw`, or something of the
 [keyboard and the mouse](#keyboard-and-mouse) other than the enums `Key`
 and `MouseButton` **has a window**. `Color` alone is a struct like any
 other. A name counts where it stands for the built-in: an enum variant
@@ -828,13 +831,20 @@ with no window open, a headless one, or a driven one ticks as fast as it
 can.
 
 **A frame for each tick.** When a tick ends while a window is open, the
-window shows a new **frame**: the picture of the world after that tick, of
-`Window.pixel_width` by `Window.pixel_height` pixels. In 0.7 the picture is
-`Window.background`. Showing a frame never waits for the display, so the
-display's rate changes neither the pace nor the output of a program, and a
-window that is hidden, minimized or on another workspace costs the program
-nothing: its ticks go on. The frames are drawn on the device that GPU
-systems use; a window needs one (see [Without a display](#without-a-display)).
+window shows a new **frame**: the window's size and background as they
+are then, and the list of what the tick drew (see [Drawing](#drawing)).
+Its picture is `Window.pixel_width` by `Window.pixel_height` pixels of the
+background with the draws over it, in order. A frame is first a list, and
+its picture is made from the list, on the device that GPU systems use: a
+window that is shown needs one (see [Without a display](#without-a-display)).
+
+A shown window has each frame's picture made when its tick ends, once the
+device has finished the frame before: a program whose frames take the
+device longer than a tick runs slow, as one whose systems do. Showing a
+frame never waits for the display, so the display's rate changes neither
+the pace nor the output of a program. A window that is hidden, minimized
+or on another workspace has no pictures made and costs the program
+nothing more: its ticks go on, and so do its frames as lists.
 
 **Determinism.** A window brings its sizes, its closing, its focus and the
 keyboard and the mouse into a program from outside, and all of them enter
@@ -842,9 +852,12 @@ only when a tick begins. A headless run takes all of them from its
 commands alone, so it prints the same output on every machine and for
 every run; a driven window on the desktop takes its focus, the keyboard
 and the mouse from its commands too. Everything the desktop can tell a program of the keyboard and
-the mouse is something a command can say. A frame of 0.7 is the same
-picture, pixel for pixel, on every device: each byte of the background is
-cleared as the linear value whose sRGB encoding it is.
+the mouse is something a command can say. A frame's list of draws is
+part of what a program computes and follows the same rules. Its picture
+is the same on every device but where
+[Determinism of a frame](#determinism-of-a-frame) allows a difference:
+the background and every opaque draw give exactly their bytes, and each
+byte of the background is cleared as that byte divided by 255.
 
 ### Without a display
 
@@ -894,6 +907,7 @@ commands of the window; those of the keyboard and the mouse are in
 | `scale S`      | A point becomes `S` pixels, a decimal number from 0.5 to 4 with at most six places; a pixel size is the size in points times `S`, halves rounded up. Headless only. |
 | `close`        | The window is closed, as if at the desktop.                |
 | `capture FILE` | Write the last frame to `FILE` as a PNG.                   |
+| `draws`        | Print the last frame as text: its size, its background and its draws, in order. See [The command `draws`](#the-command-draws). |
 
 - `resize`, `scale` and `close` take effect in the tick that begins next,
   through the events above. `close` is carried out in its place among the
@@ -911,6 +925,8 @@ commands of the window; those of the keyboard and the mouse are in
   out.
 - Each command is answered with one line on standard error, when it has
   been carried out: `midnight: drive: ` and the command as it was written.
+  The answer of `draws` alone has several lines; see
+  [The command `draws`](#the-command-draws).
   For `tick` the line comes when its last tick has finished, and says how
   many ticks have run if the program ended first. For `capture` it adds
   the value `Time.tick` had when the frame was made, its size in pixels and
@@ -924,26 +940,361 @@ commands of the window; those of the keyboard and the mouse are in
 
 - A command that is not in the table, or has the wrong arguments, a
   `resize` or `scale` in a program that is not headless or that would make
-  a frame larger than 8192 pixels on a side, and a `capture` that cannot
-  be made (no window is open, no device, the file cannot be written) stop
+  a frame larger than 8192 pixels on a side, a `capture` that cannot be
+  made (no window is open, no device, the file cannot be written), and a
+  `draws` while no window is open stop
   the program with status 1 and a line that names the file and the line
   number:
 
   ```
   midnight: drive: steps.drive:4: can't capture: no window is open
+  midnight: drive: steps.drive:9: can't list the draws: no window is open
   ```
 
 - A file of commands that cannot be opened stops the program with status
   1 when the first command is wanted.
 
 `MIDNIGHT_GPU=off` means what it says for frames as well: the program uses
-no device, so it shows no window and captures nothing. A window that is
+no device, so it shows no window and captures nothing. Its frames are
+still made as lists, and `draws` prints them. A window that is
 shown uses the device the program's GPU systems use, or, in a program
 without one, asks for an adapter that can draw to it; a headless window
 opens the device at its first `capture`. A failure of the window or its
 surface after `Window.open` has returned prints `midnight: window error:
 …` and ends the program with status 70, as an error from the device does;
 so does a window the desktop makes larger than 8192 pixels on a side.
+
+## Drawing
+
+```ruby
+component Ball
+  x: Float32
+  y: Float32
+  dx: Float32
+  dy: Float32
+end
+
+system move
+  each Ball do |ball|
+    ball.x += ball.dx
+    ball.y += ball.dy
+    ball.dx = -ball.dx if ball.x < 4.0 || ball.x > 316.0
+    ball.dy = -ball.dy if ball.y < 4.0 || ball.y > 196.0
+  end
+end
+
+system show
+  Draw.rect(0, 190, 320, 10, Color(40, 40, 60))
+  each Ball do |ball|
+    Draw.circle(ball.x, ball.y, 4, Color(255, 200, 0))
+  end
+end
+
+Window.background = Color(16, 16, 32)
+Window.open("Balls", 320, 200)
+spawn Ball(20, 30, 2, 1.5)
+spawn Ball(200, 90, -1, 2)
+World.run
+```
+
+A program draws with statements. `Draw.rect`, `Draw.circle`, `Draw.line`
+and `Draw.triangle` each add one shape to the frame the tick ends with,
+and what is drawn later covers what was drawn earlier: systems in their
+order, statements in theirs. Nothing is drawn that the source does not
+draw, and there is no drawing state: a shape's position, size and colour
+are its arguments.
+
+`Draw` is a built-in name and can't be declared by a program. A program
+that names it has a window (see [The window](#the-window)). `Draw` is not
+a value and has no fields. Its members are four statements:
+
+| Statement | Draws |
+| --------- | ----- |
+| `Draw.rect(x, y, width, height, color)` | The rectangle whose top left corner is at `x`, `y`, `width` points wide and `height` points high. |
+| `Draw.circle(x, y, radius, color)` | The disc around `x`, `y`. |
+| `Draw.line(x1, y1, x2, y2, width, color)` | The line from `x1`, `y1` to `x2`, `y2`, `width` points thick, with round ends. |
+| `Draw.triangle(x1, y1, x2, y2, x3, y3, color)` | The triangle with those corners, in either direction. |
+
+- Every argument but the last is a `Float`, and an `Int` converts as
+  everywhere. `color` is a `Color`.
+- Positions and sizes are in **points**, from the window's top left
+  corner, `x` to the right and `y` down: the space of `Mouse.x`,
+  `Mouse.y`, `Window.width` and `Window.height`. A shape may lie partly or
+  wholly outside the window; the part outside is not drawn.
+- Each is a statement: it has no value. It is written with its
+  parentheses and every argument, by position.
+- A `width`, a `height` or a `radius` that is not greater than zero draws
+  nothing, and so does a shape with a NaN among its numbers. Neither is an
+  error.
+- The numbers of a draw are kept as 32-bit `Float`s, each rounded to the
+  nearest when the statement runs.
+
+**Where.** A draw may stand wherever a statement can: in a system, a
+function, top-level code, inside `each`, `on` and every loop. In a GPU
+system it follows the rules of
+[Draws in a GPU system](#draws-in-a-gpu-system).
+
+**The frame.** While a window is open, each draw is added to a list. When
+a tick ends, the list becomes that tick's frame, with the window's size
+and background as they are then, and a new list begins. So the frame of a
+tick holds what was drawn since the tick before ended, in the order it was
+drawn: the draws of top-level code between two ticks come first, then
+those of the systems. `Window.open` begins a new list, and the frame it
+shows is the background.
+
+A draw while no window is open adds nothing to any list: its arguments are
+evaluated, with everything that does, and the draw is dropped.
+
+A program draws again every tick whatever it wants to stay on screen.
+Nothing of a frame is carried into the next.
+
+**Order.** A draw covers what was drawn before it. The order is the order
+the statements run in: systems in source order, the statements of a system
+in theirs, and the entities of an `each` in visiting order. A draw is added
+when its arguments have been evaluated: in `Draw.rect(f(), 0, 8, 8, c)`,
+what `f` draws comes before the rectangle.
+
+The visiting order of a query is deterministic and not specified (see
+[Queries](#queries)), and it changes when an entity is despawned: two
+shapes of one `each` that overlap can change which is on top. What must be
+on top is drawn by a later statement:
+
+```ruby
+system show
+  each Position, with: Floor do |pos|
+    Draw.rect(pos.x, pos.y, 16, 16, Color(60, 60, 60))
+  end
+  each Position, with: Player do |pos|
+    Draw.circle(pos.x + 8, pos.y + 8, 6, Color(255, 255, 255))
+  end
+end
+```
+
+**A program that draws opens a window.** A program that has a `Draw`
+statement and no `Window.open` anywhere is a compile error at its first
+draw:
+
+```
+error: nothing opens a window for `Draw.rect` to draw in
+  --> balls.12am:18:3
+   |
+18 |   Draw.rect(0, 190, 320, 10, Color(40, 40, 60))
+   |   ^^^^^^^^^ open one with `Window.open(title, width, height)`
+```
+
+The compiler knows the names other toolkits give these calls. `Draw.rectangle`,
+`Draw.ellipse`, `draw_circle`, `fill_rect` and a `Circle` that is
+constructed or spawned are errors that name the statement to write, and a
+colour given first is an error that says the colour goes last:
+
+```
+error: `Draw.circle` takes its colour last
+  --> balls.12am:20:17
+   |
+20 |     Draw.circle(Color(255, 200, 0), ball.x, ball.y, 4)
+   |                 ^^^^^^^^^^^^^^^^^^ write `Draw.circle(x, y, radius, color)`
+```
+
+### Which pixels a shape covers
+
+A frame has `Window.pixel_width` by `Window.pixel_height` pixels. The pixel
+in column `i` and row `j`, counted from 0 at the top left, has its
+**centre** at the point
+
+```
+((i + 0.5) * (width / pixel_width), (j + 0.5) * (height / pixel_height))
+```
+
+with `width` and `height` the window's size in points, each division and
+each product one 32-bit operation: at a scale of 1 that is
+`(i + 0.5, j + 0.5)`. **A shape covers the pixels whose centres are inside
+it.** A pixel is covered or it is not; no edge is smoothed.
+
+- **Rectangle.** A centre `(px, py)` is inside when `x <= px < x + width`
+  and `y <= py < y + height`.
+- **Circle.** Inside when the centre is nearer to `x`, `y` than `radius`.
+- **Triangle.** Inside when the centre is on the inner side of all three
+  edges. A centre exactly on an edge is inside when that edge is a left
+  edge, one with the triangle to its right, or a top edge, one that is
+  level with the triangle below it. An edge's test is computed from its two
+  ends in one order, whichever triangle it belongs to, so two triangles
+  that share an edge, with the same numbers for its two ends, cover each
+  pixel along it once. A triangle with no area covers nothing.
+- **Line.** The pixels of the rectangle that is `width` thick and runs
+  along the line from end to end, a centre exactly on one of its two long
+  edges counting for the left or the top one of the two, and the pixels of
+  a circle of radius `width / 2` around each end. A line whose ends are
+  the same point is that circle.
+
+So at a scale of 1 `Draw.rect(10, 20, 30, 5, c)` covers exactly columns 10
+to 39 of rows 20 to 24. Two rectangles of which the second's `x` is the
+32-bit sum of the first's `x` and `width`, as with whole numbers and halves
+it always is, neither overlap nor leave a gap. And
+`Draw.line(0, 10, 100, 10, 1, c)` is one row of pixels, columns 0 to 99 of
+row 9, whose centres lie at 9.5 on the upper of its two long edges.
+
+**The tests, exactly.** Every step is one 32-bit `Float` operation, rounded
+on its own, on the numbers as the draw keeps them. `(px, py)` is the
+centre.
+
+- **Nothing.** A draw covers no pixel when one of its numbers is a NaN;
+  when a rectangle's `width` or `height`, a circle's `radius` or a line's
+  `width` is not greater than zero; and when a triangle's `w`, below, is
+  zero. The tests that follow are for the others.
+- **Rectangle:** `x <= px`, `px < x + width`, `y <= py` and
+  `py < y + height`.
+- **Circle:** with `dx = px - x` and `dy = py - y`:
+  `dx * dx + dy * dy < radius * radius`.
+- **Triangle:** `w = (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)`. When
+  `w` is negative, corners 2 and 3 change places. Then for each edge from a
+  corner `a` to the next corner `b` (1 to 2, 2 to 3, 3 to 1), with `l` the
+  end of the edge that has the smaller `x`, or the smaller `y` when the
+  `x`s are equal, and `h` the other end:
+  `e = (hx - lx) * (py - ly) - (hy - ly) * (px - lx)`, negated when `l` is
+  `b`. The centre is inside when every `e` is positive, or zero on an edge
+  with `by < ay` (a left edge) or with `by == ay` and `bx > ax` (a top
+  edge).
+- **Line:** with `d` the vector from the first end to the second and `q`
+  the vector from the first end to the centre:
+  `t = q.x * d.x + q.y * d.y`, `s = q.x * d.y - q.y * d.x` and
+  `l = d.x * d.x + d.y * d.y`. The centre is in the body when `l > 0`,
+  `0 <= t`, `t <= l`, and `(4 * s) * s` is less than `(width * width) * l`,
+  or equal to it with `s > 0` and `d` pointing up or level to the right
+  (`d.y < 0`, or `d.y == 0` and `d.x > 0`), or equal to it with `s < 0` and
+  `d` pointing down or level to the left (`d.y > 0`, or `d.y == 0` and
+  `d.x < 0`). It is in an end when, with `h = width * 0.5` and `e` the
+  vector from that end to the centre, `e.x * e.x + e.y * e.y < h * h`.
+
+### Colour
+
+- A draw whose colour has an `a` of 255 gives each pixel it covers its
+  `r`, `g` and `b`.
+- With an `a` from 1 to 254 the colour is laid over what the pixel holds.
+  For each of red, green and blue, with `c` the byte of the colour and `d`
+  the byte the pixel holds, the pixel becomes
+
+  ```
+  (a * c + (255 - a) * d) / 255, rounded to the nearest whole number
+  ```
+
+  The arithmetic is on the bytes as they are: `Color(255, 255, 255, 128)`
+  over black is 128.
+- An `a` of 0 changes nothing.
+- A frame stays opaque: `capture` writes an alpha of 255 for every pixel.
+  The `a` of `Window.background` changes nothing.
+
+### Draws in a GPU system
+
+```ruby
+gpu system show
+  each Body do |body|
+    Draw.circle(body.x, body.y, 1.5, Color(255, 255, 255))
+  end
+end
+```
+
+A draw may stand directly in a GPU block: in the block itself, in an arm
+of an `if`, `unless` or `case` inside it, or before a modifier `if` or
+`unless`. It is a compile error in a loop inside the block, in the nested
+`each`, and in a function a GPU system calls, with the hint to draw from
+the block itself. A run thus makes each of the block's draws once at most.
+
+```
+error: a draw can't stand in a loop inside a GPU block
+  --> swarm.12am:19:7
+   |
+19 |       Draw.line(spot.x, i, 0, 0, 1, Color(1, 1, 1))
+   |       ^^^^^^^^^ draw from the block itself: each run makes a draw once at most
+```
+
+- The arguments are computed by the rules of the block: 32-bit, and under
+  the strict rules in a strict GPU system. A `Color` is plain, and may be
+  built in the block or read from a component, a constant or a resource
+  field.
+- The draws of a GPU block take the place in the frame that the draws of
+  an ordinary `each` would: entity after entity in visiting order, the
+  draws of one entity in the order its run made them. A draw that a run
+  does not reach, in an arm not taken or after a `next`, is not made.
+- On a device the shapes are recorded in GPU memory and the frame is made
+  from there: a draw moves nothing between CPU and GPU memory, and
+  `midnight plan` has no line for it. Where the block runs on the CPU it
+  adds the same draws to the list.
+- A draw is not one of the things a block assigns. A block that only draws
+  writes no component.
+
+### Draws on several cores
+
+A draw gives an `each` no reason to stay on one core: it is one of the
+queued changes, events and draws of rule 5 of
+[Independent loops](#several-cores). The draws of a loop that is split are
+collected for each piece and joined in visiting order when the loop ends,
+which is the order one thread makes them in. A draw weighs what an `emit`
+does: its arguments and 8 (see
+[What several cores cost](#what-several-cores-cost)). `midnight loops` has
+no reason for a draw.
+
+### Determinism of a frame
+
+- **The list of draws** is part of what a program computes, and follows
+  the rules of everything else it computes: the same on every run and for
+  every number of threads, and the same on every machine wherever the
+  numbers drawn are. A number that a GPU system that is not strict
+  computed, or a `Math` function, can differ between machines as it does
+  in a program's other output.
+- **Which pixels a shape covers** is defined above. A device may differ
+  from it only at a pixel for which the two sides of one of the tests,
+  computed as above, are equal or one 32-bit step apart, and for a shape
+  with a number that is infinite, or below about 1.18e-38 in magnitude and
+  not zero, or whose test overflows.
+- **A colour with an `a` of 255** gives exactly its bytes on every device.
+- **A colour with an `a` from 1 to 254** may be rounded differently by a
+  device: each of a pixel's three bytes may differ from the rule above by
+  one for each such draw over the pixel since the last draw with an `a` of
+  255 covered it.
+- **A program cannot read a frame.** What is drawn never reaches what a
+  program computes, so a difference between two devices' pictures is never
+  a difference in a program's output.
+
+### The command `draws`
+
+| Command | Meaning |
+| ------- | ------- |
+| `draws` | Print the last frame as text: its size, its background and its draws, in order. |
+
+It is answered on standard error, like every command of
+[Without a display](#without-a-display), and it is the one command whose
+answer has more than one line: one for the frame, one for the background
+and one for each draw. Every line begins `midnight: drive: `, and the
+lines after the first go on with two spaces:
+
+```
+midnight: drive: draws: 3 ticks, 320x200, 3 draws
+midnight: drive:   Window.background = Color(16, 16, 32, 255)
+midnight: drive:   Draw.rect(0.0, 190.0, 320.0, 10.0, Color(40, 40, 60, 255))
+midnight: drive:   Draw.circle(26.0, 34.5, 4.0, Color(255, 200, 0, 255))
+midnight: drive:   Draw.circle(197.0, 96.0, 4.0, Color(255, 200, 0, 255))
+```
+
+- The last frame is the one `capture` would write. The first line gives
+  the value `Time.tick` had when the frame was made, the window's size in
+  points, and the number of draws listed: `1 tick` and `1 draw` for one.
+- The background is printed with the `a` the program gave it, which
+  changes nothing in the picture.
+- A draw is printed as the statement that made it, with the numbers it
+  keeps: each as the shortest text that reads back as the same 32-bit
+  `Float`, in the form `to_s` gives a `Float`, and the colour with its four
+  bytes. A draw that covers nothing is printed like any other. `draws`
+  prints the 32-bit number; `puts` of a `Float32` field holding the same
+  value prints it as the 64-bit `Float` it is read as.
+- `draws` needs no device and works with `MIDNIGHT_GPU=off`. Where the
+  draws of a GPU block are in GPU memory they are brought back for it,
+  behind one wait.
+- It takes no argument, and it is an error, as for `capture`, when no
+  window is open: `can't list the draws: no window is open`.
+- It writes no file.
+
+What drawing costs, and what follows from it, is in
+[What a draw costs](#what-a-draw-costs).
 
 ## Keyboard and mouse
 
@@ -1293,7 +1644,9 @@ allowed:
 - `==` and `!=` on plain values, and `Entity.none`;
 - calling functions that follow the rules below;
 - one nested `each`, directly inside the block: not inside a loop or a
-  branch, and with no `each` inside it.
+  branch, and with no `each` inside it;
+- draws, directly in the block: see
+  [Draws in a GPU system](#draws-in-a-gpu-system).
 
 Everything else is a compile error that names the construct and gives the
 reason: strings and lists in any form, `to_s`, `puts` and `print`, `spawn`,
@@ -1319,7 +1672,8 @@ nested `each` visits entities in the order an ordinary `each` would.
   cannot use it, as described below. Types named in `with:` and `without:`
   are not restricted.
 - **Writes.** A GPU block assigns to its own local variables and to the
-  component parameters of its `each`, and to nothing else. The parameters of
+  component parameters of its `each`, and to nothing else. A draw is not
+  an assignment: a block that only draws writes no component. The parameters of
   the nested `each`, every `Entity` parameter, resources and `Time` are
   read-only.
 - **Reads.** The constants and resource fields it reads are plain.
@@ -1327,8 +1681,8 @@ nested `each` visits entities in the order an ordinary `each` would.
   values, does not recurse, directly or through other functions, and
   contains no `each` and nothing else that a GPU block may not contain. It
   may use `return`, and it may read constants, resource fields and `Time`.
-  The methods and operators of a struct are functions in this sense. A
-  diagnostic inside such a function carries a note that names the GPU system
+  The methods and operators of a struct are functions in this sense. Such
+  a function does not draw. A diagnostic inside such a function carries a note that names the GPU system
   and the call that reaches it.
 - **`UInt32`.** A `UInt32` field itself cannot be used in GPU code: the
   32-bit `Int` there is signed and cannot hold every value of one. In a GPU
@@ -1381,8 +1735,11 @@ With three cells holding 1, 2 and 3, every cell holds 6 after one tick. As
 an ordinary system the same code would leave 6, 11 and 20, because each
 entity would see what the ones before it wrote.
 
-`World.tick` returns when the GPU has finished the work the tick gave it, so
-a program that times its ticks with `clock` measures that work.
+`World.tick` returns when the GPU has finished the computing the tick gave
+it, so a program that times its ticks with `clock` measures that work. The
+frame of a window is handed to the device after that, and `World.tick`
+does not wait for its picture to be made: see
+[What a draw costs](#what-a-draw-costs).
 
 ### Arithmetic at 32 bits
 
@@ -1545,6 +1902,11 @@ unless `n` divides 4,294,967,296. A `rand(n)` that fails draws no number.
   were subtracted, which can be far larger than the result itself.
 - `Int` arithmetic, `rand` and `rand(n)` give the same results everywhere,
   strict or not.
+- A GPU system that is not strict draws with the numbers it computes,
+  so its draws may differ between devices as its other `Float` results
+  do: in their numbers and, where a `Float` decides whether a draw is
+  reached, in whether it is made. The draws of a strict GPU system are the
+  same bits on every device and on the CPU.
 - On a GPU, a comparison with NaN and a `Math` function outside its domain
   (`Math.sqrt` of a negative number, `Math.log` of zero or less) may give
   any result: for a NaN, `x != x` is true on the CPU and may be false on a
@@ -1665,7 +2027,8 @@ use, every GPU block runs on the CPU instead, split across the cores (see
 snapshot, the 32-bit arithmetic, the random numbers and the errors are the
 same. A single block
 also runs on the CPU when it does not fit the device, for example when one
-of its columns is larger than the largest buffer the device binds. The
+of its columns, or the records of its draws for a table, is larger than
+the largest buffer the device binds. The
 blocks of strict GPU systems run on the CPU when the device fails the
 start-up check of [Strict GPU systems](#strict-gpu-systems), and follow the
 strict rules there, subnormals included. The README says how the device is
@@ -1848,6 +2211,10 @@ The plan has limits:
   reads, which is made in GPU memory.
 - It describes a program that runs on a GPU. On the CPU nothing is
   transferred.
+- A draw is not a transfer and has no line: the draws of a GPU block are
+  recorded in GPU memory and the frame is made from there. What the
+  command `draws` brings back is not in the plan either; it is for looking
+  and for tests.
 
 ## Several cores
 
@@ -2225,6 +2592,7 @@ read keeps its size.
 | Reading and writing fields of a query parameter | A memory access.                    |
 | `World.count`                               | Adds up table sizes. No entities are visited. |
 | `emit`                                      | An append.                              |
+| A draw in ordinary code                     | An append of 32 bytes to the frame's list. See [What a draw costs](#what-a-draw-costs). |
 | `e[C]`, `e.has?(C)`, `e.alive?`             | Constant time, but each use is a lookup that can land anywhere in memory. |
 | `spawn`, `despawn`                          | Constant time per component.            |
 | `add`, `remove`                             | Moves the entity's row to another table, copying every component it has. |
@@ -2449,6 +2817,39 @@ What follows from this:
 - **A GPU is still far ahead where it applies.** Gravity among 16,384
   bodies on sixteen cores takes about 30 times as long as on an RTX 5090.
 
+### What a draw costs
+
+- A draw in ordinary code appends 32 bytes to the frame's list. A window
+  that is shown sends the list to the device once, when the tick ends.
+- Each draw statement of a GPU block has a record of 32 bytes among every
+  run's records, used or not: a block with three draws keeps 96 bytes for
+  each entity. On a device they are written there and nothing travels.
+- A shape costs the device a test for every pixel of the smallest upright
+  rectangle that holds it, covered or not.
+- A headless window makes no picture until a frame is captured. A window
+  that is hidden makes none.
+- A frame is handed to the device when its tick ends. The next frame is
+  not handed over until the device has finished the one before, so a
+  program whose frames take the device longer than a tick runs slow, as
+  one whose systems do. `World.tick` returns without waiting for its own
+  frame: a program that times its ticks with `clock` does not measure it.
+
+What follows from this:
+
+- **Draw from the system that has the data.** A draw in an ordinary system
+  of a component that a GPU system keeps in GPU memory brings the array
+  back in every tick: `midnight plan` lists the download. The same draw in
+  the GPU system moves nothing.
+- **Keep the draw statements of a GPU block few.** Each costs 32 bytes for
+  every entity, reached or not.
+- **Build a GPU block's colours from numbers the compiler can bound.** A
+  `Color` built from a number it cannot bound is a store that can fail,
+  and makes the block wait as any operation that can fail does: `clamp`
+  each number to 0 and 255, or read the colour from a component, a
+  constant or a resource field.
+- **`draws` is for looking and for tests.** On a device it brings a GPU
+  block's records back behind a wait.
+
 ## Errors
 
 **Compile-time errors** stop the build. Each one names the file, line and
@@ -2498,7 +2899,10 @@ A loop that runs on several cores stops with the error it stops with on
 one thread: that of the earliest failing row in visiting order. See
 [Several cores](#several-cores).
 
-There are no exceptions to catch in 0.7.
+Drawing adds no runtime error: a shape of no size, or with a NaN among its
+numbers, draws nothing, and a draw while no window is open is dropped.
+
+There are no exceptions to catch in 0.8.
 
 ## Grammar
 
@@ -2579,11 +2983,13 @@ place       = postfix
 and `ASSIGN_OP` is one of `= += -= *= /= %=`. A place that is a bare `IDENT`
 not yet in scope creates the variable.
 A `do_block` after a call is accepted only for the loop forms listed in this
-document. The `NL` after `do |…|`, and the one after the last statement of a
+document. A draw, `Draw.rect(…)` and the other three, is a `simple`
+statement written in the form of a call, with its parentheses and every
+argument by position; it is not an expression. The `NL` after `do |…|`, and the one after the last statement of a
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.7
+## Not in 0.8
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
@@ -2592,12 +2998,24 @@ files, command-line arguments), arithmetic at 32 bits outside GPU systems,
 system ordering constraints, running several systems at the same time,
 relationships between entities, and calling C libraries.
 
-A window leaves these out: drawing anything but the background; sound;
+A window leaves these out: sound;
 more than one window at a time; closing, resizing, moving or renaming the
 window from the program, full screen and an icon; refusing a close the
 user asked for; running faster or slower than real time while a window is
 open; and reading entities, components or resources over the commands'
 pipe.
+
+Drawing leaves these out: text, images and sprites; outlines, rounded
+rectangles, ellipses, arcs, polygons of more than three corners, curves
+and paths; any order but the program's, such as layers, sorting by a key
+or a depth buffer; a camera, a view transform, a logical size that
+differs from the window's, and rotating a shape by an argument; smoothed
+edges; blending other than laying a colour over what is under it;
+drawing into anything but the window's frame, and keeping a frame's
+pixels for the next one; reading a frame's pixels in a program, and
+commands that look at pixels; arguments of a draw given by name; three
+dimensions; code written in Midnight that runs for each pixel; and lines
+for draws in `midnight plan`.
 
 The keyboard and the mouse leave these out: text input (characters, the
 layout's names for keys, dead keys, input methods), key repeat and the
@@ -2615,5 +3033,6 @@ GPU systems leave these out: structural changes, events, output, strings,
 lists, `e[C]`, `has?`, `alive?` and `World.count` inside one; collecting a
 result across entities, such as a sum or a minimum, into a resource; spatial
 structures, so a nested `each` visits every pair; `Math` functions other
-than `Math.sqrt`, and `**` other than a square, in a strict GPU system; and
-the use of more than one GPU.
+than `Math.sqrt`, and `**` other than a square, in a strict GPU system; a
+draw in a loop inside a GPU block, in its nested `each` and in a function
+a GPU system calls; and the use of more than one GPU.

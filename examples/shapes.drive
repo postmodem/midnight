@@ -1,0 +1,11 @@
+# The first frame: the cloud has moved once.
+tick
+draws
+capture shapes.png
+# Forty ticks later the cloud lies over the sun.
+tick 40
+draws
+capture shapes-cloud.png
+# The window is closed.
+close
+tick

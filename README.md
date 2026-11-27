@@ -81,8 +81,9 @@ keeps one on a single core.
 - [`docs/language.md`](docs/language.md) is the language reference.
 - [`specs/`](specs/) holds one spec per change, with its acceptance criteria
   and outcome.
-- [`examples/`](examples/) has ten programs, from `hello.12am` to a
-  million-entity benchmark and a window that follows the mouse.
+- [`examples/`](examples/) has eleven programs, from `hello.12am` to a
+  million-entity benchmark, a window that follows the mouse and a scene
+  drawn with shapes.
 
 ## Try it
 
@@ -260,8 +261,9 @@ nothing to do polls for 50 microseconds and then blocks.
 ## A window
 
 A program that names `Window` opens a window with `Window.open`, keeps
-real time while it is open, and shows a frame of `Window.background` at
-the end of every tick; the reference has the rules.
+real time while it is open, and shows a frame at the end of every tick:
+`Window.background` with what the tick drew over it. The reference has
+the rules.
 
 ```sh
 nix run . -- run examples/window.12am
@@ -295,11 +297,45 @@ MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/window.drive nix run . -- run e
 | `info`     | Print one line to standard error when a window opens: its sizes in points and pixels, and `headless` or where it is shown and how frames reach it, such as `wayland, mailbox`; `input from commands` when it is driven; and, for a shown window that is not driven, a line each time it gains the focus and each time the pointer enters it. |
 
 `MIDNIGHT_DRIVE` names a file or a named pipe of commands, one to a line:
-`tick`, `tick N`, `resize W H`, `scale S`, `close` and `capture FILE`, which
-writes the last frame as a PNG. Each command is answered on standard error
-with a line that begins `midnight: drive: `; the reference has the rest.
+`tick`, `tick N`, `resize W H`, `scale S`, `close`, `capture FILE`, which
+writes the last frame as a PNG, and `draws`, which prints it as text.
+Each command is answered on standard error with a line that begins
+`midnight: drive: `; the reference has the rest.
 The run above writes `drift.png` and `drift-2x.png` to the working
 directory.
+
+### Drawing
+
+A system draws with four statements, `Draw.rect`, `Draw.circle`,
+`Draw.line` and `Draw.triangle`, each of which adds one shape to the
+frame the tick ends with:
+
+```ruby
+system show
+  Draw.rect(0, 190, 320, 10, Color(40, 40, 60))
+  each Ball do |ball|
+    Draw.circle(ball.x, ball.y, 4, Color(255, 200, 0))
+  end
+end
+```
+
+Positions and sizes are in points from the window's top left, `y` down,
+and the colour comes last. What is drawn later covers what was drawn
+earlier, in the order the program runs, and nothing of a frame is kept
+for the next: a program draws every tick what it wants on screen. The
+same statement works in a GPU system, where the shape is recorded on the
+device and nothing travels. A frame is a list before it is a picture,
+and the command `draws` prints that list, which needs no device, so
+drawing can be checked exactly on any machine:
+
+```sh
+MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/shapes.drive nix run . -- run examples/shapes.12am
+```
+
+prints each frame of [`examples/shapes.12am`](examples/shapes.12am) as
+the statements that drew it, and writes `shapes.png` and
+`shapes-cloud.png`. The reference says which pixels each shape covers
+and how a translucent colour is laid over what is under it.
 
 ### Keyboard and mouse
 
@@ -535,7 +571,8 @@ tests/run/      programs that must print exactly NAME.out, on a device the
                 `stats` lines in NAME.stats when there is one, and with
                 MIDNIGHT_THREADS=4,small,info the lines in NAME.split; a
                 program with a window gets the commands in NAME.drive,
-                and on a device must answer them with NAME.frames
+                must give the `draws` answers in NAME.draws, and on a
+                device must answer the others with NAME.frames
 tests/fail/     programs that must be rejected with exactly NAME.err
 tests/panic/    programs that must stop with the run-time error in NAME.err
 tests/plan/     programs whose transfer plan must be exactly NAME.plan
@@ -558,14 +595,14 @@ and `.frames` files, the only expected files that come from a device.
 
 ## Status
 
-Midnight 0.7 is the language core, GPU systems, the rules that move only
+Midnight 0.8 is the language core, GPU systems, the rules that move only
 what is needed between CPU and GPU memory, strict GPU systems, loops on
-several cores, a window, and the keyboard and the mouse. It is
+several cores, a window, the keyboard and the mouse, and drawing. It is
 tested on `x86_64-linux`, GPU systems on an NVIDIA device, on an AMD iGPU
 through Mesa's RADV, and on Mesa's software Vulkan, and the window on
 Wayland; the flake also offers
 `aarch64-linux`, `x86_64-darwin` and `aarch64-darwin`, which evaluate but
-have not been run. What 0.7 leaves out
+have not been run. What 0.8 leaves out
 is listed at the end of the reference.
 
 ## License
