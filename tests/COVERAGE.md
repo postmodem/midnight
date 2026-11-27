@@ -364,6 +364,40 @@ run inside `tests/window/compositor.sh`.
 | Commands from a named pipe, with a window shown | `window_shown` |
 | Without `MIDNIGHT_GPU_FLAGS` or `MIDNIGHT_WINDOW_FLAGS`: one line from `midnight`, the program runs headless and captures nothing | `a_window_built_without_the_flags_runs_headless` |
 
+## Drawing
+
+Every program here has a `.draws` file, which `draws_match_expected`
+requires headless with `MIDNIGHT_GPU=off` in both build modes. In GPU
+mode, `window_drawn` holds every capture that follows a `draws` to the
+reference renderer, `tests/render/mod.rs`, at four scales.
+
+| Construct | Files |
+| --- | --- |
+| The four statements, their numbers kept as 32-bit `Float`s, `Int` arguments, shapes outside the window | `draw_shapes`, `examples/shapes` |
+| A size of zero, a negative `width`, `height` and `radius`, a NaN in each position, `Infinity`, `-0.0`, a number in exponent form | `draw_shapes`; pixels: `shapes_that_cover_nothing` |
+| `Draw` is built in, not a value, has no fields; a draw is a statement with its parentheses and every argument by position | `fail/draw_as_value`, `fail/draw_arguments` |
+| A program that names `Draw` has a window; a variant named `Draw` gives none | `draw_window`; `a_variant_named_like_a_built_in_gives_no_window` |
+| Where a draw may stand: a function, `on`, every loop, top-level code | `draw_places`, `draw_order` |
+| The frame: the draws since the tick before, top-level code first; `Window.open` begins a list; nothing carried into the next frame | `draw_order`, `draw_window` |
+| A draw with no window open evaluates its arguments and is dropped; a window opened again | `draw_window` |
+| Order: systems in source order, statements in theirs, entities in visiting order; an argument that draws comes first | `draw_order`, `draw_mixed` |
+| A program that draws and opens no window | `fail/draw_without_window` |
+| The names of other toolkits, unknown members, a colour first, shapes not in 0.8 | `fail/draw_shape_names`, `fail/draw_unknown_member`, `fail/draw_color_first`, `fail/draw_not_shapes` |
+| Which pixels a shape covers: the examples, shared edges, a line one point wide, shapes far larger than the frame, the cut to the frame | the renderer's unit tests `the_examples_of_the_reference`, `rectangles_side_by_side_neither_overlap_nor_leave_a_gap`, `triangles_that_share_edges_cover_each_pixel_once`, `a_line_one_point_wide_is_one_row_or_column`, `shapes_far_larger_than_the_frame`, `a_frame_of_every_size_is_covered_by_its_own_rectangle`; on devices `draw_many`, `draw_huge` in `window_drawn` and `window_frames` |
+| Colour: the bytes as they are, the rule for a translucent draw, a pixel under translucent draws within one step of the rule for each | `the_colour_rule`; `draw_layers`, `examples/shapes` in `window_drawn` |
+| An opaque frame is the same bytes on every device | the `.frames` files of `draw_many` and `draw_huge`, in `window_frames` on hardware and `llvmpipe` |
+| A draw in a GPU block: in the block, in an arm, after `next`; reached in one tick and not the next; several tables; a strict system; a block that only draws | `draw_gpu`, `draw_gpu_strict`, `draw_mixed`; on a device `gpu_programs` requires the `.draws` |
+| A draw in a loop inside a GPU block, in its nested `each`, in a function a GPU system calls | `fail/draw_gpu_places` |
+| A GPU block's draws stay on the device: no transfer after the first tick; `draws` brings them back, a download a table behind one wait | `draw_gpu_stats`, `examples/flock` (`.stats`), `draw_gpu_fetch` |
+| A block that draws and does not fit the device runs on the CPU | `draw_unfit` |
+| Draws on several cores, in the order of one thread | `draw_cores` (see [Several cores](#several-cores)) |
+| A frame shown in a window is the frame captured, with draws | `window_shown` |
+| Ticks keep real time with ten thousand shapes a tick | `window_keeps_time` |
+| A headless window asked for no frame renders nothing | `draw_stats` |
+| `draws`: the header with ticks, size and count, the background, one line a draw; before the first tick; in a program that never draws; after the program has ended; after a `resize` and a `scale` | `draw_none`, `draw_window`, `draw_shapes` |
+| `draws` with an argument, with no window open | `drive_errors` |
+| With `MIDNIGHT_GPU=off`, `draws` works and `capture` captures nothing | `draws_match_expected`, `drive_errors` |
+
 ## Keyboard and mouse
 
 Every program here runs headless with the commands of its `.drive` file,

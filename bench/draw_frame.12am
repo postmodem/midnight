@@ -18,7 +18,7 @@ end
 
 gpu system show
   each Spot do |s|
-    c = Color(s.kind * 60 + 40, 200 - s.kind * 40, 120)
+    c = Color((s.kind * 60 + 40).clamp(0, 255), (200 - s.kind * 40).clamp(0, 255), 120)
     case s.kind
     when 0
       Draw.rect(s.x, s.y, 16, 16, c)

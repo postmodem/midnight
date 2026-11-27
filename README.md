@@ -103,6 +103,8 @@ nix run . -- plan tests/plan/reader.12am
 nix run . -- loops examples/bounce.12am
 nix run . -- run examples/window.12am
 nix run . -- run examples/input.12am
+nix run . -- run examples/shapes.12am
+nix run . -- run examples/flock.12am
 ```
 
 ## The compiler
@@ -334,8 +336,18 @@ MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/shapes.drive nix run . -- run e
 
 prints each frame of [`examples/shapes.12am`](examples/shapes.12am) as
 the statements that drew it, and writes `shapes.png` and
-`shapes-cloud.png`. The reference says which pixels each shape covers
+`shapes-cloud.png`. The scene follows the window: resize it and it is drawn again to
+fit. The reference says which pixels each shape covers
 and how a translucent colour is laid over what is under it.
+
+```sh
+MIDNIGHT_GPU=stats MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/flock.drive nix run . -- run examples/flock.12am
+```
+
+runs [`examples/flock.12am`](examples/flock.12am), where a GPU system
+moves 100,000 points and draws them, and prints what crosses between CPU
+and GPU memory in each tick: after the first, which sends the points,
+nothing, until `draws` brings the shapes back to print them.
 
 ### Keyboard and mouse
 
@@ -438,6 +450,16 @@ loop over a million entities that counts and despawns the few that expire;
 `cores_flee`, a loop with a nested `each`; and `cores_small`, a loop over 64
 tables of 100 entities, which stays on one thread. The two runs of each
 program must print the same checksum.
+
+```sh
+nix develop -c bash tests/window/compositor.sh bash bench/draws.sh
+```
+
+times `bench/draw_frame.12am`, which draws 0 to 1,000,000 shapes a tick
+in a window of 1920 by 1080, from a GPU system and from an ordinary one,
+with the window shown in the compositor of the window tests and headless,
+and prints the time per tick of each and their difference: what a frame
+of those shapes adds to a tick. `VK_DRIVER_FILES` chooses the device.
 
 ## Working on it
 

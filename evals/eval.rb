@@ -1118,11 +1118,10 @@ module Eval
     SAID = "midnight: drive: "
     # The numbers of each shape, by its statement's name.
     NUMBERS = { "rect" => 4, "circle" => 3, "line" => 5, "triangle" => 6 }.freeze
-    COMPONENTS = { "Rect" => "rect", "Circle" => "circle", "Line" => "line", "Triangle" => "triangle" }.freeze
     HEADER = /\Adraws: (\d+) ticks?, (\S+), (\d+) draws?\z/
     BACKGROUND = /\AWindow\.background = Color\((\d+), (\d+), (\d+), (\d+)\)\z/
-    SHAPE = /\A(?:Draw\.(rect|circle|line|triangle)|(Rect|Circle|Line|Triangle))\((.*)\)\z/
-    ARGUMENTS = /\A((?:[^,]+, )*)Color\((\d+), (\d+), (\d+), (\d+)\)(?:, (-?\d+))?\z/
+    SHAPE = /\ADraw\.(rect|circle|line|triangle)\((.*)\)\z/
+    ARGUMENTS = /\A((?:[^,]+, )*)Color\((\d+), (\d+), (\d+), (\d+)\)\z/
 
     # The lines of every `draws` answer in a program's standard error, with
     # `midnight: drive: ` removed: each answer's first line and the lines
@@ -1156,13 +1155,13 @@ module Eval
     end
 
     # What a line of a `draws` answer draws: { "kind", "numbers" (bits),
-    # "color" (four bytes) }, a `layer` left out; a line that is neither
-    # form is { "kind" => "text", "text" => line }.
+    # "color" (four bytes) }; a line that is no draw is
+    # { "kind" => "text", "text" => line }.
     def shape(line)
       text = line.strip
       m = text.match(SHAPE)
-      a = m && m[3].match(ARGUMENTS)
-      kind = m && (m[1] || COMPONENTS[m[2]])
+      a = m && m[2].match(ARGUMENTS)
+      kind = m && m[1]
       numbers = a && a[1].split(", ").map { |n| bits(n) }
       if a && numbers.size == NUMBERS[kind] && numbers.none?(&:nil?)
         { "kind" => kind, "numbers" => numbers, "color" => a[2..5].map(&:to_i) }

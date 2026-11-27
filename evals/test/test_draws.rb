@@ -5,7 +5,7 @@ require "json"
 require "fileutils"
 require_relative "../eval"
 
-# The check `draws`: reading answers of both forms, comparing them, what a
+# The check `draws`: reading answers, comparing them by what they draw, what a
 # failed check records, and the section of the report and line of compare
 # that read it.
 class DrawsTest < Minitest::Test
@@ -20,12 +20,13 @@ class DrawsTest < Minitest::Test
       Draw.line(NaN, -0.0, 1e+30, Infinity, 2.0, Color(1, 2, 3, 128))
   TEXT
 
-  COMPONENTS = <<~TEXT
+  # ANSWER with its numbers written otherwise: the same draws.
+  RESPELT = <<~TEXT
     draws: 3 ticks, 320x200, 3 draws
       Window.background = Color(16, 16, 32, 255)
-      Rect(10.0, 20.0, 30.0, 6.0, Color(40, 40, 60, 255), 0)
-      Circle(26.0, 34.5, 4.0, Color(255, 200, 0, 255), 2)
-      Line(NaN, -0.0, 1000000000000000019884624838656.0, Infinity, 2, Color(1, 2, 3, 128), -1)
+      Draw.rect(10, 20.00, 30.0, 6.0, Color(40, 40, 60, 255))
+      Draw.circle(26.0, 34.5, 4.0, Color(255, 200, 0, 255))
+      Draw.line(NaN, -0.0, 1000000000000000019884624838656.0, Infinity, 2, Color(1, 2, 3, 128))
   TEXT
 
   def diff(got, want = ANSWER, any: false) = D.difference(D.parse(got), D.parse(want), any: any)
@@ -37,14 +38,14 @@ class DrawsTest < Minitest::Test
     assert_equal "#{ANSWER}draws: 4 ticks, 1x1, 0 draws\n  Window.background = Color(0, 0, 0, 0)\n", D.answers_text(err)
   end
 
-  def test_both_forms_draw_the_same
+  def test_the_same_draws_written_otherwise
     a = D.parse(ANSWER).first
     assert_equal [3, "320x200", [16, 16, 32, 255]], a["frame"]
     assert_equal({ "kind" => "rect", "numbers" => [10.0, 20.0, 30.0, 6.0].map { |x| [x].pack("e").unpack1("V") },
                    "color" => [40, 40, 60, 255] }, a["shapes"].first)
     assert_equal [0x7fc00000, 0x80000000, D.bits("1e+30"), 0x7f800000, 0x40000000], a["shapes"].last["numbers"]
-    assert_nil diff(COMPONENTS)
-    assert_nil diff(ANSWER, COMPONENTS)
+    assert_nil diff(RESPELT)
+    assert_nil diff(ANSWER, RESPELT)
     assert_equal "text", D.shape("Draw.rect(1.0, 2.0, Color(0, 0, 0, 255))")["kind"]
     assert_equal "text", D.shape("Draw.oval(1.0, 2.0, 3.0, Color(0, 0, 0, 255))")["kind"]
   end
@@ -90,7 +91,7 @@ class DrawsTest < Minitest::Test
   def test_swapped_and_by_centre
     want = "Draw.rect(10.0, 20.0, 30.0, 6.0, Color(40, 40, 60, 255))"
     assert D.swapped?("Draw.rect(20.0, 10.0, 30.0, 6.0, Color(40, 40, 60, 255))", want)
-    assert D.swapped?("Rect(10.0, 20.0, 6.0, 30.0, Color(40, 40, 60, 255), 0)", want)
+    assert D.swapped?("Draw.rect(10.0, 20.0, 6.0, 30.0, Color(40, 40, 60, 255))", want)
     refute D.swapped?("Draw.rect(20.0, 10.0, 6.0, 30.0, Color(40, 40, 60, 255))", want)
     refute D.swapped?("Draw.rect(20.0, 10.0, 30.0, 6.0, Color(40, 40, 61, 255))", want)
     refute D.swapped?(want, want)
@@ -144,10 +145,10 @@ class DrawsTest < Minitest::Test
   def test_the_check_grades_and_keeps_the_answers
     with_task do |task, stub, dir|
       keep = File.join(dir, "keep")
-      g = Eval::Grade.grade(task, program(dir, said(COMPONENTS)), compiler: stub, keep: keep)
+      g = Eval::Grade.grade(task, program(dir, said(RESPELT)), compiler: stub, keep: keep)
       assert_equal "pass", g["verdict"]
       assert_equal({ "build" => true, "output" => true, "draws" => true }, g["checks"])
-      assert_equal COMPONENTS, File.read(File.join(keep, "graded.draws"))
+      assert_equal RESPELT, File.read(File.join(keep, "graded.draws"))
 
       g = Eval::Grade.grade(task, program(dir, said(ANSWER.sub("26.0, 34.5", "34.5, 26.0"))), compiler: stub, keep: keep)
       assert_equal "fail", g["verdict"]
@@ -176,7 +177,7 @@ class DrawsTest < Minitest::Test
       write.("expected.out", "tick 1\ntick 3\n")
       good = "tick 1\ntick 3\n---\n#{said(ANSWER)}"
       write.("solution.12am", good)
-      write.("right/components.12am", "tick 1\ntick 3\n---\n#{said(COMPONENTS)}")
+      write.("right/respelt.12am", "tick 1\ntick 3\n---\n#{said(RESPELT)}")
       write.("wrong/build.12am", "FAIL\n")
       root = File.dirname(task.dir)
       _, problems = Eval::SelfTest.run(root, compiler: stub)
