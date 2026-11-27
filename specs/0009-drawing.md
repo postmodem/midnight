@@ -1,6 +1,6 @@
 # 0009 — Drawing: shapes from systems, and the frame as a list
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0008
 
 ## Goal
@@ -1302,4 +1302,163 @@ All run on x86_64-linux, on the development machine.
 
 ## Outcome
 
-Not implemented.
+Implemented, with the differences listed under "Differences from the
+design". Criteria 1 to 9 and 11 pass on x86_64-linux: a Ryzen 9 9950X3D
+beside an RTX 5090 (NVIDIA 595.71.05), its integrated Radeon through
+RADV and `llvmpipe`, both of Mesa 26.1.8, `wgpu-native` 27.0.4.0, SDL
+3.4.10, sway 1.12, clang 21.1.8, Claude Code 2.1.327 for the evals.
+Criterion 10 is run by hand at the desktop.
+
+### Acceptance criteria
+
+| # | Result |
+| - | ------ |
+| 1 | `nix flake check` passes, with `checks.gpu`, `checks.window` (`window_drawn` among the tests in the sandbox, 56 captures on `llvmpipe`) and `checks.tsan`. `nix run .#gpu-test` and `nix run .#window-test` pass on the RTX 5090. |
+| 2 | No `.out`, `.err`, `.plan`, `.loops`, `.split`, `.stats` or `.frames` file of 0.7.0 (`d6001fc`) has changed. `emit-c` and the generated shaders of the 969 programs of `tests/`, `examples/` and `bench/` that 0.7.0 has are the bytes 0.7.0 gives; `src/` and `Cargo.toml` have not changed since that check. |
+| 3 | `draws_match_expected` gives every `.draws` file headless with `MIDNIGHT_GPU=off` in both build modes, and `thread_programs` gives the same answers for each of its six settings. |
+| 4 | `window_drawn` passes on `llvmpipe` in the sandbox, and on the RTX 5090 and RADV, in both build modes, as given and at scales of 1.25, 1.5 and 2. The opaque programs `draw_many` and `draw_huge` have `.frames` files, whose CRCs `window_frames` holds on all three devices. |
+| 5 | `examples/flock.12am` on the RTX 5090: its `.stats` file, which `gpu_stats_match_expected` holds, has one upload in the first tick and nothing up or down until `draws`, which brings back one download. `window_drawn` passes for it (80 captures with the other programs). |
+| 6 | Every statement, command, diagnostic and command error has a test: the `tests/run/draw_*` programs, eight `tests/fail/draw_*` programs, `loops/cores_draws`, `drive_errors`, `a_variant_named_like_a_built_in_gives_no_window`, and the reference renderer's unit tests. `tests/COVERAGE.md` maps them under "Drawing". |
+| 7 | No sanitizer report from any debug run of a program that draws: in the suite, in `window_drawn` and in `window_shown` inside the compositor of the window tests. |
+| 8 | Every window test runs headless or inside `tests/window/compositor.sh`; the draw benchmark runs inside it too. |
+| 9 | Both forms ran the four tasks before slice 3, and the thirteen ran before and after; see "The evals" below. The audits of the failed runs found no correct program rejected and no answer reached from outside a run's directory. |
+| 10 | Run by hand at the desktop: to be recorded. |
+| 11 | The reference says 0.8 and `midnight --version` prints `midnight 0.8.0`. "What a draw costs" has the costs measured on the implementation. The README's commands work as written. `tests/COVERAGE.md` has "Drawing". |
+
+### Measured
+
+What a frame of 1920 by 1080 pixels with shapes of about 16 by 16, the
+four kinds in turn, adds to a tick (`bench/draws.sh`: the window shown
+in the compositor of the window tests, minus the same run headless):
+
+| Shapes    | RTX 5090 | Integrated Radeon | `llvmpipe` |
+| --------- | -------- | ----------------- | ---------- |
+| none      | 0.15 ms  | 0.19 ms           | 0.87 ms    |
+| 10,000    | 0.15 ms  | 1.3 ms            | 4.9 ms     |
+| 100,000   | 0.32 ms  | 10 ms             | 39 ms      |
+| 1,000,000 | 2.1 ms   | 98 ms             | 336 ms     |
+
+These are shapes from an ordinary `each`. From a GPU block with four draw
+statements of which each run reaches one, the RTX 5090 takes the same,
+the Radeon about 6% more and `llvmpipe` about 65% more: unused records
+are drawn as instances too. The planning probe measured 0.96 ms for a
+million on the RTX 5090 from handing the frame over to the device having
+finished it; the number here is what the frame adds to a tick, showing
+it in the compositor included. A million draws in an ordinary `each`
+take about 2 ms of a tick on the CPU.
+
+### The evals
+
+**The form.** At `a5c4fd8` (statements) and `546bbca` (components), one
+after the other, four jobs, Sonnet and Haiku, 10 trials:
+
+| Task | Model | Statements | Components |
+| ---- | ----- | ---------- | ---------- |
+| `poster` | `sonnet` | 10/10 | 10/10 |
+| `poster` | `haiku` | 10/10 | 10/10 |
+| `drift` | `sonnet` | 10/10 | 10/10 |
+| `drift` | `haiku` | 10/10 | 10/10 |
+| `gauge` | `sonnet` | 10/10 | 10/10 |
+| `gauge` | `haiku` | 10/10 | 9/10 |
+| `retouch` | `sonnet` | 10/10 | 10/10 |
+| `retouch` | `haiku` | 10/10 | 10/10 |
+| Pooled | | 80/80 | 79/80 |
+
+Fisher's exact test, two-sided: p = 1.000. The statements stand. The
+component failure left a `Rect` of zero width at level 0 in the frame.
+`compare` named no difference in the models as reported, effort, trials,
+the preamble, the agent's tools or Claude Code's version.
+
+Finer measures, statements against components: the first compile of the
+agent's program succeeded in 80 of 80 runs against 68 of 80; 0 compile
+errors against 33 (17 of a tag used as a query term, 11 of query terms
+against block parameters, 5 of unknown variables); 10.7 turns against
+11.1 on average; $6.34 against $7.02 at API prices.
+
+The two tips differed in the reference (`docs/language.md`: "Drawing"
+and about twenty places that describe drawing), `README.md`,
+`examples/shapes.12am` and `.draws`, the compiler (`src/`, 23 files),
+the runtime (2 files), the tests (`tests/fail` 35, `tests/run` 23,
+`tests/loops` 2, the suite) and the tasks' programs (`solution.12am`,
+`right/` and `wrong/` of the four, and of `pantry` and `league`, whose
+programs declared a `Line`, a name the component form takes). Every
+`TASK.md`, the harness and the preamble were the same bytes.
+
+**The thirteen.** `compare` of the run before (the 0008 baseline at
+`a8f0a5f`, which stands for it: the tasks, kit and preamble had its
+hashes at `d6001fc`) with each run of the thirteen:
+
+| Run | Sonnet | Haiku | Pooled | Rows marked | Marks by chance | p |
+| --- | ------ | ----- | ------ | ----------- | --------------- | - |
+| baseline, `a8f0a5f` | 65/65 | 59/65 | 124/130 | | | |
+| `a5c4fd8` | 65/65 | 60/65 | 125/130 | 0 | about 0.0 | 1.000 |
+| `f95fdb7` | 65/65 | 60/65 | 125/130 | 0 | about 0.0 | 1.000 |
+
+Every failure after the baseline is Haiku on `paddle`, which keeps the
+ball's velocity after a miss, as in the baseline. `compare` named the
+preamble and the kit as different, and nothing else.
+
+**The four on `main`, again.** At `f95fdb7`, 10 trials: 80 of 80,
+against 80 of 80 at `a5c4fd8`, p = 1.000. 78 runs made a first compile
+of their own, every one successful; 0 compile errors; 10.8 turns; $6.13.
+The tasks differ between the two runs by the `systems` order rule and
+the `wrong/` program added for it.
+
+**The counts.** 1 and 2: no statement run failed **draws**; not
+reached. 3: no diagnostic of this spec came up in a statement run; not
+reached. 4: no row of the thirteen marked, in either run after; not
+reached.
+
+**What the evals added.** The review of the tasks across the forms
+found five holes in them before any run, three of which favoured the
+statements. The first audit found that agents keep scratch files outside
+their directory, which the preamble now forbids, and a correct program
+counted as escaped for a refused call, which now goes for review. The
+form comparison confirmed the default and changed nothing: passes were
+at the ceiling, and only the finer measures told the forms apart. The
+thirteen showed no harm from the new section, as expected, and changed
+nothing. `evals/ledger.md` has the entries. After these runs no eval
+runs by default; both sets of tasks were removed, with the Ruby-shaped
+measure of spec 0008 ("Since: what the evals became" there).
+
+### Differences from the design
+
+- **Choices the design left open.** The typed program has
+  `StmtKind::Draw` with its shape, numbers, colour and the span of its
+  name. The error for a program that draws and opens no window is raised
+  at the first draw in source order once the whole program is checked. A
+  draw while no window is open fills a record of its thread's own that
+  nothing reads. Programs that draw carry `_Static_assert`s of the record's
+  layout; others are unchanged. `draws` prints the frame's size in points.
+- **A GPU block's records** are one buffer for each table the block
+  runs over, bound after every other buffer of the block, used as storage,
+  as the vertex buffer of the shape pipeline and as the source of a copy.
+  A frame is a list of spans, each a run of the CPU's records or a
+  block's records for one table; a device span is drawn from the block's
+  buffer, with no copy. `draws` brings each device span back, one
+  download a span, behind one wait.
+- **A frame whose records exceed the device's largest buffer** is drawn
+  in parts.
+- **A program that runs a block on the CPU on purpose** says so in a line
+  `# on the CPU: REASON`, which `gpu_programs`, `window_drawn` and
+  `window_shown` hold it to. `draw_unfit` is such a block: 999 column
+  buffers and its records make 1,000 bindings, one more than any device
+  binds.
+- **`stats` runs blank their captures**, so a `.stats` file counts no
+  capture; `draw_stats` holds that a headless window asked for no frame
+  adds nothing.
+- **`examples/shapes.12am` is laid out by the window's height** and
+  spans its width, so it fills a window of any size; at 320 by 200 its
+  draws are the ones the design gives.
+- **The reference renderer** tests only the pixels of each shape's
+  upright bounds, with two more on each side, so that a frame of a
+  million shapes is checked in seconds; a test holds it to the test of
+  every pixel.
+- **`gpu_stats_match_expected` reads `examples/`** as well, so the stats
+  of `examples/flock.12am` are a test.
+- **In the evals:** the component tip's reference differed from
+  `main`'s beyond "Drawing" in the places that describe a `Draw`
+  statement; spec 0008 has no table of areas, so the drawing tasks have
+  a small table of their own; the check **systems** requires the named
+  systems in order, and `others after` in a task's `systems` file means
+  no other system runs before the last named one.
