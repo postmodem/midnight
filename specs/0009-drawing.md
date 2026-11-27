@@ -1,6 +1,6 @@
 # 0009 — Drawing: shapes from systems, and the frame as a list
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0008
 
 ## Goal
