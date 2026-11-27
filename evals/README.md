@@ -205,9 +205,36 @@ breaks `eval_solutions_pass`, and the task changes with it.
 
 ## What a result decides
 
-- A spec that runs the evals says, before the first run, which result
-  would change its decision. If none would, the runs are a regression
-  check only, and the Outcome says so.
+An **eval** is a set of tasks and the measure read from them. Every eval
+is **experimental** until it has shown that it is useful, and then it is
+**in use**. `ledger.md` lists each eval with its status and what every
+spec that ran it learned.
+
+- An experimental eval decides nothing. Its result may inform a
+  decision, which is made on its merits; the Outcome says what the
+  result added.
+- A spec that runs an eval says, before the first run:
+  - which result would change or inform its decision. If none would, the
+    runs are a regression check only, and the Outcome says so;
+  - which measure is read: pass rates, or a finer one where pass rates
+    leave no room, such as first-try compiles, failed compiler calls or
+    turns;
+  - what would show the eval useful: a result that predicted what agents
+    then met in real work, one that disagreed with what was expected and
+    was right, or one that found a fault in the language or its
+    documentation that was then fixed.
+- Before an eval is relied on, it shows it can move. No model passes all
+  its tasks every time or fails them every time, and a run against a
+  reference or a compiler made worse on purpose (a section cut, a
+  diagnostic made unhelpful) gives a worse result. A regression check is
+  judged this way, since it moves only when something breaks.
+- A fix to the harness or a task that running an eval finds is welcome,
+  and is not evidence that the eval is useful: running any eval finds
+  them.
+- An experimental eval that has not shown it is useful after two specs
+  that ran it is iterated on, replaced or removed.
+- What an eval in use decides is settled when the first eval is in use.
+- The Outcome of a spec that ran an eval adds an entry to `ledger.md`.
 - A worse result is not a veto by itself. The evals measure how agents
   write a program, not how easily a person reviews it or whether it is
   right beyond the task's checks, and a change is weighed on those as

@@ -148,11 +148,20 @@ command that needs it.
   per model on the commit that adds or changes it, and the results are
   committed in the next commit. Results are committed; transcripts never
   are.
-- A spec that runs the evals states, before the first run, which result
-  would change its decision; with none, the runs are a regression check
-  only. A worse result is not a veto by itself: the evals measure writing,
-  not review or correctness beyond the task's checks, and the Outcome
-  says what was weighed against it.
+- Every eval (a set of tasks and the measure read from them) is
+  experimental until `evals/ledger.md` records it useful, and an
+  experimental eval decides nothing: it may inform. A spec that runs one
+  states before the first run which result would change or inform its
+  decision (with none, the runs are a regression check only), which
+  measure is read, and what would show the eval useful. Before an eval
+  is relied on, it shows it can move: no ceiling, and a worse result
+  from a reference or compiler made worse on purpose. Its Outcome says
+  what the eval added, not counting fixes to the harness or tasks, and
+  adds an entry to the ledger. An experimental eval not shown useful
+  after two specs is iterated on, replaced or removed. A worse result is
+  not a veto by itself: the evals measure writing, not review or
+  correctness beyond the task's checks, and the Outcome says what was
+  weighed against it.
 - The README's paragraph on the evals names no task and no rule of
   grading: every agent the evals start reads the README.
 
