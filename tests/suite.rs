@@ -3512,8 +3512,11 @@ fn a_window_built_without_the_flags_runs_headless() {
                 }
                 let commands = dir.join("capture.drive");
                 std::fs::write(&commands, "capture frame.png\n").expect("write commands");
+                // No device: the capture is refused for the build's flags
+                // before one would be used.
                 let mut command = Command::new(&exe);
                 command
+                    .env("MIDNIGHT_GPU", "off")
                     .env("MIDNIGHT_WINDOW", "headless")
                     .env("MIDNIGHT_DRIVE", &commands)
                     .current_dir(&dir);
