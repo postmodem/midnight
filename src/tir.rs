@@ -728,6 +728,28 @@ pub enum ReasonKind {
     },
 }
 
+impl ReasonKind {
+    /// The number of the rule broken, as "Several cores" in the reference
+    /// numbers them.
+    pub fn rule(self) -> u8 {
+        match self {
+            ReasonKind::UsesString | ReasonKind::UsesList => 1,
+            ReasonKind::AssignsRow(_)
+            | ReasonKind::AssignsNested(_)
+            | ReasonKind::Assigns { .. }
+            | ReasonKind::AssignsDt => 2,
+            ReasonKind::ReadsAssigned { .. } => 3,
+            ReasonKind::FloatSum(_)
+            | ReasonKind::CompactSum(_)
+            | ReasonKind::SummedAndRead(_)
+            | ReasonKind::SummedAndAssigned(_)
+            | ReasonKind::SumInFunction(_) => 4,
+            ReasonKind::Does(_) => 6,
+            ReasonKind::ReadsGpu { .. } => 7,
+        }
+    }
+}
+
 /// What rule 6 of an independent `each` leaves out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Deed {

@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::json::{self, Format, Object};
+
 const RUNTIME_H: &str = include_str!("../runtime/midnight_rt.h");
 const RUNTIME_C: &str = include_str!("../runtime/midnight_rt.c");
 const GPU_H: &str = include_str!("../runtime/midnight_gpu.h");
@@ -22,6 +24,151 @@ pub struct Parts {
     pub threads: bool,
     /// The program has a window.
     pub window: bool,
+}
+
+/// A message of the compiler's own, kept in parts so that it can be
+/// written as text or as JSON.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Message {
+    /// A file of the build could not be written.
+    CantWrite { file: String, error: String },
+    /// No build directory could be made: `error` is the system's reason,
+    /// `None` when every name tried was taken.
+    BuildDirectory {
+        directory: String,
+        error: Option<String>,
+    },
+    /// The C compiler did not start (`status` is `None`, `error` says why)
+    /// or failed (`kept` is the generated C, `output` what it printed).
+    CCompiler {
+        compiler: String,
+        status: Option<i32>,
+        output: String,
+        kept: Option<String>,
+        error: Option<String>,
+    },
+    /// The built program could not be started.
+    CantRun { error: String },
+    /// A program is built without a part because flags variables are not
+    /// set. `window` when the part is the window's, else GPU systems'.
+    NoFlags {
+        variables: Vec<&'static str>,
+        window: bool,
+    },
+}
+
+impl Message {
+    /// The message as text, ending in a newline.
+    pub fn text(&self) -> String {
+        let mut text = match self {
+            Message::CantWrite { file, error } => {
+                format!("midnight: can't write `{file}`: {error}")
+            }
+            Message::BuildDirectory { directory, error } => match error {
+                Some(error) => {
+                    format!("midnight: can't create a build directory in `{directory}`: {error}")
+                }
+                None => format!("midnight: can't create a build directory in `{directory}`"),
+            },
+            Message::CCompiler {
+                compiler,
+                error: Some(error),
+                ..
+            } => format!(
+                "midnight: can't run the C compiler `{compiler}`: {error}\n\
+                 Set MIDNIGHT_CC to a C11 compiler."
+            ),
+            Message::CCompiler { output, kept, .. } => format!(
+                "midnight: the C compiler rejected the generated code. This is a bug in midnight.\n\
+                 The generated C was kept at {}\n\n{output}",
+                kept.as_deref().unwrap_or("")
+            ),
+            Message::CantRun { error } => format!("midnight: can't run the program: {error}"),
+            Message::NoFlags { .. } => format!("midnight: {}", self.no_flags_line()),
+        };
+        text.push('\n');
+        text
+    }
+
+    /// The line of a [`Message::NoFlags`], without `midnight: `.
+    fn no_flags_line(&self) -> String {
+        let Message::NoFlags { variables, window } = self else {
+            unreachable!("a message about flags")
+        };
+        let missing = match variables.as_slice() {
+            [one] => format!("{one} is"),
+            many => format!("{} are", many.join(" and ")),
+        };
+        if *window {
+            format!("{missing} not set; the window will run only headless, and capture nothing")
+        } else {
+            format!("{missing} not set; GPU systems will run on the CPU")
+        }
+    }
+
+    /// The message as a JSON line.
+    pub fn json(&self) -> String {
+        let line = match self {
+            Message::CantWrite { file, error } => {
+                let mut line = Object::new("cant_write");
+                line.str("file", file).str("message", error);
+                line
+            }
+            Message::BuildDirectory { directory, error } => {
+                let mut line = Object::new("build_directory");
+                line.str("directory", directory);
+                if let Some(error) = error {
+                    line.str("message", error);
+                }
+                line
+            }
+            Message::CCompiler {
+                compiler,
+                status,
+                output,
+                kept,
+                error,
+            } => {
+                let mut line = Object::new("c_compiler");
+                line.str("compiler", compiler);
+                if let Some(status) = status {
+                    line.int("status", *status as i64);
+                }
+                line.str("output", output);
+                if let Some(kept) = kept {
+                    line.str("kept", kept);
+                }
+                if let Some(error) = error {
+                    line.str("message", error);
+                }
+                line
+            }
+            Message::CantRun { error } => {
+                let mut line = Object::new("cant_run");
+                line.str("message", error);
+                line
+            }
+            Message::NoFlags { variables, window } => {
+                let mut line = Object::new("no_flags");
+                line.raw(
+                    "variables",
+                    &json::array(variables.iter().map(|name| json::quoted(name))),
+                )
+                .str("affects", if *window { "window" } else { "gpu_systems" })
+                .str("message", &self.no_flags_line());
+                line
+            }
+        };
+        line.line()
+    }
+
+    /// The message in a format.
+    pub fn render(&self, format: Format) -> String {
+        match format {
+            Format::Text => self.text(),
+            Format::Json => self.json(),
+        }
+    }
 }
 
 const RELEASE_FLAGS: &[&str] = &["-O2", "-fwrapv", "-ffp-contract=off"];
@@ -59,11 +206,17 @@ const TARGET_FLAGS: &[&str] = &["-march=x86-64-v3"];
 #[cfg(not(target_arch = "x86_64"))]
 const TARGET_FLAGS: &[&str] = &[];
 
-/// Compiles `c_source` and the runtime into the executable `out`. The
-/// error is a message ready to print.
-pub fn build(c_source: &str, out: &Path, debug: bool, parts: Parts) -> Result<(), String> {
+/// Compiles `c_source` and the runtime into the executable `out`. Says on
+/// standard error, in `format`, what runs without flags.
+pub fn build(
+    c_source: &str,
+    out: &Path,
+    debug: bool,
+    parts: Parts,
+    format: Format,
+) -> Result<(), Message> {
     let dir = make_build_dir()?;
-    let result = compile_in(&dir, c_source, out, debug, parts);
+    let result = compile_in(&dir, c_source, out, debug, parts, format);
     if result.is_ok() {
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -73,14 +226,34 @@ pub fn build(c_source: &str, out: &Path, debug: bool, parts: Parts) -> Result<()
 /// Compiles into a temporary directory, runs the program with this
 /// process's standard streams, and returns its exit status. The program
 /// runs without `LD_LIBRARY_PATH`: it finds its libraries through its
-/// runpaths.
-pub fn run(c_source: &str, debug: bool, parts: Parts) -> Result<u8, String> {
+/// runpaths. With `program_format`, it runs with `MIDNIGHT_FORMAT=json`,
+/// or without the variable for text.
+pub fn run(
+    c_source: &str,
+    debug: bool,
+    parts: Parts,
+    format: Format,
+    program_format: Option<Format>,
+) -> Result<u8, Message> {
     let dir = make_build_dir()?;
     let exe = dir.join("program");
-    compile_in(&dir, c_source, &exe, debug, parts)?;
-    let status = Command::new(&exe).env_remove("LD_LIBRARY_PATH").status();
+    compile_in(&dir, c_source, &exe, debug, parts, format)?;
+    let mut command = Command::new(&exe);
+    command.env_remove("LD_LIBRARY_PATH");
+    match program_format {
+        Some(Format::Json) => {
+            command.env("MIDNIGHT_FORMAT", "json");
+        }
+        Some(Format::Text) => {
+            command.env_remove("MIDNIGHT_FORMAT");
+        }
+        None => {}
+    }
+    let status = command.status();
     let _ = std::fs::remove_dir_all(&dir);
-    let status = status.map_err(|error| format!("midnight: can't run the program: {error}"))?;
+    let status = status.map_err(|error| Message::CantRun {
+        error: error.to_string(),
+    })?;
     Ok(exit_code(status))
 }
 
@@ -96,23 +269,30 @@ fn flags_variable(name: &str) -> Option<String> {
 /// `MIDNIGHT_GPU_FLAGS` is set, and for a window when that and
 /// `MIDNIGHT_WINDOW_FLAGS` both are; the window part for a window when
 /// both are. Says on standard error what runs without them.
-fn part_flags(gpu: bool, window: bool) -> (Option<String>, Option<String>) {
+fn part_flags(gpu: bool, window: bool, format: Format) -> (Option<String>, Option<String>) {
     let gpu_flags = flags_variable("MIDNIGHT_GPU_FLAGS");
     let window_flags = flags_variable("MIDNIGHT_WINDOW_FLAGS");
     if gpu && gpu_flags.is_none() {
-        eprintln!("midnight: MIDNIGHT_GPU_FLAGS is not set; GPU systems will run on the CPU");
+        let message = Message::NoFlags {
+            variables: vec!["MIDNIGHT_GPU_FLAGS"],
+            window: false,
+        };
+        eprint!("{}", message.render(format));
     }
     if window {
-        let missing = match (&gpu_flags, &window_flags) {
-            (None, None) => Some("MIDNIGHT_GPU_FLAGS and MIDNIGHT_WINDOW_FLAGS are"),
-            (None, Some(_)) => Some("MIDNIGHT_GPU_FLAGS is"),
-            (Some(_), None) => Some("MIDNIGHT_WINDOW_FLAGS is"),
-            (Some(_), Some(_)) => None,
-        };
-        if let Some(missing) = missing {
-            eprintln!(
-                "midnight: {missing} not set; the window will run only headless, and capture nothing"
-            );
+        let mut variables = Vec::new();
+        if gpu_flags.is_none() {
+            variables.push("MIDNIGHT_GPU_FLAGS");
+        }
+        if window_flags.is_none() {
+            variables.push("MIDNIGHT_WINDOW_FLAGS");
+        }
+        if !variables.is_empty() {
+            let message = Message::NoFlags {
+                variables,
+                window: true,
+            };
+            eprint!("{}", message.render(format));
         }
     }
     let frames = window && gpu_flags.is_some() && window_flags.is_some();
@@ -126,24 +306,23 @@ fn compile_in(
     out: &Path,
     debug: bool,
     parts: Parts,
-) -> Result<(), String> {
+    format: Format,
+) -> Result<(), Message> {
     let Parts {
         gpu,
         threads,
         window,
     } = parts;
     let write = |name: &str, text: &str| {
-        std::fs::write(dir.join(name), text).map_err(|error| {
-            format!(
-                "midnight: can't write `{}`: {error}",
-                dir.join(name).display()
-            )
+        std::fs::write(dir.join(name), text).map_err(|error| Message::CantWrite {
+            file: dir.join(name).display().to_string(),
+            error: error.to_string(),
         })
     };
     write("program.c", c_source)?;
     write("midnight_rt.h", RUNTIME_H)?;
     write("midnight_rt.c", RUNTIME_C)?;
-    let (gpu_flags, window_flags) = part_flags(gpu, window);
+    let (gpu_flags, window_flags) = part_flags(gpu, window, format);
     if gpu_flags.is_some() {
         write("midnight_gpu.h", GPU_H)?;
         write("midnight_gpu.c", GPU_C)?;
@@ -209,24 +388,28 @@ fn compile_in(
         command.args(flags.split_whitespace());
     }
 
-    let output = command.output().map_err(|error| {
-        format!(
-            "midnight: can't run the C compiler `{cc}`: {error}\n\
-             Set MIDNIGHT_CC to a C11 compiler."
-        )
+    let output = command.output().map_err(|error| Message::CCompiler {
+        compiler: cc.clone(),
+        status: None,
+        output: String::new(),
+        kept: None,
+        error: Some(error.to_string()),
     })?;
     if output.status.success() {
         return Ok(());
     }
-    Err(format!(
-        "midnight: the C compiler rejected the generated code. This is a bug in midnight.\n\
-         The generated C was kept at {}\n\n{}",
-        dir.join("program.c").display(),
-        String::from_utf8_lossy(&output.stderr).trim_end()
-    ))
+    Err(Message::CCompiler {
+        compiler: cc,
+        status: Some(i32::from(exit_code(output.status))),
+        output: String::from_utf8_lossy(&output.stderr)
+            .trim_end()
+            .to_string(),
+        kept: Some(dir.join("program.c").display().to_string()),
+        error: None,
+    })
 }
 
-fn make_build_dir() -> Result<PathBuf, String> {
+fn make_build_dir() -> Result<PathBuf, Message> {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.subsec_nanos());
@@ -241,17 +424,17 @@ fn make_build_dir() -> Result<PathBuf, String> {
             Ok(()) => return Ok(dir),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(format!(
-                    "midnight: can't create a build directory in `{}`: {error}",
-                    base.display()
-                ));
+                return Err(Message::BuildDirectory {
+                    directory: base.display().to_string(),
+                    error: Some(error.to_string()),
+                });
             }
         }
     }
-    Err(format!(
-        "midnight: can't create a build directory in `{}`",
-        base.display()
-    ))
+    Err(Message::BuildDirectory {
+        directory: base.display().to_string(),
+        error: None,
+    })
 }
 
 /// The status to pass on: the program's own, or 128 plus the signal that

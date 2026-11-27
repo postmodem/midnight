@@ -1,0 +1,5 @@
+{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"error","message":"unknown escape `\\\u0001`","label":"the escapes are \\n, \\t, \\r, \\0, \\e, \\\\, \\\" and \\#","file":"tests/json/parts/escape_control.12am","start":{"line":1,"column":8,"byte":7},"end":{"line":1,"column":10,"byte":9},"notes":[]}
+{"kind":"error","message":"unknown escape `\\é`","label":"the escapes are \\n, \\t, \\r, \\0, \\e, \\\\, \\\" and \\#","file":"tests/json/parts/escape_accent.12am","start":{"line":2,"column":9,"byte":73},"end":{"line":2,"column":11,"byte":76},"notes":[]}
+{"kind":"error","message":"can't find `tests/json/parts/missing.12am`","label":"required here as \"parts/missing\"","file":"tests/json/check_files.12am","start":{"line":7,"column":1,"byte":222},"end":{"line":7,"column":24,"byte":245},"notes":[]}
+{"kind":"errors","count":3,"shown":3}

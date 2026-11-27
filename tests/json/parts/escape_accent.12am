@@ -1,0 +1,2 @@
+# Ünïcödé before the error, so its column and byte differ.
+puts "→ \é"

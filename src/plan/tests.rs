@@ -67,8 +67,8 @@ fn renders_the_columns_lined_up() {
     let line = |direction, from: &str, to: &str, rows, cause| Transfer {
         direction,
         component: "Position".to_string(),
-        from: from.to_string(),
-        to: to.to_string(),
+        from: Stage::system(from),
+        to: Stage::system(to),
         rows,
         cause,
     };
@@ -108,16 +108,16 @@ fn pads_to_the_widest_component_and_route() {
         Transfer {
             direction: Direction::Upload,
             component: "Hp".to_string(),
-            from: TOP_LEVEL.to_string(),
-            to: "regenerate".to_string(),
+            from: Stage::TopLevel,
+            to: Stage::system("regenerate"),
             rows: false,
             cause: Some(Structural::Spawn),
         },
         Transfer {
             direction: Direction::Download,
             component: "Position".to_string(),
-            from: "a".to_string(),
-            to: "b".to_string(),
+            from: Stage::system("a"),
+            to: Stage::system("b"),
             rows: false,
             cause: Some(Structural::Add),
         },

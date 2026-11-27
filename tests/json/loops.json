@@ -1,0 +1,7 @@
+{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"loop","file":"tests/json/loops.12am","line":22,"in":{"def":"Vec2.total"},"terms":["Health"],"with":[],"without":[],"runs":"one_core","reason":"`t += …` at line 23 is a `Float` sum","rule":4}
+{"kind":"loop","file":"tests/json/loops.12am","line":30,"in":{"def":"heal"},"terms":["Health"],"with":["Visible"],"without":[],"runs":"cores"}
+{"kind":"loop","file":"tests/json/loops.12am","line":36,"in":{"system":"move","gpu":true,"strict":false},"terms":["Position"],"with":[],"without":["Frozen","Visible"],"runs":"gpu"}
+{"kind":"loop","file":"tests/json/loops.12am","line":42,"in":{"system":"settle","gpu":true,"strict":true},"terms":["Position"],"with":[],"without":[],"runs":"gpu"}
+{"kind":"loop","file":"tests/json/loops.12am","line":48,"in":{"system":"report","gpu":false,"strict":false},"terms":["Entity","Health"],"with":[],"without":[],"runs":"one_core","reason":"`puts` at line 49","rule":6}
+{"kind":"loop","file":"tests/json/loops.12am","line":56,"in":{"top_level":true},"terms":["Entity","Position"],"with":["Visible"],"without":["Frozen"],"runs":"one_core","reason":"`rand` at line 57","rule":6}

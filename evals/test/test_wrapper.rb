@@ -137,6 +137,13 @@ class WrapperTest < Minitest::Test
     assert_equal "c.drive", env["MIDNIGHT_DRIVE"]
   end
 
+  def test_passes_the_format
+    _, out, = call("run", "solution.12am", "--format", "json", env: { "MIDNIGHT_FORMAT" => "json" })
+    assert_equal "json", stub_env(out)["MIDNIGHT_FORMAT"]
+    refute_includes log.last["dropped"], "MIDNIGHT_FORMAT"
+    refute log.last["refused"], "`json` after `--format` is not a file"
+  end
+
   def test_refuses_a_file_outside
     assert_refused("check", File.join(@other, "outside.12am"))
     assert_refused("check", "../#{File.basename(@other)}/outside.12am")

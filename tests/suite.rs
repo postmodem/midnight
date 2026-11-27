@@ -131,6 +131,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+mod json_lines;
 mod render;
 
 const STRICT_CFLAGS: &str = "-Wall -Wextra -Werror";
@@ -607,6 +608,506 @@ fn loops_programs() {
         .map_err(|message| format!("{}: {message}", source.display()))
     });
     report("loops", sources.len(), failures);
+}
+
+/// The lines of a diagnostic's text that its JSON form must give: each
+/// `error:` and `note:` line, each `-->` line, and the width and label of
+/// each primary marker.
+fn diagnostic_skeleton_of_text(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if line.starts_with("error: ") || line.starts_with("note: ") {
+            out.push(line.to_string());
+        } else if let Some(place) = trimmed.strip_prefix("--> ") {
+            out.push(format!("--> {place}"));
+        } else if let Some(rest) = trimmed.strip_prefix("| ") {
+            let marked = rest.trim_start();
+            let width = marked.chars().take_while(|&c| c == '^').count();
+            if width > 0 {
+                out.push(format!("mark: {width}"));
+                if let Some(label) = marked[width..].strip_prefix(' ') {
+                    out.push(format!("label: {label}"));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The 1-based line and column, in characters, of a byte offset.
+fn line_column(text: &str, byte: usize) -> (usize, usize) {
+    let before = &text[..byte];
+    let line = before.matches('\n').count() + 1;
+    let start = before.rfind('\n').map_or(0, |i| i + 1);
+    (line, before[start..].chars().count() + 1)
+}
+
+/// Checks a `start` or `end` against the file it names, and returns its
+/// line and column.
+fn json_position(position: &json_lines::Value, text: &str) -> Result<(usize, usize), String> {
+    let (line, column, byte) = (
+        position.int("line")? as usize,
+        position.int("column")? as usize,
+        position.int("byte")? as usize,
+    );
+    if byte > text.len() || line_column(text, byte) != (line, column) {
+        return Err(format!(
+            "{} does not agree with its byte in the file",
+            position.text()
+        ));
+    }
+    Ok((line, column))
+}
+
+/// The skeleton of [`diagnostic_skeleton_of_text`] made from JSON lines.
+fn diagnostic_skeleton_of_json(lines: &[json_lines::Value]) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    let read = |name: &str| std::fs::read_to_string(name).map_err(|e| format!("{name}: {e}"));
+    let mut errors = 0;
+    let mut totals = None;
+    for line in lines {
+        match line.kind() {
+            "error" if totals.is_none() => {
+                errors += 1;
+                let file = line.str("file")?;
+                let text = read(file)?;
+                let (start_line, start_column) = json_position(line.get("start").unwrap(), &text)?;
+                let (end_line, end_column) = json_position(line.get("end").unwrap(), &text)?;
+                out.push(format!("error: {}", line.str("message")?));
+                out.push(format!("--> {file}:{start_line}:{start_column}"));
+                let width = if end_line == start_line {
+                    end_column - start_column
+                } else {
+                    let line_text = text.lines().nth(start_line - 1).unwrap_or("");
+                    (line_text.chars().count() + 1).saturating_sub(start_column)
+                };
+                out.push(format!("mark: {}", width.max(1)));
+                if let Some(label) = line.get("label") {
+                    out.push(format!("label: {}", label.as_str().ok_or("a label")?));
+                }
+                for note in line.array("notes")? {
+                    let file = note.str("file")?;
+                    let text = read(file)?;
+                    let (line, column) = json_position(note.get("start").unwrap(), &text)?;
+                    json_position(note.get("end").unwrap(), &text)?;
+                    out.push(format!("note: {}", note.str("message")?));
+                    out.push(format!("--> {file}:{line}:{column}"));
+                }
+            }
+            "errors" if totals.is_none() => totals = Some((line.int("count")?, line.int("shown")?)),
+            _ => return Err(format!("unexpected line {}", line.text())),
+        }
+    }
+    let (count, shown) = totals.ok_or("no `errors` line")?;
+    if shown != errors || shown != count.min(20) {
+        return Err(format!(
+            "{errors} errors, but count {count} and shown {shown}"
+        ));
+    }
+    if count > shown {
+        let hidden = count - shown;
+        let noun = if hidden == 1 { "error" } else { "errors" };
+        out.push(format!("note: {hidden} more {noun} not shown"));
+    }
+    Ok(out)
+}
+
+/// Runs `midnight ARGS --format json` and returns its standard output and
+/// standard error.
+fn midnight_json(args: &[&OsStr], status: i32) -> Result<(String, String), String> {
+    let output = midnight()
+        .args(args)
+        .args(["--format", "json"])
+        .output()
+        .expect("run midnight");
+    if output.status.code() != Some(status) {
+        return Err(format!(
+            "`midnight {}` exited with {:?}, expected {status}\n{}",
+            args.join(OsStr::new(" ")).to_string_lossy(),
+            output.status,
+            text(&output.stderr)
+        ));
+    }
+    Ok((text(&output.stdout), text(&output.stderr)))
+}
+
+#[test]
+fn fail_programs_in_json() {
+    let sources = programs("tests/fail");
+    let failures = for_each_parallel(&sources, |source| {
+        let label = |message: String| format!("{}: {message}", source.display());
+        let (stdout, stderr) =
+            midnight_json(&[OsStr::new("check"), source.as_os_str()], 1).map_err(label)?;
+        if !stdout.is_empty() {
+            return Err(label(format!("wrote to standard output\n{stdout}")));
+        }
+        let lines = json_lines::parse_form(&stderr).map_err(label)?;
+        let actual = diagnostic_skeleton_of_json(&lines).map_err(label)?;
+        let expected_text = std::fs::read_to_string(source.with_extension("err")).unwrap();
+        let expected = diagnostic_skeleton_of_text(&expected_text);
+        if actual != expected {
+            return Err(label(format!(
+                "the JSON says\n{}\nbut the text says\n{}",
+                actual.join("\n"),
+                expected.join("\n")
+            )));
+        }
+        Ok(())
+    });
+    report("failing programs in JSON", sources.len(), failures);
+}
+
+/// A line of text with its runs of spaces made one space.
+fn collapse_spaces(line: &str) -> String {
+    line.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// A `transfer` line as the text of `midnight plan` gives it, its spaces
+/// collapsed.
+fn transfer_text(line: &json_lines::Value) -> Result<String, String> {
+    if line.kind() != "transfer" {
+        return Err(format!("unexpected line {}", line.text()));
+    }
+    let stage = |key: &str| -> Result<String, String> {
+        let stage = line.get(key).ok_or(format!("no `{key}`"))?;
+        if stage.get("top_level").and_then(json_lines::Value::as_bool) == Some(true) {
+            return Ok("top level".to_string());
+        }
+        let name = stage.str("system")?;
+        Ok(if stage.bool("strict")? {
+            format!("strict {name}")
+        } else {
+            name.to_string()
+        })
+    };
+    let mut text = format!(
+        "{} {} {} -> {}",
+        line.str("direction")?,
+        line.str("component")?,
+        stage("from")?,
+        stage("to")?
+    );
+    if line.bool("rows")? {
+        text.push_str(" rows");
+    }
+    if let Some(on) = line.get("on") {
+        text.push_str(&format!(" on {}", on.as_str().ok_or("`on`")?));
+    }
+    Ok(text)
+}
+
+/// A `loop` line as the text of `midnight loops` gives it, its spaces
+/// collapsed.
+fn loop_text(line: &json_lines::Value) -> Result<String, String> {
+    if line.kind() != "loop" {
+        return Err(format!("unexpected line {}", line.text()));
+    }
+    let stands_in = line.get("in").ok_or("no `in`")?;
+    let stands_in = if let Some(name) = stands_in.get("system") {
+        let kind = match (stands_in.bool("gpu")?, stands_in.bool("strict")?) {
+            (true, true) => "strict gpu system",
+            (true, false) => "gpu system",
+            _ => "system",
+        };
+        format!("{kind} {}", name.as_str().ok_or("`system`")?)
+    } else if let Some(name) = stands_in.get("def") {
+        format!("def {}", name.as_str().ok_or("`def`")?)
+    } else if stands_in.bool("top_level")? {
+        "top level".to_string()
+    } else {
+        return Err(format!("`in` is {}", stands_in.text()));
+    };
+    let names = |key: &str| -> Result<Vec<String>, String> {
+        line.array(key)?
+            .iter()
+            .map(|name| name.as_str().map(str::to_string).ok_or(format!("`{key}`")))
+            .collect()
+    };
+    names("with")?;
+    names("without")?;
+    let runs = match line.str("runs")? {
+        "one_core" => {
+            let rule = line.int("rule")?;
+            if !(1..=7).contains(&rule) {
+                return Err(format!("rule {rule}"));
+            }
+            format!("one core: {}", line.str("reason")?)
+        }
+        runs @ ("gpu" | "cores") => runs.to_string(),
+        other => return Err(format!("`runs` is `{other}`")),
+    };
+    Ok(collapse_spaces(&format!(
+        "{}:{} {stands_in} each {} {runs}",
+        line.str("file")?,
+        line.int("line")?,
+        names("terms")?.join(", ")
+    )))
+}
+
+#[test]
+fn plan_and_loops_in_json() {
+    let mut sources: Vec<(PathBuf, &str)> = programs("tests/plan")
+        .into_iter()
+        .map(|source| (source, "plan"))
+        .collect();
+    sources.extend(
+        programs("tests/loops")
+            .into_iter()
+            .map(|source| (source, "loops")),
+    );
+    let failures = for_each_parallel(&sources, |(source, command)| {
+        let label = |message: String| format!("{}: {message}", source.display());
+        let (stdout, stderr) =
+            midnight_json(&[OsStr::new(command), source.as_os_str()], 0).map_err(label)?;
+        if !stderr.is_empty() {
+            return Err(label(format!("wrote to standard error\n{stderr}")));
+        }
+        let lines = json_lines::parse_form(&stdout).map_err(label)?;
+        let line_text = if *command == "plan" {
+            transfer_text
+        } else {
+            loop_text
+        };
+        let actual: Vec<String> = lines
+            .iter()
+            .map(line_text)
+            .collect::<Result<_, _>>()
+            .map_err(label)?;
+        let expected_text = std::fs::read_to_string(source.with_extension(command)).unwrap();
+        let expected: Vec<String> = expected_text.lines().map(collapse_spaces).collect();
+        if actual != expected {
+            return Err(label(format!(
+                "the JSON says\n{}\nbut the text says\n{}",
+                actual.join("\n"),
+                expected.join("\n")
+            )));
+        }
+        Ok(())
+    });
+    report("plans and loops in JSON", sources.len(), failures);
+}
+
+/// What a `tests/json` file writes in place of the compiler's version.
+const VERSION_MARK: &str = "\"version\":\"VERSION\"";
+
+/// `tests/json/NAME.12am`: its first line, `# json: COMMAND`, names the
+/// command whose JSON `NAME.json` holds exactly: `check`, `plan` or
+/// `loops`, or `run` for the standard error of a headless run with its
+/// `NAME.drive` and `MIDNIGHT_FORMAT=json`.
+#[test]
+fn json_programs() {
+    let sources = programs("tests/json");
+    let dir = scratch("json");
+    let version = format!("\"version\":\"{}\"", env!("CARGO_PKG_VERSION"));
+    let failures = for_each_parallel(&sources, |source| {
+        let label = |message: String| format!("{}: {message}", source.display());
+        let program = std::fs::read_to_string(source).unwrap();
+        let command = program
+            .lines()
+            .next()
+            .and_then(|line| line.strip_prefix("# json: "))
+            .ok_or_else(|| label("no `# json: COMMAND` line".to_string()))?;
+        let actual = match command {
+            "check" | "plan" | "loops" => {
+                let output = midnight()
+                    .arg(command)
+                    .arg(source)
+                    .args(["--format", "json"])
+                    .output()
+                    .expect("run midnight");
+                let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+                match (command, stderr.is_empty()) {
+                    ("check", _) if stdout.is_empty() => stderr,
+                    (_, true) => stdout,
+                    _ => {
+                        return Err(label(format!(
+                            "wrote to both streams\n--- stdout\n{stdout}--- stderr\n{stderr}"
+                        )));
+                    }
+                }
+            }
+            "run" => {
+                let exe = exe_path(&dir, source, Mode::Release);
+                build(source, &exe, Mode::Release)?;
+                let mut command = on_cpu(&exe, source);
+                command.env("MIDNIGHT_FORMAT", "json");
+                run_within(&mut command, RUN_LIMIT).stderr
+            }
+            other => return Err(label(format!("unknown command `{other}`"))),
+        };
+        for (i, line) in actual.lines().enumerate() {
+            json_lines::parse_line(line).map_err(|e| label(format!("line {}: {e}", i + 1)))?;
+        }
+        expect(
+            &source.with_extension("json"),
+            &actual.replacen(&version, VERSION_MARK, 1),
+            "JSON",
+        )
+        .map_err(label)
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("JSON programs", sources.len(), failures);
+}
+
+/// The first line of every JSON form, with this compiler's version.
+fn json_first_line() -> String {
+    format!(
+        "{{\"kind\":\"midnight\",\"format\":1,\"version\":\"{}\"}}\n",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
+#[test]
+fn format_takes_one_word_on_five_commands() {
+    let file = "examples/move.12am";
+    for args in [
+        vec!["check", file, "--format", "xml"],
+        vec!["check", file, "--format"],
+        vec!["check", file, "--format", "json", "--format", "json"],
+        vec!["check", file, "--format=json"],
+        vec!["emit-c", file, "--format", "json"],
+        vec!["emit-wgsl", file, "--format", "text"],
+    ] {
+        let output = midnight().args(&args).output().expect("run midnight");
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {stderr}");
+        assert!(
+            stderr.starts_with("midnight: ") && stderr.contains("Usage:"),
+            "{args:?}: {stderr}"
+        );
+    }
+    let usage = text(&midnight().arg("--help").output().unwrap().stdout);
+    assert!(usage.contains("--format text|json"), "{usage}");
+    for command in ["check", "plan", "loops"] {
+        let output = midnight()
+            .args([command, file, "--format", "text"])
+            .output()
+            .unwrap();
+        let plain = midnight().args([command, file]).output().unwrap();
+        assert_eq!(output, plain, "{command}");
+    }
+}
+
+#[test]
+fn compiler_messages_in_json() {
+    let dir = scratch("compiler-messages");
+    let first = json_first_line();
+    let lines = |stderr: &str| json_lines::parse_form(stderr).unwrap();
+
+    // A file that can't be read, from `check` and from `plan`, which writes
+    // its first line to both streams.
+    let (_, stderr) = midnight_json(&[OsStr::new("check"), OsStr::new("no/such.12am")], 1).unwrap();
+    let line = &lines(&stderr)[0];
+    assert_eq!(line.kind(), "cant_read");
+    assert_eq!(line.str("file"), Ok("no/such.12am"));
+    assert!(!line.str("message").unwrap().is_empty());
+    let (stdout, stderr) =
+        midnight_json(&[OsStr::new("plan"), OsStr::new("no/such.12am")], 1).unwrap();
+    assert_eq!(stdout, first);
+    assert_eq!(lines(&stderr)[0].kind(), "cant_read");
+    let (stdout, stderr) = midnight_json(
+        &[
+            OsStr::new("loops"),
+            OsStr::new("tests/fail/args_builtin_count.12am"),
+        ],
+        1,
+    )
+    .unwrap();
+    assert_eq!(stdout, first);
+    assert_eq!(lines(&stderr)[0].kind(), "error");
+
+    // A check with no error writes the first line alone.
+    let (stdout, stderr) =
+        midnight_json(&[OsStr::new("check"), OsStr::new("examples/move.12am")], 0).unwrap();
+    assert_eq!((stdout.as_str(), stderr.as_str()), ("", first.as_str()));
+
+    // A C compiler that fails, and one that does not start.
+    let out = dir.join("move");
+    let build = |cc: &str| {
+        midnight()
+            .args(["build", "examples/move.12am", "--format", "json", "-o"])
+            .arg(&out)
+            .env("MIDNIGHT_CC", cc)
+            .output()
+            .unwrap()
+    };
+    let output = build("false");
+    assert_eq!(output.status.code(), Some(1));
+    let line = &lines(&text(&output.stderr))[0];
+    assert_eq!(line.kind(), "c_compiler");
+    assert_eq!(
+        (line.str("compiler"), line.int("status")),
+        (Ok("false"), Ok(1))
+    );
+    assert_eq!(line.str("output"), Ok(""));
+    let kept = line.str("kept").unwrap();
+    assert!(
+        kept.ends_with("program.c") && Path::new(kept).exists(),
+        "{kept}"
+    );
+    let _ = std::fs::remove_dir_all(Path::new(kept).parent().unwrap());
+    let output = build("/no/such/cc");
+    let line = &lines(&text(&output.stderr))[0];
+    assert_eq!(line.kind(), "c_compiler");
+    assert!(line.get("status").is_none() && line.get("kept").is_none());
+    assert!(!line.str("message").unwrap().is_empty());
+
+    // A build directory that can't be made.
+    let output = midnight()
+        .args(["build", "examples/move.12am", "--format", "json", "-o"])
+        .arg(&out)
+        .env("TMPDIR", "/no/such/dir")
+        .output()
+        .unwrap();
+    let line = &lines(&text(&output.stderr))[0];
+    assert_eq!(line.kind(), "build_directory");
+    assert_eq!(line.str("directory"), Ok("/no/such/dir"));
+    assert!(line.str("message").is_ok());
+
+    // Flags that are not set: a program with a GPU system, and one with a
+    // window, built with `false` as the C compiler.
+    for (source, affects, variables) in [
+        (
+            "tests/run/gpu_transfers.12am",
+            "gpu_systems",
+            vec!["MIDNIGHT_GPU_FLAGS"],
+        ),
+        (
+            "examples/flock.12am",
+            "window",
+            vec!["MIDNIGHT_GPU_FLAGS", "MIDNIGHT_WINDOW_FLAGS"],
+        ),
+    ] {
+        let output = midnight()
+            .args(["build", source, "--format", "json", "-o"])
+            .arg(&out)
+            .env("MIDNIGHT_CC", "false")
+            .env_remove("MIDNIGHT_GPU_FLAGS")
+            .env_remove("MIDNIGHT_WINDOW_FLAGS")
+            .output()
+            .unwrap();
+        let found = lines(&text(&output.stderr));
+        let line = found
+            .iter()
+            .find(|line| line.kind() == "no_flags" && line.str("affects") == Ok(affects))
+            .unwrap_or_else(|| panic!("{source}: no `no_flags` line for {affects}"));
+        assert_eq!(line.str("affects"), Ok(affects), "{source}");
+        let named: Vec<&str> = line
+            .array("variables")
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(named, variables, "{source}");
+        assert!(line.str("message").unwrap().contains("not set"), "{source}");
+        let kept = found.iter().find_map(|line| line.get("kept")?.as_str());
+        if let Some(kept) = kept {
+            let _ = std::fs::remove_dir_all(Path::new(kept).parent().unwrap());
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

@@ -1,0 +1,59 @@
+# json: loops
+# Every place a loop stands, its filters, and each way it runs.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Health
+  hp: Int
+end
+
+tag Frozen
+tag Visible
+
+struct Vec2
+  x: Float
+  y: Float
+
+  def total -> Float
+    t = 0.0
+    each Health do |h|
+      t += 1.0
+    end
+    t
+  end
+end
+
+def heal
+  each Health, with: Visible do |h|
+    h.hp += 1
+  end
+end
+
+gpu system move
+  each Position, without: [Frozen, Visible] do |pos|
+    pos.x += 1.0
+  end
+end
+
+strict gpu system settle
+  each Position do |pos|
+    pos.y = pos.y * 0.5
+  end
+end
+
+system report
+  each Entity, Health do |e, h|
+    puts "#{e} #{h.hp}"
+  end
+end
+
+spawn Position(0.0, 0.0), Health(3)
+heal
+puts Vec2(1.0, 2.0).total
+each Entity, Position, with: Visible, without: Frozen do |e, p|
+  p.x = rand
+end
+World.tick

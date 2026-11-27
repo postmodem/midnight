@@ -41,6 +41,7 @@
 //! besides those when every structural change runs in every tick are
 //! marked with the operation.
 
+use crate::json::Object;
 use crate::tir::{
     Block, ComponentId, CompoundOp, Expr, ExprKind, FuncId, Place, PlaceKind, Program, Query, Stmt,
     StmtKind, Term,
@@ -83,16 +84,52 @@ impl Structural {
     }
 }
 
+/// Where a transfer comes from or goes to: a system, or the top-level code.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Stage {
+    System { name: String, strict: bool },
+    TopLevel,
+}
+
+impl Stage {
+    /// A system that is not strict.
+    #[cfg(test)]
+    pub fn system(name: &str) -> Stage {
+        Stage::System {
+            name: name.to_string(),
+            strict: false,
+        }
+    }
+
+    /// `move`, `strict move` or `top level`.
+    fn text(&self) -> String {
+        match self {
+            Stage::System { name, strict: true } => format!("strict {name}"),
+            Stage::System { name, .. } => name.clone(),
+            Stage::TopLevel => TOP_LEVEL.to_string(),
+        }
+    }
+
+    fn json(&self) -> String {
+        let mut object = Object::empty();
+        match self {
+            Stage::System { name, strict } => object.str("system", name).bool("strict", *strict),
+            Stage::TopLevel => object.bool("top_level", true),
+        };
+        object.finish()
+    }
+}
+
 /// One line of a plan.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Transfer {
     pub direction: Direction,
     /// The component's name.
     pub component: String,
-    /// The system that left the other copy as the only current one.
-    pub from: String,
-    /// The system that needs the copy.
-    pub to: String,
+    /// The step that left the other copy as the only current one.
+    pub from: Stage,
+    /// The step that needs the copy.
+    pub to: Stage,
     /// Set when only the rows concerned move, not the whole array.
     pub rows: bool,
     /// Set when the transfer happens only because of a structural change.
@@ -112,9 +149,11 @@ pub fn plan(program: &Program) -> Vec<Transfer> {
     transfers.extend(changed.into_iter().filter(|t| t.cause.is_some()));
     transfers.sort_by_key(|t| t.at);
     let name = |step: usize| match program.systems.get(step) {
-        Some(system) if system.strict => format!("strict {}", system.name),
-        Some(system) => system.name.clone(),
-        None => TOP_LEVEL.to_string(),
+        Some(system) => Stage::System {
+            name: system.name.clone(),
+            strict: system.strict,
+        },
+        None => Stage::TopLevel,
     };
     transfers
         .into_iter()
@@ -131,7 +170,7 @@ pub fn plan(program: &Program) -> Vec<Transfer> {
 
 /// The plan as text: one line per transfer, the columns lined up.
 pub fn render(transfers: &[Transfer]) -> String {
-    let route = |t: &Transfer| format!("{} -> {}", t.from, t.to);
+    let route = |t: &Transfer| format!("{} -> {}", t.from.text(), t.to.text());
     let component_width = transfers.iter().map(|t| t.component.len()).max();
     let route_width = transfers.iter().map(|t| route(t).len()).max();
     let (component_width, route_width) = (component_width.unwrap_or(0), route_width.unwrap_or(0));
@@ -155,6 +194,24 @@ pub fn render(transfers: &[Transfer]) -> String {
         }
         out.push_str(line.trim_end());
         out.push('\n');
+    }
+    out
+}
+
+/// The plan as JSON lines: one `transfer` line per transfer.
+pub fn render_json(transfers: &[Transfer]) -> String {
+    let mut out = String::new();
+    for t in transfers {
+        let mut line = Object::new("transfer");
+        line.str("direction", t.direction.name())
+            .str("component", &t.component)
+            .raw("from", &t.from.json())
+            .raw("to", &t.to.json())
+            .bool("rows", t.rows);
+        if let Some(cause) = t.cause {
+            line.str("on", cause.name());
+        }
+        out.push_str(&line.line());
     }
     out
 }

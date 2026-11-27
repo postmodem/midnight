@@ -209,6 +209,8 @@ module Eval
           arg = rest.shift
           if arg == "-o"
             out = rest.shift
+          elsif arg == "--format"
+            rest.shift
           elsif !arg.start_with?("-")
             files << arg
           end
@@ -251,10 +253,10 @@ module Eval
           "MIDNIGHT_GPU" => "off",
           "MIDNIGHT_WINDOW" => words.join(",")
         }
-        %w[MIDNIGHT_THREADS MIDNIGHT_DRIVE].each do |name|
+        kept = %w[MIDNIGHT_THREADS MIDNIGHT_DRIVE MIDNIGHT_FORMAT]
+        kept.each do |name|
           env[name] = caller_env[name] if caller_env.key?(name)
         end
-        kept = %w[MIDNIGHT_THREADS MIDNIGHT_DRIVE]
         dropped = caller_env.keys.reject { |k| kept.include?(k) }.sort
         [env, dropped]
       end
@@ -2113,7 +2115,8 @@ module Eval
       cmd = [@runner.claude, "-p", "--safe-mode", "--restricted", "--strict-mcp-config",
              "--disable-slash-commands", "--tools", TOOLS.join(","),
              "--allowedTools", "Bash(midnight *)", "Bash(MIDNIGHT_DRIVE=* midnight *)",
-             "Bash(MIDNIGHT_THREADS=* midnight *)", "Bash(MIDNIGHT_WINDOW=* midnight *)", *TOOLS.drop(1),
+             "Bash(MIDNIGHT_THREADS=* midnight *)", "Bash(MIDNIGHT_WINDOW=* midnight *)",
+             "Bash(MIDNIGHT_FORMAT=* midnight *)", *TOOLS.drop(1),
              "--permission-prompts", "none", "--no-session-persistence",
              "--output-format", "stream-json", "--verbose", "--model", @model]
       cmd += ["--effort", @runner.effort] if @runner.effort

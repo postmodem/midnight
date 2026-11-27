@@ -6,6 +6,7 @@
 //! core the line ends with the first thing in its block that keeps it
 //! there.
 
+use crate::json::{self, Object};
 use crate::source::{SourceMap, Span};
 use crate::tir::{
     Block, Body, ComponentId, Expr, ExprKind, FuncId, Local, Place, PlaceKind, Program, Query,
@@ -15,64 +16,157 @@ use crate::tir::{
 /// The name the top-level code has in a line.
 const TOP_LEVEL: &str = "top level";
 
-struct Line {
-    span: Span,
-    place: String,
-    stands_in: String,
-    terms: String,
-    runs: String,
+/// What a loop is written in.
+#[derive(Clone)]
+enum StandsIn {
+    System {
+        name: String,
+        gpu: bool,
+        strict: bool,
+    },
+    /// A function, `Vec2.length` for a method.
+    Def(String),
+    TopLevel,
 }
 
-/// The lines of a program, each ending in a newline.
-pub fn render(program: &Program, sources: &SourceMap) -> String {
+/// Where a loop runs.
+enum Runs {
+    Gpu,
+    Cores,
+    /// On one core: the reason's text and the number of its rule.
+    OneCore(String, u8),
+}
+
+struct Line {
+    span: Span,
+    file: String,
+    line: u32,
+    stands_in: StandsIn,
+    terms: Vec<String>,
+    with: Vec<String>,
+    without: Vec<String>,
+    runs: Runs,
+}
+
+impl Line {
+    fn place(&self) -> String {
+        format!("{}:{}", self.file, self.line)
+    }
+
+    fn stands_in(&self) -> String {
+        match &self.stands_in {
+            StandsIn::System { name, gpu, strict } => {
+                let kind = match (gpu, strict) {
+                    (true, true) => "strict gpu system",
+                    (true, false) => "gpu system",
+                    _ => "system",
+                };
+                format!("{kind} {name}")
+            }
+            StandsIn::Def(name) => format!("def {name}"),
+            StandsIn::TopLevel => TOP_LEVEL.to_string(),
+        }
+    }
+
+    fn terms(&self) -> String {
+        format!("each {}", self.terms.join(", "))
+    }
+
+    fn runs(&self) -> String {
+        match &self.runs {
+            Runs::Gpu => "gpu".to_string(),
+            Runs::Cores => "cores".to_string(),
+            Runs::OneCore(reason, _) => format!("one core: {reason}"),
+        }
+    }
+
+    fn json(&self) -> String {
+        let names = |names: &[String]| json::array(names.iter().map(|name| json::quoted(name)));
+        let mut stands_in = Object::empty();
+        match &self.stands_in {
+            StandsIn::System { name, gpu, strict } => stands_in
+                .str("system", name)
+                .bool("gpu", *gpu)
+                .bool("strict", *strict),
+            StandsIn::Def(name) => stands_in.str("def", name),
+            StandsIn::TopLevel => stands_in.bool("top_level", true),
+        };
+        let mut line = Object::new("loop");
+        line.str("file", &self.file)
+            .int("line", self.line as i64)
+            .raw("in", &stands_in.finish())
+            .raw("terms", &names(&self.terms))
+            .raw("with", &names(&self.with))
+            .raw("without", &names(&self.without));
+        match &self.runs {
+            Runs::Gpu => line.str("runs", "gpu"),
+            Runs::Cores => line.str("runs", "cores"),
+            Runs::OneCore(reason, rule) => line
+                .str("runs", "one_core")
+                .str("reason", reason)
+                .int("rule", *rule as i64),
+        };
+        line.line()
+    }
+}
+
+/// The lines of a program, in source order.
+fn lines(program: &Program, sources: &SourceMap) -> Vec<Line> {
     let mut printer = Printer {
         program,
         sources,
         lines: Vec::new(),
     };
     for (index, func) in program.funcs.iter().enumerate() {
-        let stands_in = format!("def {}", printer.func_name(FuncId(index)));
+        let stands_in = StandsIn::Def(printer.func_name(FuncId(index)));
         printer.body(&func.body, &stands_in);
     }
     for system in &program.systems {
-        let kind = match (system.gpu, system.strict) {
-            (true, true) => "strict gpu system",
-            (true, false) => "gpu system",
-            _ => "system",
+        let stands_in = StandsIn::System {
+            name: system.name.clone(),
+            gpu: system.gpu,
+            strict: system.strict,
         };
-        printer.body(&system.body, &format!("{kind} {}", system.name));
+        printer.body(&system.body, &stands_in);
     }
-    printer.body(&program.main, TOP_LEVEL);
+    printer.body(&program.main, &StandsIn::TopLevel);
 
     let mut lines = printer.lines;
     lines.sort_by_key(|line| (line.span.file.0, line.span.start));
-    let width = |column: fn(&Line) -> &String| {
-        lines
+    lines
+}
+
+/// The lines of a program, each ending in a newline.
+pub fn render(program: &Program, sources: &SourceMap) -> String {
+    let lines = lines(program, sources);
+    let columns: Vec<[String; 4]> = lines
+        .iter()
+        .map(|line| [line.place(), line.stands_in(), line.terms(), line.runs()])
+        .collect();
+    let width = |column: usize| {
+        columns
             .iter()
-            .map(|line| column(line).chars().count())
+            .map(|line| line[column].chars().count())
             .max()
             .unwrap_or(0)
     };
-    let widths = (
-        width(|line| &line.place),
-        width(|line| &line.stands_in),
-        width(|line| &line.terms),
-    );
-    lines
+    let widths = (width(0), width(1), width(2));
+    columns
         .iter()
-        .map(|line| {
+        .map(|[place, stands_in, terms, runs]| {
             format!(
-                "{:place$}  {:stands_in$}  {:terms$}  {}\n",
-                line.place,
-                line.stands_in,
-                line.terms,
-                line.runs,
-                place = widths.0,
-                stands_in = widths.1,
-                terms = widths.2,
+                "{place:place_width$}  {stands_in:stands_in_width$}  {terms:terms_width$}  {runs}\n",
+                place_width = widths.0,
+                stands_in_width = widths.1,
+                terms_width = widths.2,
             )
         })
         .collect()
+}
+
+/// The lines of a program as JSON lines: one `loop` line each.
+pub fn render_json(program: &Program, sources: &SourceMap) -> String {
+    lines(program, sources).iter().map(Line::json).collect()
 }
 
 struct Printer<'p> {
@@ -100,7 +194,7 @@ impl<'p> Printer<'p> {
     }
 
     /// Adds a line for every `each` of a body that has a verdict.
-    fn body(&mut self, body: &'p Body, stands_in: &str) {
+    fn body(&mut self, body: &'p Body, stands_in: &StandsIn) {
         let mut found = Vec::new();
         block_eaches(&body.block, &mut found);
         for stmt in found {
@@ -109,35 +203,40 @@ impl<'p> Printer<'p> {
             };
             let runs = match run {
                 Run::Inside => continue,
-                Run::Gpu => "gpu".to_string(),
-                Run::Cores(_) => "cores".to_string(),
-                Run::OneCore(reason) => format!("one core: {}", self.reason(reason, &body.locals)),
+                Run::Gpu => Runs::Gpu,
+                Run::Cores(_) => Runs::Cores,
+                Run::OneCore(reason) => {
+                    Runs::OneCore(self.reason(reason, &body.locals), reason.kind.rule())
+                }
+            };
+            let names = |ids: &[ComponentId]| {
+                ids.iter()
+                    .map(|&id| self.component(id).to_string())
+                    .collect()
             };
             self.lines.push(Line {
                 span: stmt.span,
-                place: format!(
-                    "{}:{}",
-                    self.sources.file(stmt.span.file).name,
-                    self.line_of(stmt.span)
-                ),
-                stands_in: stands_in.to_string(),
+                file: self.sources.file(stmt.span.file).name.clone(),
+                line: self.line_of(stmt.span),
+                stands_in: stands_in.clone(),
                 terms: self.terms(query),
+                with: names(&query.with),
+                without: names(&query.without),
                 runs,
             });
         }
     }
 
-    /// `each Entity, Life`
-    fn terms(&self, query: &Query) -> String {
-        let names: Vec<&str> = query
+    /// `Entity`, `Life`
+    fn terms(&self, query: &Query) -> Vec<String> {
+        query
             .terms
             .iter()
             .map(|term| match term {
-                Term::Entity => "Entity",
-                Term::Component { component, .. } => self.component(*component),
+                Term::Entity => "Entity".to_string(),
+                Term::Component { component, .. } => self.component(*component).to_string(),
             })
-            .collect();
-        format!("each {}", names.join(", "))
+            .collect()
     }
 
     /// `Stats.expired`, or the name of a variable.

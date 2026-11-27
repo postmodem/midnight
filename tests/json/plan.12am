@@ -1,0 +1,52 @@
+# json: plan
+# Transfers between systems, a strict one, the top level, rows and a
+# structural change.
+
+component Position
+  x: Float32
+  y: Float32
+end
+
+component Mass
+  kg: Float32
+end
+
+component Velocity
+  dx: Float32
+  dy: Float32
+end
+
+gpu system move
+  each Position, Velocity, Mass do |pos, vel, m|
+    pos.x += vel.dx * Time.dt * m.kg
+    pos.y += vel.dy * Time.dt
+  end
+end
+
+strict gpu system settle
+  each Position do |pos|
+    pos.x = pos.x * 0.5
+  end
+end
+
+system report
+  each Position do |pos|
+    pos.x += 1.0
+  end
+end
+
+system grow
+  spawn Position(0.0, 0.0), Velocity(1.0, 1.0), Mass(1.0)
+end
+
+1000.times do |i|
+  spawn Position(i, 0.0), Velocity(1.0, 0.5), Mass(1.0)
+end
+
+Time.dt = 0.5
+10.times do
+  World.tick
+  each Mass do |m|
+    m.kg = m.kg + 1.0
+  end
+end

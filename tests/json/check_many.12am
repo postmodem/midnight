@@ -1,0 +1,26 @@
+# json: check
+# Twenty-three errors: twenty shown, and the totals.
+
+puts undefined_1
+puts undefined_2
+puts undefined_3
+puts undefined_4
+puts undefined_5
+puts undefined_6
+puts undefined_7
+puts undefined_8
+puts undefined_9
+puts undefined_10
+puts undefined_11
+puts undefined_12
+puts undefined_13
+puts undefined_14
+puts undefined_15
+puts undefined_16
+puts undefined_17
+puts undefined_18
+puts undefined_19
+puts undefined_20
+puts undefined_21
+puts undefined_22
+puts undefined_23

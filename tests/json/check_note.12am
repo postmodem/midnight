@@ -1,0 +1,24 @@
+# json: check
+# Checker errors: a label, a note, a column after non-ASCII text, and a
+# span over several lines.
+
+component Position
+  x: Float
+end
+
+system move
+  each Postion do |pos|
+    pos.x += 1.0
+  end
+end
+
+names = ["é", "ü"]
+names.each_with_index do |item, item|
+  puts item
+end
+x = "→" + 1
+count = 1
+count = [
+  1,
+  2
+]

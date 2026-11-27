@@ -8,6 +8,7 @@
 //!    |        ^^^^^^^ did you mean `Position`?
 //! ```
 
+use crate::json::{self, Object};
 use crate::source::{SourceMap, Span};
 
 /// At most this many errors are printed.
@@ -103,6 +104,53 @@ pub fn render(sources: &SourceMap, diagnostics: &[Diagnostic], color: bool) -> S
     out
 }
 
+/// Renders the first [`MAX_ERRORS`] diagnostics as JSON lines, one each,
+/// then one `errors` line with the totals when there is any.
+pub fn render_json(sources: &SourceMap, diagnostics: &[Diagnostic]) -> String {
+    let mut out = String::new();
+    for diagnostic in diagnostics.iter().take(MAX_ERRORS) {
+        let mut line = Object::new("error");
+        line.str("message", &diagnostic.message);
+        if let Some(label) = &diagnostic.label {
+            line.str("label", label);
+        }
+        place(&mut line, sources, diagnostic.span);
+        let notes = diagnostic.notes.iter().map(|note| {
+            let mut object = Object::empty();
+            object.str("message", &note.message);
+            place(&mut object, sources, note.span);
+            object.finish()
+        });
+        line.raw("notes", &json::array(notes));
+        out.push_str(&line.line());
+    }
+    if !diagnostics.is_empty() {
+        let mut line = Object::new("errors");
+        line.int("count", diagnostics.len() as i64);
+        line.int("shown", diagnostics.len().min(MAX_ERRORS) as i64);
+        out.push_str(&line.line());
+    }
+    out
+}
+
+/// Adds `file`, `start` and `end` for a span.
+fn place(object: &mut Object, sources: &SourceMap, span: Span) {
+    let file = sources.file(span.file);
+    let position = |offset: u32| {
+        let (line, column) = file.line_col(offset);
+        let mut object = Object::empty();
+        object
+            .int("line", line as i64)
+            .int("column", column as i64)
+            .int("byte", offset as i64);
+        object.finish()
+    };
+    object
+        .str("file", &file.name)
+        .raw("start", &position(span.start))
+        .raw("end", &position(span.end.max(span.start)));
+}
+
 fn excerpt(
     out: &mut String,
     sources: &SourceMap,
@@ -173,6 +221,36 @@ error: unknown component `Postion`
    |        ^^^^^^^ did you mean `Position`?
 ";
         assert_eq!(render(&sources, &[diagnostic], false), expected);
+    }
+
+    #[test]
+    fn renders_json_lines_with_whole_spans_and_totals() {
+        let mut sources = SourceMap::new();
+        let file = sources.add(
+            "a.12am".into(),
+            PathBuf::from("a.12am"),
+            "é = [\n  1\n]\n".into(),
+        );
+        let diagnostic = Diagnostic::new("bad \"list\"", Span::new(file, 5, 12))
+            .label("a\tlabel")
+            .note("here", Span::new(file, 0, 2));
+        let many = vec![diagnostic.clone(); 21];
+        let first = concat!(
+            r#"{"kind":"error","message":"bad \"list\"","label":"a\tlabel","file":"a.12am","#,
+            r#""start":{"line":1,"column":5,"byte":5},"end":{"line":3,"column":2,"byte":12},"#,
+            r#""notes":[{"message":"here","file":"a.12am","start":{"line":1,"column":1,"byte":0},"#,
+            r#""end":{"line":1,"column":2,"byte":2}}]}"#,
+            "\n"
+        );
+        let rendered = render_json(&sources, &many);
+        let lines: Vec<&str> = rendered.split_inclusive('\n').collect();
+        assert_eq!(lines.len(), 21);
+        assert_eq!(lines[0], first);
+        assert_eq!(
+            lines[20],
+            "{\"kind\":\"errors\",\"count\":21,\"shown\":20}\n"
+        );
+        assert_eq!(render_json(&sources, &[]), "");
     }
 
     #[test]

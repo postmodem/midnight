@@ -1,0 +1,9 @@
+# json: check
+# Diagnostics from several files: a raw control character and a non-ASCII
+# character after a backslash in strings, and a file that is not there.
+
+require "parts/escape_control"
+require "parts/escape_accent"
+require "parts/missing"
+
+puts "never built"

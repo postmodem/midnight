@@ -1,0 +1,4 @@
+# json: check
+# A program with no error: the first line and nothing else.
+
+puts "fine"
