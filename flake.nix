@@ -31,11 +31,10 @@
           (lib.fileset.maybeMissing ./tests)
           (lib.fileset.maybeMissing ./examples)
           (lib.fileset.maybeMissing ./bench)
-          (lib.fileset.maybeMissing ./evals/tasks)
         ];
       };
 
-      # What the harness of the evals, its tests and self-test read.
+      # What the harness of the evals and its tests read.
       evalsSrc = lib.fileset.toSource {
         root = ./.;
         fileset = lib.fileset.unions [
@@ -43,8 +42,6 @@
           ./evals/kit
           ./evals/preamble.md
           ./evals/test
-          ./evals/tasks
-          ./tests/fail
         ];
       };
 
@@ -531,8 +528,7 @@
                 bash tests/window/test.sh $TMPDIR/window | tee $out/log
               '';
 
-          # The harness's tests, and self-test with the package as the
-          # compiler.
+          # The harness's tests, with the package as the compiler.
           evals =
             pkgs.runCommand "midnight-eval-tests"
               {
@@ -547,7 +543,6 @@
                 for test in evals/test/test_*.rb; do
                   ruby "$test"
                 done
-                ruby evals/eval.rb self-test
                 touch $out
               '';
 

@@ -115,7 +115,7 @@ class DrawsTest < Minitest::Test
     dir = Eval::Env.mktemp
     task = File.join(dir, "task")
     FileUtils.mkdir_p(task)
-    File.write(File.join(task, "meta"), "areas: draw window\ncontrol: no\nruby: x\ndraws: #{any ? 'any' : 'in'} order\n")
+    File.write(File.join(task, "meta"), "areas: draw window\ndraws: #{any ? 'any' : 'in'} order\n")
     File.write(File.join(task, "expected.out"), "tick 3\n")
     File.write(File.join(task, "expected.draws"), ANSWER)
     File.write(File.join(task, "check.drive"), "tick 3\ndraws\n")
@@ -191,26 +191,12 @@ class DrawsTest < Minitest::Test
     end
   end
 
-  def test_tasks_without_expected_draws_keep_their_hash
-    baseline = File.join(Eval::ROOT, "evals", "results", "2026-11-26-a8f0a5f-baseline.json")
-    if File.exist?(baseline) && thirteen_unchanged?
-      JSON.parse(File.read(baseline))["tasks"].each do |name, t|
-        assert_equal t["sha256"], Eval::Task.new(File.join(Eval::ROOT, "evals", "tasks", name)).sha256, name
-      end
-    end
+  def test_expected_draws_counts_in_a_tasks_hash
     with_task do |task, _, _|
       before = task.sha256
       File.write(task.path("expected.draws"), ANSWER.sub("3 ticks", "4 ticks"))
       refute_equal before, task.sha256
     end
-  end
-
-  # Whether the thirteen tasks' files are as they were at the baseline's
-  # commit (false without git).
-  def thirteen_unchanged?
-    names = %w[countdown crowd fixup league ledger mend orbits paddle pantry sandpile swarm thermostat warren]
-    system("git", "-C", Eval::ROOT, "diff", "--quiet", "a8f0a5f", "--", *names.map { |n| "evals/tasks/#{n}" },
-           out: File::NULL, err: File::NULL)
   end
 
   def results(name) = JSON.parse(File.read(File.join(FIXTURES, name)))

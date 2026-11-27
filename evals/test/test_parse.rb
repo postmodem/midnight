@@ -35,8 +35,8 @@ class ParseTest < Minitest::Test
   end
 
   def test_meta
-    meta = Eval::Task.parse_meta("areas: ecs strings\ncontrol: yes\nruby:\n")
-    assert_equal({ "areas" => "ecs strings", "control" => "yes", "ruby" => "" }, meta)
+    meta = Eval::Task.parse_meta("areas: ecs strings\nminutes:\n")
+    assert_equal({ "areas" => "ecs strings", "minutes" => "" }, meta)
     assert_raises(Eval::Failure) { Eval::Task.parse_meta("no colon\n") }
   end
 

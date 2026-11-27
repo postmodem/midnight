@@ -1,4 +1,0 @@
-areas: draw window
-control: no
-ruby: a picture drawn once and expected to stay, a rectangle placed by its centre, colour or size given first as in other toolkits
-draws: in order

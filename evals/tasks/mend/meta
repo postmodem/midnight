@@ -1,3 +1,0 @@
-areas: repair lists strings
-control: no
-ruby: the given program's own: `tally` (a Hash of counts), `sort_by` with a brace block and an array as the key, `each_slice`, `join`, `format`

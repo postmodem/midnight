@@ -4,7 +4,7 @@ require "minitest/autorun"
 require "json"
 require_relative "../eval"
 
-# What was read, the Ruby-shaped rule, Fisher's test, report and compare.
+# What was read, Fisher's test, report and compare.
 class ReportTest < Minitest::Test
   ROOT = "/tmp/eval.Root0000"
   FIXTURES = File.join(__dir__, "fixtures")
@@ -64,32 +64,6 @@ class ReportTest < Minitest::Test
     assert_empty read(call("Bash", { "command" => "cat ~nobody/language.md ~+/x" }, out))
   end
 
-  def test_ruby_shaped
-    shaped = ->(msg) { Eval::RubyShaped.ruby_shaped?(Eval::Stderr.template(msg), Eval::Stderr.spans(msg)) }
-    assert shaped.("unknown method `insert` for `[Row]`")
-    assert shaped.("unknown method `upcase` for `String`")
-    assert shaped.("unknown method `times` for `Int`")
-    assert shaped.("unknown method `round` for `Float`")
-    assert shaped.("unknown method `tap` for `Team`")
-    refute shaped.("unknown method `frobnicate` for `[Row]`")
-    assert shaped.("unknown function `format`")
-    assert shaped.("unknown variable or function `nil`")
-    assert shaped.("unknown function `Math.cbrt`")
-    assert shaped.("unknown constant `Math::PI`")
-    assert shaped.("unknown constant `Hash`")
-    assert shaped.("unknown type `Symbol`")
-    refute shaped.("unknown constant `Widget`")
-    refute shaped.("expected a component, found `Vec2`")
-    assert shaped.("unknown method `new` for the type `Entity`")
-    refute shaped.("unknown method `spawn` for the type `Entity`")
-  end
-
-  def test_every_template_of_the_rule_is_one_the_compiler_prints
-    printed = Dir.glob(File.join(Eval::ROOT, "tests", "fail", "*.err")).flat_map { |f| File.readlines(f) }
-                 .filter_map { |l| l[/\Aerror: (.*)/, 1] }.map { |m| Eval::Stderr.template(m) }
-    Eval::RubyShaped::TEMPLATES.each { |t| assert_includes printed, t }
-  end
-
   def test_fisher
     assert_in_delta 2.0 / 252, Eval::Stats.fisher(5, 0, 0, 5), 1e-12
     assert_in_delta 1.0, Eval::Stats.fisher(3, 2, 2, 3), 1e-12
@@ -117,13 +91,13 @@ class ReportTest < Minitest::Test
     %w[Pass\ rates Tasks Diagnostics The\ reference\ as\ read Exceptions].each { |h| assert_includes text, "## #{h}" }
     assert_match(/\| `league` \| `haiku` \| 1\/1 \| yes \|/, text)
     assert_match(/\| `sonnet` \| 100\.0% ± 0\.0 \| 3 of 3 \|/, text)
-    assert_match(/`` `…` is a keyword and can't be used as a name `` \| 1 \| 1 \| 1 \| 0 \|  \| on ×1 \|/, text)
+    assert_match(/`` `…` is a keyword and can't be used as a name `` \| 1 \| 1 \| 1 \| 0 \| on ×1 \|/, text)
     assert_match(/\| `language.md` \| Lists \| 3 \|/, text)
     assert_match(/Denied tool calls: 6 in 5 runs/, text)
 
     b = Eval::Report.render(results("results-b.json"))
     assert_match(/\| `league` \| `haiku` \| 0\/1 \| no \|/, b)
-    assert_match(/\| error \| `` unknown method `…` for `…` `` \| 1 \| 1 \| 0 \| 0 \| yes \| insert \/ \[Row\] ×1 \|/, b)
+    assert_match(/\| error \| `` unknown method `…` for `…` `` \| 1 \| 1 \| 0 \| 0 \| insert \/ \[Row\] ×1 \|/, b)
   end
 
   def test_compare

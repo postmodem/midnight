@@ -4,9 +4,9 @@ The evals measure how well agents write Midnight when all they know of it
 is its documentation. Each task is a program to write or to repair. The
 harness gives it to Claude Code in a directory of its own, grades the
 program the agent leaves, and writes a results file and a report: how
-often each model passed, which compiler calls failed and why, which
-mistakes are Ruby-shaped, and which parts of the reference the agents
-read. `specs/0008-evals.md` is the design; this file is how to use it.
+often each model passed, which compiler calls failed and why, and which
+parts of the reference the agents read. They run only when a spec asks
+them a question; see "When the evals run". `specs/0008-evals.md` is the design; this file is how to use it.
 
 ## Running
 
@@ -15,7 +15,7 @@ on the PATH:
 
 ```sh
 nix run .#eval -- run                                   # every task, sonnet and haiku, 5 trials
-nix run .#eval -- run --tasks league,warren --models haiku --trials 1 --label try
+nix run .#eval -- run --tasks NAME,OTHER --models haiku --trials 1 --label try
 nix run .#eval -- run --resume evals/results/DATE-COMMIT.json
 nix run .#eval -- report evals/results/DATE-COMMIT.json
 nix run .#eval -- compare evals/results/A.json evals/results/B.json
@@ -107,9 +107,8 @@ isolate".
    and **verified** (the agent ran exactly the program that was graded).
 4. **Diagnostics and run-time errors**: one row per template (the message
    with each backticked name replaced by `…`), how often it came up, in how
-   many runs, how many of those passed, how often an agent got the same
-   error again, and whether it is Ruby-shaped: the name is one Ruby has
-   in that place and Midnight does not.
+   many runs, how many of those passed, and how often an agent got the
+   same error again.
 5. **The reference as read**: for each section of each documentation
    file, how many runs read any of it.
 6. **Draws**, when a task has the check: per task and model, the runs
@@ -157,7 +156,7 @@ A task is a directory under `evals/tasks/`:
 
 ```
 TASK.md          the task, after the preamble
-meta             areas:, control:, ruby:, minutes:, draws:
+meta             areas:, minutes:, draws:
 solution.12am    the reference solution, never shown to agents
 expected.out     what a correct program prints, in full
 right/*.12am     other correct programs, written differently
@@ -187,20 +186,24 @@ and wording two agents would read differently. Then:
 
 ```sh
 nix run .#eval -- self-test NAME
-nix develop -c cargo test eval_solutions_pass
 ```
 
 and, on the commit that adds the task, one run per model
 (`run --tasks NAME --trials 1 --label NAME`), whose results are committed
-in the next commit. A change to the language that breaks a task's program
-breaks `eval_solutions_pass`, and the task changes with it.
+in the next commit. Nothing else tests a task's programs: run `self-test`
+again before any run made after the language changed.
 
 ## When the evals run
 
-- Before and after a spec that changes the syntax, a diagnostic or the
-  reference, with the same models, effort, kit and trials, and the
-  comparison in the spec's Outcome; 10 trials where a choice of syntax
-  rests on it.
+- Only when a spec asks a question an eval can answer. No spec runs them
+  by default.
+- An idea for an eval starts as a spike: a few sessions on a rough task,
+  read by hand. Only a spike that shows the eval can tell something
+  becomes tasks, trials and an entry in `ledger.md`.
+- There are no tasks now. The thirteen of spec 0008 and the four
+  drawing tasks of spec 0009 were removed after 0009; their files are in
+  the history (`git show 0483b58:evals/tasks`), and `ledger.md` says what
+  each set showed.
 - When a task is added or changed, as above.
 
 ## What a result decides
@@ -248,4 +251,4 @@ nix develop -c bash -c 'for t in evals/test/test_*.rb; do ruby "$t"; done'
 
 They need no network or account: they read recorded transcripts and call
 logs in `evals/test/fixtures/` (ids zeroed) and call the wrapper directly.
-`nix flake check` runs them and `self-test` as `checks.evals`.
+`nix flake check` runs them as `checks.evals`.

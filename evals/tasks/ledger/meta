@@ -1,3 +1,0 @@
-areas: strict gpu
-control: no
-ruby: ** for the growth factor, Math.exp and Math.log, the amounts as 64-bit Float

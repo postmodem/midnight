@@ -1,3 +1,0 @@
-areas: ecs structural
-control: no
-ruby: changes that take effect at once (an eaten rabbit gone before the next fox looks, newborns counted at once)

@@ -1,3 +1,0 @@
-areas: float structs
-control: no
-ruby: format and "%.3f" % x for three decimals, round(3) printed as it is

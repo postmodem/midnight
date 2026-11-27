@@ -1,4 +1,0 @@
-areas: draw window repair
-control: no
-ruby: the given program's own: a rectangle placed by its centre, shapes drawn in the wrong order, the bytes of a colour in another order
-draws: in order

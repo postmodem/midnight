@@ -15,13 +15,6 @@
 //!   print exactly `NAME.loops`, and print nothing to standard error.
 //! - `examples/NAME.12am` + `NAME.out`: as `tests/run`. `examples/bench.12am`
 //!   and `bench/churn.12am` are only compiled.
-//! - `evals/tasks/NAME/`: `eval_solutions_pass` builds `solution.12am` and
-//!   every program of `right/` in both modes; each must exit 0 and print
-//!   exactly `expected.out`, run headless with `check.drive` when the task
-//!   has one, give the `draws` answers of `expected.draws` when it has one
-//!   (as the evals' check compares them), and meet the task's `loops` and
-//!   `systems` files. Every
-//!   program of `wrong/` must fail one of those checks in release mode.
 //!
 //! Every program above runs with `MIDNIGHT_GPU=off`, so GPU systems run
 //! their CPU implementation.
@@ -236,7 +229,7 @@ fn no_display(command: &mut Command) {
 fn drive_file(source: &Path, captures: bool) -> PathBuf {
     static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     let dir = DIR.get_or_init(|| scratch("drives"));
-    let commands = std::fs::read_to_string(beside(source, "drive")).unwrap_or_default();
+    let commands = std::fs::read_to_string(source.with_extension("drive")).unwrap_or_default();
     let kept: String = commands
         .split_inclusive('\n')
         .map(|line| {
@@ -375,13 +368,7 @@ fn build(source: &Path, exe: &Path, mode: Mode) -> Result<(), String> {
 }
 
 fn exe_path(dir: &Path, source: &Path, mode: Mode) -> PathBuf {
-    let stem = match eval_task_of(source) {
-        Some(_) => source
-            .with_extension("")
-            .to_string_lossy()
-            .replace('/', "_"),
-        None => source.file_stem().unwrap().to_string_lossy().into_owned(),
-    };
+    let stem = source.file_stem().unwrap().to_string_lossy();
     dir.join(format!("{stem}-{mode:?}"))
 }
 
@@ -468,7 +455,6 @@ fn example_programs() {
     run_ok_all("examples", &examples());
 }
 
-/// The directories of `evals/tasks` that have a `meta` file, sorted.
 /// Every program of `tests/run` and `examples` with a `NAME.draws` file,
 /// run headless with no device in both build modes, answers its `draws`
 /// commands with exactly the lines of that file. With `UPDATE_EXPECT=1`
@@ -512,442 +498,6 @@ fn draws_match_expected() {
     });
     let _ = std::fs::remove_dir_all(&dir);
     report("runs with draws", jobs.len(), failures);
-}
-
-fn eval_tasks() -> Vec<PathBuf> {
-    let mut tasks: Vec<PathBuf> = std::fs::read_dir("evals/tasks")
-        .into_iter()
-        .flatten()
-        .filter_map(|entry| Some(entry.ok()?.path()))
-        .filter(|path| path.join("meta").is_file())
-        .collect();
-    tasks.sort();
-    tasks
-}
-
-/// The reference solution of every eval task.
-fn eval_solutions() -> Vec<PathBuf> {
-    eval_tasks()
-        .into_iter()
-        .map(|task| task.join("solution.12am"))
-        .filter(|path| path.is_file())
-        .collect()
-}
-
-/// The task directory of a program under `evals/tasks`.
-fn eval_task_of(source: &Path) -> Option<PathBuf> {
-    let rest = source.strip_prefix("evals/tasks").ok()?;
-    let name = rest.components().next()?;
-    Some(Path::new("evals/tasks").join(name))
-}
-
-/// The file beside `source` with `extension`: for a program of an eval
-/// task, the task's `expected.out` for `out` and its `check.drive` for
-/// `drive`.
-fn beside(source: &Path, extension: &str) -> PathBuf {
-    match (eval_task_of(source), extension) {
-        (Some(task), "out") => task.join("expected.out"),
-        (Some(task), "drive") => task.join("check.drive"),
-        _ => source.with_extension(extension),
-    }
-}
-
-/// The lines of a task's `loops` file as `(where, place)`.
-fn task_loops(task: &Path) -> Vec<(String, String)> {
-    let text = std::fs::read_to_string(task.join("loops")).unwrap_or_default();
-    text.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(|line| match line.strip_suffix(" one core") {
-            Some(where_) => (where_.to_string(), "one core".to_string()),
-            None => {
-                let (where_, place) = line.rsplit_once(' ').unwrap_or(("", line));
-                (where_.to_string(), place.to_string())
-            }
-        })
-        .collect()
-}
-
-/// `same_draws` compares what lines draw, not their text.
-#[test]
-fn draws_compare_by_what_they_draw() {
-    let want = "draws: 2 ticks, 320x200, 2 draws\n  Window.background = Color(1, 2, 3, 255)\n  \
-                Draw.rect(1.0, 2.0, 3.0, 4.0, Color(9, 9, 9, 255))\n  \
-                Draw.circle(NaN, 1e+30, -0.0, Color(1, 1, 1, 128))\n";
-    let respelt = "draws: 2 ticks, 320x200, 2 draws\n  Window.background = Color(1, 2, 3, 255)\n  \
-                   Draw.rect(1, 2.00, 3.0, 4.0, Color(9, 9, 9, 255))\n  \
-                   Draw.circle(NaN, 1000000000000000019884624838656.0, -0.0, Color(1, 1, 1, 128))\n";
-    assert!(same_draws(respelt, want, false));
-    let swapped = want.replace("Draw.rect(1.0, 2.0", "Draw.rect(2.0, 1.0");
-    assert!(!same_draws(&swapped, want, false));
-    let zero = want.replace("-0.0, Color", "0.0, Color");
-    assert!(!same_draws(&zero, want, true));
-    let mut lines: Vec<&str> = want.lines().collect();
-    lines.swap(2, 3);
-    let reordered = lines.join("\n") + "\n";
-    assert!(!same_draws(&reordered, want, false));
-    assert!(same_draws(&reordered, want, true));
-    assert!(!same_draws(&want.replace("2 ticks", "3 ticks"), want, true));
-}
-
-/// Whether a task's `meta` says `draws: any order`: the shapes of each of
-/// its `draws` answers are then compared as a set with counts.
-fn task_draws_any_order(task: &Path) -> bool {
-    let text = std::fs::read_to_string(task.join("meta")).unwrap_or_default();
-    text.lines().any(|line| {
-        line.split_once(':')
-            .is_some_and(|(key, value)| key.trim() == "draws" && value.trim() == "any order")
-    })
-}
-
-/// What a line of a `draws` answer draws, as text that two lines share
-/// exactly when they draw the same: the shape, the bits of its numbers as
-/// 32-bit floats, and its colour. A line that is no draw is itself.
-fn draw_key(line: &str) -> String {
-    let line = line.trim();
-    let parsed = (|| {
-        let (head, rest) = line.split_once('(')?;
-        let inner = rest.strip_suffix(')')?;
-        let kind = head.strip_prefix("Draw.")?;
-        let count = match kind {
-            "rect" => 4,
-            "circle" => 3,
-            "line" => 5,
-            "triangle" => 6,
-            _ => return None,
-        };
-        let (numbers, color) = inner.split_once("Color(")?;
-        let numbers: Vec<u32> = numbers
-            .split(',')
-            .map(str::trim)
-            .filter(|n| !n.is_empty())
-            .map(|n| {
-                let value: f32 = n.parse().ok()?;
-                Some(if value.is_nan() {
-                    0x7fc0_0000
-                } else {
-                    value.to_bits()
-                })
-            })
-            .collect::<Option<_>>()?;
-        let bytes = color.strip_suffix(')')?;
-        (numbers.len() == count).then(|| format!("{kind} {numbers:?} {}", bytes.trim()))
-    })();
-    parsed.unwrap_or_else(|| line.to_string())
-}
-
-/// Whether two texts of `draws` answers draw the same, as the evals' check
-/// `draws` compares them: each answer's tick, size and background, and its
-/// shapes in order, or with `any_order` as a set with counts.
-fn same_draws(got: &str, want: &str, any_order: bool) -> bool {
-    let parse = |text: &str| {
-        let mut answers: Vec<(String, Vec<String>)> = Vec::new();
-        for line in text.lines() {
-            if let Some(header) = line.strip_prefix("draws: ") {
-                let frame: Vec<&str> = header.split(", ").take(2).collect();
-                answers.push((frame.join(", "), Vec::new()));
-            } else if let Some((frame, shapes)) = answers.last_mut() {
-                if shapes.is_empty() && line.trim().starts_with("Window.background = ") {
-                    frame.push_str(line.trim());
-                } else {
-                    shapes.push(draw_key(line));
-                }
-            }
-        }
-        if any_order {
-            for (_, shapes) in &mut answers {
-                shapes.sort();
-            }
-        }
-        answers
-    };
-    parse(got) == parse(want)
-}
-
-/// The lines of a task's `systems` file as `(name, each)`, in the order
-/// the systems run, and whether its last line is `others after`: any
-/// other system runs after them.
-fn task_systems(task: &Path) -> (Vec<(String, bool)>, bool) {
-    let text = std::fs::read_to_string(task.join("systems")).unwrap_or_default();
-    let mut lines: Vec<Vec<&str>> = text
-        .lines()
-        .map(|line| line.split_whitespace().collect::<Vec<&str>>())
-        .filter(|words| !words.is_empty())
-        .collect();
-    let others_after = lines
-        .last()
-        .is_some_and(|words| words == &["others", "after"]);
-    if others_after {
-        lines.pop();
-    }
-    let systems = lines
-        .iter()
-        .map(|words| match words.as_slice() {
-            [name] => (name.to_string(), false),
-            [name, "each"] => (name.to_string(), true),
-            _ => panic!(
-                "{}/systems: `{}` is not `NAME [each]`",
-                task.display(),
-                words.join(" ")
-            ),
-        })
-        .collect();
-    (systems, others_after)
-}
-
-/// Why the systems `source` declares are not in the order wanted, or
-/// `None`: the named ones must be declared in their order and, with
-/// `others_after`, before any other. A named system `source` does not
-/// declare is left to `systems_missing`.
-fn systems_out_of_order(
-    source: &Path,
-    wanted: &[(String, bool)],
-    others_after: bool,
-) -> Option<String> {
-    let program = std::fs::read_to_string(source).unwrap_or_default();
-    let order: Vec<&str> = program.lines().filter_map(declared_system).collect();
-    let names: Vec<&str> = wanted
-        .iter()
-        .map(|(name, _)| name.as_str())
-        .filter(|name| order.contains(name))
-        .collect();
-    let named: Vec<&str> = order
-        .iter()
-        .copied()
-        .filter(|n| names.contains(n))
-        .collect();
-    if named != names {
-        return Some(format!("runs {} in that order", named.join(", ")));
-    }
-    let last = names.last().filter(|_| others_after)?;
-    let at = order.iter().position(|n| n == last)?;
-    order[..at]
-        .iter()
-        .find(|n| !names.contains(n))
-        .map(|early| format!("`{early}` runs before `{last}`"))
-}
-
-/// The columns of a line of `midnight loops`, which two or more spaces
-/// separate.
-fn loops_columns(line: &str) -> Vec<&str> {
-    let mut columns = Vec::new();
-    let mut rest = line;
-    while let Some(at) = rest.find("  ") {
-        columns.push(&rest[..at]);
-        rest = rest[at..].trim_start_matches(' ');
-    }
-    columns.push(rest);
-    columns
-}
-
-/// The `loops` lines of a task that what `midnight loops` printed does
-/// not meet: no line has the loop's place as its second column, or one
-/// such line's last column is not the place and does not begin with it
-/// and a colon.
-fn loops_missing(loops: &str, wanted: &[(String, String)]) -> Vec<String> {
-    let rows: Vec<Vec<&str>> = loops.lines().map(loops_columns).collect();
-    wanted
-        .iter()
-        .filter(|(where_, place)| {
-            let mine: Vec<&Vec<&str>> = rows
-                .iter()
-                .filter(|row| row.get(1) == Some(&where_.as_str()))
-                .collect();
-            mine.is_empty()
-                || !mine.iter().all(|row| {
-                    let last = row.last().unwrap();
-                    *last == place || last.starts_with(&format!("{place}:"))
-                })
-        })
-        .map(|(where_, place)| format!("{where_} {place}"))
-        .collect()
-}
-
-/// The name a line declares a system with, after any `strict` and `gpu`.
-fn declared_system(line: &str) -> Option<&str> {
-    let mut words = line.split_whitespace().peekable();
-    if words.peek() == Some(&"strict") {
-        words.next();
-    }
-    if words.peek() == Some(&"gpu") {
-        words.next();
-    }
-    if words.next() != Some("system") {
-        return None;
-    }
-    let name = words.next()?;
-    let end = name
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '?' || c == '!'))
-        .unwrap_or(name.len());
-    let name = &name[..end];
-    name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_')
-        .then_some(name)
-}
-
-/// Whether `body` has `word` with no letter, digit or `_` either side.
-fn has_word(body: &str, word: &str) -> bool {
-    let part = |c: char| c.is_ascii_alphanumeric() || c == '_';
-    body.match_indices(word)
-        .any(|(at, _)| !body[..at].ends_with(part) && !body[at + word.len()..].starts_with(part))
-}
-
-/// The `systems` lines of a task that `source` does not meet: a system it
-/// does not declare, or, with `each`, one with no loop under it in what
-/// `midnight loops` printed and none in a function its body names. A
-/// system's body is the lines from its declaration to the next `end` at
-/// the start of a line.
-fn systems_missing(source: &Path, loops: &str, wanted: &[(String, bool)]) -> Vec<String> {
-    let program = std::fs::read_to_string(source).unwrap_or_default();
-    let lines: Vec<&str> = program.lines().collect();
-    let mut bodies = std::collections::BTreeMap::new();
-    for (i, line) in lines.iter().enumerate() {
-        if let Some(name) = declared_system(line) {
-            let stop = (i + 1..lines.len())
-                .find(|&k| {
-                    lines[k].strip_prefix("end").is_some_and(|rest| {
-                        !rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
-                    })
-                })
-                .unwrap_or(lines.len());
-            bodies.insert(name.to_string(), lines[i + 1..stop].join("\n"));
-        }
-    }
-    let wheres: Vec<&str> = loops
-        .lines()
-        .filter_map(|line| loops_columns(line).get(1).copied())
-        .collect();
-    let functions: Vec<&str> = wheres
-        .iter()
-        .filter_map(|where_| where_.strip_prefix("def "))
-        .collect();
-    wanted
-        .iter()
-        .filter(|(name, each)| {
-            let Some(body) = bodies.get(name) else {
-                return true;
-            };
-            let declarations =
-                ["", "gpu ", "strict ", "strict gpu "].map(|kind| format!("{kind}system {name}"));
-            *each
-                && !wheres
-                    .iter()
-                    .any(|where_| declarations.iter().any(|d| d == where_))
-                && !functions.iter().any(|function| has_word(body, function))
-        })
-        .map(|(name, each)| {
-            if *each {
-                format!("{name} each")
-            } else {
-                name.clone()
-            }
-        })
-        .collect()
-}
-
-/// What `midnight loops` prints for `source`.
-fn loops_of(source: &Path) -> Result<String, String> {
-    let output = midnight()
-        .arg("loops")
-        .arg(source)
-        .output()
-        .expect("run midnight");
-    if output.status.success() {
-        Ok(text(&output.stdout))
-    } else {
-        Err(format!(
-            "{}: `midnight loops` failed\n{}",
-            source.display(),
-            text(&output.stderr)
-        ))
-    }
-}
-
-/// How a program of an eval task does as grading runs it: built in `mode`,
-/// run with no GPU, headless with the task's `check.drive`, standard input
-/// empty; `Ok` with the checks it fails, empty when it passes.
-fn eval_checks(dir: &Path, task: &Path, source: &Path, mode: Mode) -> Result<Vec<String>, String> {
-    let mut failed = Vec::new();
-    let stem = source
-        .with_extension("")
-        .to_string_lossy()
-        .replace('/', "_");
-    let exe = dir.join(format!("{stem}-{mode:?}"));
-    if build(source, &exe, mode).is_err() {
-        failed.push("build".to_string());
-    } else {
-        let run = run_within(&mut on_cpu(&exe, source), RUN_LIMIT);
-        let expected = std::fs::read_to_string(task.join("expected.out"))
-            .map_err(|error| format!("{}: can't read expected.out: {error}", task.display()))?;
-        if run.status != Some(0) || run.stdout != expected {
-            failed.push(format!(
-                "output (status {:?})\n--- expected\n{expected}--- actual\n{}--- stderr\n{}---",
-                run.status, run.stdout, run.stderr
-            ));
-        }
-        if let Ok(want) = std::fs::read_to_string(task.join("expected.draws")) {
-            let got = draws_answers(&run.drive);
-            if !same_draws(&got, &want, task_draws_any_order(task)) {
-                failed.push(format!("draws\n--- expected\n{want}--- actual\n{got}---"));
-            }
-        }
-    }
-    let loops = task_loops(task);
-    let (systems, others_after) = task_systems(task);
-    if !loops.is_empty() || !systems.is_empty() {
-        let printed = loops_of(source).unwrap_or_default();
-        let missing = loops_missing(&printed, &loops);
-        if !missing.is_empty() {
-            failed.push(format!("loops: {}", missing.join(", ")));
-        }
-        let missing = systems_missing(source, &printed, &systems);
-        if !missing.is_empty() {
-            failed.push(format!("systems: {}", missing.join(", ")));
-        }
-        if let Some(why) = systems_out_of_order(source, &systems, others_after) {
-            failed.push(format!("systems: {why}"));
-        }
-    }
-    Ok(failed)
-}
-
-/// Every eval task's reference solution and the programs of its `right/`
-/// pass every check grading makes, in release and debug; every program
-/// of its `wrong/` fails one in release.
-#[test]
-fn eval_solutions_pass() {
-    let tasks = eval_tasks();
-    assert!(!tasks.is_empty(), "no task under evals/tasks");
-    let mut jobs = Vec::new();
-    for task in &tasks {
-        let right = std::iter::once(task.join("solution.12am"))
-            .chain(programs(&task.join("right").to_string_lossy()));
-        for source in right {
-            for mode in MODES {
-                jobs.push((task, source.clone(), mode, true));
-            }
-        }
-        for source in programs(&task.join("wrong").to_string_lossy()) {
-            jobs.push((task, source, Mode::Release, false));
-        }
-    }
-    let dir = scratch("evals");
-    let failures = for_each_parallel(&jobs, |(task, source, mode, passes)| {
-        let failed = eval_checks(&dir, task, source, *mode)?;
-        match (passes, failed.is_empty()) {
-            (true, false) => Err(format!(
-                "{} ({mode:?}) fails {}",
-                source.display(),
-                failed.join("\n")
-            )),
-            (false, true) => Err(format!(
-                "{} ({mode:?}) passes every check",
-                source.display()
-            )),
-            _ => Ok(()),
-        }
-    });
-    let _ = std::fs::remove_dir_all(&dir);
-    report("programs of eval tasks", jobs.len(), failures);
 }
 
 #[test]
@@ -1672,13 +1222,13 @@ fn run_gpu_program(
             source.display()
         ));
     }
-    let out_path = beside(source, "out");
+    let out_path = source.with_extension("out");
     let expected = if stops {
         String::new()
     } else {
         read(&out_path)?
     };
-    let draws_path = beside(source, "draws");
+    let draws_path = source.with_extension("draws");
     let expected_draws = if draws_path.exists() {
         Some(read(&draws_path)?)
     } else {
@@ -1767,7 +1317,6 @@ fn gpu_programs() {
         ("gpu-run", programs("tests/run"), false),
         ("gpu-examples", examples(), false),
         ("gpu-panic", programs("tests/panic"), true),
-        ("gpu-evals", eval_solutions(), false),
     ];
     let mut dirs = Vec::new();
     let mut jobs = Vec::new();
@@ -3354,7 +2903,6 @@ fn split_programs() -> Vec<(PathBuf, bool)> {
         (programs("tests/run"), false),
         (examples(), false),
         (programs("tests/panic"), true),
-        (eval_solutions(), false),
     ] {
         found.extend(
             sources
@@ -3379,7 +2927,7 @@ fn run_with_threads(
     settings: &[&str],
 ) -> Result<(), String> {
     let read = |extension: &str| {
-        let path = beside(source, extension);
+        let path = source.with_extension(extension);
         std::fs::read_to_string(&path).map_err(|error| {
             format!(
                 "{}: can't read {}: {error}",
@@ -3394,7 +2942,7 @@ fn run_with_threads(
         (0, String::new(), RUN_LIMIT)
     };
     let mut expected_stdout = if stops { None } else { Some(read("out")?) };
-    let mut expected_draws = if beside(source, "draws").exists() {
+    let mut expected_draws = if source.with_extension("draws").exists() {
         Some(read("draws")?)
     } else {
         None

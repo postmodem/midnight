@@ -1,8 +1,0 @@
-tick 1: ferry 1 took 1, ferry 2 took 2, 1 left, waiting: 5, 6, 7, 8, 9
-tick 2: ferry 1 took 1, ferry 2 took 2, 1 left, waiting: 9, 10, 11
-tick 3: ferry 1 took 1, ferry 2 took 2, 1 left, waiting: 12, 14
-tick 4: ferry 1 took 1, ferry 2 took 2, 0 left, waiting: 16
-tick 5: ferry 1 took 1, ferry 2 took 1, 0 left, waiting: none
-tick 6: ferry 1 took 1, ferry 2 took 2, 1 left, waiting: 22
-tick 7: ferry 1 took 1, ferry 2 took 0, 0 left, waiting: none
-tick 8: ferry 1 took 1, ferry 2 took 0, 0 left, waiting: none

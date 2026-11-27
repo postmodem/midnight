@@ -1,3 +1,0 @@
-areas: gpu float
-control: no
-ruby: sum and count over the particles inside the GPU block, a resource counter assigned from it

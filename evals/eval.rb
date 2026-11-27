@@ -437,7 +437,6 @@ module Eval
     def read(*parts) = File.read(path(*parts))
     def exist?(*parts) = File.exist?(path(*parts))
     def minutes = (@meta["minutes"] || "15").to_i
-    def control? = @meta["control"] == "yes"
     def areas = @meta.fetch("areas", "").split
     def expected = read("expected.out")
     def drive = exist?("check.drive") ? path("check.drive") : nil
@@ -1690,79 +1689,6 @@ module Eval
     end
   end
 
-  # Names Ruby has where Midnight reported an unknown one.
-  module RubyShaped
-    KEYWORDS = %w[__ENCODING__ __LINE__ __FILE__ BEGIN END alias and begin break case class def
-                  defined? do else elsif end ensure false for if in module next nil not or redo
-                  rescue retry return self super then true undef unless until when while yield].freeze
-
-    SCRIPT = <<~'RUBY'
-      constants = Object.constants.select { |n| Object.const_get(n).is_a?(Module) rescue false }.map(&:to_s)
-      names = {
-        "Array" => Array.public_instance_methods.map(&:to_s),
-        "String" => String.public_instance_methods.map(&:to_s),
-        "Integer" => Integer.public_instance_methods.map(&:to_s),
-        "Float" => Float.public_instance_methods.map(&:to_s),
-        "Object" => Object.public_instance_methods.map(&:to_s),
-        "Class" => Class.public_instance_methods.map(&:to_s),
-        "Kernel" => (Kernel.private_instance_methods + Kernel.public_instance_methods).map(&:to_s),
-        "Math" => Math.singleton_methods.map(&:to_s),
-        "Math::" => Math.constants.map(&:to_s),
-        "constants" => constants
-      }
-      require "json"
-      puts JSON.generate(names.transform_values { |v| v.uniq.sort })
-    RUBY
-
-    module_function
-
-    def names
-      @names ||= begin
-        out = IO.popen([Env.ruby, "--disable-gems", "-e", SCRIPT], &:read)
-        raise Failure, "ruby --disable-gems failed" unless $?.success?
-
-        JSON.parse(out)
-      end
-    end
-
-    def ruby_class(type)
-      if type.start_with?("[") then "Array"
-      elsif type == "String" then "String"
-      elsif type == "Int" then "Integer"
-      elsif type == "Float" then "Float"
-      else "Object"
-      end
-    end
-
-    TEMPLATES = ["unknown method `…` for `…`", "unknown field or method `…` for `…`",
-                 "unknown method `…` for the type `…`", "unknown function `…`",
-                 "unknown variable or function `…`", "unknown constant `…`", "unknown type `…`"].freeze
-
-    # Whether a diagnostic (template and spans) names something Ruby has.
-    def ruby_shaped?(template, spans)
-      n = spans.first.to_s
-      case template
-      when "unknown method `…` for `…`", "unknown field or method `…` for `…`"
-        names[ruby_class(spans[1].to_s)].include?(n)
-      when "unknown method `…` for the type `…`"
-        names["Class"].include?(n)
-      when "unknown function `…`", "unknown variable or function `…`"
-        if n.start_with?("Math.")
-          names["Math"].include?(n.delete_prefix("Math."))
-        else
-          names["Kernel"].include?(n) || KEYWORDS.include?(n)
-        end
-      when "unknown constant `…`", "unknown type `…`"
-        if n.start_with?("Math::")
-          names["Math::"].include?(n.delete_prefix("Math::"))
-        else
-          names["constants"].include?(n)
-        end
-      else false
-      end
-    end
-  end
-
   module Stats
     module_function
 
@@ -1910,10 +1836,10 @@ module Eval
           runs = v.map(&:first).uniq
           spans = v.map { |_, d| d["spans"] }.reject(&:empty?).tally.sort_by { |s, c| [-c, s] }
           [kind, Report.code(tmpl), v.size, runs.size, runs.count { |r| r["outcome"] == "pass" },
-           v.count { |_, d| d["repeated"] }, ruby_mark(kind, v),
+           v.count { |_, d| d["repeated"] },
            spans.first(6).map { |s, c| "#{s.join(' / ')} ×#{c}" }.join(", ")]
         end
-        out << table(%w[Kind Template Count Runs Passed Repeated Ruby-shaped Spans], rows)
+        out << table(%w[Kind Template Count Runs Passed Repeated Spans], rows)
       end
 
       out << "\n## The reference as read\n\n"
@@ -1996,20 +1922,6 @@ module Eval
       out << "- Two numbers exchanged: #{swapped.empty? ? 'none' : swapped.join(', ')}\n"
       out << "- A rectangle placed by its centre: #{centred.empty? ? 'none' : centred.join(', ')}\n"
       out
-    end
-
-    # "yes" when every occurrence of a template is Ruby-shaped, "N of M"
-    # when some are.
-    def ruby_mark(kind, occurrences)
-      return "" unless kind == "error"
-
-      n = occurrences.count do |_, d|
-        d.key?("ruby_shaped") ? d["ruby_shaped"] : RubyShaped.ruby_shaped?(d["template"], d["spans"].to_a)
-      end
-      if n.zero? then ""
-      elsif n == occurrences.size then "yes"
-      else "#{n} of #{occurrences.size}"
-      end
     end
 
     def detail(r)
@@ -2313,9 +2225,7 @@ module Eval
       rec["escapes"] = escapes unless escapes.empty?
       rec["review"] = review unless review.empty?
       rec["calls"] = CallLog.summary(calls)
-      rec["diagnostics"] = CallLog.diagnostics(calls).each do |d|
-        d["ruby_shaped"] = RubyShaped.ruby_shaped?(d["template"], d["spans"]) if d["kind"] == "error"
-      end
+      rec["diagnostics"] = CallLog.diagnostics(calls)
       rec["compiler_bug"] = calls.any? { |c| Stderr.compiler_bug?(c["stderr"]) }
       rec["first_try"] = CallLog.first_try(calls, given_sha)
       rec["verified"] = CallLog.verified(calls, graded["sha256"], graded["program_sha256"])
@@ -2521,7 +2431,7 @@ module Eval
           "files" => kit.map { |dest, source| { "dest" => dest, "source" => source, "sha256" => Digest::SHA256.file(@kit_files[dest]).hexdigest } },
           "sections" => kit.keys.to_h { |dest| [dest, dest.end_with?(".md") ? Kit.sections(File.read(@kit_files[dest])) : [[1, nil]]] }
         },
-        "tasks" => @tasks.to_h { |t| [t.name, { "sha256" => t.sha256, "control" => t.control?, "areas" => t.areas, "ruby" => t.meta["ruby"].to_s }] },
+        "tasks" => @tasks.to_h { |t| [t.name, { "sha256" => t.sha256, "areas" => t.areas }] },
         "runs" => []
       }
     end
@@ -2736,8 +2646,6 @@ module Eval
         check.(!task.programs("right").empty?, "no program in right/")
         check.(!task.programs("wrong").empty?, "no program in wrong/")
         check.(shown_prefix?(task), "the output in TASK.md is not a proper prefix of expected.out")
-        check.(task.control? ? task.meta["ruby"].to_s.empty? : !task.meta["ruby"].to_s.empty?,
-               task.control? ? "a control names Ruby forms" : "names no Ruby form")
         if task.draws? || task.meta.key?("draws")
           ok = task.draws? && ["in order", "any order"].include?(task.meta["draws"])
           check.(ok, "expected.draws and `draws: in order` or `draws: any order` in meta go together")

@@ -1,3 +1,0 @@
-areas: cores ecs
-control: no
-ruby: sum over the walkers, a total kept as total = total + x, counts in a list

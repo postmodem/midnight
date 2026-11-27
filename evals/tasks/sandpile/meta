@@ -1,3 +1,0 @@
-areas: lists
-control: no
-ruby: Array.new with a block, ranges, each_slice, join

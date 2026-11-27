@@ -142,13 +142,15 @@ command that needs it.
   The suite runs programs directly: a shell whose `LD_LIBRARY_PATH` was set
   by something else (some launchers set it to their own ALSA) breaks every
   program linked with SDL 3, so unset it before `cargo test`.
-- The evals run before and after a spec that changes the syntax, a
-  diagnostic or the reference, with the same models, effort, kit and
-  trials (10 trials where a choice of syntax rests on them), and the
-  spec's Outcome has the `compare`. A task added or changed is run once
-  per model on the commit that adds or changes it, and the results are
-  committed in the next commit. Results are committed; transcripts never
-  are.
+- The evals run only when a spec asks a question an eval can answer; no
+  spec runs them by default. An idea for an eval starts as a spike, a
+  few sessions on a rough task read by hand, and becomes tasks, trials
+  and a ledger entry only when the spike shows it can tell something.
+  Runs that compare are made with the same models, effort, kit and
+  trials, and the spec's Outcome has the `compare`. A task added or
+  changed is run once per model on the commit that adds or changes it,
+  and the results are committed in the next commit. Results are
+  committed; transcripts never are.
 - Every eval (a set of tasks and the measure read from them) is
   experimental until `evals/ledger.md` records it useful, and an
   experimental eval decides nothing: it may inform. A spec that runs one
@@ -362,22 +364,11 @@ command that needs it.
 - A program that reads the keyboard or the mouse takes its input from its
   `.drive` file in every mode but `window_input`; `drive_errors` holds
   every command error, in the order they are reported.
-- Evals:
-  - `evals/tasks/NAME/` is a task: `TASK.md`, `meta` (`areas:`,
-    `control:`, `ruby:`, `minutes:`), `solution.12am`, `expected.out`,
-    `right/*.12am` (other correct programs), `wrong/*.12am` (programs
-    grading rejects), and optionally `given/` (files beside `TASK.md`),
-    `check.drive`, `loops` and `systems`. The rules for a task are in
-    "Tasks" in `specs/0008-evals.md`.
-  - `eval_solutions_pass` builds every task's `solution.12am` and `right/`
-    programs, in release and debug, and requires `expected.out` with
-    status 0 and every `loops` and `systems` line; every `wrong/` program
-    must fail a check. A change to the language that breaks a task's
-    program changes the task with it. Solutions with a split loop also
-    run in `thread_programs`, and those with a GPU system in
-    `gpu_programs`.
-  - `checks.evals` runs the harness's tests (`evals/test/test_*.rb`) and
-    `self-test` in the build sandbox, with the packaged compiler.
+- Evals: there are no tasks under `evals/tasks/` now; "Adding a task" in
+  `evals/README.md` says what one is, and `self-test NAME` checks its
+  programs. `checks.evals` runs the harness's tests
+  (`evals/test/test_*.rb`) in the build sandbox, with the packaged
+  compiler.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
   diagnostic and run-time error has a test; keep it that way when the
   language changes.

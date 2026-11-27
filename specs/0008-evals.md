@@ -874,3 +874,39 @@ sessions.
   by `TASK.md` saying the system goes over its entities "with an `each`":
   the first baseline rejected a correct `warren` that went over every
   animal through lists of handles. The spec's rule says so.
+
+### Since: what the evals became
+
+Spec 0009 was the first to run them for a decision, and they were
+reduced at its end.
+
+- **What they showed.** The thirteen ran four times (the baseline, and
+  three times in 0009): 124 or 125 of 130 each time, Sonnet every run,
+  Haiku failing `paddle` in the same way every time. No row ever passed
+  less often than before, so as a regression check they never moved. The
+  four drawing tasks compared two forms of drawing: 80 of 80 against 79
+  of 80, p = 1.000. Pass rates sat at the ceiling; what told the forms
+  apart was the finer measures (first-try compiles 80 of 80 against 68
+  of 80, no compile error against 33), and what found faults was the
+  reviews of the tasks and the audits of the transcripts, not the
+  passes.
+- **What changed.** No spec runs the evals by default: the rule that a
+  spec changing the syntax, a diagnostic or the reference runs them
+  before and after is gone. An eval runs only when a spec asks a
+  question it can answer, and a new eval starts as a spike, a few
+  sessions on a rough task read by hand.
+- **What was removed.** The Ruby-shaped measure: over 390 sessions it
+  flagged one kind of error 4 times, all in runs that passed. With it
+  went the report's Ruby-shaped column, the `ruby_shaped` field of a
+  recorded diagnostic (results already committed keep it), and the
+  `ruby:` and `control:` lines of a task's `meta` with the rule of
+  `self-test` that tied them. The thirteen tasks and the four drawing
+  tasks were removed too, with `eval_solutions_pass` and the runs of
+  their solutions in `thread_programs` and `gpu_programs`; their files
+  are in the history (`git show 0483b58:evals/tasks`). The design above
+  still describes them.
+- **What stays.** The harness, the wrapper, the audit, `report`,
+  `compare`, `grade`, `self-test` and `isolation`, the harness's own test
+  tasks in `evals/test/tasks/`, and the committed results.
+  `evals/ledger.md` has the status of each set of tasks; `evals/README.md`
+  has the rules as they now are.

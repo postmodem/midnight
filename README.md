@@ -572,9 +572,8 @@ alone. Claude Code is given a set of small programs to write or repair,
 each in a directory of its own with the documentation and the compiler
 and nothing else, and a report says how often each model succeeded,
 which diagnostics it met and how it got past them, and which parts of
-the reference it read. A spec that changes the syntax, a diagnostic or
-the reference runs them before and after, and its Outcome compares the
-two. They need the network and a Claude account, so `nix flake check`
+the reference it read. They run only when a spec asks them a question,
+and its Outcome says what they showed. They need the network and a Claude account, so `nix flake check`
 tests only the harness and the tasks' own programs. `evals/README.md`
 says how to run them, read a report and add a task.
 
