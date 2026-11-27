@@ -2003,9 +2003,11 @@ fn gpu_stats_match_plan() {
     ));
 }
 
-/// The programs of `tests/run` that have a `NAME.stats` file.
+/// The programs of `tests/run` and `examples` that have a `NAME.stats` file.
 fn stats_programs() -> Vec<PathBuf> {
-    programs("tests/run")
+    let mut sources = programs("tests/run");
+    sources.extend(programs("examples"));
+    sources
         .into_iter()
         .filter(|source| source.with_extension("stats").exists())
         .collect()
@@ -2019,7 +2021,7 @@ fn gpu_stats_match_expected() {
     let sources = stats_programs();
     assert!(
         !sources.is_empty(),
-        "no program with a .stats file under tests/run of the working directory"
+        "no program with a .stats file under tests/run or examples of the working directory"
     );
     let dir = scratch("gpu-stats-expected");
     let jobs: Vec<(&PathBuf, Mode)> = sources

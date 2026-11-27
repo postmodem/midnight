@@ -191,6 +191,41 @@ pub fn over(a: u8, color: u8, under: u8) -> u8 {
     ((a * c + (255 - a) * d + 127) / 255) as u8
 }
 
+/// An upright rectangle in points, `(x0, x1)` and `(y0, y1)`, that holds
+/// every point `draw` can cover; infinite where a number is.
+fn bounds(draw: &Draw) -> ((f32, f32), (f32, f32)) {
+    let n = draw.n;
+    let span = |values: &[f32], pad: f32| {
+        let low = values.iter().copied().fold(f32::INFINITY, f32::min);
+        let high = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        (low - pad, high + pad)
+    };
+    match draw.shape {
+        Shape::Rect => ((n[0], n[0] + n[2]), (n[1], n[1] + n[3])),
+        Shape::Circle => ((n[0] - n[2], n[0] + n[2]), (n[1] - n[2], n[1] + n[2])),
+        Shape::Line => (span(&[n[0], n[2]], n[4]), span(&[n[1], n[3]], n[4])),
+        Shape::Triangle => (
+            span(&[n[0], n[2], n[4]], 0.0),
+            span(&[n[1], n[3], n[5]], 0.0),
+        ),
+    }
+}
+
+/// The pixels, of `count` of `step` points each, whose centres may lie
+/// from `low` to `high`, with two more on each side.
+fn pixel_span(low: f32, high: f32, step: f32, count: u32) -> std::ops::Range<u32> {
+    if low.is_nan() || high.is_nan() {
+        return 0..0;
+    }
+    let first = ((low / step).floor() as i64)
+        .saturating_sub(2)
+        .clamp(0, i64::from(count));
+    let last = ((high / step).ceil() as i64)
+        .saturating_add(2)
+        .clamp(0, i64::from(count));
+    first as u32..last.max(first) as u32
+}
+
 /// Renders `frame` at `pixel_width` by `pixel_height` pixels.
 pub fn render(frame: &Frame, pixel_width: u32, pixel_height: u32) -> Picture {
     let count = pixel_width as usize * pixel_height as usize;
@@ -199,17 +234,23 @@ pub fn render(frame: &Frame, pixel_width: u32, pixel_height: u32) -> Picture {
     let mut layers = vec![0u32; count];
     let step_x = frame.width as f32 / pixel_width as f32;
     let step_y = frame.height as f32 / pixel_height as f32;
-    for j in 0..pixel_height {
-        let py = (j as f32 + 0.5) * step_y;
-        for i in 0..pixel_width {
-            let px = (i as f32 + 0.5) * step_x;
-            let at = j as usize * pixel_width as usize + i as usize;
-            let pixel = &mut rgba[at * 4..at * 4 + 4];
-            for draw in &frame.draws {
-                let a = draw.color[3];
-                if a == 0 || !covers(draw, px, py) {
+    for draw in &frame.draws {
+        let a = draw.color[3];
+        if a == 0 {
+            continue;
+        }
+        let ((x0, x1), (y0, y1)) = bounds(draw);
+        let columns = pixel_span(x0, x1, step_x, pixel_width);
+        let rows = pixel_span(y0, y1, step_y, pixel_height);
+        for j in rows {
+            let py = (j as f32 + 0.5) * step_y;
+            for i in columns.clone() {
+                let px = (i as f32 + 0.5) * step_x;
+                if !covers(draw, px, py) {
                     continue;
                 }
+                let at = j as usize * pixel_width as usize + i as usize;
+                let pixel = &mut rgba[at * 4..at * 4 + 4];
                 if a == 255 {
                     pixel[..3].copy_from_slice(&draw.color[..3]);
                     layers[at] = 0;
@@ -420,6 +461,66 @@ mod tests {
             let mut with_nan = whole;
             with_nan.n[k] = f32::NAN;
             assert!(at_one(&with_nan).is_empty(), "a NaN at {k}");
+        }
+    }
+
+    #[test]
+    fn a_shape_covers_nothing_outside_the_pixels_render_visits() {
+        let mut shapes = vec![
+            draw(Shape::Rect, &[-1e6, -1e6, 2e6, 2e6]),
+            draw(Shape::Rect, &[f32::NEG_INFINITY, 3.0, f32::INFINITY, 4.0]),
+            draw(Shape::Rect, &[319.75, 199.75, 0.25, 0.25]),
+            draw(Shape::Circle, &[64.0, 64.0, 1e6]),
+            draw(Shape::Circle, &[-0.5, 200.5, 1.0]),
+            draw(Shape::Circle, &[10.0, 10.0, f32::INFINITY]),
+            draw(Shape::Line, &[-1e6, 64.0, 1e6, 64.0, 2.0]),
+            draw(Shape::Line, &[5.0, 5.0, 5.0, 5.0, 9.0]),
+            draw(Shape::Line, &[300.0, 10.0, 20.0, 190.0, 0.5]),
+            draw(Shape::Triangle, &[1e30, 64.0, -10.0, -10.0, -10.0, 200.0]),
+            draw(Shape::Triangle, &[0.0, 0.0, 100.0, 0.0, 0.0, f32::NAN]),
+        ];
+        for k in 0..40u16 {
+            let f = f32::from(k);
+            shapes.push(draw(
+                Shape::Rect,
+                &[f * 7.9 - 3.0, f * 4.7, 0.6 + f * 0.3, 1.0],
+            ));
+            shapes.push(draw(
+                Shape::Circle,
+                &[f * 8.1, 199.0 - f * 5.2, 0.3 + f * 0.1],
+            ));
+            shapes.push(draw(
+                Shape::Line,
+                &[f * 8.0, 0.0, 320.0 - f * 8.0, 200.0, f * 0.05],
+            ));
+            let (x, y) = (f * 7.7 + 0.3, f * 4.9 + 0.1);
+            shapes.push(draw(
+                Shape::Triangle,
+                &[x, y, x + 2.5, y + 0.5, x + 0.75, y + 3.0],
+            ));
+        }
+        for pixels in SCALES.into_iter().chain([(160, 100), (333, 211)]) {
+            for shape in &shapes {
+                let frame = Frame {
+                    width: 320,
+                    height: 200,
+                    background: [0, 0, 0, 255],
+                    draws: vec![*shape],
+                };
+                let picture = render(&frame, pixels.0, pixels.1);
+                let drawn: Vec<(u32, u32)> = (0..pixels.1)
+                    .flat_map(|j| (0..pixels.0).map(move |i| (i, j)))
+                    .filter(|(i, j)| {
+                        let at = (*j * pixels.0 + *i) as usize * 4;
+                        picture.rgba[at..at + 3] != [0, 0, 0]
+                    })
+                    .collect();
+                assert_eq!(
+                    drawn,
+                    covered(shape, (320, 200), pixels),
+                    "{shape:?} at {pixels:?}"
+                );
+            }
         }
     }
 

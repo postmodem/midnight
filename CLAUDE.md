@@ -184,6 +184,13 @@ command that needs it.
 - `examples/NAME.12am` with `NAME.out`: as `tests/run`.
 - Every program above runs with `MIDNIGHT_GPU=off`: GPU systems run their CPU
   implementation, so the suite needs no device and is exact.
+- Drawing: `draws_match_expected` runs every program of `tests/run` and
+  `examples` that has a `NAME.draws` file headless with `MIDNIGHT_GPU=off`
+  and its `NAME.drive`, in both build modes, and requires the answers to
+  its `draws` commands, with `midnight: drive: ` removed, to be exactly
+  that file. `UPDATE_EXPECT=1` rewrites `.draws` files from its release
+  run and no other. A `NAME.frames` file holds the other answers.
+  `thread_programs` requires the same `draws` answers for every setting.
 - A program with a window runs with `MIDNIGHT_WINDOW=headless` and
   `MIDNIGHT_DRIVE` set to its `NAME.drive` file, `capture` lines blanked,
   or to an empty file; the display variables name nothing that can be
@@ -225,9 +232,9 @@ command that needs it.
 - GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe) or
   `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU), the tests
   `gpu_programs`, `gpu_stats_match_plan`, `gpu_stats_match_expected`,
-  `gpu_driver_finds_its_parts`, `gpu_strict_div_sqrt` and `window_frames`
-  also run, on release and debug builds. Without it they do nothing. `checks.gpu` is the
-  software mode in the build sandbox; `apps.gpu-test` is the hardware mode,
+  `gpu_driver_finds_its_parts`, `gpu_strict_div_sqrt`, `window_frames` and
+  `window_drawn` also run, on release and debug builds. Without it they do
+  nothing. `checks.gpu` is the software mode in the build sandbox; `apps.gpu-test` is the hardware mode,
   on the device the Vulkan loader finds, which a `VK_DRIVER_FILES` the
   caller sets chooses.
   - `gpu_programs` runs every program of `tests/run`, `tests/panic` and
@@ -243,14 +250,20 @@ command that needs it.
     system must say the device passed the strict check, and runs with
     `MIDNIGHT_GPU=strict-cpu` too, with and without the threads, which must
     give the same output.
+    The `draws` answers of a program with a `NAME.draws` file must be
+    those: exactly, or, with the line, each number of a shape within the
+    bound. A program with a line `# on the CPU: REASON` runs its blocks
+    that say so on the CPU for exactly that reason and no other
+    (`draw_unfit`, whose block needs more bindings than any device has);
+    `window_drawn` and `window_shown` hold it to the line too.
   - `gpu_stats_match_plan` runs `tests/run/gpu_transfers.12am` with
     `MIDNIGHT_GPU=stats` and requires every tick but the first and the last
     to make the uploads and downloads `midnight plan` lists, and no row
     up or down: its plan has no `rows` line. The last line also counts what
     the code after the loop transfers. It runs again with
     `MIDNIGHT_THREADS=4,small`.
-  - `gpu_stats_match_expected` runs every program of `tests/run` that has
-    a `NAME.stats` file with `MIDNIGHT_GPU=stats` and requires exactly those
+  - `gpu_stats_match_expected` runs every program of `tests/run` and
+    `examples` that has a `NAME.stats` file with `MIDNIGHT_GPU=stats` and requires exactly those
     lines, also with `MIDNIGHT_THREADS=4,small`; with a `NAME.rows.stats`
     file, also with `stats,rows`. The counts are the same on every device
     and for every number of threads. Its programs use tables of 200,000 rows
@@ -275,6 +288,15 @@ command that needs it.
     device. `frames_are_the_colours_painted`, which needs no device, holds
     the CRCs in those files to the colours the programs paint: change it
     with them.
+  - `window_drawn` runs every program of `tests/run` and `examples` whose
+    commands have a `draws` on the line before a `capture`, headless, in
+    both build modes, as given and again after a `scale` of 1.25, 1.5 and
+    2, and requires each such capture to agree with what
+    `tests/render/mod.rs`, the reference renderer, makes of that `draws`
+    answer: every byte equal, but for a pixel under translucent draws,
+    which may differ by one for each of them. The renderer states
+    "Which pixels a shape covers" and "Colour" apart from the shaders and
+    has unit tests of its own.
   - The first three and `window_frames` print the device they ran on. In
     GPU mode `UPDATE_EXPECT=1` rewrites `.stats` and `.frames` files and no
     others.
@@ -307,9 +329,12 @@ command that needs it.
     `resize` or `scale` with a window, the commands from a named pipe: the
     answers and output must be the headless ones, `info` must name
     `wayland`, and a picture of the compositor must hold the last capture's
-    pixels.
+    pixels. It runs the programs of `window_drawn` with no `resize` or
+    `scale` too, each capture held to the reference renderer.
   - `window_keeps_time`: 120 ticks in 1.9 to 2.3 seconds with the output at
     60 Hz, at 144 Hz, and with the window on a workspace that is not shown.
+    A second program, which draws ten thousand shapes a tick, is held to
+    the same.
   - `window_closes` and `window_resized`: a close and a resize by the
     compositor reach the program as the events.
   - `window_input` runs `tests/run/input_events.12am` with a window, not

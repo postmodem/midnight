@@ -3,6 +3,11 @@
 # What is drawn later covers what was drawn earlier: the ground covers the
 # foot of the hill, the roof sits on the house, the cloud lies over the sun.
 #
+# The scene is laid out for a window 200 points high and scaled to the
+# window's height, read every tick: the ground spans the window's width,
+# the sun keeps to its right edge, and resizing the window redraws the
+# scene to fit.
+#
 #   nix run . -- run examples/shapes.12am
 #
 # Run it headless, with its commands, to see its frames as text:
@@ -15,27 +20,34 @@ component Cloud
   speed: Float
 end
 
+# Points for each point of the 200-high layout.
+def unit -> Float
+  Window.height / 200.0
+end
+
 system drift
   each Cloud do |cloud|
-    cloud.x += cloud.speed
-    cloud.x = -60.0 if cloud.x > 320.0
+    cloud.x += cloud.speed * unit
+    cloud.x = -60.0 * unit if cloud.x > Window.width
   end
 end
 
 system sky
-  Draw.circle(250, 50, 24, Color(255, 210, 60))
+  s = unit
+  Draw.circle(Window.width - 70.0 * s, 50 * s, 24 * s, Color(255, 210, 60))
   each Cloud do |cloud|
-    Draw.rect(cloud.x, 40, 60, 18, Color(255, 255, 255, 160))
+    Draw.rect(cloud.x, 40 * s, 60 * s, 18 * s, Color(255, 255, 255, 160))
   end
 end
 
 system land
-  Draw.triangle(-40, 200, 90, 110, 220, 200, Color(60, 130, 70))
-  Draw.rect(0, 170, 320, 30, Color(80, 170, 80))
-  Draw.rect(150, 132, 48, 38, Color(200, 90, 60))
-  Draw.triangle(142, 132, 174, 106, 206, 132, Color(120, 50, 40))
-  Draw.line(40, 168, 90, 70, 1, Color(40, 40, 40))
-  Draw.triangle(90, 70, 102, 58, 108, 80, Color(220, 40, 120))
+  s = unit
+  Draw.triangle(-40 * s, 200 * s, 90 * s, 110 * s, 220 * s, 200 * s, Color(60, 130, 70))
+  Draw.rect(0, 170 * s, Window.width, 30 * s, Color(80, 170, 80))
+  Draw.rect(150 * s, 132 * s, 48 * s, 38 * s, Color(200, 90, 60))
+  Draw.triangle(142 * s, 132 * s, 174 * s, 106 * s, 206 * s, 132 * s, Color(120, 50, 40))
+  Draw.line(40 * s, 168 * s, 90 * s, 70 * s, s, Color(40, 40, 40))
+  Draw.triangle(90 * s, 70 * s, 102 * s, 58 * s, 108 * s, 80 * s, Color(220, 40, 120))
 end
 
 Window.background = Color(120, 180, 230)

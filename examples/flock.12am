@@ -1,0 +1,49 @@
+# 100,000 points swirl around the middle of the window, each pulled toward
+# it and drawn as one pixel coloured by its speed: slow points are blue,
+# fast ones yellow. A GPU system moves them and draws them, so after the
+# first tick, which sends their columns, nothing moves between CPU and GPU
+# memory: the frame is made from the records the GPU system wrote.
+#
+#   nix run . -- run examples/flock.12am
+#
+# Run it headless, with its commands, to see what crosses to the GPU:
+#
+#   MIDNIGHT_GPU=stats MIDNIGHT_WINDOW=headless \
+#     MIDNIGHT_DRIVE=examples/flock.drive nix run . -- run examples/flock.12am
+
+component Point
+  x: Float32
+  y: Float32
+  vx: Float32
+  vy: Float32
+end
+
+gpu system swirl
+  each Point do |p|
+    dx = 320.0 - p.x
+    dy = 200.0 - p.y
+    pull = 0.05 / (dx.abs + dy.abs + 1.0)
+    p.vx += dx * pull
+    p.vy += dy * pull
+    p.x += p.vx
+    p.y += p.vy
+    speed = p.vx.abs + p.vy.abs
+    level = (speed * 55.0).clamp(0.0, 255.0).to_i
+    Draw.rect(p.x, p.y, 1, 1, Color(level, level, 255 - level))
+  end
+end
+
+Window.background = Color(8, 8, 20)
+Window.open("Flock", 640, 400)
+i = 0
+while i < 100000
+  ring = 20.0 + (i % 1000) * 0.18
+  turn = i * 2.39996
+  x = Math.cos(turn) * ring
+  y = Math.sin(turn) * ring
+  v = Math.sqrt(0.05 * ring * ring / (x.abs + y.abs + 1.0))
+  spawn Point(320.0 + x, 200.0 + y, -y / ring * v, x / ring * v)
+  i += 1
+end
+World.run
+puts "closed after #{Time.tick} ticks"
