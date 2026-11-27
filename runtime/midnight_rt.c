@@ -2751,8 +2751,9 @@ static void drive_query(const char *text) {
     int64_t from = 0;
     const char *at = text + 5;
 
-    /* Takes a name that stands as a term (`filter` false) or a filter. */
-    enum { TERMS, AFTER_TERM, FILTER, AFTER_FILTER, DONE } state = TERMS;
+    /* Where the line is: before a term or a filter, after a term, at a
+     * filter's keyword, after a filter. */
+    enum { TERMS, AFTER_TERM, FILTER, AFTER_FILTER } state = TERMS;
     bool in_list = false;
     bool listing_with = false;
     for (;;) {
@@ -2836,11 +2837,9 @@ static void drive_query(const char *text) {
         if (state == AFTER_TERM || state == AFTER_FILTER) {
             if (token.kind == TOKEN_END) break;
             if (token.kind == TOKEN_COMMA) {
-                Token peek_at_text = {TOKEN_END, NULL, 0};
                 const char *peek = at;
-                peek_at_text = next_token(&peek);
-                if (state == AFTER_FILTER &&
-                    peek_at_text.kind != TOKEN_WITH && peek_at_text.kind != TOKEN_WITHOUT) {
+                TokenKind next = next_token(&peek).kind;
+                if (state == AFTER_FILTER && next != TOKEN_WITH && next != TOKEN_WITHOUT) {
                     drive_fail("%s", unreadable);
                 }
                 state = TERMS;
