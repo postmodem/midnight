@@ -34,9 +34,9 @@ system launch
     Tally.upcoming += 1
     m = k % 4
     if k % 2 == 0
-      spawn Look(k, 2 + k % 3), Vel(8 + 3 * m, -1), Pos(6, 150 - 9 * m), Even
+      spawn Look(k, 1 + k % 3), Vel(8 + 3 * m, -1), Pos(8, 150 - 9 * m), Even
     else
-      spawn Vel(8 + 3 * m, -1 - 1), Pos(6, 150 - 9 * m), Look(k, 2 + k % 3)
+      spawn Vel(8 + 3 * m, -1 - 1), Pos(8, 150 - 9 * m), Look(k, 1 + k % 3)
     end
   end
 end

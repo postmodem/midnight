@@ -1,4 +1,4 @@
-draws: 2 ticks, 240x180, 5 draws
+draws: 1 tick, 240x180, 5 draws
   Window.background = Color(20, 24, 36, 255)
   Draw.rect(8.0, 12.0, 224.0, 100.0, Color(40, 70, 130, 255))
   Draw.circle(182.0, 40.0, 18.0, Color(250, 210, 60, 255))

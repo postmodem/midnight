@@ -60,7 +60,7 @@ order above. With `try.drive`, and with the commands it is checked with,
 the first answer of `draws` begins with these two lines:
 
 ```
-midnight: drive: draws: 2 ticks, 240x180, 5 draws
+midnight: drive: draws: 1 tick, 240x180, 5 draws
 midnight: drive:   Window.background = Color(20, 24, 36, 255)
 ```
 

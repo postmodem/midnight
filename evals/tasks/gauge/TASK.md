@@ -21,13 +21,15 @@ program may have other systems, which run after `report`.
 - If the up arrow key was pressed since the previous tick began (it went
   down at least once, however many times), the level goes up by 1.
 - If the down arrow key was pressed since the previous tick began, the
-  level goes down by 1. With both pressed, the two cancel.
+  level goes down by 1. With both pressed, the two cancel and the level
+  does not change, at 0 and 12 too.
 - The level stays between 0 and 12: a change that would take it below 0
   or above 12 leaves it at 0 or 12.
 - A key that stays held does not change the level again in later ticks.
 
 The **marker** is shown in a tick when the space bar is held down when
-the tick begins, and hidden otherwise.
+the tick begins, and hidden otherwise: a tap of the space bar that is
+over before the tick begins does not show it.
 
 **Report.** The program prints `tick T: level L, marker M`, where `T` is
 the tick's number, counting from 1, `L` is the level after this tick's
@@ -40,7 +42,7 @@ covering the earlier ones where they overlap:
 1. **The track**: a rectangle whose top left corner is at `x` = 20, `y` =
    52, 148 points wide and 14 points high, colour (70, 70, 80).
 2. **The bar**, only when `L` is greater than 0: a rectangle whose top
-   left corner is at `x` = 22, `y` = 54, 12 × `L` points wide and 10
+   left corner is at `x` = 22, `y` = 54, 12 * `L` points wide and 10
    points high. Its colour is (230, 70, 50) when `L` is 9 or more, and
    (60, 200, 90) otherwise.
 3. **The limit**: a line from its first end at `x` = 130, `y` = 46 to its
@@ -51,7 +53,7 @@ covering the earlier ones where they overlap:
    (90, 90, 90) when `L` is 0.
 5. **The marker**, only in a tick in which it is shown: a triangle whose
    corners are, in this order, (`E`, 49), (`E` - 5, 40) and (`E` + 5,
-   40), each written `(x, y)`, where `E` = 22 + 12 × `L` is the `x` of
+   40), each written `(x, y)`, where `E` = 22 + 12 * `L` is the `x` of
    the bar's right end. Its colour is (250, 240, 120).
 
 A frame holds those shapes and nothing else: one for each that is in it,

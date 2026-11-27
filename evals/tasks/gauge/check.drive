@@ -37,11 +37,43 @@ tick
 draws
 key ArrowDown
 tick
+key ArrowDown
 key down Space
 tick
 draws
 key up Space
 key ArrowUp
-tick 2
+tick
+key Space
+tick
+draws
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+tick
+key ArrowUp
+key ArrowDown
+key down Space
+tick
 draws
 close

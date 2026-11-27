@@ -11,23 +11,23 @@ window is closed. Positions and sizes are in points: `x` from the left
 edge of the window, `y` down from its top edge. A colour is given as its
 red, green and blue bytes.
 
-Each bubble is an entity. The bubbles are numbered 1, 2, 3, … in the
+Each bubble is an entity. The bubbles are numbered 1, 2, 3, ... in the
 order they appear. The program has three systems, which run once a tick
 in this order: `launch` adds the new bubble, `move` goes over every
 bubble with an `each` and moves it, and `report` prints the tick's line.
 The program may have other systems, which run after `report`.
 
-**Launch.** In ticks 1, 4, 7, 10, … (every tick whose number, counting
+**Launch.** In ticks 1, 4, 7, 10, ... (every tick whose number, counting
 from 1, leaves 1 when divided by 3), bubble `k` appears, where `k` is 1
 in tick 1, 2 in tick 4, and so on. With `m` = `k` mod 4, it appears at
-`x` = 6, `y` = 150 - 9 × `m`, with:
+`x` = 8, `y` = 150 - 9 * `m`, with:
 
-- a radius of 2 + (`k` mod 3);
-- a velocity of `vx` = 8 + 3 × `m` and `vy` = -1 - (`k` mod 2): it moves
+- a radius of 1 + (`k` mod 3);
+- a velocity of `vx` = 8 + 3 * `m` and `vy` = -1 - (`k` mod 2): it moves
   `vx` points right and 1 or 2 points up each tick;
-- the colour (100 + 30 × `m`, 210, 255).
+- the colour (100 + 30 * `m`, 210, 255).
 
-So bubble 1 appears at (6, 141) with a radius of 3, moves 11 right and 2
+So bubble 1 appears at (8, 141) with a radius of 2, moves 11 right and 2
 up each tick, and has the colour (130, 210, 255). A bubble that appears
 in a tick is moved in that tick too.
 
@@ -74,7 +74,7 @@ command `draws`. With `try.drive`, and with the commands it is checked
 with, the first answer of `draws` begins with these two lines:
 
 ```
-midnight: drive: draws: 40 ticks, 288x176, 9 draws
+midnight: drive: draws: 35 ticks, 288x176, 9 draws
 midnight: drive:   Window.background = Color(8, 30, 52, 255)
 ```
 
