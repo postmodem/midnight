@@ -11,7 +11,8 @@
 # "frame" is shown minus headless: the time a frame of those shapes adds
 # to a tick. The device is the one the Vulkan loader finds, which a
 # VK_DRIVER_FILES the caller sets chooses; for Mesa's llvmpipe, set
-# RENDERER=pixman too, so that the compositor draws on the CPU. MIDNIGHT
+# MIDNIGHT_GPU=software and RENDERER=pixman too, so that the programs may
+# use it and the compositor draws on the CPU. MIDNIGHT
 # is the compiler (default: cargo run from the repository).
 
 set -euo pipefail
@@ -47,7 +48,8 @@ for shapes in 0 10000 100000 1000000; do
     fi
     $midnight build "$work/$name.12am" -o "$work/$name"
     if [ -z "$device" ]; then
-      device=$(MIDNIGHT_GPU=info "$work/$name" 2>&1 >/dev/null | sed -n '1s/^midnight: gpu: //p')
+      device=$(MIDNIGHT_GPU=${MIDNIGHT_GPU:+$MIDNIGHT_GPU,}info MIDNIGHT_WINDOW=headless "$work/$name" 2>&1 >/dev/null |
+        sed -n '1s/^midnight: gpu: //p')
     fi
     shown=$(best "$work/$name" "")
     headless=$(best "$work/$name" headless)

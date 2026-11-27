@@ -2834,6 +2834,24 @@ What follows from this:
   one whose systems do. `World.tick` returns without waiting for its own
   frame: a program that times its ticks with `clock` does not measure it.
 
+Measured beside a Ryzen 9 9950X3D, what a frame of 1920 by 1080 pixels
+with shapes of about 16 by 16 pixels, the four kinds in turn, drawn by an
+ordinary `each`, adds to a tick:
+
+| Shapes    | RTX 5090 | Integrated Radeon | `llvmpipe`, 32 threads |
+| --------- | -------- | ----------------- | ---------------------- |
+| none      | 0.15 ms  | 0.19 ms           | 0.87 ms                |
+| 10,000    | 0.15 ms  | 1.3 ms            | 4.9 ms                 |
+| 100,000   | 0.32 ms  | 10 ms             | 39 ms                  |
+| 1,000,000 | 2.1 ms   | 98 ms             | 336 ms                 |
+
+The same shapes drawn by a GPU block with four draw statements, one of
+which each run reaches, cost the RTX 5090 the same, the Radeon about 6%
+more and `llvmpipe` about 65% more: the three records left unused are
+handed to the device too. A million draws in an ordinary `each` take
+about 2 ms of the CPU's time in a tick, whether a frame is made or not.
+`bench/draws.sh` measures these on the machine it runs on.
+
 What follows from this:
 
 - **Draw from the system that has the data.** A draw in an ordinary system
@@ -2841,7 +2859,8 @@ What follows from this:
   back in every tick: `midnight plan` lists the download. The same draw in
   the GPU system moves nothing.
 - **Keep the draw statements of a GPU block few.** Each costs 32 bytes for
-  every entity, reached or not.
+  every entity, reached or not, and some devices spend time on a record
+  that is not used.
 - **Build a GPU block's colours from numbers the compiler can bound.** A
   `Color` built from a number it cannot bound is a store that can fail,
   and makes the block wait as any operation that can fail does: `clamp`
