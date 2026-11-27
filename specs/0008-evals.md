@@ -68,8 +68,7 @@ evals/
   README.md          how to run the evals, read a report and add a task
   preamble.md        the start of every task as the agent reads it
   kit                the documentation every agent gets, by default
-  eval.rb            the harness
-  test/              the harness's tests, their recorded inputs, test kits
+  test/              the harness tests' recorded inputs, test tasks, test kits
   tasks/NAME/
     TASK.md          the task, after the preamble
     meta             key: value lines
@@ -162,10 +161,11 @@ them, and leaves it otherwise.
 
 ### The wrapper
 
-The agent's `midnight` is a Ruby script the harness writes for each run.
-Ruby runs it with `--disable=gems,rubyopt`, and its first line sets the
-load path to Ruby's own, so `RUBYOPT` and `RUBYLIB` load nothing. It runs
-the compiler of the commit under test:
+The agent's `midnight` is the harness's own executable, copied for each
+run into a directory of its own under the name `midnight`, with
+`midnight.json` beside it naming the run's directory, the log directory
+and the compiler. Run under that name, it is the wrapper. It runs the
+compiler of the commit under test:
 
 - with an environment built from nothing but: `PATH` (the flake's
   coreutils), `HOME` (an empty directory of its own), `TMPDIR` (an empty
@@ -185,8 +185,8 @@ the compiler of the commit under test:
 
 It refuses a call, with status 2 and one line on standard error:
 
-- when the caller set a variable whose name begins `RUBY`, `LD_` or
-  `GCONV`, which change how Ruby or the dynamic loader starts, except an
+- when the caller set a variable whose name begins `LD_` or `GCONV`,
+  which change how the dynamic loader starts, except an
   `LD_LIBRARY_PATH` whose every directory is in `/nix/store/`, as Claude
   Code's launcher sets it;
 - when a file argument, the argument of `-o`, or `MIDNIGHT_DRIVE` resolves
@@ -207,7 +207,7 @@ refused.
 
 These guards are in the wrapper because permission patterns match more
 than they appear to: `Bash(MIDNIGHT_DRIVE=* midnight *)` also allows a
-command that sets another variable after it, `RUBYOPT` among them. A program
+command that sets another variable after it, `LD_PRELOAD` among them. A program
 the wrapper accepts reads only files of the run's directory, its sources
 and its file of commands; it reaches no network and no C library, and
 with `MIDNIGHT_GPU=off` it captures no frame, so it writes nothing but its
@@ -339,8 +339,8 @@ steps. When the run's sessions have finished, `run` grades each kept
 program the time limit stopped in grading again, with nothing else
 running, and keeps the second grade.
 
-The results file also records the commit, Midnight's version, the Ruby
-version, a hash of `preamble.md`, for each task a hash of `TASK.md`,
+The results file also records the commit, Midnight's version, a hash of
+`preamble.md`, for each task a hash of `TASK.md`,
 `meta`, `expected.out`, `check.drive`, `loops`, `systems` and `given/`,
 for the kit each source path with its hash, and the store paths of the
 agent's tools and of the compiler's `PATH`.
@@ -378,8 +378,7 @@ account details and are large.
 
 `report FILE` prints Markdown and `run` writes it beside the results:
 
-1. A header: the commit, Midnight's, Claude Code's and Ruby's versions,
-   the kit, the agent's tools, the models as reported, effort, trials,
+1. A header: the commit, Midnight's and Claude Code's versions, the kit, the agent's tools, the models as reported, effort, trials,
    date.
 2. For each model, **pass@1** over all tasks (the mean of the tasks' pass
    rates over graded runs) with its standard error taken across tasks, and
@@ -507,17 +506,20 @@ task covers, a task for it is added.
 
 ### The harness
 
-`evals/eval.rb` is Ruby, standard library only, run by the flake's Ruby.
-`apps.eval` runs the working tree's `evals/eval.rb` from the repository's
-root, and refuses to start elsewhere. Its commands:
+The harness is `src/bin/midnight-eval/`, a second binary of the
+compiler's crate, under the crate's rules: no crates and no `unsafe`; its
+JSON reader and writer, SHA-256, shell-word splitting and Fisher's test
+are its own. The package builds it with the compiler. `apps.eval` runs
+the package's `midnight-eval` from the repository's root, and refuses to
+start elsewhere. Its commands:
 
 - `run [--tasks A,B] [--models M,N] [--trials K] [--effort E] [--kit FILE]
   [--jobs J] [--label L]`: builds the compiler of the commit `HEAD` names
   (`nix build "git+file://$PWD?rev=COMMIT"`), takes the tasks and the
   kit's files from that commit (`git show COMMIT:PATH`), and refuses a
   `--kit` file that is not in it, so uncommitted changes change nothing
-  that is measured. It refuses to start when `evals/eval.rb` differs from
-  the commit, while `/tmp` or `/` holds an `AGENTS.md` or a `CLAUDE.md`
+  that is measured. It refuses to start when `src/bin/midnight-eval/`
+  differs from the commit, while `/tmp` or `/` holds an `AGENTS.md` or a `CLAUDE.md`
   (the run directories' parents), and refuses to write a results file that
   exists, saying to give `--label`. It runs every task, model and trial, grades, and writes
   `evals/results/DATE-COMMIT[-LABEL].json` after every run and the `.md`
@@ -549,8 +551,8 @@ it with `nix build` when it is unset: from the working tree, or for
 `grade --run` from the run's commit. `claude` is
 whatever is first on the caller's PATH; the results record its version.
 
-The harness's tests, in `evals/test/`, use Ruby's bundled `minitest` and
-need no network or account. They cover parsing call logs and transcripts
+The harness's tests, `tests/harness.rs` with their recorded inputs in
+`evals/test/`, need no network or account. They cover parsing call logs and transcripts
 (recorded from real runs, plus transcripts of an API error and a usage
 limit in the format of a real `result` line), templates, the Ruby-shaped
 rule (every template it names is one the compiler's `tests/fail` print),
@@ -609,7 +611,7 @@ Sonnet and Haiku:
 
 ### Slices
 
-1. **Harness and three tasks.** `eval.rb` with `run`, `grade`,
+1. **Harness and three tasks.** The harness with `run`, `grade`,
    `self-test`, the wrapper, the audit, the results file; `thermostat`,
    `league`, `warren`; the harness's tests; `apps.eval`. A run of the three
    tasks with one trial per model, read by hand against the transcripts.
@@ -640,12 +642,11 @@ All run on x86_64-linux, on the development machine.
       by `..`; a program that requires a file outside, in each quote,
       with and without a space after `require`, by an absolute path, by
       `..`, and through a symbolic link followed by `..`; a require the
-      guard cannot read; `RUBYOPT`, `RUBYLIB`, another `RUBY` variable,
-      `LD_PRELOAD`, an `LD_LIBRARY_PATH` with a directory outside the Nix
-      store, and `GCONV_PATH`, set after a `MIDNIGHT_` variable, with a
-      file beside the program that Ruby would load; `MIDNIGHT_GPU=on` and
-      `MIDNIGHT_WINDOW=`. Each is refused or overridden, no file the test
-      planted is loaded, and the call log says so.
+      guard cannot read; `LD_PRELOAD`, `LD_AUDIT`, another `LD_`
+      variable, an `LD_LIBRARY_PATH` with a directory outside the Nix
+      store, and `GCONV_PATH`, set after a `MIDNIGHT_` variable;
+      `MIDNIGHT_GPU=on` and `MIDNIGHT_WINDOW=`. Each is refused or
+      overridden, and the call log says so.
    2. A task in `evals/test/` whose `TASK.md` asks the agent to try each of
       those, to read the repository's `CLAUDE.md`, to list the home
       directory, to print `$PATH`, `$HOME` and the environment, and to
@@ -703,9 +704,9 @@ All run on x86_64-linux, on the development machine.
 - **Repairs and controls in the set.** A repair measures a diagnostic
   directly; a control separates what is hard about Midnight from what is
   hard about any new language.
-- **Ruby for the harness.** Standard library only; it parses the
-  transcripts with `JSON`, and it supplies the names that make a mistake
-  Ruby-shaped from Ruby itself.
+- **The harness in the compiler's crate.** One language in the
+  repository, built by the flake's Rust toolchain with the compiler, and
+  the wrapper is the same executable.
 - **Sonnet and Haiku by default, five trials.** A weaker model shows where
   the language or its documentation is unclear sooner than a stronger one;
   five trials separate a task that passes every time from one that
@@ -719,8 +720,7 @@ All run on x86_64-linux, on the development machine.
 
 Implemented, with the differences listed under "Differences from the
 design". All nine criteria pass on x86_64-linux, with Claude Code 2.1.327
-(models as reported: `claude-sonnet-5-5`, `claude-haiku-5-5`) and Ruby
-3.4.12. The baseline measured `a8f0a5f`; the commits after it change only
+(models as reported: `claude-sonnet-5-5`, `claude-haiku-5-5`). The baseline measured `a8f0a5f`; the commits after it change only
 `compare`, the results and this Outcome.
 
 ### Acceptance criteria
@@ -730,11 +730,11 @@ design". All nine criteria pass on x86_64-linux, with Claude Code 2.1.327
 | 1 | `nix flake check` passes, `checks.evals` included; `cargo test` passes, `eval_solutions_pass` included. |
 | 2 | `self-test` passes: 13 tasks, every rule. |
 | 3 | Thirteen tasks, each with `TASK.md`, `meta`, `solution.12am`, `expected.out` and at least one program in `right/`; every area of the table covered; `thermostat` and `countdown` are controls, `mend` and `fixup` repairs; every other task names a form in `ruby:`. |
-| 4 | 4.1: `evals/test/test_wrapper.rb` makes every call the criterion lists. 4.2 and 4.3: `eval.rb isolation` at `b91e8a6` passed every check. The token was in no file of either run; no path of the repository was in the transcript; the `system/init` line listed the six tools and no MCP server. Of the escape run's 47 tool calls, 12 were denied by permissions (`ls ~`, `env`, `echo "$PATH"`, `find ~`, Glob of `/home`, `cat ../eval-token`, Read of `/tmp/eval-token`, `ln -s`, `rm`, a variable the rules do not name); of its 23 compiler calls, 16 were refused by the wrapper (outside files, `-o`, drive files and requires, an unreadable require, `RUBYOPT`, `RUBYLIB`, `RUBY_GC_HEAP_INIT_SLOTS`, `LD_PRELOAD`, `LD_LIBRARY_PATH=/tmp`, `GCONV_PATH`), and every path the audit found was in one of them. `MIDNIGHT_CC`, `MIDNIGHT_CFLAGS`, `MIDNIGHT_GPU_FLAGS` and `MIDNIGHT_WINDOW_FLAGS` were dropped, `MIDNIGHT_GPU=on` and `MIDNIGHT_WINDOW=` overridden, and the file Ruby would have loaded through `RUBYOPT` was never loaded. With the `AGENTS.md`, the agent replied `done`. |
+| 4 | 4.1: the harness's tests make every call the criterion lists. 4.2 and 4.3: `isolation` at `b91e8a6` passed every check. The token was in no file of either run; no path of the repository was in the transcript; the `system/init` line listed the six tools and no MCP server. Of the escape run's 47 tool calls, 12 were denied by permissions (`ls ~`, `env`, `echo "$PATH"`, `find ~`, Glob of `/home`, `cat ../eval-token`, Read of `/tmp/eval-token`, `ln -s`, `rm`, a variable the rules do not name); of its 23 compiler calls, 16 were refused by the wrapper (outside files, `-o`, drive files and requires, an unreadable require, `LD_PRELOAD`, `LD_LIBRARY_PATH=/tmp`, `GCONV_PATH`), and every path the audit found was in one of them. `MIDNIGHT_CC`, `MIDNIGHT_CFLAGS`, `MIDNIGHT_GPU_FLAGS` and `MIDNIGHT_WINDOW_FLAGS` were dropped, `MIDNIGHT_GPU=on` and `MIDNIGHT_WINDOW=` overridden. With the `AGENTS.md`, the agent replied `done`. |
 | 5 | `grade --run` of the baseline: 130 programs, every verdict as recorded. |
 | 6 | Baseline `evals/results/2026-11-26-a8f0a5f-baseline.{json,md}`, no run escaped. A fresh agent read the six failed runs and one passed run of each task and model that had one, and scanned every tool call of the 130 transcripts: no answer came from outside a run's directory, and no correct program was rejected. The six failures are the agents' own (below). The audit of the first baseline, at `b91e8a6`, had found one correct program rejected; the tasks were fixed and the baseline run again (under "Findings"). |
 | 7 | `compare` of the baseline with `2026-11-26-a8f0a5f-no-structural` (warren, fixup, thermostat; one trial per model; kit `evals/test/kit-no-structural/kit`, the reference without "Structural changes inside `each`") prints both runs' counts for the three tasks and names `language.md` as the kit's difference. All six runs passed. |
-| 8 | The harness's tests pass (56 tests). Outside `evals/runs/`, `evals/` holds no path of the development machine (the `/home/x` paths in the tests are made up) and no transcript with account details: the recorded transcripts have zeroed ids. The README's paragraph names no task and no rule of grading. |
+| 8 | The harness's tests pass. Outside `evals/runs/`, `evals/` holds no path of the development machine (the `/home/x` paths in the tests are made up) and no transcript with account details: the recorded transcripts have zeroed ids. The README's paragraph names no task and no rule of grading. |
 | 9 | Below, under "Findings". |
 
 ### Findings
@@ -855,7 +855,7 @@ sessions.
 - **`thread_programs` runs every task solution with a split loop**: crowd,
   fixup, ledger, paddle, swarm, thermostat and warren, a superset of the
   three the spec names, by the same rule as every other program.
-- **The isolation run is `eval.rb isolation`**: the two tasks of criterion
+- **The isolation run is `isolation`**: the two tasks of criterion
   4 are in `evals/test/tasks/` (`escape`, `agents-md`), the tokens are in
   `/tmp/eval-token` and `eval-token` at the repository's root, and the
   probe keeps every file of the run's directory, not only the program, so

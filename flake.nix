@@ -1,5 +1,5 @@
 {
-  description = "Midnight: a compiled, Ruby-flavored language built around entities, components and systems";
+  description = "Midnight: a compiled language for games and simulations, built around entities, components and systems";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
@@ -19,29 +19,31 @@
 
       version = (lib.importTOML ./Cargo.toml).package.version;
 
-      # Everything the compiler and its tests read.
+      # Everything the compiler, the evals' harness and their tests read.
+      crateFiles = lib.fileset.unions [
+        ./Cargo.toml
+        ./Cargo.lock
+        ./src
+        ./runtime
+        ./docs/language.md
+        (lib.fileset.maybeMissing ./tests)
+        (lib.fileset.maybeMissing ./examples)
+        (lib.fileset.maybeMissing ./bench)
+      ];
+
       src = lib.fileset.toSource {
         root = ./.;
-        fileset = lib.fileset.unions [
-          ./Cargo.toml
-          ./Cargo.lock
-          ./src
-          ./runtime
-          ./docs/language.md
-          (lib.fileset.maybeMissing ./tests)
-          (lib.fileset.maybeMissing ./examples)
-          (lib.fileset.maybeMissing ./bench)
-        ];
+        fileset = crateFiles;
       };
 
-      # What the harness of the evals and its tests read.
+      # The crate with what the harness's tests read: their recorded inputs
+      # and the committed results.
       evalsSrc = lib.fileset.toSource {
         root = ./.;
         fileset = lib.fileset.unions [
-          ./evals/eval.rb
-          ./evals/kit
-          ./evals/preamble.md
+          crateFiles
           ./evals/test
+          (lib.fileset.maybeMissing ./evals/results)
         ];
       };
 
@@ -86,6 +88,12 @@
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
           nativeCheckInputs = [ pkgs.clang ];
+          # The unit tests and the suite; checks.evals runs the harness's.
+          cargoTestFlags = [
+            "--bins"
+            "--test"
+            "suite"
+          ];
           # The nixpkgs compiler wrapper adds hardening flags of its own;
           # generated programs are built with the flags midnight passes and
           # no others.
@@ -265,19 +273,17 @@
           '';
         };
 
-      # evals/eval.rb, run from the repository's root with the tools it
-      # hands on to agents and to the compiler.
+      # The package's midnight-eval, run from the repository's root with
+      # the tools it hands on to agents and to the compiler.
       evalFor =
         pkgs:
         pkgs.writeShellApplication {
           name = "midnight-eval";
           runtimeInputs = [
-            pkgs.ruby_3_4
             pkgs.git
             pkgs.coreutils
           ];
           runtimeEnv = {
-            EVAL_RUBY = lib.getExe pkgs.ruby_3_4;
             EVAL_COREUTILS = "${pkgs.coreutils}/bin";
             EVAL_AGENT_TOOLS = lib.makeBinPath [
               pkgs.coreutils
@@ -289,12 +295,12 @@
             ];
           };
           text = ''
-            if [ ! -f evals/eval.rb ] || [ ! -f flake.nix ] ||
+            if [ ! -f evals/kit ] || [ ! -f flake.nix ] ||
               [ "$(git rev-parse --show-toplevel 2>/dev/null)" != "$PWD" ]; then
               echo "midnight-eval: run it from the root of the midnight repository" >&2
               exit 2
             fi
-            exec ruby evals/eval.rb "$@"
+            exec ${lib.getExe' (midnightFor pkgs) "midnight-eval"} "$@"
           '';
         };
 
@@ -418,7 +424,6 @@
               pkgs.rust-analyzer
               pkgs.clang
               pkgs.nixfmt
-              pkgs.ruby_3_4
             ];
             MIDNIGHT_CC = lib.getExe' pkgs.clang "clang";
             MIDNIGHT_GPU_FLAGS = gpuFlagsFor pkgs;
@@ -528,23 +533,23 @@
                 bash tests/window/test.sh $TMPDIR/window | tee $out/log
               '';
 
-          # The harness's tests, with the package as the compiler.
-          evals =
-            pkgs.runCommand "midnight-eval-tests"
-              {
-                nativeBuildInputs = [ pkgs.ruby_3_4 ];
-                MIDNIGHT_BIN = lib.getExe midnight;
-                EVAL_RUBY = lib.getExe pkgs.ruby_3_4;
-                EVAL_COREUTILS = "${pkgs.coreutils}/bin";
-              }
-              ''
-                export HOME=$TMPDIR
-                cd ${evalsSrc}
-                for test in evals/test/test_*.rb; do
-                  ruby "$test"
-                done
-                touch $out
-              '';
+          # The harness's tests, tests/harness.rs, with the package as the
+          # compiler where they need one.
+          evals = midnight.overrideAttrs {
+            pname = "midnight-eval-tests";
+            src = evalsSrc;
+            MIDNIGHT_BIN = lib.getExe midnight;
+            EVAL_COREUTILS = "${pkgs.coreutils}/bin";
+            buildPhase = ''
+              export HOME=$TMPDIR
+              cargo test --offline --release --test harness
+            '';
+            doCheck = false;
+            installPhase = ''
+              touch $out
+            '';
+            postInstall = "";
+          };
 
           # The suite's ThreadSanitizer tests.
           tsan =

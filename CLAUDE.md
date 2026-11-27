@@ -11,8 +11,9 @@ window shows it through SDL 3, takes the keyboard and the mouse from it,
 and draws its frames on the same device, or runs headless. Any program
 can be driven by commands, which let it run a tick at a time and print
 its entities and resources between ticks, and the compiler and programs
-write JSON lines when asked. `evals/` measures how well agents write it from its
-documentation alone. `README.md` has the overview.
+write JSON lines when asked. `evals/` measures how well agents write it
+from its documentation alone; its harness is `src/bin/midnight-eval/`, a
+second binary of the crate. `README.md` has the overview.
 
 ## What defines what
 
@@ -61,7 +62,8 @@ documentation alone. `README.md` has the overview.
 Nothing is installed outside the flake. From the repository root:
 
 ```sh
-nix develop -c cargo test                  # unit tests and every test program, both build modes
+nix develop -c cargo test                  # unit tests and every test program, both build modes; the evals' harness
+nix develop -c cargo test --test harness   # the evals' harness alone
 nix develop -c cargo clippy --all-targets -- -D warnings
 nix develop -c cargo fmt
 nix develop -c cargo run -- run FILE.12am  # also: build, check, emit-c; add --debug
@@ -102,7 +104,7 @@ command that needs it.
 
 - No crates. The lexer, parser, diagnostics and argument parsing are written
   by hand, and `Cargo.lock` lists one package.
-- No `unsafe` in the compiler.
+- No `unsafe` in the compiler or the evals' harness.
 - `midnight_rt.c` is C11 with libc and libm only, and defines
   `_POSIX_C_SOURCE` for `getline`, with which every program reads the
   commands of `MIDNIGHT_DRIVE`; where it is built with
@@ -418,9 +420,10 @@ command that needs it.
   every command error, in the order they are reported.
 - Evals: there are no tasks under `evals/tasks/` now; "Adding a task" in
   `evals/README.md` says what one is, and `self-test NAME` checks its
-  programs. `checks.evals` runs the harness's tests
-  (`evals/test/test_*.rb`) in the build sandbox, with the packaged
-  compiler.
+  programs. The harness's tests are `tests/harness.rs` and
+  `tests/harness/`, their recorded inputs `evals/test/`; `cargo test`
+  runs them, and `checks.evals` runs them in the build sandbox with the
+  packaged compiler. The package's own check leaves them out.
 - `tests/COVERAGE.md` maps the reference to the tests. Every construct,
   diagnostic and run-time error has a test; keep it that way when the
   language changes.

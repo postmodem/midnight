@@ -49,8 +49,9 @@ tests/window/   compositor.sh, test.sh; smoke.c, a window from SDL 3 and
                 wgpu-native on its own; input.c, a keyboard and a pointer
                 for a headless compositor
 bench/          the benchmarks and their programs; see bench/README.md
-evals/          the evals: eval.rb, the harness; results/, committed runs
-                and reports; see evals/README.md
+evals/          the evals: tasks, kit, results/, committed runs and
+                reports; the harness is src/bin/midnight-eval/; see
+                evals/README.md
 specs/          one spec per change
 ```
 

@@ -723,7 +723,7 @@ World.run
   `.draws`, in the renamed programs of `pantry` and `league`, and in
   each drawing task's `solution.12am`, `right/`, `wrong/` and, for
   `retouch`, the given program. Every other file is the same bytes on
-  both, among them `evals/eval.rb`, `evals/preamble.md`, `evals/kit`,
+  both, among them the evals' harness, `evals/preamble.md`, `evals/kit`,
   `flake.nix`, `flake.lock`, `Cargo.toml`'s version, and each drawing
   task's `TASK.md`, `meta`, `expected.out`, `expected.draws`,
   `check.drive`, `systems` and given commands. `git diff --stat` of the

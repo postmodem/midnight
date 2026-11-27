@@ -524,7 +524,7 @@ implementation serves both forms: the two values ±7.038531e-26 print as
 - `src/driver.rs`: each of its messages keeps its parts apart (a C
   compiler failure its status, output and kept file).
 - `src/emit`: the formatters, the tables and the version.
-- `evals/eval.rb`: the wrapper passes `MIDNIGHT_FORMAT` and knows that
+- `src/bin/midnight-eval/`: the wrapper passes `MIDNIGHT_FORMAT` and knows that
   `--format` takes a value; no eval runs in this spec, and
   `checks.evals` is otherwise unaffected.
 

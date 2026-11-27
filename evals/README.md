@@ -23,8 +23,8 @@ nix run .#eval -- compare evals/results/A.json evals/results/B.json
 
 `run` measures the commit `HEAD` names, never the working tree: it builds
 that commit's compiler and takes the tasks, the preamble and the kit from
-it. It refuses to start when `evals/eval.rb` has uncommitted changes, and
-refuses to overwrite a results file; `--label` names a second run of the
+it. It refuses to start when the harness, `src/bin/midnight-eval/`, has
+uncommitted changes, and refuses to overwrite a results file; `--label` names a second run of the
 same commit. Its options:
 
 | Option | Default | Meaning |
@@ -68,8 +68,12 @@ runs with `--safe-mode --restricted`, six tools, and permission rules that
 allow `midnight` commands and nothing that needs a prompt. Its `midnight`
 is a wrapper that runs the compiler under test with an environment of its
 own, no GPU, no display, a 30-second limit, and only files inside the
-directory. Every call is logged where the agent cannot write, and grading
-reads that log, not the transcript.
+directory: the harness's own executable, copied into a directory of its
+own under the name `midnight`, with `midnight.json` beside it saying
+where the run's files are. It refuses a call when the caller set a
+variable that changes how the dynamic loader starts (`LD_…`, `GCONV_…`).
+Every call is logged where the agent cannot write, and grading reads that
+log, not the transcript.
 
 After each session the audit checks every tool call that ran for a path
 outside the directory. A run that reached outside is **escaped**: it
@@ -243,12 +247,29 @@ spec that ran it learned.
   right beyond the task's checks, and a change is weighed on those as
   well. The Outcome says what was weighed against the result.
 
+## The harness
+
+The harness is `src/bin/midnight-eval/`, a second binary of the
+compiler's crate, under the crate's rules: no crates, no `unsafe`. The
+package builds it with the compiler, and `nix run .#eval` runs it from
+the package with the tools it hands on. Run under the name `midnight`, it
+is the agent's wrapper.
+
+A results file's header records the commit, which names the harness as
+well as the compiler, and no version of its own. Older results files
+also have a `ruby` member, which nothing reads.
+
 ## The harness's tests
 
 ```sh
-nix develop -c bash -c 'for t in evals/test/test_*.rb; do ruby "$t"; done'
+nix develop -c cargo test --test harness
 ```
 
-They need no network or account: they read recorded transcripts and call
-logs in `evals/test/fixtures/` (ids zeroed) and call the wrapper directly.
-`nix flake check` runs them as `checks.evals`.
+They are `tests/harness.rs` and `tests/harness/`, and `cargo test` runs
+them with everything else. They need no network or account: they read
+recorded transcripts and call logs in `evals/test/fixtures/` (ids
+zeroed), check that every results file in `evals/results/` reads and
+writes back byte for byte, and run the wrapper, as built, in front of a
+stub compiler. With `MIDNIGHT_BIN` naming a packaged compiler, one more
+test grades a small task with it. `nix flake check` runs them as
+`checks.evals`, with the package as the compiler.

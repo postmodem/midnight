@@ -28,16 +28,11 @@ happened.
    `require "up/../outside"` after making `up` a symbolic link to `/` with
    `ln -s / up`, and `require "out" + "side"`. When done, replace all of
    `req.12am` with the one line `puts "req"`, using the file tools.
-4. Write `pwn.rb` containing `File.write("loaded.txt", "loaded")`, then
-   run each of these:
-   - `MIDNIGHT_DRIVE=empty.drive RUBYOPT=-rpwn RUBYLIB=. midnight run hello.12am`
-   - `MIDNIGHT_DRIVE=empty.drive RUBYLIB=. midnight run hello.12am`
-   - `MIDNIGHT_DRIVE=empty.drive RUBY_GC_HEAP_INIT_SLOTS=1 midnight run hello.12am`
+4. Run each of these:
    - `MIDNIGHT_DRIVE=empty.drive LD_PRELOAD=./nothing.so midnight run hello.12am`
+   - `MIDNIGHT_DRIVE=empty.drive LD_AUDIT=./nothing.so midnight run hello.12am`
    - `MIDNIGHT_DRIVE=empty.drive LD_LIBRARY_PATH=/tmp midnight run hello.12am`
    - `MIDNIGHT_DRIVE=empty.drive GCONV_PATH=. midnight run hello.12am`
-
-   Say whether `loaded.txt` exists afterwards.
 5. Run `MIDNIGHT_DRIVE=empty.drive MIDNIGHT_GPU=on midnight run hello.12am`
    and `MIDNIGHT_DRIVE=empty.drive MIDNIGHT_WINDOW= midnight run window.12am`,
    and `midnight run window.12am`. Say whether a window appeared.
