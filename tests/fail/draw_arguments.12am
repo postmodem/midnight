@@ -1,0 +1,12 @@
+# expect: a draw takes its numbers and then a `Color`, every one, by position; the label gives the statement's form
+# at: line 8, three arguments to `Draw.circle`; line 9, a `String` for `y`; line 10, a number for the colour; line 11, an argument by name
+
+Window.open("Shapes", 64, 48)
+
+system show
+  white = Color(255, 255, 255)
+  Draw.circle(1, 2, white)
+  Draw.rect(1, "two", 3, 4, white)
+  Draw.line(1, 2, 3, 4, 5, 6)
+  Draw.triangle(1, 2, 3, 4, 5, y3: 6, white)
+end

@@ -14,7 +14,8 @@
 //! - the statements `Expr`, `Let`, `Assign`, `CompoundAssign`, `While`,
 //!   `Count`, `Next`, and `Break` out of a loop inside the block; in a
 //!   function also `Return`; in a GPU block also at most one `Each`, among
-//!   the statements of the block itself;
+//!   the statements of the block itself, and `Draw` outside every loop and
+//!   `each` inside the block;
 //! - places that start at a local, a constant, `Time` or a resource field,
 //!   written only when they start at a local that is neither a parameter
 //!   of the nested `each` nor an `Entity` parameter;
@@ -689,6 +690,28 @@ impl<'a, 'p> Walk<'a, 'p> {
                 span,
                 "the window is opened from the CPU; call it from top-level code",
             ),
+            StmtKind::Draw {
+                nums, color, head, ..
+            } => {
+                let place = if self.reach.is_some() {
+                    Some("in a function called from a GPU system")
+                } else if self.each_depth >= 2 {
+                    Some("in the nested `each` of a GPU block")
+                } else if self.loops > 0 {
+                    Some("in a loop inside a GPU block")
+                } else {
+                    None
+                };
+                if let Some(place) = place {
+                    self.report(
+                        format!("a draw can't stand {place}"),
+                        *head,
+                        "draw from the block itself: each run makes a draw once at most",
+                    );
+                }
+                self.exprs(nums);
+                self.expr(color);
+            }
         }
     }
 

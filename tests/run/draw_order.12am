@@ -1,0 +1,35 @@
+# Draws are listed in the order they are made: the draws of top-level code
+# between two ticks first, then the systems in source order, the
+# statements of a system in theirs. A draw is made once its arguments are
+# evaluated, so what a function called for an argument draws comes first.
+# A frame holds what was drawn since the frame before, and nothing of it.
+
+resource Step
+  n: Int = 0
+end
+
+def marked(x: Float) -> Float
+  Draw.circle(x, 0, 1, Color(1, 1, 1))
+  puts "marked #{x}"
+  x * 2
+end
+
+system first
+  Step.n += 1
+  Draw.rect(1, 1, 1, 1, Color(10, 0, 0))
+  Draw.rect(2, 2, 2, 2, Color(20, 0, 0))
+end
+
+system second
+  Draw.rect(marked(3), 0, 4, 4, Color(30, 0, 0))
+  Draw.triangle(0, 0, 1, 0, 0, Step.n, Color(40, 0, 0)) if Step.n < 3
+end
+
+Window.open("Order", 64, 48)
+Draw.line(0, 0, 9, 9, 1, Color(0, 9, 0))
+World.tick
+Draw.line(0, 0, 8, 8, 1, Color(0, 8, 0))
+Draw.line(0, 0, 7, 7, 1, Color(0, 7, 0))
+World.tick
+World.tick
+puts "after #{Time.tick} ticks"

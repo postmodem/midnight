@@ -34,6 +34,21 @@ fn is_loop(expr: &ast::Expr) -> bool {
     matches!(expr.kind, ast::ExprKind::Member { block: Some(_), .. })
 }
 
+/// The receiver, member and arguments of `Draw.name(…)`.
+fn draw_form(expr: &ast::Expr) -> Option<(&ast::Expr, &ast::Ident, &[ast::Arg])> {
+    match &expr.kind {
+        ast::ExprKind::Member {
+            recv,
+            name,
+            args: Some(args),
+            block: None,
+        } if matches!(&recv.kind, ast::ExprKind::Const(owner) if owner == "Draw") => {
+            Some((recv, name, args))
+        }
+        _ => None,
+    }
+}
+
 /// The arguments of `Window.open(…)` written as a statement.
 fn window_open(expr: &ast::Expr) -> Option<&[ast::Arg]> {
     match &expr.kind {
@@ -96,6 +111,7 @@ impl Checker<'_> {
                 && let ast::StmtKind::Expr(e) = &stmt.kind
                 && !is_loop(e)
                 && window_open(e).is_none()
+                && draw_form(e).is_none()
             {
                 match self.expr(e, mode, expected) {
                     None => tail = Tail::Poison,
@@ -119,6 +135,9 @@ impl Checker<'_> {
         let span = stmt.span;
         let kind = match &stmt.kind {
             ast::StmtKind::Expr(e) => match (&e.kind, window_open(e)) {
+                _ if let Some((recv, name, args)) = draw_form(e) => {
+                    self.draw(recv, name, args, e.span)?
+                }
                 (_, Some(args)) => self.window_open(args, e.span)?,
                 (
                     ast::ExprKind::Member {
@@ -470,6 +489,7 @@ impl Checker<'_> {
 
     /// `Window.open(title, width, height)`.
     fn window_open(&mut self, args: &[ast::Arg], span: Span) -> Option<StmtKind> {
+        self.opens_window = true;
         if self.cx.query_eaches > 0 && !self.cx.gpu {
             self.err_label(
                 "`Window.open` is not allowed inside an `each`",
@@ -496,6 +516,127 @@ impl Checker<'_> {
             width: values.next()?,
             height: values.next()?,
         })
+    }
+
+    /// `Draw.rect(…)` and the other shapes, written as a statement.
+    fn draw(
+        &mut self,
+        recv: &ast::Expr,
+        name: &ast::Ident,
+        args: &[ast::Arg],
+        span: Span,
+    ) -> Option<StmtKind> {
+        let Some(shape) = tir::Shape::ALL
+            .into_iter()
+            .find(|shape| shape.name() == name.name)
+        else {
+            self.draw_unknown(name);
+            for arg in args {
+                self.probe(&arg.value);
+            }
+            return None;
+        };
+        let head = recv.span.to(name.span);
+        if self
+            .first_draw
+            .is_none_or(|(first, _)| (head.file.0, head.start) < (first.file.0, first.start))
+        {
+            self.first_draw = Some((head, shape));
+        }
+        let statement = format!("Draw.{}", shape.name());
+        let form = format!("`{}`", shape.form());
+        for arg in args {
+            if let Some(keyword) = &arg.name {
+                self.err_label(
+                    format!("`{statement}` takes no arguments by name"),
+                    keyword.span,
+                    format!("its arguments go by position: {form}"),
+                );
+            }
+        }
+        let color = match self.global("Color") {
+            Some(Global::Record(id)) => Type::Record(id),
+            _ => unreachable!("a program that names `Draw` has the built-in `Color`"),
+        };
+        let values: Vec<Option<tir::Expr>> = args
+            .iter()
+            .map(|arg| self.value(&arg.value, None))
+            .collect();
+        if let Some(Some(first)) = values.first()
+            && first.ty == color
+        {
+            self.err_label(
+                format!("`{statement}` takes its colour last"),
+                first.span,
+                format!("write {form}"),
+            );
+            return None;
+        }
+        let want = shape.params().len() + 1;
+        if args.len() != want {
+            self.err_label(
+                format!(
+                    "`{statement}` takes {}, but {}",
+                    util::count(want, "argument"),
+                    util::were_given(args.len())
+                ),
+                span,
+                form,
+            );
+            return None;
+        }
+        if args.iter().any(|arg| arg.name.is_some()) {
+            return None;
+        }
+        let mut values = values.into_iter();
+        let mut nums = Vec::new();
+        let mut ok = true;
+        for value in values.by_ref().take(want - 1) {
+            match value.and_then(|value| self.convert(value, &Type::Float, Some(form.clone()))) {
+                Some(value) => nums.push(value),
+                None => ok = false,
+            }
+        }
+        let color = values
+            .next()
+            .flatten()
+            .and_then(|value| self.convert(value, &color, Some(form.clone())));
+        if !ok {
+            return None;
+        }
+        Some(StmtKind::Draw {
+            shape,
+            nums,
+            color: color?,
+            head,
+        })
+    }
+
+    /// Reports a member of `Draw` that is not one of its shapes.
+    pub(super) fn draw_unknown(&mut self, name: &ast::Ident) {
+        let member = name.name.as_str();
+        if matches!(member, "text" | "sprite" | "image") {
+            self.err(
+                format!("`Draw.{member}` is not in 0.8, which draws shapes only"),
+                name.span,
+            );
+            return;
+        }
+        let write = match member {
+            "rectangle" | "square" | "box" => tir::Shape::Rect.form(),
+            "ellipse" | "disc" => tir::Shape::Circle.form(),
+            "point" | "pixel" => "Draw.rect(x, y, 1, 1, color)".to_string(),
+            _ => tir::Shape::ALL
+                .into_iter()
+                .min_by_key(|shape| util::edit_distance(member, shape.name()))
+                .map(tir::Shape::form)
+                .expect("there are shapes"),
+        };
+        self.err_label(
+            format!("`Draw` has no `{member}`"),
+            name.span,
+            format!("write `{write}`"),
+        );
     }
 
     fn emit(&mut self, event: &ast::Expr) -> Option<StmtKind> {

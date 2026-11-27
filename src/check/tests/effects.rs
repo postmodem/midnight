@@ -870,6 +870,35 @@ fn rule_5_queued_changes_and_events_are_fine() {
     );
 }
 
+#[test]
+fn rule_5_draws_are_fine() {
+    let mut program = checked(
+        "system s\n  each P do |p|\n    Draw.circle(p.x, 1, 2, Color(1, 2, 3))\n    \
+         Draw.rect(p.x, 0, 1, 1, Color(0, 0, 0)) if p.n > 0\n  end\nend\n\
+         Window.open(\"w\", 8, 8)\n",
+    );
+    assert_eq!(program.verdicts(), ["cores"]);
+}
+
+#[test]
+fn a_draw_weighs_its_arguments_and_8() {
+    let weight = |line: &str| {
+        let text = format!(
+            "system s\n  each P do |p|\n    {line}\n  end\nend\nWindow.open(\"w\", 8, 8)\n"
+        );
+        terms(&checked(&text).cores().weight)
+    };
+    // Two reads of `p.x` and an addition, and 8.
+    assert_eq!(
+        weight("Draw.line(p.x, 0, p.x + 1.0, 0, 1, Color(9, 9, 9))"),
+        [(11, vec![])]
+    );
+    assert_eq!(
+        weight("Draw.circle(0, 0, 1, Color(9, 9, 9))"),
+        [(8, vec![])]
+    );
+}
+
 // ----- rule 6 -----
 
 #[test]

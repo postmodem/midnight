@@ -1,0 +1,5 @@
+draws: 1 tick, 32x32, 3 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.circle(0.33333334, 0.2, 0.71428573, Color(1, 2, 3, 200))
+  Draw.circle(0.16666667, 0.32500002, 1.5446428, Color(1, 2, 3, 200))
+  Draw.circle(2.3333333, 0.010000001, 7.001428, Color(1, 2, 3, 200))

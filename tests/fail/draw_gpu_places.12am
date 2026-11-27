@@ -1,0 +1,28 @@
+# expect: in a GPU system a draw stands in the block itself or in a branch of it, and not in a loop, the nested `each`, or a function the system calls
+# at: line 9, in `mark`, with a note at the call on line 24; line 19, in a counting loop; line 22, in the nested `each`
+
+component Spot
+  x: Float32
+end
+
+def mark(x: Float)
+  Draw.circle(x, 0, 1, Color(1, 1, 1))
+end
+
+gpu system show
+  each Spot do |spot|
+    Draw.circle(spot.x, 0, 1, Color(1, 1, 1)) if spot.x > 0.0
+    if spot.x < 0.0
+      Draw.rect(spot.x, 0, 1, 1, Color(1, 1, 1))
+    end
+    3.times do |i|
+      Draw.line(spot.x, i, 0, 0, 1, Color(1, 1, 1))
+    end
+    each Spot do |other|
+      Draw.rect(other.x, 0, 1, 1, Color(1, 1, 1))
+    end
+    mark(spot.x)
+  end
+end
+
+Window.open("GPU", 64, 48)

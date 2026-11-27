@@ -180,8 +180,8 @@ pub struct Program {
     /// The top-level statements, in order.
     pub main: Body,
     /// Set when the program has a window: when it names `Window`,
-    /// `WindowResized`, `WindowClosed`, `Keyboard`, `Mouse` or one of the
-    /// events of the keyboard, the mouse and the focus.
+    /// `WindowResized`, `WindowClosed`, `Keyboard`, `Mouse`, `Draw` or one
+    /// of the events of the keyboard, the mouse and the focus.
     pub window: Option<Window>,
 }
 
@@ -486,6 +486,68 @@ pub enum StmtKind {
         width: Expr,
         height: Expr,
     },
+    /// `Draw.rect(…)` and the other shapes: `nums` holds the shape's
+    /// numbers as `Float`s, in the order of [`Shape::params`], and `color`
+    /// is a `Color`; they are evaluated in that order, and then the draw is
+    /// added to the frame's list. In a GPU block it stands directly in the
+    /// block or in a branch of it, never in a loop, the nested `each` or a
+    /// function.
+    Draw {
+        shape: Shape,
+        nums: Vec<Expr>,
+        color: Expr,
+        /// `Draw.rect` as written, for messages.
+        head: Span,
+    },
+}
+
+/// The shapes of `Draw`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shape {
+    Rect,
+    Circle,
+    Line,
+    Triangle,
+}
+
+impl Shape {
+    pub const ALL: [Shape; 4] = [Shape::Rect, Shape::Circle, Shape::Line, Shape::Triangle];
+
+    /// The member of `Draw`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Shape::Rect => "rect",
+            Shape::Circle => "circle",
+            Shape::Line => "line",
+            Shape::Triangle => "triangle",
+        }
+    }
+
+    /// The names of its numbers, in order; the colour comes after them.
+    pub fn params(self) -> &'static [&'static str] {
+        match self {
+            Shape::Rect => &["x", "y", "width", "height"],
+            Shape::Circle => &["x", "y", "radius"],
+            Shape::Line => &["x1", "y1", "x2", "y2", "width"],
+            Shape::Triangle => &["x1", "y1", "x2", "y2", "x3", "y3"],
+        }
+    }
+
+    /// The kind word of its record: `MN_DRAW_RECT` and the others.
+    pub fn kind(self) -> u32 {
+        match self {
+            Shape::Rect => 1,
+            Shape::Circle => 2,
+            Shape::Line => 3,
+            Shape::Triangle => 4,
+        }
+    }
+
+    /// The statement as the reference writes it:
+    /// `Draw.circle(x, y, radius, color)`.
+    pub fn form(self) -> String {
+        format!("Draw.{}({}, color)", self.name(), self.params().join(", "))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -763,6 +825,8 @@ pub enum EffectKind {
     Add,
     Remove,
     Emit(EventId),
+    /// A draw.
+    Draw,
     /// `spawn`, `on`, output, random numbers, the clock, `exit` and the
     /// `World` methods other than `count`.
     Does(Deed),

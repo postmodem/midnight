@@ -1,0 +1,14 @@
+# expect: a member of `Draw` that is not a shape names the statement to write: the shape other toolkits call by that name, or the nearest of the four
+# at: lines 6 to 13, each unknown member
+
+Window.open("Shapes", 64, 48)
+system show
+  Draw.rectangle(0, 0, 4, 4, Color(1, 1, 1))
+  Draw.square(0, 0, 4, 4, Color(1, 1, 1))
+  Draw.box(0, 0, 4, 4, Color(1, 1, 1))
+  Draw.ellipse(0, 0, 4, Color(1, 1, 1))
+  Draw.disc(0, 0, 4, Color(1, 1, 1))
+  Draw.point(0, 0, Color(1, 1, 1))
+  Draw.pixel(0, 0, Color(1, 1, 1))
+  Draw.circel(0, 0, 4, Color(1, 1, 1))
+end

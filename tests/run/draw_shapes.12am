@@ -1,0 +1,53 @@
+# Each shape is listed as the statement that made it, with its numbers as
+# 32-bit floats and its colour with four bytes: `Int` arguments, shapes
+# partly and wholly outside the window, sizes that draw nothing (zero and
+# negative), a NaN in each position of one shape, `Infinity`, `-0.0`, a
+# number in exponent form, and numbers that 32 bits round. A draw that
+# covers nothing is listed like any other.
+
+def nan
+  0.0 / 0.0
+end
+
+system show
+  white = Color(255, 255, 255)
+  Draw.rect(10, 20, 30, 5, white)
+  Draw.circle(40.5, 30.25, 7, Color(255, 0, 0))
+  Draw.line(0, 10, 100, 10, 1, Color(0, 255, 0, 128))
+  Draw.triangle(5, 5, 60, 10, 20, 50, Color(0, 0, 255, 0))
+
+  # Partly and wholly outside the window.
+  Draw.rect(-20, -20, 30, 30, white)
+  Draw.circle(500, 500, 10, white)
+  Draw.line(-1000000, 50, 1000000, 60, 2, white)
+  Draw.triangle(1e30, 0, 0, 100, -50, -50, white)
+
+  # Sizes that draw nothing, and a triangle with no area.
+  Draw.rect(1, 1, 0, 5, white)
+  Draw.rect(1, 1, 5, 0.0, white)
+  Draw.rect(1, 1, -5, 2, white)
+  Draw.rect(1, 1, 5, -2, white)
+  Draw.circle(1, 1, 0, white)
+  Draw.circle(1, 1, -3, white)
+  Draw.line(0, 0, 10, 10, 0, white)
+  Draw.line(0, 0, 10, 10, -1.5, white)
+  Draw.triangle(0, 0, 10, 10, 20, 20, white)
+
+  # A NaN in each position of a line.
+  Draw.line(nan, 2, 3, 4, 5, white)
+  Draw.line(1, nan, 3, 4, 5, white)
+  Draw.line(1, 2, nan, 4, 5, white)
+  Draw.line(1, 2, 3, nan, 5, white)
+  Draw.line(1, 2, 3, 4, nan, white)
+
+  # Infinity, a negative zero, exponent form, and rounding to 32 bits.
+  Draw.circle(1.0 / 0.0, -0.0, 2.5e1, white)
+  Draw.circle(-1.0 / 0.0, 1e-3, 1e20, white)
+  Draw.rect(0.1, 1.0 / 3.0, 16777217, 1e-50, white)
+  Draw.rect(3.4e38, 1e39, -1e39, 123456789, white)
+end
+
+Window.background = Color(16, 16, 32)
+Window.open("Shapes", 320, 200)
+World.run
+puts "ticks: #{Time.tick}"

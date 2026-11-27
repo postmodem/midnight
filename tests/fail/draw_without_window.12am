@@ -1,0 +1,13 @@
+# expect: a program that draws and opens no window is told to open one, at its first draw
+# at: line 5, the draw in `mark`, which is the first in the source; the draw on line 9 is not reported
+
+def mark
+  Draw.circle(2, 2, 1, Color(0, 0, 0))
+end
+
+system show
+  Draw.rect(0, 190, 320, 10, Color(40, 40, 60))
+  mark
+end
+
+World.tick

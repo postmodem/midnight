@@ -1,0 +1,23 @@
+error: `Draw` is a built-in name and can't be redefined
+ --> tests/fail/draw_as_value.12am:4:8
+  |
+4 | struct Draw
+  |        ^^^^
+
+error: `Draw.rect` is a statement and has no value
+  --> tests/fail/draw_as_value.12am:10:10
+   |
+10 |   done = Draw.rect(0, 0, 1, 1, Color(1, 1, 1))
+   |          ^^^^^^^^^ a draw adds a shape to the frame; write it on a line of its own
+
+error: `Draw` is not a value
+  --> tests/fail/draw_as_value.12am:11:12
+   |
+11 |   shapes = Draw
+   |            ^^^^ draw with its members, like `Draw.rect(x, y, width, height, color)`
+
+error: `Draw.rect` needs its arguments
+  --> tests/fail/draw_as_value.12am:12:3
+   |
+12 |   Draw.rect
+   |   ^^^^^^^^^ write `Draw.rect(x, y, width, height, color)`

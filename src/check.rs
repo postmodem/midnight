@@ -78,6 +78,7 @@ const BUILTIN_NAMES: &[&str] = &[
     "MouseReleased",
     "WindowFocused",
     "WindowUnfocused",
+    "Draw",
 ];
 
 /// The built-in names that are types.
@@ -479,6 +480,37 @@ struct Checker<'a> {
     deferred_calls: bool,
     /// The file of the built-in declarations, if the program has them.
     builtins: Option<FileId>,
+    /// The draw that comes first in the source, and its shape.
+    first_draw: Option<(Span, tir::Shape)>,
+    /// The program has a `Window.open`.
+    opens_window: bool,
+}
+
+/// What to write for an unknown type or function that names a shape:
+/// `Circle`, `Rect`, `draw_circle`, `fill_rect` and the like.
+fn draw_hint(name: &str) -> Option<String> {
+    let shape = match name {
+        "Rect" | "Rectangle" => tir::Shape::Rect,
+        "Circle" => tir::Shape::Circle,
+        "Line" => tir::Shape::Line,
+        "Triangle" => tir::Shape::Triangle,
+        _ => {
+            let bare = name
+                .strip_prefix("draw_")
+                .or_else(|| name.strip_prefix("fill_"))
+                .unwrap_or(name);
+            tir::Shape::ALL
+                .into_iter()
+                .find(|shape| shape.name() == bare)?
+        }
+    };
+    let what = match shape {
+        tir::Shape::Rect => "a rectangle",
+        tir::Shape::Circle => "a circle",
+        tir::Shape::Line => "a line",
+        tir::Shape::Triangle => "a triangle",
+    };
+    Some(format!("{what} is drawn with `{}`", shape.form()))
 }
 
 fn mk(kind: tir::ExprKind, ty: Type, span: Span) -> tir::Expr {
@@ -522,6 +554,8 @@ impl<'a> Checker<'a> {
             cx: FnCtx::new(BodyKind::Top),
             deferred_calls: false,
             builtins: None,
+            first_draw: None,
+            opens_window: false,
         }
     }
 
@@ -739,6 +773,18 @@ impl<'a> Checker<'a> {
     /// Turns the collected declarations into the typed program, or returns
     /// the errors in source order.
     fn finish(mut self) -> Result<tir::Program, Vec<Diagnostic>> {
+        if let Some((span, shape)) = self.first_draw
+            && !self.opens_window
+        {
+            self.err_label(
+                format!(
+                    "nothing opens a window for `Draw.{}` to draw in",
+                    shape.name()
+                ),
+                span,
+                "open one with `Window.open(title, width, height)`",
+            );
+        }
         if !self.errors.is_empty() {
             let mut errors = std::mem::take(&mut self.errors);
             errors.sort_by_key(|d| (d.span.file.0, d.span.start, d.span.end));

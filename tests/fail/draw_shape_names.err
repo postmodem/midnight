@@ -1,0 +1,71 @@
+error: unknown type `Circle`
+ --> tests/fail/draw_shape_names.12am:5:5
+  |
+5 | c = Circle(1, 2, 3)
+  |     ^^^^^^ a circle is drawn with `Draw.circle(x, y, radius, color)`
+
+error: unknown type `Rect`
+ --> tests/fail/draw_shape_names.12am:6:7
+  |
+6 | spawn Rect(0, 0, 4, 4)
+  |       ^^^^ a rectangle is drawn with `Draw.rect(x, y, width, height, color)`
+
+error: unknown type `Rectangle`
+ --> tests/fail/draw_shape_names.12am:7:5
+  |
+7 | r = Rectangle(0, 0, 1, 1)
+  |     ^^^^^^^^^ a rectangle is drawn with `Draw.rect(x, y, width, height, color)`
+
+error: unknown type `Line`
+ --> tests/fail/draw_shape_names.12am:8:5
+  |
+8 | l = Line(0, 0, 1, 1)
+  |     ^^^^ a line is drawn with `Draw.line(x1, y1, x2, y2, width, color)`
+
+error: unknown type `Triangle`
+ --> tests/fail/draw_shape_names.12am:9:5
+  |
+9 | t = Triangle(0, 0, 1, 1, 0, 1)
+  |     ^^^^^^^^ a triangle is drawn with `Draw.triangle(x1, y1, x2, y2, x3, y3, color)`
+
+error: unknown component `Circle`
+  --> tests/fail/draw_shape_names.12am:10:7
+   |
+10 | spawn Circle
+   |       ^^^^^^ a circle is drawn with `Draw.circle(x, y, radius, color)`
+
+error: unknown function `draw_circle`
+  --> tests/fail/draw_shape_names.12am:11:1
+   |
+11 | draw_circle(1, 2, 3)
+   | ^^^^^^^^^^^ a circle is drawn with `Draw.circle(x, y, radius, color)`
+
+error: unknown function `fill_rect`
+  --> tests/fail/draw_shape_names.12am:12:1
+   |
+12 | fill_rect(0, 0, 4, 4)
+   | ^^^^^^^^^ a rectangle is drawn with `Draw.rect(x, y, width, height, color)`
+
+error: unknown function `draw_line`
+  --> tests/fail/draw_shape_names.12am:13:1
+   |
+13 | draw_line(0, 0, 1, 1)
+   | ^^^^^^^^^ a line is drawn with `Draw.line(x1, y1, x2, y2, width, color)`
+
+error: unknown function `triangle`
+  --> tests/fail/draw_shape_names.12am:14:1
+   |
+14 | triangle(0, 0, 1, 1, 0, 1)
+   | ^^^^^^^^ a triangle is drawn with `Draw.triangle(x1, y1, x2, y2, x3, y3, color)`
+
+error: unknown function `rect`
+  --> tests/fail/draw_shape_names.12am:15:1
+   |
+15 | rect(0, 0, 4, 4)
+   | ^^^^ a rectangle is drawn with `Draw.rect(x, y, width, height, color)`
+
+error: unknown function `circle`
+  --> tests/fail/draw_shape_names.12am:16:1
+   |
+16 | circle(1, 1, 1)
+   | ^^^^^^ a circle is drawn with `Draw.circle(x, y, radius, color)`

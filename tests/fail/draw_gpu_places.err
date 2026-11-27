@@ -1,0 +1,22 @@
+error: a draw can't stand in a function called from a GPU system
+ --> tests/fail/draw_gpu_places.12am:9:3
+  |
+9 |   Draw.circle(x, 0, 1, Color(1, 1, 1))
+  |   ^^^^^^^^^^^ draw from the block itself: each run makes a draw once at most
+note: GPU system `show` calls `mark` here
+  --> tests/fail/draw_gpu_places.12am:24:5
+   |
+24 |     mark(spot.x)
+   |     ------------
+
+error: a draw can't stand in a loop inside a GPU block
+  --> tests/fail/draw_gpu_places.12am:19:7
+   |
+19 |       Draw.line(spot.x, i, 0, 0, 1, Color(1, 1, 1))
+   |       ^^^^^^^^^ draw from the block itself: each run makes a draw once at most
+
+error: a draw can't stand in the nested `each` of a GPU block
+  --> tests/fail/draw_gpu_places.12am:22:7
+   |
+22 |       Draw.rect(other.x, 0, 1, 1, Color(1, 1, 1))
+   |       ^^^^^^^^^ draw from the block itself: each run makes a draw once at most

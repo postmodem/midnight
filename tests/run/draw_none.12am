@@ -1,0 +1,9 @@
+# A program with a window that never draws: `draws` lists the frame's size
+# and background, and no draw, before the first tick and after the last.
+
+Window.background = Color(1, 2, 3, 4)
+Window.open("Nothing", 30, 20)
+World.tick
+Window.background = Color(200, 100, 50)
+World.tick
+puts "ticks: #{Time.tick}"

@@ -1,0 +1,5 @@
+tests/loops/cores_draws.12am:11  system show    each Dot  cores
+tests/loops/cores_draws.12am:17  system branch  each Dot  cores
+tests/loops/cores_draws.12am:23  system trail   each Dot  cores
+tests/loops/cores_draws.12am:31  system pairs   each Dot  cores
+tests/loops/cores_draws.12am:43  system called  each Dot  cores

@@ -67,6 +67,12 @@ pub(super) fn stmt(s: &mut Stmt, f: Visit<'_>) {
             expr(width, f);
             expr(height, f);
         }
+        StmtKind::Draw { nums, color, .. } => {
+            for num in nums {
+                expr(num, f);
+            }
+            expr(color, f);
+        }
     }
 }
 

@@ -1,0 +1,19 @@
+tick
+draws
+resize 100 50
+draws
+tick
+draws
+scale 2
+draws
+tick
+draws
+close
+tick
+# The second window: the frame Window.open made, then its ticks.
+draws
+tick
+draws
+tick
+# The program has ended; its window is still open.
+draws

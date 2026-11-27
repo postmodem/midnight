@@ -687,8 +687,8 @@ void mn_sleep(double seconds);
 /*
  * A program that names `Window`, `WindowResized`, `WindowClosed`,
  * `Keyboard`, `Mouse`, `KeyPressed`, `KeyReleased`, `MousePressed`,
- * `MouseReleased`, `WindowFocused` or `WindowUnfocused` has a window. It
- * is compiled with MN_WINDOW, and before mn_start it sets
+ * `MouseReleased`, `WindowFocused`, `WindowUnfocused` or `Draw` has a
+ * window. It is compiled with MN_WINDOW, and before mn_start it sets
  * mn_window_program to a description of the `Window` and `Mouse`
  * resources and the eight events. Generated code lays them out as the
  * structs below and asserts that it does.
@@ -916,6 +916,52 @@ bool mn_button_down(uint32_t button);
 bool mn_button_pressed(uint32_t button);
 bool mn_button_released(uint32_t button);
 
+/* ---- Drawing ----------------------------------------------------------------- */
+
+/*
+ * A program that has a draw statement has a window. A draw is a record of
+ * 32 bytes, MnDraw: its kind, the shape's numbers in the order of the
+ * statement's arguments, each rounded to the nearest 32-bit float, unused
+ * ones zero, and the four bytes of its colour. All-zero bytes are a draw of
+ * nothing. Generated code asserts the layout.
+ *
+ * While a window is open, the runtime keeps every draw since the last
+ * frame, in the order the draws were made. When a tick ends, those draws
+ * become the frame's, with the window's size and background as they are
+ * then, and a new list begins; mn_window_open begins a new list and makes
+ * a frame of the background alone. While no window is open no draw is
+ * kept.
+ *
+ * A GPU block may draw: `draws` in its MnGpuBlock is the number of its
+ * draw statements, and each run has a record for each, used or not. The
+ * record of row `r` and draw statement `s` is record `r * draws + s` of
+ * the block's records for the table. A run first stores kind 0 in each of
+ * its records, so a draw the run does not reach is a draw of nothing. Its
+ * records, in the order of the query's tables and rows, take the place in
+ * the frame that the draws of an ordinary `each` would.
+ */
+
+enum {
+    MN_DRAW_NOTHING,
+    MN_DRAW_RECT,     /* x, y, width, height */
+    MN_DRAW_CIRCLE,   /* x, y, radius */
+    MN_DRAW_LINE,     /* x1, y1, x2, y2, width */
+    MN_DRAW_TRIANGLE, /* x1, y1, x2, y2, x3, y3 */
+};
+
+typedef struct MnDraw {
+    uint32_t kind;
+    float n[6];
+    MnColor color;
+} MnDraw;
+
+/* The record of a draw, all zeros, for generated code to fill at once once
+ * it has evaluated the draw's arguments. While no window is open it is a
+ * record that belongs to the calling thread and that nothing reads. Code in
+ * a piece may call it (see "Several threads"); the draw is then kept with
+ * the piece. */
+MnDraw *mn_draw(void);
+
 /* ---- GPU systems ------------------------------------------------------------- */
 
 /*
@@ -1020,6 +1066,9 @@ typedef struct MnGpuRun {
     /* The rows to run: `first` up to `end`, not included. */
     uint32_t first;
     uint32_t end;
+    /* When the block draws: the records of the table, row 0 first (see
+     * "Drawing"). The rows to run write theirs. */
+    MnDraw *records;
 } MnGpuRun;
 
 typedef struct MnGpuBlock {
@@ -1036,8 +1085,9 @@ typedef struct MnGpuBlock {
     /* Writes words MN_GPU_HEADER_WORDS and up. NULL when there are none. */
     void (*fill)(uint32_t *words);
     /* Runs the rows `first` up to `end` of one table. It reads the uniform
-     * words, the snapshot and its own rows, writes its own rows and the
-     * error word it is given, and calls nothing in the runtime but
+     * words, the snapshot and its own rows, writes its own rows, their
+     * records and the error word it is given, and calls nothing in the
+     * runtime but
      * mn_strict_enter and mn_strict_leave. */
     void (*cpu)(const MnGpuRun *run);
     /* An estimate of the work of one run, in operations: `weight`, plus
@@ -1053,6 +1103,8 @@ typedef struct MnGpuBlock {
     const MnGpuSite *sites;
     /* A block of a strict GPU system. */
     bool strict;
+    /* The number of its draw statements (see "Drawing"). */
+    uint32_t draws;
     /* Runtime-private. Initialise to NULL. */
     void *state;
 } MnGpuBlock;
@@ -1231,8 +1283,8 @@ static inline void *mn_get_synced(MnEntity e, uint32_t component, size_t size,
  *       mn_alive, mn_has, mn_get, mn_get_failed, mn_column
  *       mn_query_update, mn_query_count, mn_query_rows, mn_entity_count,
  *           for queries listed in the MnLoop, which are up to date
- *       mn_add, mn_remove, mn_despawn and mn_emit, which keep what they
- *           are given with the piece
+ *       mn_add, mn_remove, mn_despawn, mn_emit and mn_draw, which keep
+ *           what they are given with the piece
  *       mn_defer_enter, mn_defer_leave
  *       mn_loop, which then runs the loop as part of the piece
  *       mn_key_down, mn_key_pressed, mn_key_released, mn_button_down,
@@ -1319,8 +1371,8 @@ typedef struct MnLoop {
  * CPU copies of its terms current as mn_gpu_use does, runs every row of
  * the query, sets sums[i] to the total of sum i, reports the tables it
  * assigned in as mn_wrote does, and applies the queued changes when no
- * other `each` is running. What the loop queues and emits is in the order
- * of its rows.
+ * other `each` is running. What the loop queues, emits and draws is in the
+ * order of its rows.
  *
  * The rows run in one piece on the calling thread when the thread count is
  * 1, when the loop has little work, and when it is reached inside another

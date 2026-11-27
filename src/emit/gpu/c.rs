@@ -134,6 +134,7 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
         in_block: false,
         out: String::new(),
         indent: 0,
+        draws: 0,
     };
     let funcs: Vec<&Func> = gpu
         .library
@@ -182,6 +183,7 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
             in_block: true,
             out: String::new(),
             indent: 0,
+            draws: block.draws,
         };
         printer.cpu(block);
         out.push_str(&printer.out);
@@ -264,6 +266,9 @@ pub fn section(gpu: &Lowered, cx: &mut Cx) -> String {
         let _ = writeln!(out, "    .sites = {sites},");
         if block.strict {
             out.push_str("    .strict = true,\n");
+        }
+        if block.draws != 0 {
+            let _ = writeln!(out, "    .draws = {},", block.draws);
         }
         out.push_str("    .state = NULL,\n};\n\n");
     }
@@ -544,6 +549,8 @@ struct Printer<'g, 'a> {
     in_block: bool,
     out: String,
     indent: usize,
+    /// In a block's C implementation, the number of its draw statements.
+    draws: u32,
 }
 
 fn symbol(op: BinOp) -> &'static str {
@@ -856,7 +863,37 @@ impl Printer<'_, '_> {
                 let site = self.top(site);
                 self.line(&format!("g32_fail(g, {site});"));
             }
+            Stmt::Undraw(slot) => {
+                let record = self.record(*slot);
+                self.line(&format!("{record}.kind = 0;"));
+            }
+            Stmt::Draw {
+                slot,
+                kind,
+                nums,
+                color,
+            } => {
+                let record = self.record(*slot);
+                self.line(&format!("{record}.kind = {kind};"));
+                for index in 0..6 {
+                    let num = match nums.get(index) {
+                        Some(num) => self.top(num),
+                        None => "0.0f".to_string(),
+                    };
+                    self.line(&format!("{record}.n[{index}] = {num};"));
+                }
+                let color = self.expr(color);
+                self.line(&format!(
+                    "{record}.color = (MnColor){{(uint8_t){color}.f_r, (uint8_t){color}.f_g, \
+                     (uint8_t){color}.f_b, (uint8_t){color}.f_a}};"
+                ));
+            }
         }
+    }
+
+    /// The run's record for draw statement `slot`.
+    fn record(&self, slot: u32) -> String {
+        format!("records[(size_t){ROW} * {}u + {slot}u]", self.draws)
     }
 
     fn header(&self, func: &Func) -> String {
@@ -943,6 +980,9 @@ impl Printer<'_, '_> {
             };
             self.line(&format!("const {cty} *s{index} = run->inner[{index}];"));
         }
+        if block.draws != 0 {
+            self.line("MnDraw *restrict records = run->records;");
+        }
         if block.strict {
             self.line("const uint64_t fp_state = mn_strict_enter();");
         }
@@ -970,6 +1010,7 @@ pub fn function(gpu: &Lowered, name: &str) -> String {
         in_block: false,
         out: String::new(),
         indent: 0,
+        draws: 0,
     };
     printer.function(gpu.library.get(name));
     printer.out

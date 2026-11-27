@@ -272,6 +272,24 @@ fn split_drive(stderr: &str) -> (String, String) {
 
 const DRIVE_SAID: &str = "midnight: drive: ";
 
+/// The lines of the `draws` answers among a run's answers: each answer's
+/// first line, `draws: …`, and the lines after it, which begin with two
+/// spaces.
+fn draws_answers(answers: &str) -> String {
+    answers
+        .split_inclusive('\n')
+        .filter(|line| line.starts_with("draws: ") || line.starts_with("  "))
+        .collect()
+}
+
+/// A run's answers without those of `draws`.
+fn without_draws(answers: &str) -> String {
+    answers
+        .split_inclusive('\n')
+        .filter(|line| !line.starts_with("draws: ") && !line.starts_with("  "))
+        .collect()
+}
+
 /// The `.12am` files directly inside `dir`, sorted. Empty if it is missing.
 fn programs(dir: &str) -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
@@ -443,6 +461,51 @@ fn example_programs() {
 }
 
 /// The directories of `evals/tasks` that have a `meta` file, sorted.
+/// Every program of `tests/run` and `examples` with a `NAME.draws` file,
+/// run headless with no device in both build modes, answers its `draws`
+/// commands with exactly the lines of that file. With `UPDATE_EXPECT=1`
+/// the release run writes the file; no other test does.
+#[test]
+fn draws_match_expected() {
+    let sources: Vec<PathBuf> = programs("tests/run")
+        .into_iter()
+        .chain(examples())
+        .filter(|source| source.with_extension("draws").exists())
+        .collect();
+    assert!(
+        !sources.is_empty(),
+        "no program with a .draws file under tests/run and examples of the working directory"
+    );
+    let dir = scratch("draws");
+    let jobs: Vec<(&PathBuf, Mode)> = sources
+        .iter()
+        .flat_map(|source| MODES.map(|mode| (source, mode)))
+        .collect();
+    let failures = for_each_parallel(&jobs, |(source, mode)| {
+        let label = format!("{} ({mode:?})", source.display());
+        let exe = exe_path(&dir, source, *mode);
+        build(source, &exe, *mode)?;
+        let run = run_within(&mut on_cpu(&exe, source), RUN_LIMIT);
+        if run.status != Some(0) || !run.stderr.is_empty() {
+            return Err(format!(
+                "{label}: exited with {:?}\n--- answers\n{}--- stderr\n{}---",
+                run.status, run.drive, run.stderr
+            ));
+        }
+        if update_expect() && *mode == Mode::Debug {
+            return Ok(());
+        }
+        expect(
+            &source.with_extension("draws"),
+            &draws_answers(&run.drive),
+            "the answers of `draws`",
+        )
+        .map_err(|message| format!("{label}: {message}"))
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("runs with draws", jobs.len(), failures);
+}
+
 fn eval_tasks() -> Vec<PathBuf> {
     let mut tasks: Vec<PathBuf> = std::fs::read_dir("evals/tasks")
         .into_iter()
@@ -939,8 +1002,7 @@ fn mixed_component_is_as_small_as_its_fields_allow() {
 #[test]
 fn a_variant_named_like_a_built_in_gives_no_window() {
     let dir = scratch("variant-names");
-    let program =
-        "enum Shape\n  Mouse, Keyboard, Window, Key\nend\n\nputs Shape::Mouse, Shape::Key\n";
+    let program = "enum Shape\n  Mouse, Keyboard, Window, Key, Draw\nend\n\nputs Shape::Mouse, Shape::Key, Shape::Draw\n";
     let emit = |name: &str, body: &str| {
         let source = dir.join(format!("{name}.12am"));
         std::fs::write(&source, body).expect("write a test program");
@@ -959,7 +1021,8 @@ fn a_variant_named_like_a_built_in_gives_no_window() {
             .replace("Keyboard", "Qwertyui")
             .replace("Key", "Kay")
             .replace("Mouse", "Moose")
-            .replace("Window", "Widget"),
+            .replace("Window", "Widget")
+            .replace("Draw", "Dram"),
     );
     let _ = std::fs::remove_dir_all(&dir);
     assert!(!named.contains("mn_window_program"), "{named}");
@@ -967,7 +1030,8 @@ fn a_variant_named_like_a_built_in_gives_no_window() {
         .replace("Qwertyui", "Keyboard")
         .replace("Kay", "Key")
         .replace("Moose", "Mouse")
-        .replace("Widget", "Window");
+        .replace("Widget", "Window")
+        .replace("Dram", "Draw");
     assert_eq!(named, back);
 }
 
@@ -987,6 +1051,25 @@ fn gpu_system_lines(program: &str) -> impl Iterator<Item = &str> {
 /// Whether the program at `source` declares a GPU system.
 fn declares_gpu_system(source: &Path) -> bool {
     std::fs::read_to_string(source).is_ok_and(|program| gpu_system_lines(&program).next().is_some())
+}
+
+/// Whether a GPU system of the program at `source` draws: a line of one,
+/// up to the `end` that closes it, has `Draw.`. Its blocks run on the CPU.
+fn gpu_system_draws(source: &Path) -> bool {
+    let Ok(program) = std::fs::read_to_string(source) else {
+        return false;
+    };
+    let mut inside = false;
+    for line in program.lines() {
+        if line.starts_with("gpu system ") || line.starts_with("strict gpu system ") {
+            inside = true;
+        } else if line.starts_with("end") {
+            inside = false;
+        } else if inside && line.contains("Draw.") {
+            return true;
+        }
+    }
+    false
 }
 
 /// Whether every GPU system of a program that has some is strict.
@@ -1394,7 +1477,10 @@ fn gpu_programs() {
     let mut jobs = Vec::new();
     for (name, sources, stops) in &groups {
         dirs.push(scratch(name));
-        for source in sources.iter().filter(|source| declares_gpu_system(source)) {
+        for source in sources
+            .iter()
+            .filter(|source| declares_gpu_system(source) && !gpu_system_draws(source))
+        {
             for mode in &MODES {
                 jobs.push((dirs.len() - 1, source, *stops, *mode));
             }
@@ -1835,8 +1921,12 @@ fn window_frames() {
         // Only the release run may write the expected file; debug must
         // match it.
         if !(update_expect() && *mode == Mode::Debug) {
-            expect(&source.with_extension("frames"), &run.drive, "the answers")
-                .map_err(|message| format!("{label}: {message}"))?;
+            expect(
+                &source.with_extension("frames"),
+                &without_draws(&run.drive),
+                "the answers",
+            )
+            .map_err(|message| format!("{label}: {message}"))?;
         }
         let count =
             check_captures(&run.drive, &files).map_err(|message| format!("{label}: {message}"))?;
@@ -2765,6 +2855,11 @@ fn run_with_threads(
         (0, String::new(), RUN_LIMIT)
     };
     let mut expected_stdout = if stops { None } else { Some(read("out")?) };
+    let mut expected_draws = if beside(source, "draws").exists() {
+        Some(read("draws")?)
+    } else {
+        None
+    };
     for setting in settings {
         let label = format!("{} ({how}, MIDNIGHT_THREADS={setting})", source.display());
         let mut command = on_cpu(exe, source);
@@ -2799,6 +2894,16 @@ fn run_with_threads(
             }
             Some(_) => {}
             None => expected_stdout = Some(run.stdout),
+        }
+        let draws = draws_answers(&run.drive);
+        match &expected_draws {
+            Some(expected) if *expected != draws => {
+                return Err(format!(
+                    "{label}: the answers of `draws` differ\n--- expected\n{expected}--- actual\n{draws}---"
+                ));
+            }
+            Some(_) => {}
+            None => expected_draws = Some(draws),
         }
     }
     Ok(())
@@ -3092,6 +3197,12 @@ fn drive_errors() {
             "close\ntick\ncapture frame.png\n",
             "close\ntick\n",
             "3: can't capture: no window is open",
+        ),
+        ("draws all\n", "", "1: `draws` takes nothing"),
+        (
+            "close\ntick\ndraws\n",
+            "close\ntick\n",
+            "3: can't list the draws: no window is open",
         ),
         // The keyboard and the mouse: names and numbers first.
         ("key Q2\n", "", "1: `Q2` is not a key"),
@@ -3771,7 +3882,7 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
         })
     };
     let answered = shown.wait_for(Duration::from_secs(120), |said| {
-        split_drive(said).0 == expected
+        without_draws(&split_drive(said).0) == expected
     });
     let picture = files.join("screen.ppm");
     let taken = answered && {

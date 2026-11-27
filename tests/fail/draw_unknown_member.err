@@ -1,0 +1,47 @@
+error: `Draw` has no `rectangle`
+ --> tests/fail/draw_unknown_member.12am:6:8
+  |
+6 |   Draw.rectangle(0, 0, 4, 4, Color(1, 1, 1))
+  |        ^^^^^^^^^ write `Draw.rect(x, y, width, height, color)`
+
+error: `Draw` has no `square`
+ --> tests/fail/draw_unknown_member.12am:7:8
+  |
+7 |   Draw.square(0, 0, 4, 4, Color(1, 1, 1))
+  |        ^^^^^^ write `Draw.rect(x, y, width, height, color)`
+
+error: `Draw` has no `box`
+ --> tests/fail/draw_unknown_member.12am:8:8
+  |
+8 |   Draw.box(0, 0, 4, 4, Color(1, 1, 1))
+  |        ^^^ write `Draw.rect(x, y, width, height, color)`
+
+error: `Draw` has no `ellipse`
+ --> tests/fail/draw_unknown_member.12am:9:8
+  |
+9 |   Draw.ellipse(0, 0, 4, Color(1, 1, 1))
+  |        ^^^^^^^ write `Draw.circle(x, y, radius, color)`
+
+error: `Draw` has no `disc`
+  --> tests/fail/draw_unknown_member.12am:10:8
+   |
+10 |   Draw.disc(0, 0, 4, Color(1, 1, 1))
+   |        ^^^^ write `Draw.circle(x, y, radius, color)`
+
+error: `Draw` has no `point`
+  --> tests/fail/draw_unknown_member.12am:11:8
+   |
+11 |   Draw.point(0, 0, Color(1, 1, 1))
+   |        ^^^^^ write `Draw.rect(x, y, 1, 1, color)`
+
+error: `Draw` has no `pixel`
+  --> tests/fail/draw_unknown_member.12am:12:8
+   |
+12 |   Draw.pixel(0, 0, Color(1, 1, 1))
+   |        ^^^^^ write `Draw.rect(x, y, 1, 1, color)`
+
+error: `Draw` has no `circel`
+  --> tests/fail/draw_unknown_member.12am:13:8
+   |
+13 |   Draw.circel(0, 0, 4, Color(1, 1, 1))
+   |        ^^^^^^ write `Draw.circle(x, y, radius, color)`

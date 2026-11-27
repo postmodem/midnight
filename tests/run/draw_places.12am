@@ -1,0 +1,36 @@
+# A draw may stand wherever a statement can: in a function, in `on`, and in
+# every loop.
+
+event Hit
+  x: Int
+end
+
+def corner(size: Float)
+  Draw.rect(0, 0, size, size, Color(9, 9, 9))
+end
+
+system make
+  emit Hit(3)
+  emit Hit(5)
+end
+
+system show
+  on Hit do |hit|
+    Draw.circle(hit.x, hit.x, 1, Color(255, 0, 0))
+  end
+  3.times do |i|
+    Draw.line(i, 0, i, 10, 1, Color(0, 255, 0))
+  end
+  i = 0
+  while i < 2
+    Draw.rect(i * 10, 20, 5, 5, Color(0, 0, 255))
+    i += 1
+  end
+  [1.5, 2.5].each do |x|
+    corner(x)
+  end
+end
+
+Window.open("Places", 50, 40)
+World.tick
+puts "ticks: #{Time.tick}"

@@ -228,3 +228,13 @@ pub fn depth_suffix(depth: usize) -> String {
         _ => format!("z{depth}x"),
     }
 }
+
+/// The runtime's name for the kind of a shape's record.
+pub fn draw_kind(shape: crate::tir::Shape) -> &'static str {
+    match shape {
+        crate::tir::Shape::Rect => "MN_DRAW_RECT",
+        crate::tir::Shape::Circle => "MN_DRAW_CIRCLE",
+        crate::tir::Shape::Line => "MN_DRAW_LINE",
+        crate::tir::Shape::Triangle => "MN_DRAW_TRIANGLE",
+    }
+}

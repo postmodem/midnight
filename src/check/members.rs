@@ -172,6 +172,10 @@ impl Checker<'_> {
                 "Keyboard" if self.builtins.is_some() => {
                     return self.keyboard_member(name, args, span);
                 }
+                "Draw" => {
+                    self.draw_value(recv, name, args);
+                    return None;
+                }
                 _ => {}
             }
             match self.global(owner) {
@@ -807,6 +811,36 @@ impl Checker<'_> {
         Some(resolved)
     }
 
+    /// `Draw.name` or `Draw.name(…)` where a value is wanted, or without
+    /// its arguments: a draw is a statement with every argument.
+    fn draw_value(&mut self, recv: &ast::Expr, name: &ast::Ident, args: Option<&[ast::Arg]>) {
+        for arg in args.unwrap_or(&[]) {
+            self.probe(&arg.value);
+        }
+        let Some(shape) = tir::Shape::ALL
+            .into_iter()
+            .find(|shape| shape.name() == name.name)
+        else {
+            self.draw_unknown(name);
+            return;
+        };
+        let head = recv.span.to(name.span);
+        let statement = shape.name();
+        if args.is_none() {
+            self.err_label(
+                format!("`Draw.{statement}` needs its arguments"),
+                head,
+                format!("write `{}`", shape.form()),
+            );
+        } else {
+            self.err_label(
+                format!("`Draw.{statement}` is a statement and has no value"),
+                head,
+                "a draw adds a shape to the frame; write it on a line of its own",
+            );
+        }
+    }
+
     /// A member of the built-in `Keyboard`: one of its three queries.
     fn keyboard_member(
         &mut self,
@@ -1106,6 +1140,9 @@ impl Checker<'_> {
                     span,
                     "only components and tags are attached to entities",
                 );
+            }
+            None if let Some(hint) = super::draw_hint(name) => {
+                self.err_label(format!("unknown component `{name}`"), span, hint);
             }
             None => {
                 let candidates = self.component_names();

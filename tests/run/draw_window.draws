@@ -1,0 +1,24 @@
+draws: 1 tick, 64x48, 1 draw
+  Window.background = Color(0, 40, 0, 255)
+  Draw.rect(0.0, 0.0, 64.0, 48.0, Color(0, 0, 0, 255))
+draws: 1 tick, 64x48, 1 draw
+  Window.background = Color(0, 40, 0, 255)
+  Draw.rect(0.0, 0.0, 64.0, 48.0, Color(0, 0, 0, 255))
+draws: 2 ticks, 100x50, 1 draw
+  Window.background = Color(0, 40, 0, 255)
+  Draw.rect(0.0, 0.0, 100.0, 50.0, Color(1, 0, 0, 255))
+draws: 2 ticks, 100x50, 1 draw
+  Window.background = Color(0, 40, 0, 255)
+  Draw.rect(0.0, 0.0, 100.0, 50.0, Color(1, 0, 0, 255))
+draws: 3 ticks, 100x50, 1 draw
+  Window.background = Color(0, 40, 0, 255)
+  Draw.rect(0.0, 0.0, 100.0, 50.0, Color(2, 0, 0, 255))
+draws: 4 ticks, 20x10, 0 draws
+  Window.background = Color(0, 0, 80, 255)
+draws: 5 ticks, 20x10, 2 draws
+  Window.background = Color(0, 0, 80, 255)
+  Draw.circle(4.0, 2.0, 2.0, Color(4, 4, 4, 255))
+  Draw.rect(0.0, 0.0, 20.0, 10.0, Color(4, 0, 0, 255))
+draws: 6 ticks, 20x10, 1 draw
+  Window.background = Color(0, 0, 80, 255)
+  Draw.rect(0.0, 0.0, 20.0, 10.0, Color(5, 0, 0, 255))

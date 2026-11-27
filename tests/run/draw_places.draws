@@ -1,0 +1,11 @@
+draws: 1 tick, 50x40, 9 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.circle(3.0, 3.0, 1.0, Color(255, 0, 0, 255))
+  Draw.circle(5.0, 5.0, 1.0, Color(255, 0, 0, 255))
+  Draw.line(0.0, 0.0, 0.0, 10.0, 1.0, Color(0, 255, 0, 255))
+  Draw.line(1.0, 0.0, 1.0, 10.0, 1.0, Color(0, 255, 0, 255))
+  Draw.line(2.0, 0.0, 2.0, 10.0, 1.0, Color(0, 255, 0, 255))
+  Draw.rect(0.0, 20.0, 5.0, 5.0, Color(0, 0, 255, 255))
+  Draw.rect(10.0, 20.0, 5.0, 5.0, Color(0, 0, 255, 255))
+  Draw.rect(0.0, 0.0, 1.5, 1.5, Color(9, 9, 9, 255))
+  Draw.rect(0.0, 0.0, 2.5, 2.5, Color(9, 9, 9, 255))

@@ -1,0 +1,23 @@
+error: `Draw.circle` takes 4 arguments, but 3 were given
+ --> tests/fail/draw_arguments.12am:8:3
+  |
+8 |   Draw.circle(1, 2, white)
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^ `Draw.circle(x, y, radius, color)`
+
+error: expected `Float`, found `String`
+ --> tests/fail/draw_arguments.12am:9:16
+  |
+9 |   Draw.rect(1, "two", 3, 4, white)
+  |                ^^^^^ `Draw.rect(x, y, width, height, color)`
+
+error: expected `Color`, found `Int`
+  --> tests/fail/draw_arguments.12am:10:28
+   |
+10 |   Draw.line(1, 2, 3, 4, 5, 6)
+   |                            ^ `Draw.line(x1, y1, x2, y2, width, color)`
+
+error: `Draw.triangle` takes no arguments by name
+  --> tests/fail/draw_arguments.12am:11:32
+   |
+11 |   Draw.triangle(1, 2, 3, 4, 5, y3: 6, white)
+   |                                ^^ its arguments go by position: `Draw.triangle(x1, y1, x2, y2, x3, y3, color)`

@@ -1,0 +1,25 @@
+draws: 0 ticks, 64x48, 0 draws
+  Window.background = Color(0, 0, 0, 255)
+draws: 1 tick, 64x48, 6 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.line(0.0, 0.0, 9.0, 9.0, 1.0, Color(0, 9, 0, 255))
+  Draw.rect(1.0, 1.0, 1.0, 1.0, Color(10, 0, 0, 255))
+  Draw.rect(2.0, 2.0, 2.0, 2.0, Color(20, 0, 0, 255))
+  Draw.circle(3.0, 0.0, 1.0, Color(1, 1, 1, 255))
+  Draw.rect(6.0, 0.0, 4.0, 4.0, Color(30, 0, 0, 255))
+  Draw.triangle(0.0, 0.0, 1.0, 0.0, 0.0, 1.0, Color(40, 0, 0, 255))
+draws: 2 ticks, 64x48, 7 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.line(0.0, 0.0, 8.0, 8.0, 1.0, Color(0, 8, 0, 255))
+  Draw.line(0.0, 0.0, 7.0, 7.0, 1.0, Color(0, 7, 0, 255))
+  Draw.rect(1.0, 1.0, 1.0, 1.0, Color(10, 0, 0, 255))
+  Draw.rect(2.0, 2.0, 2.0, 2.0, Color(20, 0, 0, 255))
+  Draw.circle(3.0, 0.0, 1.0, Color(1, 1, 1, 255))
+  Draw.rect(6.0, 0.0, 4.0, 4.0, Color(30, 0, 0, 255))
+  Draw.triangle(0.0, 0.0, 1.0, 0.0, 0.0, 2.0, Color(40, 0, 0, 255))
+draws: 3 ticks, 64x48, 4 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.rect(1.0, 1.0, 1.0, 1.0, Color(10, 0, 0, 255))
+  Draw.rect(2.0, 2.0, 2.0, 2.0, Color(20, 0, 0, 255))
+  Draw.circle(3.0, 0.0, 1.0, Color(1, 1, 1, 255))
+  Draw.rect(6.0, 0.0, 4.0, 4.0, Color(30, 0, 0, 255))

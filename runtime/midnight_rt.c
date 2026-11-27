@@ -62,8 +62,8 @@ _Thread_local struct MnLoopThread *mn_loop_thread;
 static _Noreturn void piece_fail(struct MnLoopThread *thread, char *text);
 
 /* Makes room for `need` bytes of what the thread's piece queues (`kind`
- * 0) or emits (`kind` 1 + the event's id), counts one record more, and
- * returns where the bytes start. */
+ * 0), emits (`kind` 1 + the event's id) or draws (`kind` 1 + the number of
+ * events), counts one record more, and returns where the bytes start. */
 static unsigned char *piece_bytes(struct MnLoopThread *thread, uint32_t kind,
                                   size_t need);
 #endif
@@ -989,10 +989,13 @@ static struct {
     int64_t ticks_left;
     int64_t ticks_run;
 
-    /* The last frame: its size in pixels, its background, and the value of
-     * Time.tick when it was made. */
+    /* The last frame: its size in pixels and in points, its background,
+     * and the value of Time.tick when it was made. Its draws are
+     * drawing.frame. */
     uint32_t frame_width;
     uint32_t frame_height;
+    int64_t frame_point_width;
+    int64_t frame_point_height;
     MnColor frame_background;
     int64_t frame_tick;
 
@@ -1031,6 +1034,64 @@ static _Noreturn void drive_fail(const char *format, ...) {
     va_end(args);
     fputc('\n', stderr);
     mn_leave(1);
+}
+
+/* ---- Drawing ---- */
+
+/* An array of draw records. */
+typedef struct MnDraws {
+    MnDraw *data;
+    size_t len;
+    size_t capacity;
+} MnDraws;
+
+static struct {
+    /* The draws since the last frame, in the order they were made. */
+    MnDraws list;
+    /* The draws of the last frame. */
+    MnDraws frame;
+} drawing;
+
+/* What a draw is given while no window is open. */
+#ifdef MN_THREADS
+static _Thread_local MnDraw draw_dropped;
+#else
+static MnDraw draw_dropped;
+#endif
+
+/* Adds `more` records to the end of `draws` and returns the first. */
+static MnDraw *draws_extend(MnDraws *draws, size_t more) {
+    if (draws->capacity - draws->len < more) {
+        size_t capacity = draws->capacity ? draws->capacity : 64;
+        while (capacity - draws->len < more) {
+            if (capacity > SIZE_MAX / 2 / sizeof(MnDraw)) mn_out_of_memory();
+            capacity *= 2;
+        }
+        draws->data = mn_realloc(draws->data, capacity * sizeof(MnDraw));
+        draws->capacity = capacity;
+    }
+    MnDraw *first = draws->data + draws->len;
+    draws->len += more;
+    return first;
+}
+
+MnDraw *mn_draw(void) {
+    MnDraw *record;
+    if (!win.open) {
+        record = &draw_dropped;
+    }
+#ifdef MN_THREADS
+    /* In a piece the draw is kept with the piece. */
+    else if (mn_loop_thread) {
+        record = (MnDraw *)(void *)piece_bytes(
+            mn_loop_thread, 1 + mn_world.program->event_count, sizeof(MnDraw));
+    }
+#endif
+    else {
+        record = draws_extend(&drawing.list, 1);
+    }
+    memset(record, 0, sizeof *record);
+    return record;
 }
 
 /* ---- The keyboard and the mouse ---- */
@@ -1535,6 +1596,44 @@ static int drive_words(char *text, char **words, int most) {
 }
 
 static void window_capture(const char *text, const char *file);
+static int format_number(double value, bool single, char *out);
+
+/* Answers `draws`: the last frame as text, a line for the frame, one for
+ * its background and one for each draw that is not of nothing. */
+static void window_draws(void) {
+    static const char *const shapes[] = {"", "rect", "circle", "line", "triangle"};
+    static const int numbers[] = {0, 4, 3, 5, 6};
+    if (!win.open) drive_fail("can't list the draws: no window is open");
+    const MnDraws *frame = &drawing.frame;
+    size_t listed = 0;
+    for (size_t i = 0; i < frame->len; i++) {
+        if (frame->data[i].kind != MN_DRAW_NOTHING) listed++;
+    }
+    drive_answer("draws: %lld tick%s, %lldx%lld, %zu draw%s",
+                 (long long)win.frame_tick, win.frame_tick == 1 ? "" : "s",
+                 (long long)win.frame_point_width,
+                 (long long)win.frame_point_height, listed,
+                 listed == 1 ? "" : "s");
+    MnColor background = win.frame_background;
+    drive_answer("  Window.background = Color(%u, %u, %u, %u)",
+                 (unsigned)background.r, (unsigned)background.g,
+                 (unsigned)background.b, (unsigned)background.a);
+    for (size_t i = 0; i < frame->len; i++) {
+        const MnDraw *draw = &frame->data[i];
+        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TRIANGLE) continue;
+        char line[320];
+        int len = snprintf(line, sizeof line, "  Draw.%s(", shapes[draw->kind]);
+        for (int n = 0; n < numbers[draw->kind]; n++) {
+            len += format_number((double)draw->n[n], true, line + len);
+            line[len++] = ',';
+            line[len++] = ' ';
+        }
+        snprintf(line + len, sizeof line - (size_t)len, "Color(%u, %u, %u, %u))",
+                 (unsigned)draw->color.r, (unsigned)draw->color.g,
+                 (unsigned)draw->color.b, (unsigned)draw->color.a);
+        drive_answer("%s", line);
+    }
+}
 
 /* Carries out one command, given without its line break and without the
  * spaces around it. Returns true when it lets ticks run. */
@@ -1614,6 +1713,9 @@ static bool drive_command(char *text) {
         win.pixel_width = scaled(win.width);
         win.pixel_height = scaled(win.height);
         drive_answer("%s", text);
+    } else if (strcmp(name, "draws") == 0) {
+        if (count != 1) drive_fail("`draws` takes nothing");
+        window_draws();
     } else if (strcmp(name, "close") == 0) {
         if (count != 1) drive_fail("`close` takes nothing");
         if (win.open) {
@@ -1683,13 +1785,20 @@ static void drive_tick_answer(bool ending) {
     win.tick_text = NULL;
 }
 
-/* Makes the frame of the window as the resource has it now. */
+/* Makes the frame of the window as the resource has it now, with the draws
+ * since the last frame, and begins a new list. */
 static void window_frame(void) {
     const MnWindow *window = mn_window_program->window;
     win.frame_width = (uint32_t)window->pixel_width;
     win.frame_height = (uint32_t)window->pixel_height;
+    win.frame_point_width = window->width;
+    win.frame_point_height = window->height;
     win.frame_background = window->background;
     win.frame_tick = mn_time.tick;
+    MnDraws frame = drawing.frame;
+    drawing.frame = drawing.list;
+    drawing.list = frame;
+    drawing.list.len = 0;
 }
 
 /* Shows a window of win.width by win.height points titled `title` and
@@ -1787,6 +1896,7 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     window->pixel_width = win.pixel_width;
     window->pixel_height = win.pixel_height;
     window->open = true;
+    drawing.list.len = 0;
     window_frame();
 #ifdef MN_FRAMES
     if (win.shown) window_draw();
@@ -1881,6 +1991,8 @@ static void window_tick_begin(void) {
         win.closing = false;
         window->open = false;
         window_hide();
+        drawing.list.len = 0;
+        drawing.frame.len = 0;
         mn_emit(mn_window_program->closed);
         mn_stop();
     }
@@ -2134,6 +2246,9 @@ static void window_finish(void) {
     win.drive = NULL;
     win.drive_done = true;
     win.open = false;
+    free(drawing.list.data);
+    free(drawing.frame.data);
+    memset(&drawing, 0, sizeof drawing);
     window_hide();
 #ifdef MN_FRAMES
     mn_window_finish();
@@ -2217,14 +2332,18 @@ static int format_int(int64_t value, char *out) {
 }
 
 /* Writes `value` with `precision` significant digits in exponent form and
- * reports whether that text reads back as the same number. */
-static bool float_reads_back(double value, int precision, char *text,
-                             size_t size) {
+ * reports whether that text reads back as the same number: as the same
+ * 32-bit float when `single`. */
+static bool float_reads_back(double value, bool single, int precision,
+                             char *text, size_t size) {
     snprintf(text, size, "%.*e", precision - 1, value);
+    if (single) return strtof(text, NULL) == (float)value;
     return strtod(text, NULL) == value;
 }
 
-static int format_float(double value, char *out) {
+/* The text of a `Float`; with `single`, of a 32-bit float, with the
+ * fewest digits that read back as that float. */
+static int format_number(double value, bool single, char *out) {
     if (value != value) {
         memcpy(out, "NaN", 3);
         return 3;
@@ -2239,14 +2358,16 @@ static int format_float(double value, char *out) {
     }
 
     /* The fewest significant digits that read back. When 15 digits do not,
-     * no smaller number does. */
+     * no smaller number does; 9 always do for a 32-bit float. */
     char text[32];
-    int precision = float_reads_back(value, 15, text, sizeof text) ? 1 : 16;
-    while (precision < 17 &&
-           !float_reads_back(value, precision, text, sizeof text)) {
+    int most = single ? 9 : 17;
+    int precision =
+        single || float_reads_back(value, false, 15, text, sizeof text) ? 1 : 16;
+    while (precision < most &&
+           !float_reads_back(value, single, precision, text, sizeof text)) {
         precision++;
     }
-    if (precision == 17) snprintf(text, sizeof text, "%.16e", value);
+    if (precision == most) snprintf(text, sizeof text, "%.*e", most - 1, value);
 
     /* `text` is [-]d[.ddd]e[+-]xx: split it into digits and exponent. */
     const char *in = text;
@@ -2289,6 +2410,10 @@ static int format_float(double value, char *out) {
     if (exponent < 0) exponent = -exponent;
     if (exponent < 10) out[len++] = '0';
     return len + format_int(exponent, out + len);
+}
+
+static int format_float(double value, char *out) {
+    return format_number(value, false, out);
 }
 
 static int format_entity(MnEntity e, char *out) {
@@ -3211,9 +3336,10 @@ typedef struct MnBytes {
     size_t capacity;
 } MnBytes;
 
-/* What one piece queued, or emitted of one event type: `count` records in
- * the bytes `begin` up to `end` of the buffer of that kind of the thread
- * that ran it. Kind 0 is queued changes; kind 1 + e is events of type e. */
+/* What one piece queued, emitted of one event type, or drew: `count`
+ * records in the bytes `begin` up to `end` of the buffer of that kind of the
+ * thread that ran it. Kind 0 is queued changes; kind 1 + e is events of
+ * type e; kind 1 + the number of events is draws. */
 typedef struct MnStretch {
     uint64_t piece;
     uint32_t kind;
@@ -3371,13 +3497,18 @@ static int stretch_order(const void *a, const void *b) {
 }
 
 /* Hands one stretch to the world: queued changes to the end of the queue,
- * events to the end of their buffer. */
+ * events to the end of their buffer, draws to the end of the list. */
 static void stretch_append(const MnStretch *stretch) {
     const MnBytes *bytes = &loops.threads[stretch->thread].buffers[stretch->kind];
     size_t size = stretch->end - stretch->begin;
     if (stretch->kind == 0) {
         memcpy(commands_extend(size), bytes->data + stretch->begin, size);
         mn_world.deferred_count += (uint32_t)stretch->count;
+    } else if (stretch->kind == 1 + mn_world.program->event_count) {
+#ifdef MN_WINDOW
+        memcpy(draws_extend(&drawing.list, (size_t)stretch->count),
+               bytes->data + stretch->begin, size);
+#endif
     } else {
         memcpy(events_extend(stretch->kind - 1, stretch->count),
                bytes->data + stretch->begin, size);
@@ -3467,7 +3598,7 @@ static void loop_split(MnLoop *loop, const void *env, int64_t *sums,
         if (!loops.threads) mn_out_of_memory();
         memset(loops.threads, 0, size);
     }
-    uint32_t kinds = 1 + w->program->event_count;
+    uint32_t kinds = 2 + w->program->event_count;
     bool flags = loop->wrote_count != 0 && mn_gpu_active;
     size_t flag_count = flags ? mn_mul(tables, loop->wrote_count) : 0;
     for (uint32_t t = 0; t < split->threads; t++) {
@@ -3530,7 +3661,7 @@ static void loops_finish(void) {
     for (uint32_t t = 0; t < loops.thread_count; t++) {
         struct MnLoopThread *thread = &loops.threads[t];
         if (thread->buffers) {
-            uint32_t kinds = 1 + mn_world.program->event_count;
+            uint32_t kinds = 2 + mn_world.program->event_count;
             for (uint32_t kind = 0; kind < kinds; kind++) {
                 free(thread->buffers[kind].data);
             }
@@ -3653,6 +3784,9 @@ typedef struct MnGpuScratch {
     /* The `info` line that says how the block is split has been
      * printed. */
     bool split_reported;
+    /* Where a run on the CPU writes its records while no window is open. */
+    MnDraw *records;
+    size_t record_capacity;
 } MnGpuScratch;
 
 /* The block that ran for the first time most recently. */
@@ -3769,7 +3903,26 @@ typedef struct GpuLoop {
     uint64_t piece_rows;
     /* One for each thread taking part, when the run is split. */
     GpuError *errors;
+    /* When the block draws: the records of all its rows, row after row. */
+    MnDraw *records;
 } GpuLoop;
+
+/* The records of a run on the CPU of a block that draws, `rows` rows of
+ * them: at the end of the frame's list while a window is open, otherwise
+ * memory of the block's that nothing reads. */
+static MnDraw *gpu_records(const MnGpuBlock *block, MnGpuScratch *scratch,
+                           uint64_t rows) {
+    size_t count = mn_mul((size_t)rows, block->draws);
+#ifdef MN_WINDOW
+    if (win.open) return draws_extend(&drawing.list, count);
+#endif
+    if (count > scratch->record_capacity) {
+        scratch->records =
+            mn_realloc(scratch->records, mn_mul(count, sizeof(MnDraw)));
+        scratch->record_capacity = count;
+    }
+    return scratch->records;
+}
 
 /* Runs the rows numbered `from` up to `to`, table after table. */
 static void gpu_rows(const GpuLoop *loop, uint64_t from, uint64_t to,
@@ -3785,7 +3938,9 @@ static void gpu_rows(const GpuLoop *loop, uint64_t from, uint64_t to,
                         scratch->inner,
                         error,
                         (uint32_t)(from - start),
-                        (uint32_t)(stop - start)};
+                        (uint32_t)(stop - start),
+                        loop->records ? loop->records + (size_t)start * block->draws
+                                      : NULL};
         block->cpu(&run);
         from = stop;
         t++;
@@ -3838,7 +3993,8 @@ void mn_gpu_run(MnGpuBlock *block) {
     uint64_t weight =
         work_add(block->weight, work_mul(block->inner_weight, uniform[1]));
     MnSplit split = split_of(rows, weight);
-    GpuLoop loop = {block, scratch, rows, split.piece_rows, NULL};
+    GpuLoop loop = {block, scratch, rows, split.piece_rows, NULL, NULL};
+    if (block->draws != 0) loop.records = gpu_records(block, scratch, rows);
     uint32_t error = UINT32_MAX;
     if (split.threads < 2) {
         gpu_rows(&loop, 0, rows, &error);
@@ -4049,6 +4205,7 @@ static void gpu_finish(void) {
         free(scratch->inner);
         free(scratch->snapshots);
         free(scratch->snapshot_sizes);
+        free(scratch->records);
         scratch->block->state = NULL;
         free(scratch);
     }

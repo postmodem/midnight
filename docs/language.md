@@ -610,8 +610,8 @@ number of terms.
 The order in which entities are visited is not specified, but it is
 deterministic: the same program with the same input visits them in the same
 order. A loop that runs on [several cores](#several-cores) gives what
-visiting the entities in that order gives, and what it queues and emits is
-in that order.
+visiting the entities in that order gives, and what it queues, emits and
+draws is in that order.
 
 `each` can be used anywhere statements can: in systems, in functions and at
 the top level. Queries nest, which is how pairs of entities are compared.
@@ -1916,9 +1916,10 @@ through other functions, keeps to all of these:
    `R.f = R.f + x` is an assignment under rule 2. Several sums into one
    field are fine. `Int` addition wraps, so the total is the same in any
    order.
-5. **Queued changes and events.** `despawn`, `add` and `remove`, on any
-   entity, and `emit`. They are collected per piece and joined in visiting
-   order when the loop ends, which is the order one thread makes them in.
+5. **Queued changes, events and draws.** `despawn`, `add` and `remove`, on
+   any entity, `emit`, and the draws of `Draw`. They are collected per piece
+   and joined in visiting order when the loop ends, which is the order one
+   thread makes them in.
    A component that is added, and an event, are plain values under rule 1.
 6. **None of these:** `spawn`; `on`; `rand`, `rand(n)` and `srand`; `puts`
    and `print`; `clock`, `sleep` and `exit`; `World.stop`; `World.tick`,
@@ -2377,7 +2378,7 @@ operations:
   of `Time`, and nothing for assigning a whole variable;
 - 4 for `e[C]` and `World.count`;
 - 8 for `/`, `%`, `**` and a `Math` function, and for `despawn`, `add`,
-  `remove` and `emit`;
+  `remove`, `emit` and a draw;
 - for a branch, its condition and the heaviest of its arms;
 - for a loop that is not a query, 8 times its body;
 - for a call, the weight of the function, and 64 for one that recurses;

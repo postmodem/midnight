@@ -1,0 +1,50 @@
+# An independent loop that draws while its rows run in pieces on several
+# threads: its own draws, those of the `each` nested in it and those of a
+# function it calls are listed in the order of its rows, which is the order
+# one thread makes them in. The 600 dots are in three tables; each row
+# looks at 200 probes, which gives the loop enough work to be split.
+
+component Dot
+  id: Int
+end
+
+component Probe
+  id: Int
+end
+
+tag Red
+tag Blue
+
+def mark(id: Int)
+  Draw.rect(id, 1, 1, 1, Color(0, 0, 200))
+end
+
+system show
+  each Dot do |dot|
+    Draw.circle(dot.id, Time.tick, 1, Color(200, 0, 0)) if dot.id % 25 == 0
+    each Probe do |probe|
+      if probe.id == dot.id % 200 && dot.id % 70 == 3
+        Draw.line(dot.id, probe.id, 0, 0, 1, Color(0, 200, 0))
+      end
+    end
+    mark(dot.id) if dot.id % 90 == 5
+  end
+end
+
+600.times do |i|
+  if i % 3 == 0
+    spawn Dot(i), Red
+  elsif i % 3 == 1
+    spawn Dot(i), Blue
+  else
+    spawn Dot(i)
+  end
+end
+200.times do |i|
+  spawn Probe(i)
+end
+
+Window.open("Cores", 640, 480)
+World.tick
+World.tick
+puts "ticks: #{Time.tick}"

@@ -80,6 +80,12 @@ pub fn walk_stmt<'a>(stmt: &'a Stmt, f: &mut dyn FnMut(Node<'a>)) {
             walk_expr(width, f);
             walk_expr(height, f);
         }
+        StmtKind::Draw { nums, color, .. } => {
+            for num in nums {
+                walk_expr(num, f);
+            }
+            walk_expr(color, f);
+        }
     }
 }
 

@@ -63,6 +63,8 @@ pub struct Block<'a> {
     pub inner_query: Option<&'a Query>,
     pub outer: Vec<Column>,
     pub inner: Vec<Column>,
+    /// The number of its draw statements: each run has a record for each.
+    pub draws: u32,
     /// One run: the code for the row `row`. Inside the nested loop the
     /// snapshot row is `j`.
     pub body: Vec<Stmt>,
@@ -209,6 +211,7 @@ struct Draft<'a> {
     inner_query: Option<&'a Query>,
     outer: Vec<Column>,
     inner: Vec<Column>,
+    draws: u32,
     /// Loads of the run's own row.
     prologue: Vec<Stmt>,
     body: Vec<Stmt>,
@@ -288,6 +291,8 @@ struct InBlock<'a> {
     paths: HashMap<usize, Paths>,
     inner_query: Option<&'a Query>,
     inner: Vec<Column>,
+    /// The draw statements lowered so far.
+    draws: u32,
 }
 
 /// A value: an expression without effects, and whether an assignment to
@@ -477,6 +482,7 @@ impl<'a> Lower<'a> {
             paths: local_paths(body),
             inner_query: None,
             inner: Vec::new(),
+            draws: 0,
         });
         let mut outer = Vec::new();
         let (prologue, epilogue) = cx.views(query, params, false, &mut outer);
@@ -496,6 +502,7 @@ impl<'a> Lower<'a> {
             inner_query: block.inner_query,
             outer,
             inner: block.inner,
+            draws: block.draws,
             prologue,
             body,
             epilogue,
@@ -506,7 +513,8 @@ impl<'a> Lower<'a> {
     /// library.
     fn finish(&mut self, id: u32, draft: Draft<'a>) -> Block<'a> {
         let mut outer = draft.outer;
-        let mut body = draft.prologue;
+        let mut body: Vec<Stmt> = (0..draft.draws).map(Stmt::Undraw).collect();
+        body.extend(draft.prologue);
         let reached = closure(&self.library, &Uses::of_stmts(&draft.body));
         if reached.rand_state {
             // The run draws random numbers, which depend on its entity.
@@ -560,6 +568,7 @@ impl<'a> Lower<'a> {
             inner_query: draft.inner_query,
             outer,
             inner: draft.inner,
+            draws: draft.draws,
             body,
             uses,
             entries,
@@ -969,6 +978,29 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 body,
                 ..
             } => self.nested_each(query, params, body),
+            StmtKind::Draw {
+                shape, nums, color, ..
+            } => {
+                let mut exprs: Vec<&'a TExpr> = nums.iter().collect();
+                exprs.push(color);
+                let mut values = self.operands(&exprs);
+                let mut color = values.pop().expect("a draw has a colour");
+                if !color.e.is_path() {
+                    color = self.temp(color);
+                }
+                let block = self
+                    .block
+                    .as_mut()
+                    .expect("the checker keeps draws in GPU blocks");
+                let slot = block.draws;
+                block.draws += 1;
+                self.out.push(Stmt::Draw {
+                    slot,
+                    kind: shape.kind(),
+                    nums: values.into_iter().map(|value| value.e).collect(),
+                    color: color.e,
+                });
+            }
             StmtKind::ListEach { .. }
             | StmtKind::On { .. }
             | StmtKind::Puts(_)

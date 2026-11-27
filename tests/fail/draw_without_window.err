@@ -1,0 +1,5 @@
+error: nothing opens a window for `Draw.circle` to draw in
+ --> tests/fail/draw_without_window.12am:5:3
+  |
+5 |   Draw.circle(2, 2, 1, Color(0, 0, 0))
+  |   ^^^^^^^^^^^ open one with `Window.open(title, width, height)`

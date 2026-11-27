@@ -673,6 +673,10 @@ impl Checker<'_> {
                     let label = match name {
                         "World" | "Time" | "Math" => format!("use its members, like `{name}.…`"),
                         "Keyboard" => "use its members, like `Keyboard.down?(Key::A)`".to_string(),
+                        "Draw" => {
+                            "draw with its members, like `Draw.rect(x, y, width, height, color)`"
+                                .to_string()
+                        }
                         _ => "a type is not a value".to_string(),
                     };
                     self.err_label(format!("`{name}` is not a value"), span, label);
@@ -799,6 +803,8 @@ impl Checker<'_> {
                 "`{0}(…)` is always a function call; the method is `self.{0}(…)`",
                 name.name
             ));
+        } else if let Some(hint) = super::draw_hint(&name.name) {
+            diagnostic = diagnostic.label(hint);
         } else if let Some(close) = util::closest(&name.name, candidates.iter().map(String::as_str))
         {
             diagnostic = diagnostic.label(format!("did you mean `{close}`?"));
@@ -1206,6 +1212,9 @@ impl Checker<'_> {
                 format!("`{n}` is built in and has no constructor"),
                 Some("only structs, components and events are constructed".to_string()),
             ),
+            None if let Some(hint) = super::draw_hint(n) => {
+                (format!("unknown type `{n}`"), Some(hint))
+            }
             None => {
                 let candidates: Vec<String> = self
                     .globals

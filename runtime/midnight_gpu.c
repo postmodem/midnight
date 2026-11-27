@@ -1062,6 +1062,7 @@ static uint64_t block_uniform_stride(const MnGpuBlock *block) {
 static const char *block_unfit(const MnGpuBlock *block) {
     char *reason = gpu.reason;
     size_t room = sizeof gpu.reason;
+    if (block->draws != 0) return "it draws, and draws are made on the CPU";
     uint32_t storage = block_storage_buffers(block);
     if (storage > gpu.max_storage_buffers) {
         snprintf(reason, room,

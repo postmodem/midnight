@@ -219,7 +219,7 @@ end
 ";
 
 /// The names that give a program a window.
-const WINDOW_NAMES: [&str; 11] = [
+const WINDOW_NAMES: [&str; 12] = [
     "Window",
     "WindowResized",
     "WindowClosed",
@@ -231,6 +231,7 @@ const WINDOW_NAMES: [&str; 11] = [
     "MouseReleased",
     "WindowFocused",
     "WindowUnfocused",
+    "Draw",
 ];
 
 /// The program of `items`, from every file in `sources`, preceded by the
@@ -440,6 +441,14 @@ mod tests {
         );
         assert_eq!(
             builtin_names("enum Shape\n  Mouse, Window\nend\nputs Shape::Keyboard\n"),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            builtin_names("Draw.rect(0, 0, 1, 1, Color(0, 0, 0))\n"),
+            ["Key", "MouseButton", "Window", "Mouse"]
+        );
+        assert_eq!(
+            builtin_names("enum Shape\n  Draw\nend\nputs Shape::Draw\n"),
             Vec::<String>::new()
         );
     }

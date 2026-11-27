@@ -1,0 +1,5 @@
+error: `Draw.circle` takes its colour last
+ --> tests/fail/draw_color_first.12am:6:15
+  |
+6 |   Draw.circle(Color(255, 0, 0), 10, 10, 4)
+  |               ^^^^^^^^^^^^^^^^ write `Draw.circle(x, y, radius, color)`

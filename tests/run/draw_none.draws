@@ -1,0 +1,6 @@
+draws: 0 ticks, 30x20, 0 draws
+  Window.background = Color(1, 2, 3, 4)
+draws: 1 tick, 30x20, 0 draws
+  Window.background = Color(1, 2, 3, 4)
+draws: 2 ticks, 30x20, 0 draws
+  Window.background = Color(200, 100, 50, 255)

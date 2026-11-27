@@ -1,0 +1,16 @@
+# expect: a type or function that names a shape, and that the program does not define, says how the shape is drawn
+# at: line 5, `Circle`; line 6, `Rect`; line 7, `Rectangle`; line 8, `Line`; line 9, `Triangle`; line 10, `Circle` spawned bare; lines 11 to 16, the functions
+
+Window.open("Shapes", 64, 48)
+c = Circle(1, 2, 3)
+spawn Rect(0, 0, 4, 4)
+r = Rectangle(0, 0, 1, 1)
+l = Line(0, 0, 1, 1)
+t = Triangle(0, 0, 1, 1, 0, 1)
+spawn Circle
+draw_circle(1, 2, 3)
+fill_rect(0, 0, 4, 4)
+draw_line(0, 0, 1, 1)
+triangle(0, 0, 1, 1, 0, 1)
+rect(0, 0, 4, 4)
+circle(1, 1, 1)

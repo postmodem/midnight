@@ -1,0 +1,48 @@
+# expect: every loop is independent. Each draws: directly, in a branch, in
+# a counting loop, in a nested `each`, and in a called function; a draw is
+# kept with the piece that makes it, as an `emit` is.
+
+component Dot
+  x: Float
+  y: Float
+end
+
+system show
+  each Dot do |dot|
+    Draw.circle(dot.x, dot.y, 2, Color(255, 255, 255))
+  end
+end
+
+system branch
+  each Dot do |dot|
+    Draw.rect(dot.x, dot.y, 1, 1, Color(255, 0, 0)) if dot.x > dot.y
+  end
+end
+
+system trail
+  each Dot do |dot|
+    3.times do |i|
+      Draw.line(dot.x, dot.y, dot.x - i, dot.y, 1, Color(0, 255, 0))
+    end
+  end
+end
+
+system pairs
+  each Dot do |dot|
+    each Dot do |other|
+      Draw.line(dot.x, dot.y, other.x, other.y, 0.5, Color(0, 0, 255))
+    end
+  end
+end
+
+def spark(x: Float, y: Float)
+  Draw.triangle(x, y, x + 1, y, x, y + 1, Color(9, 9, 9))
+end
+
+system called
+  each Dot do |dot|
+    spark(dot.x, dot.y)
+  end
+end
+
+Window.open("Draws", 64, 48)

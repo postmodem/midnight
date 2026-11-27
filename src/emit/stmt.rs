@@ -5,14 +5,14 @@ use std::fmt::Write as _;
 
 use crate::source::Span;
 use crate::tir::{
-    BinOp, Block, CompoundOp, Cores, EventId, Expr, LocalId, Place, PlaceKind, Query, Run, Stmt,
-    StmtKind, Target, Term, Type,
+    BinOp, Block, CompoundOp, Cores, EventId, Expr, LocalId, Place, PlaceKind, Query, Run, Shape,
+    Stmt, StmtKind, Target, Term, Type,
 };
 
 use super::analysis::{self, HoistKey, Node};
 use super::body::{ADD, Dep, FnCx, Mode, Own, ScopeKind, UNARY, Val};
 use super::expr::{Sink, Want, arg_list, push_lit, text_parts};
-use super::names;
+use super::names::{self, draw_kind};
 use super::place::{Prepared, load};
 use super::{LoopDesc, RESET_LINE};
 
@@ -88,6 +88,9 @@ impl<'a> FnCx<'a, '_> {
                 let loc = self.cx.loc(stmt.span);
                 self.line(&format!("mn_window_open({}, {loc});", arg_list(&values)));
             }
+            StmtKind::Draw {
+                shape, nums, color, ..
+            } => self.draw(*shape, nums, color),
         }
         if analysis::leaves(stmt) {
             self.forget(mark);
@@ -961,6 +964,24 @@ impl<'a> FnCx<'a, '_> {
         }
         let values = self.eval_parts(&parts);
         self.write_parts(&parts, values, &Sink::Out);
+    }
+
+    /// A draw: its arguments in order, then its record, filled at once.
+    fn draw(&mut self, shape: Shape, nums: &'a [Expr], color: &'a Expr) {
+        let mut exprs: Vec<&'a Expr> = nums.iter().collect();
+        exprs.push(color);
+        let values = self.operands(&exprs, Want::Peek);
+        let (color_value, nums) = values.split_last().expect("a draw has a colour");
+        let color_name = self.declare(&color.ty, &color_value.c);
+        let record = self.tmp();
+        self.line(&format!("MnDraw *const {record} = mn_draw();"));
+        self.line(&format!("{record}->kind = {};", draw_kind(shape)));
+        for (index, num) in nums.iter().enumerate() {
+            self.line(&format!("{record}->n[{index}] = (float)({});", num.c));
+        }
+        self.line(&format!(
+            "memcpy(&{record}->color, &{color_name}, sizeof {record}->color);"
+        ));
     }
 
     fn emit_event(&mut self, event: EventId, value: &'a Expr) {

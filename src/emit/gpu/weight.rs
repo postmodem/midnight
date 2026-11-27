@@ -200,7 +200,13 @@ impl Weigher<'_> {
                 Weight::default()
             }
             Stmt::Return(Some(value)) | Stmt::Call(value) => Weight::of(self.expr(value)),
-            Stmt::Fail(_) => Weight::of(1),
+            Stmt::Fail(_) | Stmt::Undraw(_) => Weight::of(1),
+            Stmt::Draw { nums, color, .. } => {
+                let args = nums
+                    .iter()
+                    .fold(self.expr(color), |total, num| add(total, self.expr(num)));
+                Weight::of(add(8, args))
+            }
         }
     }
 }

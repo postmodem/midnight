@@ -70,6 +70,7 @@ pub fn module(gpu: &Lowered, block: &Block) -> String {
         gpu,
         out: String::new(),
         indent: 0,
+        draws: block.draws,
     };
     let p = &mut printer;
 
@@ -116,6 +117,9 @@ pub fn module(gpu: &Lowered, block: &Block) -> String {
     if block.uses.opaque {
         bind(p, "var<storage, read> mn_z: array<u32, 2>;");
     }
+    if block.draws != 0 {
+        bind(p, "var<storage, read_write> records: array<u32>;");
+    }
     if block.uses.rand_state {
         p.line("var<private> g_key: u32;");
         p.line("var<private> g_draws: u32;");
@@ -150,6 +154,7 @@ pub fn check_module(gpu: &Lowered) -> String {
         gpu,
         out: String::new(),
         indent: 0,
+        draws: 0,
     };
     let p = &mut printer;
     p.line("@group(0) @binding(0) var<storage, read> mn_in: array<u32>;");
@@ -199,6 +204,8 @@ struct Printer<'g, 'a> {
     gpu: &'g Lowered<'a>,
     out: String,
     indent: usize,
+    /// In a block's shader, the number of its draw statements.
+    draws: u32,
 }
 
 fn symbol(op: BinOp) -> &'static str {
@@ -663,7 +670,43 @@ impl Printer<'_, '_> {
                 let site = self.top(site);
                 self.line(&format!("atomicMin(&g_error, {site});"));
             }
+            Stmt::Undraw(slot) => {
+                let word = self.record_word(*slot, 0);
+                self.line(&format!("{word} = 0u;"));
+            }
+            Stmt::Draw {
+                slot,
+                kind,
+                nums,
+                color,
+            } => {
+                let word = self.record_word(*slot, 0);
+                self.line(&format!("{word} = {kind}u;"));
+                for index in 0..6 {
+                    let word = self.record_word(*slot, 1 + index as u32);
+                    let num = match nums.get(index) {
+                        Some(num) => format!("bitcast<u32>({})", self.top(num)),
+                        None => "0u".to_string(),
+                    };
+                    self.line(&format!("{word} = {num};"));
+                }
+                let word = self.record_word(*slot, 7);
+                let color = self.expr(color);
+                self.line(&format!(
+                    "{word} = u32({color}.f_r) | (u32({color}.f_g) << 8u) | \
+                     (u32({color}.f_b) << 16u) | (u32({color}.f_a) << 24u);"
+                ));
+            }
         }
+    }
+
+    /// Word `word` of the run's record for draw statement `slot`: a
+    /// record is eight words.
+    fn record_word(&self, slot: u32, word: u32) -> String {
+        format!(
+            "records[({ROW} * {}u + {slot}u) * 8u + {word}u]",
+            self.draws
+        )
     }
 
     fn function(&mut self, func: &Func) {

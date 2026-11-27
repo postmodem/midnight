@@ -1,0 +1,22 @@
+# A strict GPU system that draws: its numbers follow the strict rules, and
+# its draws are listed as an ordinary system's would be.
+
+component Spot
+  x: Float32
+  y: Float32
+end
+
+strict gpu system show
+  each Spot do |spot|
+    r = (spot.x * spot.x + spot.y * spot.y) / 7.0
+    Draw.circle(spot.x / 3.0, spot.y * 0.1, r, Color(1, 2, 3, 200))
+  end
+end
+
+spawn Spot(1, 2)
+spawn Spot(0.5, 3.25)
+spawn Spot(7, 0.1)
+
+Window.open("Strict", 32, 32)
+World.tick
+puts "ticks: #{Time.tick}"

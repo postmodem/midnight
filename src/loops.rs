@@ -296,6 +296,12 @@ fn stmt_eaches<'p>(stmt: &'p Stmt, out: &mut Vec<&'p Stmt>) {
             expr_eaches(width, out);
             expr_eaches(height, out);
         }
+        StmtKind::Draw { nums, color, .. } => {
+            for num in nums {
+                expr_eaches(num, out);
+            }
+            expr_eaches(color, out);
+        }
     }
 }
 

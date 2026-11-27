@@ -1,0 +1,34 @@
+# A draw while no window is open, before `Window.open` and after the window
+# is closed, evaluates its arguments and is dropped. A window opened again
+# begins with a frame of its background alone. A frame has the size in
+# points the window had when its tick ended: a `resize` and a `scale`
+# change the next frame, not the last.
+
+def said(x: Int) -> Int
+  puts "evaluated #{x}"
+  x
+end
+
+system show
+  Draw.rect(0, 0, Window.width, Window.height, Color(Time.tick, 0, 0))
+end
+
+system report
+  on WindowClosed do
+    Draw.circle(said(1), 0, 1, Color(0, 0, 0))
+    puts "closed at tick #{Time.tick}"
+  end
+end
+
+Draw.circle(said(2), 0, 1, Color(0, 0, 0))
+Window.background = Color(0, 40, 0)
+Window.open("First", 64, 48)
+World.run
+Draw.circle(said(3), 0, 1, Color(0, 0, 0))
+
+Window.background = Color(0, 0, 80)
+Window.open("Second", 20, 10)
+Draw.circle(said(4), 2, 2, Color(4, 4, 4))
+World.tick
+World.tick
+puts "ended after #{Time.tick} ticks"

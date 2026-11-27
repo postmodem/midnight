@@ -1,0 +1,7 @@
+# expect: a draw with its colour first says the colour goes last
+# at: line 6, the `Color` given first
+
+Window.open("Shapes", 64, 48)
+system show
+  Draw.circle(Color(255, 0, 0), 10, 10, 4)
+end

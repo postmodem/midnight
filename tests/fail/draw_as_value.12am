@@ -1,0 +1,13 @@
+# expect: a draw is a statement with every argument, and `Draw` is neither a value nor a name a program may declare
+# at: line 4, a struct named `Draw`; line 10, a draw used as a value; line 11, `Draw` used as a value; line 12, `Draw.rect` without its arguments
+
+struct Draw
+  x: Int
+end
+
+Window.open("Shapes", 64, 48)
+system show
+  done = Draw.rect(0, 0, 1, 1, Color(1, 1, 1))
+  shapes = Draw
+  Draw.rect
+end

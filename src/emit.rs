@@ -596,6 +596,9 @@ impl<'a> Cx<'a> {
         };
         if let Some(window) = prog.window {
             out.push_str(&self.window_layout(window));
+            if draws(prog) {
+                out.push_str(DRAW_LAYOUT);
+            }
             let _ = writeln!(
                 out,
                 "static const MnWindowProgram window_program = {{\n    (MnWindow *)&{},\n    (MnMouse *)&{},\n    {},\n    {},\n    {},\n    {},\n    {},\n    {},\n    {},\n    {},\n}};\n",
@@ -702,6 +705,35 @@ impl<'a> Cx<'a> {
         out.push('\n');
         out
     }
+}
+
+/// Assertions that a draw's record is laid out as a shader writes it.
+const DRAW_LAYOUT: &str = "\
+_Static_assert(sizeof(MnDraw) == 32, \"the layout of a draw\");
+_Static_assert(offsetof(MnDraw, kind) == 0, \"the layout of a draw\");
+_Static_assert(offsetof(MnDraw, n) == 4, \"the layout of a draw\");
+_Static_assert(offsetof(MnDraw, color) == 28, \"the layout of a draw\");
+
+";
+
+/// Whether the program has a draw statement.
+fn draws(prog: &Program) -> bool {
+    let mut found = false;
+    let mut visit = |node: analysis::Node<'_>| {
+        if let analysis::Node::Stmt(stmt) = node
+            && matches!(stmt.kind, StmtKind::Draw { .. })
+        {
+            found = true;
+        }
+    };
+    for func in &prog.funcs {
+        analysis::walk_block(&func.body.block, &mut visit);
+    }
+    for system in &prog.systems {
+        analysis::walk_block(&system.body.block, &mut visit);
+    }
+    analysis::walk_block(&prog.main.block, &mut visit);
+    found
 }
 
 /// Replaces each reset marker with a `#line` directive that gives the

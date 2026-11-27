@@ -295,6 +295,18 @@ pub enum Stmt {
     Discard(Expr),
     /// Lowers the error word to this site.
     Fail(Expr),
+    /// Stores kind 0, a draw of nothing, in the run's record for draw
+    /// statement `slot` of the block.
+    Undraw(u32),
+    /// Fills the run's record for draw statement `slot`: `kind`, the
+    /// shape's numbers (`F32`s, at most six; the rest are zero), and
+    /// `color`, a `Color` value that is a path.
+    Draw {
+        slot: u32,
+        kind: u32,
+        nums: Vec<Expr>,
+        color: Expr,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -475,6 +487,13 @@ impl Uses {
                 Stmt::Fail(site) => {
                     self.fails = true;
                     self.expr(site);
+                }
+                Stmt::Undraw(_) => {}
+                Stmt::Draw { nums, color, .. } => {
+                    for num in nums {
+                        self.expr(num);
+                    }
+                    self.expr(color);
                 }
             }
         }

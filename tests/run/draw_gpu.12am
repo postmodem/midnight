@@ -1,0 +1,54 @@
+# GPU systems that draw, here run on the CPU: the draws of a block take the
+# place in the frame that those of an ordinary `each` would, entity after
+# entity in visiting order, the draws of one entity in the order its run
+# made them. A draw in an arm not taken or after a `next` is not made, and
+# one reached in one tick need not be in the next. The block `show` draws
+# and writes nothing; the bodies are in two tables. An ordinary system's
+# draws come before, and another's after.
+
+component Body
+  x: Float32
+  y: Float32
+  id: Int32
+end
+
+tag Big
+
+system under
+  Draw.rect(0, 0, 100, 100, Color(10, 10, 10))
+end
+
+gpu system show
+  each Body do |body|
+    next if body.id == 2
+    if body.id % 2 == 0
+      Draw.circle(body.x, body.y, 1.5, Color(255, 255, 255))
+    else
+      Draw.rect(body.x, body.y, 2, 2, Color((body.id * 40).clamp(0, 255), 0, 0))
+    end
+    Draw.line(body.x, 0, body.x, body.y, 0.5, Color(0, 0, 255)) if Time.tick == 0
+  end
+end
+
+gpu system move
+  each Body, with: Big do |body|
+    body.y += 0.25
+    Draw.triangle(body.x, body.y, body.x + 1, body.y, body.x, body.y + 1, Color(0, 99, 0))
+  end
+end
+
+system over
+  Draw.rect(0, 0, 5, 5, Color(0, 255, 0, 128))
+end
+
+spawn Body(10, 20, 0)
+spawn Body(11, 21, 1), Big
+spawn Body(12, 22, 2)
+spawn Body(13, 23, 3)
+spawn Body(14, 24, 4), Big
+spawn Body(15, 25, 5), Big
+
+Window.open("GPU", 100, 100)
+World.tick
+World.tick
+puts "ticks: #{Time.tick}"
