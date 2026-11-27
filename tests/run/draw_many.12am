@@ -1,0 +1,53 @@
+# Many shapes of the four kinds at places from a fixed sequence of numbers,
+# opaque: corners and centres on whole points, halves, eighths of a point
+# and finer, so that pixel centres lie exactly on many edges at every
+# scale. Every pixel is the one the reference's tests give, on every
+# device, and the frame is the same bytes on all of them.
+
+Window.background = Color(0, 0, 0)
+Window.open("Many", 120, 80)
+
+def next_seed(seed: Int) -> Int
+  (seed * 1103515245 + 12345) % 2147483648
+end
+
+def coordinate(seed: Int) -> Float
+  (seed / 65536 % 1200).to_f / 8.0 - 15.0
+end
+
+system show
+  seed = 7 + Time.tick
+  i = 0
+  while i < 800
+    seed = next_seed(seed)
+    a = coordinate(seed)
+    seed = next_seed(seed)
+    b = coordinate(seed)
+    seed = next_seed(seed)
+    c = coordinate(seed)
+    seed = next_seed(seed)
+    d = coordinate(seed)
+    seed = next_seed(seed)
+    e = coordinate(seed)
+    seed = next_seed(seed)
+    f = coordinate(seed)
+    color = Color(seed % 256, seed / 256 % 256, seed / 65536 % 256)
+    case i % 5
+    when 0
+      Draw.rect(a, b * 0.66, (c % 13.0) + 0.125, (d % 9.0) + 0.0625, color)
+    when 1
+      Draw.circle(a, b * 0.66, (c % 7.0) + 0.5, color)
+    when 2
+      Draw.line(a, b * 0.66, c, d * 0.66, (e % 3.0) * 0.5 + 0.25, color)
+    when 3
+      Draw.triangle(a, b * 0.66, a + (c % 20.0) - 10.0, b * 0.66 + (d % 20.0) - 10.0, e, f * 0.66, color)
+    else
+      Draw.triangle(a, b, c, d, e, f, color)
+      Draw.triangle(a, b, e, f, c + 3.0, d - 2.5, color)
+    end
+    i += 1
+  end
+end
+
+World.run
+puts "drawn in #{Time.tick} ticks"

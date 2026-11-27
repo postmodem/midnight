@@ -998,6 +998,8 @@ static struct {
     int64_t frame_point_height;
     MnColor frame_background;
     int64_t frame_tick;
+    /* Goes up with every frame. */
+    uint64_t frame_number;
 
     /* The window is on the desktop, through midnight_window.c. */
     bool shown;
@@ -1795,6 +1797,7 @@ static void window_frame(void) {
     win.frame_point_height = window->height;
     win.frame_background = window->background;
     win.frame_tick = mn_time.tick;
+    win.frame_number++;
     MnDraws frame = drawing.frame;
     drawing.frame = drawing.list;
     drawing.list = frame;
@@ -1828,9 +1831,26 @@ static const char *window_show(MnString title, const char **how) {
 }
 
 #ifdef MN_FRAMES
-/* Draws the last frame and shows it on the desktop. */
+/* The last frame, for midnight_window.c, its draws in `span`. */
+static MnFrame frame_now(MnSpan *span) {
+    span->records = drawing.frame.data;
+    span->count = drawing.frame.len;
+    MnFrame frame = {0};
+    frame.width = win.frame_width;
+    frame.height = win.frame_height;
+    frame.point_width = win.frame_point_width;
+    frame.point_height = win.frame_point_height;
+    frame.background = win.frame_background;
+    frame.spans = span;
+    frame.span_count = 1;
+    frame.number = win.frame_number;
+    return frame;
+}
+
+/* Renders the last frame and shows it on the desktop. */
 static void window_draw(void) {
-    MnFrame frame = {win.frame_width, win.frame_height, win.frame_background};
+    MnSpan span;
+    MnFrame frame = frame_now(&span);
     mn_window_draw(&frame);
 }
 #endif
@@ -2207,7 +2227,8 @@ static void window_capture(const char *text, const char *file) {
     (void)text;
     drive_fail("can't capture: the program was built without the window flags");
 #else
-    MnFrame frame = {win.frame_width, win.frame_height, win.frame_background};
+    MnSpan span;
+    MnFrame frame = frame_now(&span);
     size_t size = (size_t)frame.width * frame.height * 4;
     unsigned char *rgba = mn_malloc(size);
     const char *unable = mn_window_read(&frame, rgba);

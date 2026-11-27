@@ -1,0 +1,18 @@
+# Shapes far larger than the window, and shapes whose numbers lie far
+# outside it: a rectangle and a circle a million points across, a triangle
+# with a corner at 1e30, and a line that crosses the window from ends a
+# million points away. Only the part inside the window is drawn, and every
+# pixel is the one the reference's tests give.
+
+Window.background = Color(20, 20, 20)
+Window.open("Huge", 96, 64)
+
+system show
+  Draw.rect(-1000000, -1000000, 1000040, 2000000, Color(200, 60, 60))
+  Draw.circle(1000066, 32, 1000000, Color(60, 200, 60))
+  Draw.triangle(1.0e30, 10, -20, 0, -20, 30, Color(60, 60, 200))
+  Draw.line(-1000000, -999990.5, 1000000, 1000040.25, 3, Color(240, 240, 240))
+end
+
+World.run
+puts "drawn in #{Time.tick} ticks"

@@ -10,9 +10,10 @@
  *
  * Everything here is called from the thread that runs the ticks.
  *
- * A frame is drawn into a texture midnight_window.c owns, RGBA8UnormSrgb,
- * of the frame's size. A window that is shown gets the texture by one more
- * pass, so a frame read back is the same with a window and without one.
+ * A frame is rendered into a texture midnight_window.c owns, RGBA8Unorm, of
+ * the frame's size, holding colour bytes as they are. A window that is
+ * shown gets the texture by one more pass that copies each texel, so a
+ * frame read back is the same with a window and without one.
  */
 
 #ifndef MIDNIGHT_WINDOW_H
@@ -20,11 +21,25 @@
 
 #include "midnight_rt.h"
 
-/* A frame: the picture of the world after a tick. Its alpha is ignored. */
+/* Draw records of a frame, in CPU memory. */
+typedef struct MnSpan {
+    const MnDraw *records;
+    size_t count;
+} MnSpan;
+
+/* A frame: the window's size and background after a tick, and the draws of
+ * the tick, span after span, each record in order. The background's alpha
+ * is ignored. The spans stay valid until the next frame is made. */
 typedef struct MnFrame {
     uint32_t width;  /* pixels, 1 to MN_WINDOW_LARGEST */
     uint32_t height; /* pixels, 1 to MN_WINDOW_LARGEST */
+    int64_t point_width;
+    int64_t point_height;
     MnColor background;
+    const MnSpan *spans;
+    size_t span_count;
+    /* Goes up with every frame the runtime makes. */
+    uint64_t number;
 } MnFrame;
 
 /* What the desktop says of a window that is shown. */
@@ -81,15 +96,17 @@ const char *mn_window_show(const char *title, int64_t width, int64_t height,
  * configures the surface again. */
 void mn_window_poll(MnWindowSizes *sizes);
 
-/* Draws `frame` into the frame texture and, while a window is shown and
- * not hidden, minimized or occluded, presents it. Never waits for the
- * display. */
+/* While a window is shown and not hidden, minimized or occluded: waits for
+ * the device to finish the work handed to it before, renders `frame` into
+ * the frame texture and presents it. Renders nothing otherwise. Never
+ * waits for the display. */
 void mn_window_draw(const MnFrame *frame);
 
 /* Writes the pixels of `frame` to `rgba`, width * height * 4 bytes, rows
- * from the top: reads the frame texture back, after drawing the frame into
- * it when it holds another. Starts the device through mn_window_device when
- * there is none. Returns NULL, or why the frame can't be read. */
+ * from the top: reads the frame texture back, after rendering the frame
+ * into it when it holds another. Starts the device through
+ * mn_window_device when there is none. Returns NULL, or why the frame
+ * can't be read. */
 const char *mn_window_read(const MnFrame *frame, unsigned char *rgba);
 
 /* Closes the shown window. */

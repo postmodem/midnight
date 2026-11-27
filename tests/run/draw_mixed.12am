@@ -1,0 +1,34 @@
+# An ordinary system draws, a GPU system draws over it, and another
+# ordinary system draws over both, all in the same place: the frame holds
+# them in that order, whichever runs the GPU block.
+
+component Body
+  x: Float32
+  y: Float32
+  size: Float32
+end
+
+system under
+  Draw.rect(10, 10, 60, 40, Color(200, 0, 0))
+end
+
+gpu system bodies
+  each Body do |body|
+    Draw.circle(body.x, body.y, body.size, Color(0, 200, 0))
+    Draw.triangle(body.x, body.y, body.x + body.size, body.y + body.size, body.x - body.size, body.y + body.size, Color(0, 0, 200, 160))
+  end
+end
+
+system over
+  Draw.line(0, 30, 80, 30, 2.5, Color(255, 255, 0))
+  Draw.rect(30, 20, 20, 20, Color(255, 255, 255, 96))
+end
+
+spawn Body(20, 20, 12.5)
+spawn Body(40, 30, 9.75)
+spawn Body(60, 40, 15)
+
+Window.background = Color(30, 30, 30)
+Window.open("Mixed", 80, 60)
+World.run
+puts "drawn in #{Time.tick} ticks"

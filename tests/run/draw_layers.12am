@@ -1,0 +1,25 @@
+# Translucent draws many layers deep: forty rectangles, each with another
+# alpha, overlap in the middle of the window; an opaque circle covers some
+# of them, and a translucent one lies over it. A device may round each
+# translucent draw over a pixel differently, by one step each since the
+# last opaque draw there.
+
+Window.background = Color(0, 0, 0)
+Window.open("Layers", 64, 48)
+
+system show
+  i = 0
+  while i < 40
+    alpha = 1 + (i * 29) % 254
+    color = Color((i * 37) % 256, (i * 91) % 256, (i * 53) % 256, alpha)
+    Draw.rect(i * 0.5, i * 0.25, 30, 20, color)
+    i += 1
+  end
+  Draw.circle(32, 24, 10, Color(255, 255, 255))
+  Draw.circle(32, 24, 6, Color(0, 0, 255, 100))
+  Draw.triangle(0, 47, 63, 47, 31.5, 30, Color(255, 128, 0, 1))
+  Draw.line(0, 0, 63, 47, 4, Color(0, 255, 0, 254))
+end
+
+World.run
+puts "drawn in #{Time.tick} ticks"

@@ -120,6 +120,17 @@ void mn_gpu_fetch(void);
 /* Submits the work recorded so far without waiting. */
 void mn_gpu_device_submit(void);
 
+struct WGPUCommandBufferImpl;
+
+/* Submits the work recorded so far, then `commands`, without waiting, and
+ * releases `commands`. Counts a submission when `counted`. The next
+ * mn_gpu_device_wait waits for them. */
+void mn_gpu_device_submit_commands(struct WGPUCommandBufferImpl *commands,
+                                   bool counted);
+
+/* The size of the largest buffer the device makes, in bytes. */
+uint64_t mn_gpu_largest_buffer(void);
+
 /* Submits the work recorded so far, and returns when the device has
  * finished everything submitted to it. */
 void mn_gpu_device_wait(void);

@@ -165,6 +165,7 @@
           "gpu_driver_finds_its_parts"
           "gpu_strict_div_sqrt"
           "window_frames"
+          "window_drawn"
         ];
 
       # The suite's ThreadSanitizer tests.

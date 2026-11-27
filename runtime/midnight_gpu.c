@@ -375,6 +375,16 @@ static void encoder_submit(void) {
 
 void mn_gpu_device_submit(void) { encoder_submit(); }
 
+void mn_gpu_device_submit_commands(WGPUCommandBuffer commands, bool counted) {
+    encoder_submit();
+    wgpuQueueSubmit(gpu.queue, 1, &commands);
+    if (counted) mn_gpu_submissions++;
+    wgpuCommandBufferRelease(commands);
+    gpu.pending = true;
+}
+
+uint64_t mn_gpu_largest_buffer(void) { return gpu.max_buffer; }
+
 /* Writes `bytes` bytes, a multiple of 4, at `offset` in a buffer through
  * the queue. Such a write takes effect before every command of the next
  * submission, whenever it was made, so the open encoder is submitted first

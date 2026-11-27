@@ -16,13 +16,22 @@
 #include <webgpu/wgpu.h>
 
 static struct {
-    /* The frame texture and the frame it holds, when `holds`. */
+    /* The frame texture and the number of the frame it holds, when
+     * `holds`. */
     WGPUTexture texture;
     WGPUTextureView view;
     uint32_t width;
     uint32_t height;
-    MnFrame drawn;
+    uint64_t drawn;
     bool holds;
+    /* What renders shapes: the pipeline, its uniform buffer and their
+     * binding, and the buffer that records from CPU memory are sent to,
+     * with how many it holds. */
+    WGPURenderPipeline shapes;
+    WGPUBuffer shape_uniform;
+    WGPUBindGroup shape_group;
+    WGPUBuffer records;
+    uint64_t records_capacity;
     /* Where the frame is copied to be read back, and its size in bytes. */
     WGPUBuffer readback;
     uint64_t readback_size;
@@ -72,19 +81,306 @@ static WGPUStringView view(const char *text) {
 
 /* ---- The frame ----------------------------------------------------------- */
 
-/* The linear value whose sRGB encoding is the byte. Cleared into an sRGB
- * texture, it leaves exactly that byte. */
-static double linear_of(uint8_t byte) {
-    double c = byte / 255.0;
-    return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
+/* Renders the records of a frame. Each record is an instance of six
+ * vertices: the smallest upright rectangle of pixels that holds its shape,
+ * one pixel larger on every side and cut to the frame. The fragment stage
+ * decides which pixels the shape covers, from the pixel's centre in
+ * points, by the tests of the reference's "Which pixels a shape covers".
+ * Every product there passes through `mul`, an exclusive-or of its bits
+ * with a word that is zero and known only when the shader runs, so that
+ * each operation is rounded on its own. */
+static const char *SHAPE_WGSL =
+    "struct U {\n"
+    "  inv: vec2<f32>,\n"    /* points a pixel, width / pixel_width */
+    "  scale: vec2<f32>,\n"  /* pixels a point, for the rectangle of pixels */
+    "  pixels: vec2<f32>,\n" /* the frame's size in pixels */
+    "  zbits: u32,\n"        /* zero */
+    "  pad: u32,\n"
+    "};\n"
+    "@group(0) @binding(0) var<uniform> u: U;\n"
+    "\n"
+    "struct V {\n"
+    "  @builtin(position) pos: vec4<f32>,\n"
+    "  @location(0) @interpolate(flat) a: vec4<u32>,\n"
+    "  @location(1) @interpolate(flat) b: vec4<u32>,\n"
+    "};\n"
+    "\n"
+    "fn is_nan(bits: u32) -> bool {\n"
+    "  return (bits & 0x7f800000u) == 0x7f800000u && (bits & 0x007fffffu) != 0u;\n"
+    "}\n"
+    "\n"
+    "@vertex\n"
+    "fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec4<u32>,\n"
+    "      @location(1) b: vec4<u32>) -> V {\n"
+    "  let kind = a.x;\n"
+    "  let p = array<f32, 6>(bitcast<f32>(a.y), bitcast<f32>(a.z), bitcast<f32>(a.w),\n"
+    "                        bitcast<f32>(b.x), bitcast<f32>(b.y), bitcast<f32>(b.z));\n"
+    "  var shown = kind >= 1u && kind <= 4u && !(is_nan(a.y) || is_nan(a.z) ||\n"
+    "    is_nan(a.w) || is_nan(b.x) || is_nan(b.y) || is_nan(b.z));\n"
+    "  var lo = vec2<f32>(0.0, 0.0);\n"
+    "  var hi = vec2<f32>(0.0, 0.0);\n"
+    "  switch kind {\n"
+    "    case 1u: {\n"
+    "      shown = shown && p[2] > 0.0 && p[3] > 0.0;\n"
+    "      lo = vec2<f32>(p[0], p[1]);\n"
+    "      hi = vec2<f32>(p[0] + p[2], p[1] + p[3]);\n"
+    "    }\n"
+    "    case 2u: {\n"
+    "      shown = shown && p[2] > 0.0;\n"
+    "      lo = vec2<f32>(p[0] - p[2], p[1] - p[2]);\n"
+    "      hi = vec2<f32>(p[0] + p[2], p[1] + p[2]);\n"
+    "    }\n"
+    "    case 3u: {\n"
+    "      shown = shown && p[4] > 0.0;\n"
+    "      let h = p[4] * 0.5;\n"
+    "      lo = vec2<f32>(min(p[0], p[2]) - h, min(p[1], p[3]) - h);\n"
+    "      hi = vec2<f32>(max(p[0], p[2]) + h, max(p[1], p[3]) + h);\n"
+    "    }\n"
+    "    case 4u: {\n"
+    "      lo = vec2<f32>(min(min(p[0], p[2]), p[4]), min(min(p[1], p[3]), p[5]));\n"
+    "      hi = vec2<f32>(max(max(p[0], p[2]), p[4]), max(max(p[1], p[3]), p[5]));\n"
+    "    }\n"
+    "    default: {\n"
+    "    }\n"
+    "  }\n"
+    "  let plo = clamp(floor(lo * u.scale) - vec2<f32>(1.0, 1.0), vec2<f32>(0.0, 0.0), u.pixels);\n"
+    "  let phi = clamp(ceil(hi * u.scale) + vec2<f32>(1.0, 1.0), vec2<f32>(0.0, 0.0), u.pixels);\n"
+    "  let k = vec2<bool>(vi == 1u || vi == 4u || vi == 5u, vi == 2u || vi == 3u || vi == 5u);\n"
+    "  let px = select(plo, phi, k);\n"
+    "  var o: V;\n"
+    "  o.pos = vec4<f32>(px.x * 2.0 / u.pixels.x - 1.0, 1.0 - px.y * 2.0 / u.pixels.y, 0.0, 1.0);\n"
+    "  if (!shown) {\n"
+    "    o.pos = vec4<f32>(2.0, 2.0, 0.0, 1.0);\n"
+    "  }\n"
+    "  o.a = a;\n"
+    "  o.b = b;\n"
+    "  return o;\n"
+    "}\n"
+    "\n"
+    "fn mul(x: f32, y: f32) -> f32 {\n"
+    "  return bitcast<f32>(bitcast<u32>(x * y) ^ u.zbits);\n"
+    "}\n"
+    "\n"
+    /* Whether a centre exactly on an edge of direction d, with the inside
+     * on its right, counts: a left edge or a top edge, y down. */
+    "fn on_edge_counts(d: vec2<f32>) -> bool {\n"
+    "  return d.y < 0.0 || (d.y == 0.0 && d.x > 0.0);\n"
+    "}\n"
+    "\n"
+    /* The test of the edge from a to b at c, computed from the edge's two
+     * ends in one order whichever way it runs. */
+    "fn edge(a: vec2<f32>, b: vec2<f32>, c: vec2<f32>) -> bool {\n"
+    "  var e: f32;\n"
+    "  if (b.x < a.x || (b.x == a.x && b.y < a.y)) {\n"
+    "    let d = a - b;\n"
+    "    let q = c - b;\n"
+    "    e = -(mul(d.x, q.y) - mul(d.y, q.x));\n"
+    "  } else {\n"
+    "    let d = b - a;\n"
+    "    let q = c - a;\n"
+    "    e = mul(d.x, q.y) - mul(d.y, q.x);\n"
+    "  }\n"
+    "  return e > 0.0 || (e == 0.0 && on_edge_counts(b - a));\n"
+    "}\n"
+    "\n"
+    "@fragment\n"
+    "fn fs(v: V) -> @location(0) vec4<f32> {\n"
+    "  let c = vec2<f32>(mul(v.pos.x, u.inv.x), mul(v.pos.y, u.inv.y));\n"
+    "  let n0 = bitcast<f32>(v.a.y);\n"
+    "  let n1 = bitcast<f32>(v.a.z);\n"
+    "  let n2 = bitcast<f32>(v.a.w);\n"
+    "  let n3 = bitcast<f32>(v.b.x);\n"
+    "  let n4 = bitcast<f32>(v.b.y);\n"
+    "  let n5 = bitcast<f32>(v.b.z);\n"
+    "  var inside = false;\n"
+    "  switch v.a.x {\n"
+    "    case 1u: {\n"
+    "      inside = n0 <= c.x && c.x < n0 + n2 && n1 <= c.y && c.y < n1 + n3;\n"
+    "    }\n"
+    "    case 2u: {\n"
+    "      let dx = c.x - n0;\n"
+    "      let dy = c.y - n1;\n"
+    "      inside = mul(dx, dx) + mul(dy, dy) < mul(n2, n2);\n"
+    "    }\n"
+    "    case 3u: {\n"
+    "      let a = vec2<f32>(n0, n1);\n"
+    "      let b = vec2<f32>(n2, n3);\n"
+    "      let d = b - a;\n"
+    "      let q = c - a;\n"
+    "      let t = mul(q.x, d.x) + mul(q.y, d.y);\n"
+    "      let s = mul(q.x, d.y) - mul(q.y, d.x);\n"
+    "      let l = mul(d.x, d.x) + mul(d.y, d.y);\n"
+    "      let lhs = mul(4.0 * s, s);\n"
+    "      let rhs = mul(mul(n4, n4), l);\n"
+    "      var body = false;\n"
+    "      if (l > 0.0 && 0.0 <= t && t <= l) {\n"
+    "        if (lhs < rhs) {\n"
+    "          body = true;\n"
+    "        } else if (lhs == rhs) {\n"
+    "          if (s > 0.0) {\n"
+    "            body = on_edge_counts(d);\n"
+    "          } else if (s < 0.0) {\n"
+    "            body = on_edge_counts(-d);\n"
+    "          }\n"
+    "        }\n"
+    "      }\n"
+    "      let h = n4 * 0.5;\n"
+    "      let r2 = mul(h, h);\n"
+    "      let e = c - b;\n"
+    "      inside = body || mul(q.x, q.x) + mul(q.y, q.y) < r2 || mul(e.x, e.x) + mul(e.y, e.y) < r2;\n"
+    "    }\n"
+    "    case 4u: {\n"
+    "      let p1 = vec2<f32>(n0, n1);\n"
+    "      var p2 = vec2<f32>(n2, n3);\n"
+    "      var p3 = vec2<f32>(n4, n5);\n"
+    "      let w = mul(p2.x - p1.x, p3.y - p1.y) - mul(p2.y - p1.y, p3.x - p1.x);\n"
+    "      if (w < 0.0) {\n"
+    "        let swap = p2;\n"
+    "        p2 = p3;\n"
+    "        p3 = swap;\n"
+    "      }\n"
+    "      inside = w != 0.0 && edge(p1, p2, c) && edge(p2, p3, c) && edge(p3, p1, c);\n"
+    "    }\n"
+    "    default: {\n"
+    "    }\n"
+    "  }\n"
+    "  if (!inside) {\n"
+    "    discard;\n"
+    "  }\n"
+    "  return unpack4x8unorm(v.b.w);\n"
+    "}\n";
+
+static WGPUShaderModule shader_module(const char *code) {
+    WGPUShaderSourceWGSL source = {0};
+    source.chain.sType = WGPUSType_ShaderSourceWGSL;
+    source.code = view(code);
+    WGPUShaderModuleDescriptor descriptor = {0};
+    descriptor.nextInChain = &source.chain;
+    return wgpuDeviceCreateShaderModule(mn_gpu_device(), &descriptor);
 }
 
-static void submit(WGPUCommandEncoder encoder) {
-    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
-    wgpuQueueSubmit(mn_gpu_queue(), 1, &commands);
-    mn_gpu_submissions++;
-    wgpuCommandBufferRelease(commands);
-    wgpuCommandEncoderRelease(encoder);
+/* Makes the shape pipeline, its uniform buffer and their binding, unless
+ * they are made. */
+static void shapes_make(void) {
+    if (win.shapes) return;
+    WGPUDevice device = mn_gpu_device();
+    WGPUShaderModule module = shader_module(SHAPE_WGSL);
+
+    WGPUBufferDescriptor uniform_descriptor = {0};
+    uniform_descriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+    uniform_descriptor.size = 32;
+    win.shape_uniform = wgpuDeviceCreateBuffer(device, &uniform_descriptor);
+    if (!win.shape_uniform) window_fail("can't make a buffer of 32 bytes");
+
+    WGPUBindGroupLayoutEntry entry = {0};
+    entry.binding = 0;
+    entry.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+    entry.buffer.type = WGPUBufferBindingType_Uniform;
+    entry.buffer.minBindingSize = 32;
+    WGPUBindGroupLayoutDescriptor layout_descriptor = {0};
+    layout_descriptor.entryCount = 1;
+    layout_descriptor.entries = &entry;
+    WGPUBindGroupLayout layout = wgpuDeviceCreateBindGroupLayout(device, &layout_descriptor);
+    WGPUPipelineLayoutDescriptor pipeline_layout_descriptor = {0};
+    pipeline_layout_descriptor.bindGroupLayoutCount = 1;
+    pipeline_layout_descriptor.bindGroupLayouts = &layout;
+    WGPUPipelineLayout pipeline_layout =
+        wgpuDeviceCreatePipelineLayout(device, &pipeline_layout_descriptor);
+
+    WGPUBindGroupEntry bind = {0};
+    bind.binding = 0;
+    bind.buffer = win.shape_uniform;
+    bind.size = 32;
+    WGPUBindGroupDescriptor group_descriptor = {0};
+    group_descriptor.layout = layout;
+    group_descriptor.entryCount = 1;
+    group_descriptor.entries = &bind;
+    win.shape_group = wgpuDeviceCreateBindGroup(device, &group_descriptor);
+
+    /* A record: the kind and the first three numbers, then the other three
+     * and the colour, each as 32-bit words. */
+    WGPUVertexAttribute attributes[2] = {0};
+    attributes[0].format = WGPUVertexFormat_Uint32x4;
+    attributes[0].offset = 0;
+    attributes[0].shaderLocation = 0;
+    attributes[1].format = WGPUVertexFormat_Uint32x4;
+    attributes[1].offset = 16;
+    attributes[1].shaderLocation = 1;
+    WGPUVertexBufferLayout records = {0};
+    records.stepMode = WGPUVertexStepMode_Instance;
+    records.arrayStride = sizeof(MnDraw);
+    records.attributeCount = 2;
+    records.attributes = attributes;
+
+    /* The colour over the frame by its alpha; the frame's alpha stays. */
+    WGPUBlendState blend = {0};
+    blend.color.operation = WGPUBlendOperation_Add;
+    blend.color.srcFactor = WGPUBlendFactor_SrcAlpha;
+    blend.color.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
+    blend.alpha.operation = WGPUBlendOperation_Add;
+    blend.alpha.srcFactor = WGPUBlendFactor_Zero;
+    blend.alpha.dstFactor = WGPUBlendFactor_One;
+    WGPUColorTargetState target = {0};
+    target.format = WGPUTextureFormat_RGBA8Unorm;
+    target.blend = &blend;
+    target.writeMask = WGPUColorWriteMask_All;
+    WGPUFragmentState fragment = {0};
+    fragment.module = module;
+    fragment.entryPoint = view("fs");
+    fragment.targetCount = 1;
+    fragment.targets = &target;
+    WGPURenderPipelineDescriptor descriptor = {0};
+    descriptor.layout = pipeline_layout;
+    descriptor.vertex.module = module;
+    descriptor.vertex.entryPoint = view("vs");
+    descriptor.vertex.bufferCount = 1;
+    descriptor.vertex.buffers = &records;
+    descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList;
+    descriptor.primitive.cullMode = WGPUCullMode_None;
+    descriptor.multisample.count = 1;
+    descriptor.multisample.mask = ~0u;
+    descriptor.fragment = &fragment;
+    win.shapes = wgpuDeviceCreateRenderPipeline(device, &descriptor);
+    if (!win.shapes) window_fail("can't build the pipeline that draws shapes");
+    wgpuPipelineLayoutRelease(pipeline_layout);
+    wgpuBindGroupLayoutRelease(layout);
+    wgpuShaderModuleRelease(module);
+}
+
+static void shapes_drop(void) {
+    if (win.shape_group) wgpuBindGroupRelease(win.shape_group);
+    if (win.shapes) wgpuRenderPipelineRelease(win.shapes);
+    if (win.shape_uniform) {
+        wgpuBufferDestroy(win.shape_uniform);
+        wgpuBufferRelease(win.shape_uniform);
+    }
+    if (win.records) {
+        wgpuBufferDestroy(win.records);
+        wgpuBufferRelease(win.records);
+    }
+    win.shape_group = NULL;
+    win.shapes = NULL;
+    win.shape_uniform = NULL;
+    win.records = NULL;
+    win.records_capacity = 0;
+}
+
+/* Makes the buffer of records hold `count` records, unless it does. */
+static void records_size(uint64_t count) {
+    if (win.records_capacity >= count) return;
+    if (win.records) {
+        wgpuBufferDestroy(win.records);
+        wgpuBufferRelease(win.records);
+    }
+    WGPUBufferDescriptor descriptor = {0};
+    descriptor.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst;
+    descriptor.size = count * sizeof(MnDraw);
+    win.records = wgpuDeviceCreateBuffer(mn_gpu_device(), &descriptor);
+    if (!win.records) {
+        window_fail("can't make a buffer of %llu bytes",
+                    (unsigned long long)descriptor.size);
+    }
+    win.records_capacity = count;
 }
 
 static void frame_texture_drop(void) {
@@ -112,7 +408,7 @@ static void frame_texture_size(uint32_t width, uint32_t height) {
                        WGPUTextureUsage_CopySrc;
     descriptor.dimension = WGPUTextureDimension_2D;
     descriptor.size = (WGPUExtent3D){width, height, 1};
-    descriptor.format = WGPUTextureFormat_RGBA8UnormSrgb;
+    descriptor.format = WGPUTextureFormat_RGBA8Unorm;
     descriptor.mipLevelCount = 1;
     descriptor.sampleCount = 1;
     win.texture = wgpuDeviceCreateTexture(mn_gpu_device(), &descriptor);
@@ -124,40 +420,93 @@ static void frame_texture_size(uint32_t width, uint32_t height) {
     win.height = height;
 }
 
-static bool frame_same(const MnFrame *a, const MnFrame *b) {
-    return a->width == b->width && a->height == b->height &&
-           a->background.r == b->background.r &&
-           a->background.g == b->background.g &&
-           a->background.b == b->background.b;
-}
-
-/* Records the drawing of `frame` into the frame texture: a clear to the
- * background, opaque. */
-static void frame_record(WGPUCommandEncoder encoder, const MnFrame *frame) {
-    frame_texture_size(frame->width, frame->height);
+/* Begins a render pass into the frame texture, cleared to `clear` or, when
+ * that is NULL, keeping what it holds. */
+static WGPURenderPassEncoder frame_pass(WGPUCommandEncoder encoder,
+                                        const MnColor *clear) {
     WGPURenderPassColorAttachment attachment = {0};
     attachment.view = win.view;
     attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-    attachment.loadOp = WGPULoadOp_Clear;
+    attachment.loadOp = clear ? WGPULoadOp_Clear : WGPULoadOp_Load;
     attachment.storeOp = WGPUStoreOp_Store;
-    attachment.clearValue =
-        (WGPUColor){linear_of(frame->background.r), linear_of(frame->background.g),
-                    linear_of(frame->background.b), 1.0};
+    if (clear) {
+        attachment.clearValue = (WGPUColor){clear->r / 255.0, clear->g / 255.0,
+                                            clear->b / 255.0, 1.0};
+    }
     WGPURenderPassDescriptor pass_descriptor = {0};
     pass_descriptor.colorAttachmentCount = 1;
     pass_descriptor.colorAttachments = &attachment;
     WGPURenderPassEncoder pass =
         wgpuCommandEncoderBeginRenderPass(encoder, &pass_descriptor);
-    wgpuRenderPassEncoderEnd(pass);
-    wgpuRenderPassEncoderRelease(pass);
-    win.drawn = *frame;
-    win.holds = true;
+    wgpuRenderPassEncoderSetPipeline(pass, win.shapes);
+    wgpuRenderPassEncoderSetBindGroup(pass, 0, win.shape_group, 0, NULL);
+    return pass;
 }
 
-/* ---- Drawing the frame over the surface ---------------------------------- */
+/* Records the rendering of `frame` into the frame texture: the background,
+ * then each span's records in order. Records are sent to the buffer of
+ * records at places no recorded command reads; when the frame has more
+ * than the buffer holds, the commands so far are submitted and recording
+ * goes on in a new encoder, which is returned. */
+static WGPUCommandEncoder frame_record(WGPUCommandEncoder encoder,
+                                       const MnFrame *frame) {
+    frame_texture_size(frame->width, frame->height);
+    shapes_make();
+    float uniform[8] = {0};
+    uniform[0] = (float)frame->point_width / (float)frame->width;
+    uniform[1] = (float)frame->point_height / (float)frame->height;
+    uniform[2] = (float)frame->width / (float)frame->point_width;
+    uniform[3] = (float)frame->height / (float)frame->point_height;
+    uniform[4] = (float)frame->width;
+    uniform[5] = (float)frame->height;
+    wgpuQueueWriteBuffer(mn_gpu_queue(), win.shape_uniform, 0, uniform, sizeof uniform);
+
+    uint64_t total = 0;
+    for (size_t s = 0; s < frame->span_count; s++) total += frame->spans[s].count;
+    uint64_t most = mn_gpu_largest_buffer() / sizeof(MnDraw);
+    if (most > total) most = total;
+    if (most != 0) records_size(most);
+
+    WGPURenderPassEncoder pass = frame_pass(encoder, &frame->background);
+    uint64_t used = 0;
+    for (size_t s = 0; s < frame->span_count; s++) {
+        const MnSpan *span = &frame->spans[s];
+        if (span->count != 0) mn_gpu_uploads++;
+        size_t done = 0;
+        while (done < span->count) {
+            if (used == win.records_capacity) {
+                wgpuRenderPassEncoderEnd(pass);
+                wgpuRenderPassEncoderRelease(pass);
+                mn_gpu_device_submit_commands(wgpuCommandEncoderFinish(encoder, NULL),
+                                              false);
+                wgpuCommandEncoderRelease(encoder);
+                encoder = wgpuDeviceCreateCommandEncoder(mn_gpu_device(), NULL);
+                pass = frame_pass(encoder, NULL);
+                used = 0;
+            }
+            uint64_t count = span->count - done;
+            if (count > win.records_capacity - used) count = win.records_capacity - used;
+            uint64_t offset = used * sizeof(MnDraw);
+            uint64_t bytes = count * sizeof(MnDraw);
+            wgpuQueueWriteBuffer(mn_gpu_queue(), win.records, offset,
+                                 span->records + done, (size_t)bytes);
+            wgpuRenderPassEncoderSetVertexBuffer(pass, 0, win.records, offset, bytes);
+            wgpuRenderPassEncoderDraw(pass, 6, (uint32_t)count, 0, 0);
+            used += count;
+            done += (size_t)count;
+        }
+    }
+    wgpuRenderPassEncoderEnd(pass);
+    wgpuRenderPassEncoderRelease(pass);
+    win.drawn = frame->number;
+    win.holds = true;
+    return encoder;
+}
+
+/* ---- Showing the frame on the surface ------------------------------------ */
 
 /* A triangle that covers the target; each pixel is the frame's pixel at
- * the same place. */
+ * the same place, as it is. */
 static const char *BLIT_WGSL =
     "@group(0) @binding(0) var frame: texture_2d<f32>;\n"
     "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {\n"
@@ -185,12 +534,7 @@ static void blit_make(WGPUTextureFormat format) {
     if (win.blit && win.blit_format == format) return;
     blit_drop();
     WGPUDevice device = mn_gpu_device();
-    WGPUShaderSourceWGSL source = {0};
-    source.chain.sType = WGPUSType_ShaderSourceWGSL;
-    source.code = view(BLIT_WGSL);
-    WGPUShaderModuleDescriptor module_descriptor = {0};
-    module_descriptor.nextInChain = &source.chain;
-    WGPUShaderModule module = wgpuDeviceCreateShaderModule(device, &module_descriptor);
+    WGPUShaderModule module = shader_module(BLIT_WGSL);
 
     WGPUBindGroupLayoutEntry entry = {0};
     entry.binding = 0;
@@ -259,22 +603,29 @@ static void blit_record(WGPUCommandEncoder encoder, WGPUTextureView target) {
     wgpuRenderPassEncoderRelease(pass);
 }
 
-void mn_window_draw(const MnFrame *frame) {
-    if (frame->width == 0 || frame->height == 0) {
-        win.holds = false;
-        return;
-    }
+/* Submits `encoder`'s commands as one submission. */
+static void submit(WGPUCommandEncoder encoder) {
+    mn_gpu_device_submit_commands(wgpuCommandEncoderFinish(encoder, NULL), true);
+    wgpuCommandEncoderRelease(encoder);
+}
+
+static void frame_size_check(const MnFrame *frame) {
     if (frame->width > MN_WINDOW_LARGEST || frame->height > MN_WINDOW_LARGEST) {
         window_fail("the desktop made the window %ux%u pixels, larger than %d by %d",
                     frame->width, frame->height, MN_WINDOW_LARGEST,
                     MN_WINDOW_LARGEST);
     }
+}
+
+void mn_window_draw(const MnFrame *frame) {
+    if (frame->width == 0 || frame->height == 0) return;
+    if (!win.window || win.hidden) return;
+    frame_size_check(frame);
+    mn_gpu_device_wait();
     WGPUCommandEncoder encoder =
-        wgpuDeviceCreateCommandEncoder(mn_gpu_device(), NULL);
-    frame_record(encoder, frame);
+        frame_record(wgpuDeviceCreateCommandEncoder(mn_gpu_device(), NULL), frame);
     WGPUSurfaceTexture target = {0};
-    if (win.window && !win.hidden && win.config.width == frame->width &&
-        win.config.height == frame->height) {
+    if (win.config.width == frame->width && win.config.height == frame->height) {
         wgpuSurfaceGetCurrentTexture(win.surface, &target);
     }
     WGPUTextureView target_view = NULL;
@@ -321,10 +672,12 @@ const char *mn_window_read(const MnFrame *frame, unsigned char *rgba) {
         return "the program has no device";
     }
     if (frame->width == 0 || frame->height == 0) return "the frame has no pixels";
+    frame_size_check(frame);
     WGPUDevice device = mn_gpu_device();
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, NULL);
-    if (!win.holds || !frame_same(&win.drawn, frame)) {
-        frame_record(encoder, frame);
+    if (!win.holds || win.drawn != frame->number || win.width != frame->width ||
+        win.height != frame->height) {
+        encoder = frame_record(encoder, frame);
     }
     uint32_t row = padded_row(frame->width);
     uint64_t size = (uint64_t)row * frame->height;
@@ -352,6 +705,7 @@ const char *mn_window_read(const MnFrame *frame, unsigned char *rgba) {
     WGPUExtent3D extent = {frame->width, frame->height, 1};
     wgpuCommandEncoderCopyTextureToBuffer(encoder, &from, &to, &extent);
     submit(encoder);
+    mn_gpu_device_wait();
 
     int done = 0;
     WGPUBufferMapCallbackInfo callback = {0};
@@ -359,7 +713,6 @@ const char *mn_window_read(const MnFrame *frame, unsigned char *rgba) {
     callback.callback = on_map;
     callback.userdata1 = &done;
     wgpuBufferMapAsync(win.readback, WGPUMapMode_Read, 0, (size_t)size, callback);
-    mn_gpu_waits++;
     while (done == 0) wgpuDevicePoll(device, true, NULL);
     if (done < 0) window_fail("can't read a frame back");
     const unsigned char *mapped =
@@ -441,7 +794,7 @@ static const char *mode_name(WGPUPresentMode mode) {
 }
 
 /* Builds the surface's configuration from what it lists for the device:
- * an 8-bit sRGB format by name, the first of mailbox, immediate and FIFO,
+ * the first of RGBA8Unorm and BGRA8Unorm, the first of mailbox, immediate and FIFO,
  * opaque when it can be. Returns false when it lists no such format or
  * mode, or can't be drawn to. */
 static bool surface_config(void) {
@@ -453,8 +806,8 @@ static bool surface_config(void) {
     WGPUSurfaceConfiguration config = {0};
     config.device = mn_gpu_device();
     config.usage = WGPUTextureUsage_RenderAttachment;
-    static const WGPUTextureFormat formats[] = {WGPUTextureFormat_RGBA8UnormSrgb,
-                                                WGPUTextureFormat_BGRA8UnormSrgb};
+    static const WGPUTextureFormat formats[] = {WGPUTextureFormat_RGBA8Unorm,
+                                                WGPUTextureFormat_BGRA8Unorm};
     for (size_t f = 0; f < 2 && !config.format; f++) {
         for (size_t i = 0; i < caps.formatCount; i++) {
             if (caps.formats[i] == formats[f]) config.format = formats[f];
@@ -661,6 +1014,7 @@ void mn_window_close(void) {
 void mn_window_finish(void) {
     mn_window_close();
     blit_drop();
+    shapes_drop();
     frame_texture_drop();
     if (win.readback) {
         wgpuBufferDestroy(win.readback);

@@ -134,6 +134,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+mod render;
+
 const STRICT_CFLAGS: &str = "-Wall -Wextra -Werror";
 const MODES: [Mode; 2] = [Mode::Release, Mode::Debug];
 
@@ -2128,6 +2130,161 @@ fn window_frames() {
     ));
 }
 
+/// The programs of `tests/run` and `examples` whose commands have a
+/// `draws` on the line before a `capture`.
+fn drawn_programs() -> Vec<PathBuf> {
+    let mut sources = programs("tests/run");
+    sources.extend(programs("examples"));
+    sources
+        .into_iter()
+        .filter(|source| {
+            let commands =
+                std::fs::read_to_string(source.with_extension("drive")).unwrap_or_default();
+            let lines: Vec<&str> = commands.lines().map(str::trim).collect();
+            lines
+                .windows(2)
+                .any(|pair| pair[0] == "draws" && pair[1].starts_with("capture"))
+        })
+        .collect()
+}
+
+/// Requires each capture answered in `answers` whose answer comes right
+/// after a `draws` answer to agree with the reference renderer's picture
+/// of that answer, at the size the capture gives; the file is in `dir`.
+/// Returns how many there were.
+fn check_drawn(answers: &str, dir: &Path) -> Result<usize, String> {
+    let lines: Vec<&str> = answers.lines().collect();
+    let mut count = 0;
+    for (at, line) in lines.iter().enumerate() {
+        let Some((file, width, height, _)) = capture_answer(line) else {
+            continue;
+        };
+        let mut first = at;
+        while first > 0 && lines[first - 1].starts_with("  ") {
+            first -= 1;
+        }
+        if first == 0 || first == at || !lines[first - 1].starts_with("draws: ") {
+            continue;
+        }
+        let frame = render::parse(&lines[first - 1..at].join("\n"))?;
+        let bytes = std::fs::read(dir.join(file)).map_err(|error| format!("{file}: {error}"))?;
+        let (_, _, pixels) = png_pixels(&bytes).map_err(|message| format!("{file}: {message}"))?;
+        let picture = render::render(&frame, width, height);
+        render::agrees(&picture, &pixels).map_err(|message| format!("{file}: {message}"))?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+/// Standard error without the `info` lines that say a GPU block runs on
+/// the CPU, as one that does not fit the device does.
+fn without_cpu_runs(stderr: &str) -> String {
+    stderr
+        .split_inclusive('\n')
+        .filter(|line| {
+            !(line.starts_with("midnight: gpu: ") && line.contains(" runs on the CPU: "))
+        })
+        .collect()
+}
+
+/// The scales `window_drawn` runs each program at besides its own.
+const DRAWN_SCALES: [&str; 3] = ["1.25", "1.5", "2"];
+
+/// GPU mode: every program of `tests/run` and `examples` whose commands
+/// have a `draws` on the line before a `capture` runs headless on the
+/// device, in release and debug builds, as it is and with a `scale`
+/// command of 1.25, 1.5 and 2 before its commands. It must print
+/// `NAME.out`, and each capture after a `draws` must agree with the
+/// reference renderer's picture of that `draws` answer.
+#[test]
+fn window_drawn() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let sources = drawn_programs();
+    assert!(
+        !sources.is_empty(),
+        "no program with `draws` before `capture` in the working directory"
+    );
+    let dir = scratch("window-drawn");
+    let scales: Vec<Option<&str>> = std::iter::once(None)
+        .chain(DRAWN_SCALES.iter().copied().map(Some))
+        .collect();
+    let jobs: Vec<(&PathBuf, Mode)> = sources
+        .iter()
+        .flat_map(|source| MODES.map(|mode| (source, mode)))
+        .collect();
+    let devices: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+    let captures = AtomicUsize::new(0);
+    let failures = for_each_parallel(&jobs, |(source, mode)| {
+        let exe = std::path::absolute(exe_path(&dir, source, *mode)).expect("an absolute path");
+        build(source, &exe, *mode)?;
+        let commands =
+            std::fs::read_to_string(source.with_extension("drive")).expect("read the commands");
+        for scale in &scales {
+            let label = format!(
+                "{} ({mode:?}, scale {})",
+                source.display(),
+                scale.unwrap_or("as given")
+            );
+            let files = dir.join(format!(
+                "{}-{mode:?}-{}",
+                source.file_stem().unwrap().to_string_lossy(),
+                scale.unwrap_or("1")
+            ));
+            std::fs::create_dir_all(&files).expect("create a directory for captures");
+            let drive = files.join("commands.drive");
+            let given = match scale {
+                Some(scale) => format!("scale {scale}\n{commands}"),
+                None => commands.clone(),
+            };
+            std::fs::write(&drive, given).expect("write the commands");
+            let mut command = Command::new(&exe);
+            command
+                .env("MIDNIGHT_WINDOW", "headless")
+                .env("MIDNIGHT_DRIVE", &drive);
+            no_display(&mut command);
+            on_device(&mut command, device);
+            command.current_dir(&files);
+            let mut run = run_within(&mut command, RUN_LIMIT);
+            let said =
+                device_said(&mut run, device).map_err(|message| format!("{label}: {message}"))?;
+            run.stderr = without_cpu_runs(&run.stderr);
+            if run.status != Some(0) || !run.stderr.is_empty() {
+                return Err(format!(
+                    "{label}: exited with {:?}\n--- answers\n{}--- stderr\n{}---",
+                    run.status, run.drive, run.stderr
+                ));
+            }
+            devices.lock().unwrap().insert(said);
+            let out = std::fs::read_to_string(source.with_extension("out")).unwrap_or_default();
+            if run.stdout != out {
+                return Err(format!(
+                    "{label}: standard output differs from the .out file\n--- actual\n{}---",
+                    run.stdout
+                ));
+            }
+            let count =
+                check_drawn(&run.drive, &files).map_err(|message| format!("{label}: {message}"))?;
+            if count == 0 {
+                return Err(format!("{label}: no capture after a `draws`"));
+            }
+            captures.fetch_add(count, Ordering::Relaxed);
+        }
+        Ok(())
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("programs that draw", jobs.len(), failures);
+    let devices: Vec<String> = devices.into_inner().unwrap().into_iter().collect();
+    note(&format!(
+        "window_drawn: {} runs of {} programs, {} captures, on {}",
+        jobs.len() * scales.len(),
+        sources.len(),
+        captures.into_inner(),
+        devices.join(" and ")
+    ));
+}
+
 /// The CRC-32 of PNG and of zlib's gzip.
 fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = !0u32;
@@ -2350,11 +2507,16 @@ fn zlib_inflate(stream: &[u8]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// The CRC-32 of a frame of `width` by `height` pixels of one opaque
-/// colour.
+/// The CRC-32 of the reference renderer's frame of `width` by `height`
+/// pixels with the background `rgb` and no draws.
 fn frame_crc(width: u32, height: u32, rgb: [u8; 3]) -> u32 {
-    let pixel = [rgb[0], rgb[1], rgb[2], 255];
-    crc32(&pixel.repeat((width * height) as usize))
+    let frame = render::Frame {
+        width,
+        height,
+        background: [rgb[0], rgb[1], rgb[2], 255],
+        draws: Vec::new(),
+    };
+    crc32(&render::render(&frame, width, height).rgba)
 }
 
 /// The CRCs in the `.frames` files of the frame programs are those of the
@@ -3963,10 +4125,15 @@ fn ppm_pixels(bytes: &[u8]) -> Result<(usize, usize, &[u8]), String> {
     Ok((width, height, pixels))
 }
 
-/// The programs with a `.frames` file whose commands a shown window can
-/// carry out: none of them is `resize` or `scale`.
+/// The programs with a `.frames` file, and those `window_drawn` runs, whose
+/// commands a shown window can carry out: none of them is `resize` or
+/// `scale`.
 fn shown_frame_programs() -> Vec<PathBuf> {
-    frame_programs()
+    let mut sources = frame_programs();
+    sources.extend(drawn_programs());
+    sources.sort();
+    sources.dedup();
+    sources
         .into_iter()
         .filter(|source| {
             let commands =
@@ -3979,11 +4146,14 @@ fn shown_frame_programs() -> Vec<PathBuf> {
         .collect()
 }
 
-/// Window mode: the frame programs that need neither `resize` nor `scale`
-/// run with a window on Wayland and their commands from a pipe, in release
-/// and debug builds. Their answers and output must be those of the
-/// headless run, and a picture of the compositor taken after the last
-/// command must hold the pixels of the last capture at the window's place.
+/// Window mode: the frame programs and the programs of `window_drawn` that
+/// need neither `resize` nor `scale` run with a window on Wayland and
+/// their commands from a pipe, in release and debug builds. Their output
+/// must be that of the headless run, and so must their answers when they
+/// have a `.frames` file; each capture after a `draws` must agree with the
+/// reference renderer; and a picture of the compositor taken after the
+/// last command must hold the pixels of the last capture at the window's
+/// place.
 #[test]
 fn window_shown() {
     let Some(device) = window_device() else {
@@ -4025,7 +4195,24 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
         .expect("run mkfifo");
     assert!(made.success(), "mkfifo {}", pipe.display());
     let commands = std::fs::read(source.with_extension("drive")).expect("read commands");
-    let expected = std::fs::read_to_string(source.with_extension("frames")).expect("read answers");
+    let expected = std::fs::read_to_string(source.with_extension("frames")).ok();
+    let captures = String::from_utf8_lossy(&commands)
+        .lines()
+        .filter(|line| line.trim_start().starts_with("capture"))
+        .count();
+    // Without a `.frames` file the commands end at the last capture, so
+    // that the window is still shown when the picture is taken.
+    let commands = if expected.is_none() {
+        let text = String::from_utf8_lossy(&commands).into_owned();
+        let lines: Vec<&str> = text.split_inclusive('\n').collect();
+        let last = lines
+            .iter()
+            .rposition(|line| line.trim_start().starts_with("capture"))
+            .map_or(lines.len(), |at| at + 1);
+        lines[..last].concat().into_bytes()
+    } else {
+        commands
+    };
 
     let mut shown = Shown::start(&exe, &files, Some(&pipe), device);
     // The program opens the pipe when its first tick begins; the commands
@@ -4043,7 +4230,11 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
         })
     };
     let answered = shown.wait_for(Duration::from_secs(120), |said| {
-        without_draws(&split_drive(said).0) == expected
+        let answers = split_drive(said).0;
+        match &expected {
+            Some(expected) => without_draws(&answers) == *expected,
+            None => answers.lines().filter_map(capture_answer).count() == captures,
+        }
     });
     let picture = files.join("screen.ppm");
     let taken = answered && {
@@ -4062,6 +4253,7 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
     let _ = writer.join();
     let mut run = shown.finish(Duration::from_secs(30));
     let said = window_said(&mut run, device);
+    run.stderr = without_cpu_runs(&run.stderr);
     if run.status != Some(0) || !run.stderr.is_empty() || !taken {
         return Err(format!(
             "exited with {:?}, picture taken {taken}, {said:?}\n--- answers\n{}--- stderr\n{}---",
@@ -4069,7 +4261,9 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
         ));
     }
     said?;
-    if run.drive != expected {
+    if let Some(expected) = &expected
+        && without_draws(&run.drive) != *expected
+    {
         return Err(format!(
             "the answers differ from the headless run's\n--- expected\n{expected}--- actual\n{}---",
             run.drive
@@ -4083,6 +4277,7 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
         ));
     }
     check_captures(&run.drive, &files)?;
+    check_drawn(&run.drive, &files)?;
 
     let last = run
         .drive
@@ -4129,9 +4324,35 @@ end
 puts clock - start
 ";
 
+/// `KEEPS_TIME` with a system that draws ten thousand shapes a tick, of
+/// the four kinds.
+const KEEPS_TIME_DRAWING: &str = "\
+system show
+  i = 0
+  while i < 2500
+    x = (i * 37) % 320
+    y = (i * 53) % 200
+    c = Color(i % 256, (i * 3) % 256, 200)
+    Draw.rect(x, y, 6, 4, c)
+    Draw.circle(x + 3, y + 2, 2.5, c)
+    Draw.line(x, y, x + 9, y + 5, 1.5, c)
+    Draw.triangle(x, y, x + 5, y + 1, x + 2, y + 6, Color(0, 0, 0, 128))
+    i += 1
+  end
+end
+
+Window.open(\"TITLE\", 320, 200)
+start = clock
+while Time.tick < 120
+  World.tick
+end
+puts clock - start
+";
+
 /// Window mode: 120 ticks of a window take 1.9 to 2.3 seconds with the
 /// output at 60 Hz, at 144 Hz, and with the window on a workspace that is
-/// not shown, in release and debug builds.
+/// not shown, in release and debug builds, for a program that draws
+/// nothing and for one that draws ten thousand shapes a tick.
 #[test]
 fn window_keeps_time() {
     let Some(device) = window_device() else {
@@ -4148,12 +4369,20 @@ fn window_keeps_time() {
     ];
     let mut failures = Vec::new();
     let mut times = Vec::new();
+    let programs = [("", KEEPS_TIME), (", drawing", KEEPS_TIME_DRAWING)];
     for mode in MODES {
-        for (what, title, output) in cases {
-            let label = format!("{what} ({mode:?})");
-            let name = title.replace(' ', "_");
+        for ((what, title, output), (drawing, program)) in cases
+            .iter()
+            .flat_map(|case| programs.iter().map(move |program| (*case, *program)))
+        {
+            let label = format!("{what}{drawing} ({mode:?})");
+            let name = format!(
+                "{}{}",
+                title.replace(' ', "_"),
+                drawing.replace([',', ' '], "_")
+            );
             let source = dir.join(format!("{name}.12am"));
-            std::fs::write(&source, KEEPS_TIME.replace("TITLE", title)).expect("write a program");
+            std::fs::write(&source, program.replace("TITLE", title)).expect("write a program");
             let exe = dir.join(format!("{name}-{mode:?}"));
             if let Err(message) = build(&source, &exe, mode) {
                 failures.push(message);
@@ -4187,7 +4416,11 @@ fn window_keeps_time() {
     sway(&["output", "HEADLESS-1", "mode", "1280x720@60Hz"]);
     let _ = std::fs::remove_dir_all(&dir);
     note(&format!("window_keeps_time: {}", times.join(", ")));
-    report("runs that keep time", cases.len() * MODES.len(), failures);
+    report(
+        "runs that keep time",
+        cases.len() * programs.len() * MODES.len(),
+        failures,
+    );
 }
 
 /// A program with a window that says what happens to it and ends when it

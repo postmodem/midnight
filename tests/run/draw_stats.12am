@@ -1,0 +1,32 @@
+# A headless window that is asked for no frame adds nothing to a tick's
+# `stats` line: the program draws every tick, and its lines are those of
+# its GPU system alone, one submission and one wait a tick.
+
+component Body
+  x: Float32
+  v: Float32
+end
+
+gpu system move
+  each Body do |body|
+    body.x += body.v
+  end
+end
+
+system show
+  Draw.rect(0, 0, 10, 10, Color(255, 0, 0))
+  each Body do |body|
+    Draw.circle(body.x, 32, 2, Color(0, 255, 0)) if body.v > 1.5
+  end
+end
+
+Window.open("Stats", 64, 64)
+i = 0
+while i < 1000
+  spawn Body(i, 1 + (i % 2))
+  i += 1
+end
+World.tick
+World.tick
+World.tick
+puts "ticks: #{Time.tick}"
