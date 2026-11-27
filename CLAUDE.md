@@ -8,8 +8,10 @@ system` it also emits a WGSL shader, which the runtime runs through
 runs on the CPU, and an ordinary `each` the compiler finds independent, run
 in pieces on several threads, with the output of one. A program with a
 window shows it through SDL 3, takes the keyboard and the mouse from it,
-and draws its frames on the same device, or runs headless, driven by
-commands. `evals/` measures how well agents write it from its
+and draws its frames on the same device, or runs headless. Any program
+can be driven by commands, which let it run a tick at a time and print
+its entities and resources between ticks, and the compiler and programs
+write JSON lines when asked. `evals/` measures how well agents write it from its
 documentation alone. `README.md` has the overview.
 
 ## What defines what
@@ -19,6 +21,10 @@ documentation alone. `README.md` has the overview.
 - `docs/language.md` is the definition of the language. Where the compiler
   and the reference disagree, one of them has a bug; decide which before
   changing either.
+- `docs/json.md` defines the JSON forms: of the compiler's output with
+  `--format json`, and of every line a program writes to standard error
+  with `MIDNIGHT_FORMAT=json`. Each is made from the same data as its
+  text form and says no less.
 - `specs/NNNN-name.md` is one spec per change, with a status line, acceptance
   criteria and, once implemented, an Outcome. Work starts from an approved
   spec. A draft spec is not to be implemented.
@@ -60,6 +66,7 @@ nix develop -c cargo clippy --all-targets -- -D warnings
 nix develop -c cargo fmt
 nix develop -c cargo run -- run FILE.12am  # also: build, check, emit-c; add --debug
 nix develop -c cargo run -- loops FILE.12am  # where each loop runs, and what keeps one on one core
+nix develop -c cargo run -- check --format json FILE.12am  # JSON lines; also build, run, plan, loops
 nix flake check                            # package, clippy, rustfmt, nixfmt, evals' harness and tasks, GPU programs on llvmpipe, ThreadSanitizer, windows
 nix run .#bench                            # timings against bench/baseline.c
 nix run .#bench-cores                      # loops on one thread and on all cores
@@ -67,6 +74,7 @@ nix run .#gpu-test                         # GPU programs on this machine's GPU,
 MIDNIGHT_TEST_GPU=software nix develop -c cargo test   # the suite, plus GPU programs on llvmpipe
 MIDNIGHT_TEST_GPU=hardware nix develop -c cargo test   # the suite, plus GPU programs on this machine's GPU
 MIDNIGHT_TEST_TSAN=1 nix develop -c cargo test         # the suite, plus the pool and the programs under ThreadSanitizer
+MIDNIGHT_TEST_FLOAT32=1 nix develop -c cargo test float32  # the text of every finite Float32
 nix develop -c bash tests/window/test.sh OUT           # windows inside a compositor of their own, on this machine's GPU
 nix run .#window-test                                  # the same with the packaged compiler
 nix run .#eval -- run [--tasks A,B] [--models M,N] [--trials K] [--label L]  # agents on the eval tasks, at HEAD
@@ -95,7 +103,9 @@ command that needs it.
 - No crates. The lexer, parser, diagnostics and argument parsing are written
   by hand, and `Cargo.lock` lists one package.
 - No `unsafe` in the compiler.
-- `midnight_rt.c` is C11 with libc and libm only; where it is built with
+- `midnight_rt.c` is C11 with libc and libm only, and defines
+  `_POSIX_C_SOURCE` for `getline`, with which every program reads the
+  commands of `MIDNIGHT_DRIVE`; where it is built with
   `MN_THREADS` it also uses a POSIX mutex, thread-local storage and
   `sigsetjmp`, and nothing of those otherwise; where it is built with
   `MN_WINDOW` it also uses `clock_nanosleep` for the pace of a window.
@@ -194,11 +204,52 @@ command that needs it.
   that file. `UPDATE_EXPECT=1` rewrites `.draws` files from its release
   run and no other. A `NAME.frames` file holds the other answers.
   `thread_programs` requires the same `draws` answers for every setting.
-- A program with a window runs with `MIDNIGHT_WINDOW=headless` and
-  `MIDNIGHT_DRIVE` set to its `NAME.drive` file, `capture` lines blanked,
-  or to an empty file; the display variables name nothing that can be
-  connected to and `XDG_RUNTIME_DIR` is an empty directory (`no_display`).
-  A new test that runs a window program outside window mode does the same.
+- Every program runs with `MIDNIGHT_DRIVE` set to its `NAME.drive` file,
+  `capture` lines blanked, or to an empty file, and a program with a
+  window with `MIDNIGHT_WINDOW=headless`; the display variables name
+  nothing that can be connected to and `XDG_RUNTIME_DIR` is an empty
+  directory (`no_display`). A new test that runs a window program outside
+  window mode does the same. A driven program runs no tick its commands
+  did not let run, so a program that ticks before `Window.open` or after
+  its window closes has `tick` lines for those ticks too.
+- A run's answers are split by their first line: those of `draws`
+  (`NAME.draws`), of `query` and `resource` (`NAME.queries`), and the
+  others (`NAME.frames`). `queries_match_expected` runs every program of
+  `tests/run` and `examples` with a `NAME.queries` file as
+  `draws_match_expected` does, and `UPDATE_EXPECT=1` rewrites them from
+  the release run; `thread_programs` requires the same answers for every
+  setting, and `gpu_programs` holds them to the program's tolerance.
+  `query_errors` has every error of `query` and `resource`, and
+  `a_program_without_a_window_is_driven` a windowless program driven.
+- JSON:
+  - `tests/json_lines/mod.rs` reads JSON lines strictly (Midnight's own
+    escapes, no spaces, no member twice) and writes a program's JSON
+    lines back as their text, `query` and `resource` values as their
+    leaves.
+  - `run_both_forms` runs a program as it is and with
+    `MIDNIGHT_FORMAT=json` and requires the same status and standard
+    output, and the JSON lines, as text, to be its standard error. It
+    runs every program of `tests/run`, `examples` and `tests/panic`
+    (`programs_in_json`), every case of `drive` (so `drive_errors`,
+    `drive_answers` and `query_errors`), the `.split` programs, and in
+    GPU mode the `.stats` and `.frames` programs.
+  - `fail_programs_in_json` and `plan_and_loops_in_json` hold
+    `check`, `plan` and `loops --format json` to every `.err`, `.plan`
+    and `.loops` file.
+  - `tests/json/NAME.12am` with `NAME.json`: exactly what `check`,
+    `plan` or `loops --format json` prints, as its first line `# json:
+    COMMAND` says, or, for `# json: run`, the standard error of a
+    headless run with `NAME.drive` and `MIDNIGHT_FORMAT=json`; the first
+    line's version is written `VERSION`. `UPDATE_EXPECT=1` rewrites them.
+  - `tests/runtime/lines.c` is the runtime with a main of its own:
+    `float32_text_round_trips` checks the `Float32` rule on a sample, or
+    on every finite pattern with `MIDNIGHT_TEST_FLOAT32=1`, and
+    `lines_no_program_writes_on_demand` the GPU error, window error,
+    out-of-memory and buffers lines in both forms, with
+    `tests/runtime/pool_line.c` for the pool's own.
+  - `compiler_messages_in_json`, `format_takes_one_word_on_five_commands`,
+    `the_format_variable_takes_one_word` and `run_passes_the_format`
+    cover the compiler's messages and the two switches.
 - Several threads:
   - `thread_programs` runs every program of `tests/run`, `tests/panic` and
     `examples` for which `midnight loops` prints a `gpu` or a `cores` line,
@@ -307,7 +358,8 @@ command that needs it.
     the software mode passes to programs as `VK_DRIVER_FILES`.
 - Window mode: with `MIDNIGHT_TEST_WINDOW=1`, inside
   `tests/window/compositor.sh` (the tests fail outside it), `window_shown`,
-  `window_keeps_time`, `window_closes`, `window_resized`, `window_input`,
+  `window_shown_takes_no_resize`, `window_keeps_time`, `window_closes`,
+  `window_resized`, `window_input`,
   `input_client_refuses_a_desktop` and `input_client_takes_its_commands`
   run, one at a time, in release and debug builds where they build a
   program, on the device `MIDNIGHT_TEST_GPU` names or the hardware one.

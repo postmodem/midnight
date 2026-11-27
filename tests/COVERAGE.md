@@ -8,9 +8,10 @@ it. Names without a directory are `tests/run/NAME.12am` (with `NAME.out`);
 `tests/plan/NAME.12am` (with `NAME.plan`); `loops/NAME` is
 `tests/loops/NAME.12am` (with `NAME.loops`). A program of `tests/run` with a
 `NAME.stats` file has its `MIDNIGHT_GPU=stats` lines checked on a device,
-and one with a `NAME.split` file has the loops it splits checked. A program
-with a window gets the commands of its `NAME.drive` file, and one with a
-`NAME.frames` file has its answers and captures checked on a device.
+and one with a `NAME.split` file has the loops it splits checked. Every
+program gets the commands of its `NAME.drive` file, or none; one with a
+`NAME.queries` file has its answers of `query` and `resource` checked, and
+one with a `NAME.frames` file has its answers and captures checked on a device.
 
 Every expected output was worked out by hand from the reference. Where the
 reference is ambiguous or silent, the reading a test relies on is listed under
@@ -324,6 +325,43 @@ Counts: 292 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `Time.dt`: starts at `1.0 / 60`, writable | `time_default_dt`, `time_fields`, `system_first_program` |
 | `Time.elapsed`: goes up by `Time.dt` at the end of each tick, read-only | `time_fields`, `time_default_dt`, `fail/readonly_time_elapsed` |
 
+## Driving
+
+| Construct | Files |
+| --- | --- |
+| `MIDNIGHT_DRIVE` read by every program; a missing file stops a windowless program at its end | `only_programs_with_a_window_read_the_window_variables`, `a_program_without_a_window_is_driven` |
+| A driven program runs no tick a command did not let run, before `Window.open` and after a close included | `a_program_without_a_window_is_driven`, `input_keys`, `input_focus`, `drive_errors` (`tick` lines after `World.run`) |
+| When the commands run out, ticks run freely; a program whose `World.run` ends by `World.stop` runs until it calls it | `a_program_without_a_window_is_driven` |
+| When the program ends, a pending `tick` is answered and the commands up to the next one are carried out | `a_program_without_a_window_is_driven`, `drive_answers`, `query_end` |
+| `query`: terms, `Entity`, `with:`, `without:`, bracketed lists; rows in visiting order over several tables; `from` within and past the count; more than 100 rows; no rows | `query_values` |
+| Values in rows: `Float32` and `[Float32]` by the 32-bit rule, NaN, `Int` past 2^53, strings with control characters and non-ASCII text, lists, nested structs, enums, entities, `Color` | `query_values`, `json/query` |
+| A query after a despawn and queued changes, at the end, and after `exit` inside an `each` | `query_values`, `query_end` |
+| A query on several threads, and of a column on the device, with `stats` counting the download | `query_values` (`thread_programs`), `query_gpu` (`gpu_programs`, `gpu_stats_match_expected`) |
+| `resource`, and one with no fields | `query_values`, `json/query` |
+| Every error of `query` and `resource`, and the first in the line when two apply | `query_errors` |
+| A command of the window while none is open: without a window, before `Window.open`, after a close, after the program ends | `a_program_without_a_window_is_driven`, `drive_errors` |
+
+## JSON output
+
+| Construct | Files |
+| --- | --- |
+| `--format text` and `json` on five commands; usage errors | `format_takes_one_word_on_five_commands` |
+| The first line, on the streams the text uses; each line one object with `kind` | `json_programs`, `compiler_messages_in_json`, every test below |
+| `error` and `errors`: messages, labels, notes, files, whole spans with lines, columns and bytes; at most 20 | `fail_programs_in_json`, `json/check_*` |
+| `cant_read`, `no_flags`, `c_compiler`, `build_directory`; `cant_write` and `cant_run` by their text alone | `compiler_messages_in_json` |
+| `transfer` and `loop` | `plan_and_loops_in_json`, `json/plan`, `json/loops` |
+| `MIDNIGHT_FORMAT`: `json`, `text`, any other value; `run --format json` and `--format text` | `the_format_variable_takes_one_word`, `run_passes_the_format` |
+| Every program's standard output unchanged and its standard error the same in JSON | `programs_in_json` |
+| `answer` of every command, `drive_error`, `drive_unopened`, `unknown_word`, `window_opened` | `drive_errors`, `drive_answers`, `query_errors`, `only_programs_with_a_window_read_the_window_variables`, `json/drive_window` |
+| `threads`, `threads_split` | `splits_match_expected`, `only_programs_that_split_read_the_threads_variable` |
+| `gpu_device`, `gpu_strict`, `stats`, the `.frames` answers | `gpu_stats_match_expected`, `window_frames` (GPU mode) |
+| `runtime_error` | `programs_in_json` (`tests/panic`), `json/runtime_error` |
+| `gpu_error`, `window_error`, `out_of_memory` (the runtime's and the pool's), `buffers_alive` | `lines_no_program_writes_on_demand` |
+| Strings: escapes, control characters, non-ASCII text, a command that is not UTF-8 | `json/check_files`, `json/drive_window`, `json/query` |
+| The `Float32` rule, in `draws`, `query` and `resource` | `float32_text_round_trips`, `json/drive_window` |
+| `gpu_device` with no device, `gpu_cpu_block` | `programs_in_json` (`MIDNIGHT_GPU=off,info`) |
+| `window_event` | not covered in JSON: only a shown window writes it; its text is covered by `window_shown` |
+
 ## The window
 
 Every program here runs headless with the commands of its `.drive` file.
@@ -355,11 +393,11 @@ run inside `tests/window/compositor.sh`.
 | A frame shown in a window is the frame captured | `window_shown` |
 | `MIDNIGHT_WINDOW`: `headless`, `info`, an unknown word; read by a program with a window only | `only_programs_with_a_window_read_the_window_variables`; `info` of a shown window: `window_shown`, `window_keeps_time` |
 | No window can be shown: built without the flags, `MIDNIGHT_GPU` has `off`, no display found | `a_window_built_without_the_flags_runs_headless`, `a_window_that_cannot_be_shown_is_an_error` |
-| `tick`, `tick N`, `resize`, `scale` (halves rounded up), `close`, comments, blank lines and spaces; the answers; a `tick` the program ends before | `window_events`, `window_fields`, `drive_answers` |
+| `resize`, `scale` (halves rounded up), `close`, comments, blank lines and spaces; the answers | `window_events`, `window_fields`, `drive_answers` |
 | When the commands run out the window is closed, and ticks then run freely | `window_runs_out`, `frame_bytes`, `frame_sizes` |
-| When the program ends, the commands up to the next `tick` are carried out | `drive_answers` |
 | `capture`: before the first tick the frame `Window.open` showed, then the frame of the last tick, its size, `N ticks`, the CRC-32 of its pixels; a PNG of fixed codes | `frame_sizes`, `frame_bytes`; `window_frames`, `png_files_are_read` |
-| Every wrong command stops the program with its file and line: unknown, wrong arguments, `resize` or `scale` out of range or not headless, a frame larger than 8192, `capture` with no file, no window, no device | `drive_errors` |
+| Every wrong command stops the program with its file and line: unknown, wrong arguments, `resize` or `scale` out of range, a frame larger than 8192, `capture` with no file, no window, no device | `drive_errors` |
+| `resize` or `scale` in a program that is not headless | `window_shown_takes_no_resize` |
 | A `capture` to a file that can't be written; a file of commands that can't be opened | `window_frames`, `drive_errors` |
 | Commands from a named pipe, with a window shown | `window_shown` |
 | Without `MIDNIGHT_GPU_FLAGS` or `MIDNIGHT_WINDOW_FLAGS`: one line from `midnight`, the program runs headless and captures nothing | `a_window_built_without_the_flags_runs_headless` |

@@ -1,6 +1,6 @@
 # The Midnight language
 
-This document describes Midnight 0.8: the language core specified by
+This document describes Midnight 0.9: the language core specified by
 [`specs/0001-language-core.md`](../specs/0001-language-core.md), the GPU
 systems specified by
 [`specs/0002-gpu-systems.md`](../specs/0002-gpu-systems.md), what moves
@@ -13,8 +13,10 @@ loops on several cores, specified by
 window, specified by [`specs/0006-a-window.md`](../specs/0006-a-window.md),
 the keyboard and the mouse, specified by
 [`specs/0007-keyboard-and-mouse.md`](../specs/0007-keyboard-and-mouse.md),
-and drawing, specified by
-[`specs/0009-drawing.md`](../specs/0009-drawing.md).
+drawing, specified by
+[`specs/0009-drawing.md`](../specs/0009-drawing.md), and driving every
+program, specified by
+[`specs/0010-json-and-driving.md`](../specs/0010-json-and-driving.md).
 It is the reference for what a program means. Where the compiler and this
 document disagree, one of them has a bug.
 
@@ -694,6 +696,127 @@ At the end of each tick, `Time.tick` goes up by one and `Time.elapsed` by
 `Time.dt`. Ticks run as fast as they can; nothing waits for real time,
 unless a window is open: see [The window](#the-window).
 
+## Driving
+
+`MIDNIGHT_DRIVE=FILE` gives any program its **commands**: one to a line,
+read from a file or a named pipe. A line that is empty or begins with `#`
+is skipped, and the spaces around a command are. With commands a program
+is **driven**, and it runs no tick that a command did not let run: before
+each tick begins, window open or not, the runtime carries out commands
+until one lets the tick run. So the same program and the same commands
+give the same answers on every machine; an agent that wants to look,
+decide and look again adds commands to its file and runs it again.
+
+| Command | Meaning |
+| ------- | ------- |
+| `tick`, `tick N` | Let the next tick, or the next `N` ticks, run. |
+| `query TERMS`, `query TERMS from N` | Print the entities an `each` with these terms would visit, and their components. |
+| `resource NAME` | Print a resource the program declares. |
+
+The commands of a window are in [Without a display](#without-a-display)
+and [Commands for the keyboard and the mouse](#commands-for-the-keyboard-and-the-mouse);
+they need an open window.
+
+- Commands are carried out between ticks, so `query` and `resource` see
+  the world as the last tick and the top-level code after it left it,
+  every queued change applied.
+- When the commands run out, ticks run freely; an open window is closed
+  as by `close`, and so is a window opened later, in its first tick. A
+  program whose `World.run` ends only by `World.stop` runs until it calls
+  it.
+- When the program ends by its last statement or by `exit`, the commands
+  up to the next `tick` are carried out. After `exit` they see the world
+  as it was where `exit` was called, part way through a tick if it was
+  called in a system, with `Time.tick` the tick in progress, and, if it
+  was called inside an `each`, without the changes that loop queued.
+- A run-time error, an error of the device or the window, or a wrong
+  command ends the program at once: a pending `tick` is not answered and
+  no further command is carried out.
+- Each command is answered on standard error, when it has been carried
+  out: `midnight: drive: ` and the command as it was written, and more
+  for some. For `tick` the line comes when its last tick has finished,
+  and says how many ticks have run if the program ended first:
+
+  ```
+  midnight: drive: tick 3
+  midnight: drive: tick 5: the program ended after 2 ticks
+  ```
+
+**`query`** takes the terms of an `each`: one or more terms, each a
+component or `Entity`, then `with:` and `without:` as
+[Queries](#queries) has them, each at most once, then `from N` if given,
+`N` a whole number from 0 up. Its answer lists the entities that match,
+in the order an `each` with these terms visits them, from row `N` (or
+0), at most 100. A row is two spaces, the entity, and each component
+term in the order written, as `to_s` prints it; tags are not listed. The
+first line says the command, `Time.tick` as `N ticks`, the number of
+entities that match as `N rows`, and, when the rows that follow are not
+all of them, the first and last listed, or `none from N` when none is:
+
+```
+midnight: drive: query Body, without: Frozen: 4 ticks, 100000 rows, 0 to 99
+midnight: drive:   Entity(0v1) Body(x: 12.5, y: 40.25, vx: 1.0, vy: 0.5)
+…
+midnight: drive: query Body from 200000: 4 ticks, 100000 rows, none from 200000
+midnight: drive: query Ghost: 4 ticks, 0 rows
+```
+
+**`resource`** takes the name of a resource the program declares; the
+built-in `Time`, `Window`, `Keyboard` and `Mouse` are not read. Its answer
+is the command, the ticks, and the resource as `to_s` would print a
+struct of its fields, `Flags()` for one with none:
+
+```
+midnight: drive: resource Score: 3 ticks, Score(points: 30, best: 30)
+```
+
+In both, a `Float32` is written with the fewest digits that read back as
+the same 32-bit value, read either as a 32-bit or as a 64-bit number
+rounded to 32 bits; `to_s` of a `Float32` writes its 64-bit value.
+
+A query of a component that a GPU system keeps on the device reads it as
+top-level code would: the column is brought back, and `stats` counts it
+in the line of the last tick that ended. Afterwards the copy on the CPU
+is current too, so later `stats` lines can differ from those of a run
+without the query. What the program prints does not change.
+
+These stop the program with status 1 and a line that names the file and
+the line number; when more than one applies, the first in the line, left
+to right, is reported:
+
+```
+query: `NAME` is not a component or tag of this program
+query: tag `NAME` can't be a term; filter with `with: NAME`
+query: `Entity` can't be a filter
+query: `NAME` appears twice
+query: at least one component or `Entity` comes before `with:` and `without:`
+query: `from` takes a row number from 0 up
+`query` takes the terms of an `each`
+resource: `NAME` is not a resource of this program
+resource: `NAME` is built in; `resource` reads the program's own resources
+`resource` takes the name of a resource
+unknown command `NAME`
+`tick` takes a number of ticks from 1 up, or nothing
+can't `COMMAND`: no window is open
+```
+
+The last of the `query` and `resource` groups is for a line that cannot
+be read as the command at all. A command of the window while
+`Window.open?` is false stops the program with ``can't `COMMAND`: no
+window is open``, `COMMAND` as written (`capture` and `draws` say ``can't
+capture: no window is open`` and ``can't list the draws: no window is
+open``), before anything else about the command is judged; between a
+`close` and the tick it takes effect in, the window is open. A file of
+commands that cannot be opened stops the program with status 1 when the
+first command is wanted.
+
+```
+midnight: drive: steps.drive:4: query: `Postion` is not a component or tag of this program
+```
+
+`MIDNIGHT_FORMAT=json` writes each answer and error as a JSON object;
+[JSON output](json.md) describes them.
+
 ## The window
 
 ```ruby
@@ -890,19 +1013,15 @@ window system that name what failed. On Linux a display is found only
 through `WAYLAND_DISPLAY`, `WAYLAND_SOCKET` or `DISPLAY`; Wayland is tried
 before X11.
 
-`MIDNIGHT_DRIVE=FILE` gives a program with a window its **commands**: one
-to a line, read from a file or a named pipe. A line that is empty or
-begins with `#` is skipped, and the spaces around a command are. With
-commands a program is **driven**: its ticks are not held to real time,
-headless or not, it takes its keyboard, mouse and focus from its commands
-alone, and before each tick begins, while a window is open, the runtime
-carries out commands until one lets the tick run. The table below has the
-commands of the window; those of the keyboard and the mouse are in
+A driven window, as [Driving](#driving) describes, is not held to real
+time, headless or not, and takes its keyboard, mouse and focus from its
+commands alone. The table below has the commands of the window; those of
+the keyboard and the mouse are in
 [Commands for the keyboard and the mouse](#commands-for-the-keyboard-and-the-mouse).
+Each needs an open window.
 
 | Command        | Meaning                                                    |
 | -------------- | ---------------------------------------------------------- |
-| `tick`, `tick N` | Let the next tick, or the next `N` ticks, run.           |
 | `resize W H`   | The window becomes `W` by `H` points, each from 1 to 8192, as if resized at the desktop. Headless only. |
 | `scale S`      | A point becomes `S` pixels, a decimal number from 0.5 to 4 with at most six places; a pixel size is the size in points times `S`, halves rounded up. Headless only. |
 | `close`        | The window is closed, as if at the desktop.                |
@@ -912,47 +1031,32 @@ commands of the window; those of the keyboard and the mouse are in
 - `resize`, `scale` and `close` take effect in the tick that begins next,
   through the events above. `close` is carried out in its place among the
   commands of the keyboard and the mouse: in the tick it closes, what
-  those commands do after it reaches no window. A `tick N` counts every tick of the program
-  while it is carried out, window open or not.
+  those commands do after it reaches no window. A program that ticks
+  before `Window.open`, or between a close and another `Window.open`,
+  takes `tick` commands for those ticks too.
 - The last frame is the frame of the last tick that ended while the window
   was open, or, before such a tick, the one `Window.open` showed.
   `capture` writes it as a PNG of 8 bits each of red, green, blue and
   alpha, `Window.pixel_width` by `Window.pixel_height`, alpha 255. The
   same pixels always give the same file.
-- When the commands run out the window is closed, as by `close`, and from
-  then on ticks run freely.
-- When the program ends, the commands up to the next `tick` are carried
-  out.
-- Each command is answered with one line on standard error, when it has
-  been carried out: `midnight: drive: ` and the command as it was written.
-  The answer of `draws` alone has several lines; see
-  [The command `draws`](#the-command-draws).
-  For `tick` the line comes when its last tick has finished, and says how
-  many ticks have run if the program ended first. For `capture` it adds
-  the value `Time.tick` had when the frame was made, its size in pixels and
-  the CRC-32 of its pixels, four bytes each, rows from the top:
+- The answer to `capture` adds the value `Time.tick` had when the frame
+  was made, its size in pixels and the CRC-32 of its pixels, four bytes
+  each, rows from the top:
 
   ```
-  midnight: drive: tick 3
   midnight: drive: capture after.png: 3 ticks, 320x200, crc 5f1d02c9
-  midnight: drive: tick 5: the program ended after 2 ticks
   ```
 
-- A command that is not in the table, or has the wrong arguments, a
-  `resize` or `scale` in a program that is not headless or that would make
-  a frame larger than 8192 pixels on a side, a `capture` that cannot be
-  made (no window is open, no device, the file cannot be written), and a
-  `draws` while no window is open stop
-  the program with status 1 and a line that names the file and the line
-  number:
+- A command of the window with the wrong arguments, a `resize` or `scale`
+  in a program that is not headless or that would make a frame larger
+  than 8192 pixels on a side, and a `capture` that cannot be made (no
+  device, the file cannot be written) stop the program with status 1 and
+  a line that names the file and the line number:
 
   ```
-  midnight: drive: steps.drive:4: can't capture: no window is open
-  midnight: drive: steps.drive:9: can't list the draws: no window is open
+  midnight: drive: steps.drive:4: `resize` needs MIDNIGHT_WINDOW=headless
+  midnight: drive: steps.drive:9: can't capture: no window is open
   ```
-
-- A file of commands that cannot be opened stops the program with status
-  1 when the first command is wanted.
 
 `MIDNIGHT_GPU=off` means what it says for frames as well: the program uses
 no device, so it shows no window and captures nothing. Its frames are
@@ -1281,8 +1385,9 @@ midnight: drive:   Draw.circle(197.0, 96.0, 4.0, Color(255, 200, 0, 255))
 - The background is printed with the `a` the program gave it, which
   changes nothing in the picture.
 - A draw is printed as the statement that made it, with the numbers it
-  keeps: each as the shortest text that reads back as the same 32-bit
-  `Float`, in the form `to_s` gives a `Float`, and the color with its four
+  keeps: each with the fewest digits that read back as the same 32-bit
+  value, read either as a 32-bit or as a 64-bit number rounded to 32
+  bits, in the form `to_s` gives a `Float`, and the color with its four
   bytes. A draw that covers nothing is printed like any other. `draws`
   prints the 32-bit number; `puts` of a `Float32` field holding the same
   value prints it as the 64-bit `Float` it is read as.
@@ -1566,17 +1671,19 @@ These stop the program with status 1 and a line that names the file and
 the line number, as a wrong command of the window does, and in this order
 when more than one applies:
 
-1. a name that is not a key or a button, or a number that is not as
+1. any of these while no window is open: ``can't `COMMAND`: no window is
+   open``, as [Driving](#driving) says;
+2. a name that is not a key or a button, or a number that is not as
    above or out of range;
-2. a `key` command while the window does not have the focus;
-3. `key down` of a key that is down, `key up` of a key that is up, and
+3. a `key` command while the window does not have the focus;
+4. `key down` of a key that is down, `key up` of a key that is up, and
    the same for buttons;
-4. `mouse move` outside the window while no button is held: the desktop
+5. `mouse move` outside the window while no button is held: the desktop
    reports such a pointer as having left, so the line names `mouse leave`;
-5. `mouse down` or `mouse B` while the pointer is not over the window and
+6. `mouse down` or `mouse B` while the pointer is not over the window and
    no button is held;
-6. `mouse leave` while the pointer is not over the window;
-7. `blur` without the focus and `focus` with it.
+7. `mouse leave` while the pointer is not over the window;
+8. `blur` without the focus and `focus` with it.
 
 ```
 midnight: drive: steer.drive:3: `key A` while the window does not have the focus
@@ -2906,7 +3013,7 @@ The runtime errors are:
   resource field or a constant.
 
 The commands of `MIDNIGHT_DRIVE` stop a program with errors of their own;
-see [Without a display](#without-a-display) and
+see [Driving](#driving), [Without a display](#without-a-display) and
 [Commands for the keyboard and the mouse](#commands-for-the-keyboard-and-the-mouse).
 
 In a GPU system an error is reported when the `each` it happened in ends,
@@ -3008,7 +3115,7 @@ argument by position; it is not an expression. The `NL` after `do |…|`, and th
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.8
+## Not in 0.9
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
@@ -3020,9 +3127,8 @@ relationships between entities, and calling C libraries.
 A window leaves these out: sound;
 more than one window at a time; closing, resizing, moving or renaming the
 window from the program, full screen and an icon; refusing a close the
-user asked for; running faster or slower than real time while a window is
-open; and reading entities, components or resources over the commands'
-pipe.
+user asked for; and running faster or slower than real time while a
+window is open.
 
 Drawing leaves these out: text, images and sprites; outlines, rounded
 rectangles, ellipses, arcs, polygons of more than three corners, curves
@@ -3035,6 +3141,13 @@ pixels for the next one; reading a frame's pixels in a program, and
 commands that look at pixels; arguments of a draw given by name; three
 dimensions; code written in Midnight that runs for each pixel; and lines
 for draws in `midnight plan`.
+
+Driving leaves these out: a session that stays open, with a channel of
+its own for commands and answers and errors that leave the program
+running; capturing a frame at every tick by one command; changing the
+world from commands, and commands that wait for a condition; pending
+events, single fields, filters on values and the built-in resources in
+`query` and `resource`.
 
 The keyboard and the mouse leave these out: text input (characters, the
 layout's names for keys, dead keys, input methods), key repeat and the

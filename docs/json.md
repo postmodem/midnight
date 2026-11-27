@@ -54,7 +54,11 @@ is the compiler's, the one that built the program.
   `"Infinity"` and `"-Infinity"`.
 - A `Float32` is the shortest text that reads back as the same 32-bit
   value, whether read as a 32-bit number or as a 64-bit number rounded to
-  32 bits; non-finite values as for `Float`.
+  32 bits; non-finite values as for `Float`. It differs from the shortest
+  32-bit text for two values only, `7.038531e-26` and its negative, which
+  a 64-bit reader would round to the next 32-bit value; they are written
+  `7.0385307e-26` and `-7.0385307e-26`. The text forms of `draws`, `query`
+  and `resource` use the same rule.
 
 A `Color` is an array of its four bytes, `[r, g, b, a]`. An entity is the
 string `to_s` gives it: `"Entity(3v1)"`, `"Entity(none)"`.
@@ -191,6 +195,8 @@ the tick that last ended), then members by command:
 | `resize`, `scale`, `close`, the keyboard and mouse commands | none |
 | `capture FILE` | `file`, `frame_tick`, `pixel_width`, `pixel_height`, `crc` (eight hex digits, as the text) |
 | `draws` | `frame_tick`, `width`, `height`, `background` (a color, with the `a` the program gave it), `draws`: an array of shapes |
+| `query …` | `count` (the entities that match, all of them), `from` (the first row listed), `rows`: an array of at most 100 rows |
+| `resource NAME` | `resource` (the name), `fields`: the resource as an object |
 
 A shape is an object with `shape` (`rect`, `circle`, `line` or
 `triangle`) and its arguments under the names of the reference's table
@@ -200,3 +206,19 @@ then `color`:
 ```json
 {"kind":"answer","name":"draws","command":"draws","line":2,"tick":1,"frame_tick":1,"width":64,"height":48,"background":[10,20,30,255],"draws":[{"shape":"circle","x":10.0,"y":10.0,"radius":2.25,"color":[4,5,6,7]}]}
 ```
+
+A row of `query` is an object: `entity`, then a member for each
+component term, in the order written, named by the component. A
+component, struct or resource value is an object of its fields in
+declared order (`{}` for none); a list is an array; an enum is its
+variant's name as a string; a `String` is a string; `Bool` is `true` or
+`false`; numbers, colors and entities as in [Numbers](#numbers).
+
+```json
+{"kind":"answer","name":"query","command":"query Body","line":3,"tick":4,"count":100000,"from":0,"rows":[{"entity":"Entity(0v1)","Body":{"x":12.5,"y":40.25,"vx":1.0,"vy":0.5}}]}
+{"kind":"answer","name":"resource","command":"resource Score","line":4,"tick":4,"resource":"Score","fields":{"points":30,"best":30}}
+```
+
+In an answer, `tick` is `Time.tick` when it is answered: one more than
+the tick that last ended, or, after `exit` in a system, the tick in
+progress. In a `stats` line, `tick` is the tick the line counts.

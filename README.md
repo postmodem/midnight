@@ -137,11 +137,14 @@ on the same device as GPU systems.
 ### Headless, and driven by commands
 
 Any program with a window also runs with no display at all. A file of
-commands steps it, gives it keys and clicks, prints its frames as text and
-captures them as PNG files.
+commands steps any program a tick at a time and prints its entities and
+resources between ticks; with a window it also gives it keys and clicks,
+prints its frames as text and captures them as PNG files.
 
-The same commands give the same output on every machine, so an agent can
-check a game the way it checks any other program.
+A driven program runs no tick a command did not let run, so the same
+commands give the same output on every machine, and an agent can check a
+game the way it checks any other program. The compiler and programs
+also write JSON lines, for tools that read what they say.
 
 ## Try it
 
@@ -171,6 +174,14 @@ nix run . -- run examples/input.12am
 # The same kind of program headless: each frame printed as the
 # statements that drew it, and saved as shapes.png and shapes-cloud.png
 MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/shapes.drive nix run . -- run examples/shapes.12am
+
+# Any program, a tick at a time: its entities after two ticks
+printf 'tick 2\nquery Position, Velocity\n' > look.drive
+MIDNIGHT_DRIVE=look.drive nix run . -- run examples/move.12am
+
+# The same in JSON, and the compiler's errors in JSON
+MIDNIGHT_DRIVE=look.drive nix run . -- run examples/move.12am --format json
+nix run . -- check tests/fail/unknown_component_query_suggest.12am --format json
 ```
 
 [`examples/`](examples/) has them all, each with its expected output.
@@ -187,6 +198,10 @@ midnight emit-c FILE                     print the generated C
 midnight emit-wgsl FILE                  print the shader of every GPU block
 midnight --version | --help
 ```
+
+`build`, `run`, `check`, `plan` and `loops` take `--format json`, which
+writes their diagnostics and output as JSON lines;
+[`docs/json.md`](docs/json.md) describes them.
 
 `build` names the executable after the file, without its extension,
 unless `-o` says otherwise. `run` exits with the program's status. The
@@ -215,6 +230,7 @@ WGSL shader for each loop of a GPU system, which runs through
 | [`docs/language.md`](docs/language.md)         | The language reference, with what each construct costs |
 | [`docs/principles.md`](docs/principles.md)     | What Midnight is for, and how it is built             |
 | [`docs/running.md`](docs/running.md)           | Choosing the device and threads; running headless and driven |
+| [`docs/json.md`](docs/json.md)                 | The JSON lines of the compiler and of programs        |
 | [`docs/building.md`](docs/building.md)         | Build modes, C flags, and what a program links against |
 | [`docs/development.md`](docs/development.md)   | Working on Midnight: the repository and its tests     |
 | [`bench/README.md`](bench/README.md)           | The benchmarks                                        |
@@ -227,12 +243,12 @@ run them.
 
 ## Status
 
-Midnight is at 0.8 and young. Until 1.0 a better syntax is worth a
+Midnight is at 0.9 and young. Until 1.0 a better syntax is worth a
 breaking change, and every spec that changes the language raises the
 minor version.
 
 There is no text, sound, sprites or 3D yet, and no files or command-line
-arguments. [Not in 0.8](docs/language.md#not-in-08) lists everything the
+arguments. [Not in 0.9](docs/language.md#not-in-09) lists everything the
 language leaves out.
 
 It is tested on `x86_64-linux`: GPU systems on an NVIDIA device, on an AMD

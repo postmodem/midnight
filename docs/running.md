@@ -1,7 +1,8 @@
 # Running programs
 
 A built program reads a few environment variables when it starts. Each is
-a comma-separated list of words, and a word that is not in its table is
+a comma-separated list of words, but `MIDNIGHT_FORMAT`, one word, and
+`MIDNIGHT_DRIVE`, a file name; a word that is not in its table is
 reported once, when the program starts. [Building programs](building.md)
 says how programs are built and linked.
 
@@ -10,7 +11,8 @@ says how programs are built and linked.
 | `MIDNIGHT_GPU`     | programs with a GPU system or a window          | [The device](#the-device) |
 | `MIDNIGHT_THREADS` | programs with a loop that can be split          | [Threads](#threads) |
 | `MIDNIGHT_WINDOW`  | programs with a window                          | [A window, headless and driven](#a-window-headless-and-driven) |
-| `MIDNIGHT_DRIVE`   | programs with a window                          | [A window, headless and driven](#a-window-headless-and-driven) |
+| `MIDNIGHT_DRIVE`   | every program                                   | [Driving](#driving) |
+| `MIDNIGHT_FORMAT`  | every program, before the others                | [JSON](#json) |
 
 ## The device
 
@@ -102,23 +104,53 @@ MIDNIGHT_GPU=off MIDNIGHT_THREADS=4,info nix run . -- run tests/run/cores_gpu_ta
 ```
 
 No word changes what a program prints to standard output. A thread with
-nothing to do polls for 50 microseconds and then blocks. A program with no loop that can be split has no threads and does not read
+nothing to do polls for 50 microseconds and then blocks; with `awake` it
+keeps polling while a driven program waits for its next command too. A program with no loop that can be split has no threads and does not read
 the variable.
+
+## Driving
+
+`MIDNIGHT_DRIVE` names a file or a named pipe of commands that step any
+program a tick at a time and print its entities and resources between
+ticks; a program with a window takes more commands, which give it
+keyboard and mouse input, capture its frames as PNG files and print them
+as text. Each command is answered on standard error with a line that
+begins `midnight: drive: `. A driven program runs no tick a command did
+not let run, so a file of commands gives the same answers on every
+machine.
+
+```sh
+printf 'tick 2
+query Position, Velocity
+tick
+' > look.drive
+MIDNIGHT_DRIVE=look.drive nix run . -- run examples/move.12am
+```
 
 ## A window, headless and driven
 
 `MIDNIGHT_WINDOW=headless` runs a program with a window without a display:
 the window exists in the program only, and ticks run as fast as they can.
-`info` prints a line when a window opens. `MIDNIGHT_DRIVE` names a file or
-a named pipe of commands that step the program, give it keyboard and mouse
-input, capture its frames as PNG files and print them as text; each
-command is answered on standard error with a line that begins
-`midnight: drive: `.
+`info` prints a line when a window opens.
 
 ```sh
 MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/shapes.drive nix run . -- run examples/shapes.12am
 ```
 
-The reference defines both variables and every command: see
+The reference defines the variables and every command: see
+[Driving](language.md#driving),
 [Without a display](language.md#without-a-display) and
 [Commands for the keyboard and the mouse](language.md#commands-for-the-keyboard-and-the-mouse).
+
+## JSON
+
+`MIDNIGHT_FORMAT=json` makes every line a program writes to standard
+error a JSON object: answers, `draws`, `stats`, `info` lines and errors.
+Standard output does not change. `midnight run --format json` sets it for
+the program it runs, and `check`, `build`, `plan` and `loops` take
+`--format json` for their own output. [JSON output](json.md) describes
+every line.
+
+```sh
+MIDNIGHT_FORMAT=json MIDNIGHT_DRIVE=look.drive nix run . -- run examples/move.12am
+```
