@@ -80,6 +80,30 @@ class WrapperTest < Minitest::Test
     assert_kind_of Float, entry["load"]
   end
 
+  def test_keeps_the_program_at_each_check_build_and_run
+    FileUtils.mkdir_p(File.join(@root, "lib", "docs"))
+    FileUtils.mkdir_p(File.join(@root, "docs"))
+    File.write(File.join(@root, "lib", "util.12am"), "def f = 1\n")
+    File.write(File.join(@root, "docs", "ref.12am"), "puts 3\n")
+    File.write(File.join(@root, "notes.txt"), "not a program\n")
+    call("check", "solution.12am")
+    first = log.last["program_sha256"]
+    kept = File.join(@logs, "programs", first)
+    assert_equal ["lib/util.12am", "solution.12am"], Dir.glob("**/*", base: kept).select { |f| File.file?(File.join(kept, f)) }.sort
+    assert_equal "puts 1\n", File.read(File.join(kept, "solution.12am"))
+    call("build", "solution.12am", "-o", "x")
+    assert_equal first, log.last["program_sha256"]
+    File.write(File.join(@root, "solution.12am"), "puts 4\n")
+    call("run", "solution.12am")
+    call("loops", "solution.12am")
+    assert_equal [first, log[-2]["program_sha256"]].sort, Dir.children(File.join(@logs, "programs")).sort
+    assert_equal "puts 4\n", File.read(File.join(@logs, "programs", log[-2]["program_sha256"], "solution.12am"))
+
+    keep = File.join(@other, "keep")
+    Eval.keep_compiled(@logs, keep)
+    assert_equal 2, Dir.children(File.join(keep, "programs")).size
+  end
+
   def test_drops_the_compiler_variables_and_says_so
     vars = %w[MIDNIGHT_CC MIDNIGHT_CFLAGS MIDNIGHT_GPU_FLAGS MIDNIGHT_WINDOW_FLAGS]
     vars.each do |name|

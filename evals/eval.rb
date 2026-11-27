@@ -307,6 +307,7 @@ module Eval
           "caller" => caller_env.select { |k, _| k.start_with?("MIDNIGHT_") },
           "load" => load_average
         }
+        keep_program(root, config["programs"], record["program_sha256"]) if %w[check build run].include?(argv.first)
         reason = refusal(argv, caller_env, cwd, root)
         if reason
           line = "midnight: refused: #{reason}"
@@ -327,6 +328,26 @@ module Eval
                       "stdout_cut" => r[:out_cut], "stderr_cut" => r[:err_cut])
         append(config["log"], record)
         exit r[:status]
+      end
+
+      # Copies the program in root to programs/SHA/, at the same relative
+      # paths, unless that program is already kept.
+      def keep_program(root, programs, sha)
+        return unless programs && sha
+
+        dest = File.join(programs, sha)
+        return if File.directory?(dest)
+
+        require "fileutils"
+        partial = "#{dest}.#{Process.pid}"
+        program_files(root).each do |f|
+          FileUtils.mkdir_p(File.dirname(File.join(partial, f)))
+          FileUtils.cp(File.join(root, f), File.join(partial, f))
+        end
+        FileUtils.mkdir_p(partial)
+        File.rename(partial, dest)
+      rescue SystemCallError
+        FileUtils.rm_rf(partial) if partial
       end
 
       def append(log, record)
@@ -421,6 +442,19 @@ module Eval
     def expected = read("expected.out")
     def drive = exist?("check.drive") ? path("check.drive") : nil
     def repair? = given_files.include?("solution.12am")
+    def draws? = exist?("expected.draws")
+    def expected_draws = read("expected.draws")
+
+    # Whether the shapes of each `draws` answer are compared as a set:
+    # `draws: any order` in meta; `draws: in order` compares them line for
+    # line.
+    def draws_any_order?
+      case @meta["draws"]
+      when "any order" then true
+      when "in order" then false
+      else raise Failure, "#{@name}/meta: `draws:` is `in order` or `any order`"
+      end
+    end
 
     def given_files
       return [] unless exist?("given")
@@ -463,6 +497,7 @@ module Eval
       %w[TASK.md meta expected.out check.drive loops systems].each do |f|
         d << "#{f}\0#{exist?(f) ? read(f) : ''}\0"
       end
+      d << "expected.draws\0#{expected_draws}\0" if draws?
       given_files.each { |f| d << "given/#{f}\0#{read('given', f)}\0" }
       d.hexdigest
     end
@@ -565,11 +600,22 @@ module Eval
     def template(message) = message.gsub(/`[^`]*`/, "`…`")
     def spans(message) = message.scan(/`([^`]*)`/).flatten
 
-    # Each diagnostic, run-time error and `midnight:` line.
+    # Each diagnostic, run-time error and `midnight:` line. Of a `draws`
+    # answer, its first line is recorded as `drive: draws`, and the lines
+    # after it are not.
     def parse(text)
       lines = text.to_s.lines.map(&:chomp)
       out = []
+      answer = false
       lines.each_with_index do |line, i|
+        if line.start_with?("#{Draws::SAID}draws: ")
+          answer = true
+          out << record("midnight", "drive: draws", nil, nil)
+          next
+        end
+        next if answer && line.start_with?("#{Draws::SAID}  ")
+
+        answer = false
         if (m = line.match(/\Aerror: (.*)\z/))
           at = lines[i + 1].to_s.match(/\A\s*--> (.*):(\d+):\d+\z/)
           out << record("error", m[1], at && at[1], at && at[2].to_i)
@@ -1040,6 +1086,188 @@ module Eval
     def escapes(calls, **places) = check(calls, **places)["escapes"]
   end
 
+  # The answers of the command `draws`, read and compared.
+  module Draws
+    module_function
+
+    SAID = "midnight: drive: "
+    # The numbers of each shape, by its statement's name.
+    NUMBERS = { "rect" => 4, "circle" => 3, "line" => 5, "triangle" => 6 }.freeze
+    COMPONENTS = { "Rect" => "rect", "Circle" => "circle", "Line" => "line", "Triangle" => "triangle" }.freeze
+    HEADER = /\Adraws: (\d+) ticks?, (\S+), (\d+) draws?\z/
+    BACKGROUND = /\AWindow\.background = Color\((\d+), (\d+), (\d+), (\d+)\)\z/
+    SHAPE = /\A(?:Draw\.(rect|circle|line|triangle)|(Rect|Circle|Line|Triangle))\((.*)\)\z/
+    ARGUMENTS = /\A((?:[^,]+, )*)Color\((\d+), (\d+), (\d+), (\d+)\)(?:, (-?\d+))?\z/
+
+    # The lines of every `draws` answer in a program's standard error, with
+    # `midnight: drive: ` removed: each answer's first line and the lines
+    # after it that go on with two spaces.
+    def answers_text(stderr)
+      out = +""
+      inside = false
+      stderr.to_s.scrub.each_line do |line|
+        line = line.chomp
+        if line.start_with?("#{SAID}draws: ")
+          inside = true
+        elsif !(inside && line.start_with?("#{SAID}  "))
+          inside = false
+          next
+        end
+        out << line.delete_prefix(SAID) << "\n"
+      end
+      out
+    end
+
+    # A 32-bit float's bits from the text a draw prints it as; nil when the
+    # text is no number.
+    def bits(text)
+      t = text.strip
+      x = { "NaN" => Float::NAN, "Infinity" => Float::INFINITY, "-Infinity" => -Float::INFINITY }[t] || Float(t)
+      return 0x7fc00000 if x.nan?
+
+      [x].pack("e").unpack1("V")
+    rescue ArgumentError, TypeError
+      nil
+    end
+
+    # What a line of a `draws` answer draws: { "kind", "numbers" (bits),
+    # "color" (four bytes) }, a `layer` left out; a line that is neither
+    # form is { "kind" => "text", "text" => line }.
+    def shape(line)
+      text = line.strip
+      m = text.match(SHAPE)
+      a = m && m[3].match(ARGUMENTS)
+      kind = m && (m[1] || COMPONENTS[m[2]])
+      numbers = a && a[1].split(", ").map { |n| bits(n) }
+      if a && numbers.size == NUMBERS[kind] && numbers.none?(&:nil?)
+        { "kind" => kind, "numbers" => numbers, "color" => a[2..5].map(&:to_i) }
+      else
+        { "kind" => "text", "text" => text }
+      end
+    end
+
+    # Each answer of a text of `draws` answers: { "frame" => [tick, size,
+    # background bytes], "shapes", "lines" (the shapes' lines as printed),
+    # "header" (its first two lines) }.
+    def parse(text)
+      answers = []
+      text.to_s.each_line do |line|
+        line = line.chomp
+        if (h = line.match(HEADER))
+          answers << { "frame" => [h[1].to_i, h[2], nil], "shapes" => [], "lines" => [], "header" => [line] }
+        elsif answers.empty?
+          next
+        elsif answers.last["header"].size == 1 && (b = line.strip.match(BACKGROUND))
+          answers.last["frame"][2] = b[1..4].map(&:to_i)
+          answers.last["header"] << line
+        else
+          answers.last["shapes"] << shape(line)
+          answers.last["lines"] << line.strip
+        end
+      end
+      answers
+    end
+
+    # Where the answers got first differ from those wanted, or nil when they
+    # are equal: { "answer" (from 1), "how" (`answers`, `frame`, `missing`,
+    # `extra`, `order`, `differs`), "got", "want" (lines, nil where there is
+    # none) }. any: each answer's shapes compared as a set with counts.
+    def difference(got, want, any: false)
+      [got.size, want.size].max.times do |i|
+        g = got[i]
+        w = want[i]
+        if g.nil? || w.nil?
+          return { "answer" => i + 1, "how" => "answers", "got" => g && g["header"].first,
+                   "want" => w && w["header"].first }
+        end
+        if g["frame"] != w["frame"]
+          return { "answer" => i + 1, "how" => "frame", "got" => g["header"].join(" / "),
+                   "want" => w["header"].join(" / ") }
+        end
+        d = any ? set_difference(g, w) : list_difference(g, w)
+        return d.merge("answer" => i + 1) if d
+      end
+      nil
+    end
+
+    def list_difference(g, w)
+      gs = g["shapes"]
+      ws = w["shapes"]
+      k = (0...[gs.size, ws.size].max).find { |j| gs[j] != ws[j] } or return nil
+      at = ->(how, gi, wi) { { "how" => how, "got" => gi && g["lines"][gi], "want" => wi && w["lines"][wi] } }
+      if gs.size == ws.size && gs.sort_by(&:to_s) == ws.sort_by(&:to_s) then at.("order", k, k)
+      elsif k >= gs.size || gs[k..] == ws[k + 1..] then at.("missing", nil, k)
+      elsif k >= ws.size || gs[k + 1..] == ws[k..] then at.("extra", k, nil)
+      else at.("differs", k, k)
+      end
+    end
+
+    def set_difference(g, w)
+      missing = take_away(w, g)
+      extra = take_away(g, w)
+      return nil if missing.empty? && extra.empty?
+      return { "how" => "extra", "got" => g["lines"][extra.first], "want" => nil } if missing.empty?
+      return { "how" => "missing", "got" => nil, "want" => w["lines"][missing.first] } if extra.empty?
+
+      want = w["shapes"][missing.first]
+      near = extra.max_by { |i| likeness(g["shapes"][i], want) }
+      { "how" => "differs", "got" => g["lines"][near], "want" => w["lines"][missing.first] }
+    end
+
+    # The indices of a's shapes that b does not have, counting repeats.
+    def take_away(a, b)
+      left = b["shapes"].tally
+      a["shapes"].each_index.reject do |i|
+        s = a["shapes"][i]
+        left[s].to_i.positive? && (left[s] -= 1)
+      end
+    end
+
+    def likeness(a, b)
+      return -1 unless a["kind"] == b["kind"]
+
+      a["numbers"].to_a.zip(b["numbers"].to_a).count { |x, y| x == y } + (a["color"] == b["color"] ? 1 : 0)
+    end
+
+    # Whether the shape of line got is the one of line want with two of its
+    # numbers in each other's places.
+    def swapped?(got, want)
+      g = shape(got.to_s)
+      w = shape(want.to_s)
+      return false if g["kind"] == "text" || g["kind"] != w["kind"] || g["color"] != w["color"]
+
+      gn = g["numbers"]
+      wn = w["numbers"]
+      diff = gn.each_index.reject { |i| gn[i] == wn[i] }
+      diff.size == 2 && gn[diff[0]] == wn[diff[1]] && gn[diff[1]] == wn[diff[0]]
+    end
+
+    # Whether the shape of line got is a rectangle with want's width and
+    # height at want's place plus half its width and half its height.
+    def by_centre?(got, want)
+      g = shape(got.to_s)
+      w = shape(want.to_s)
+      return false unless g["kind"] == "rect" && w["kind"] == "rect"
+
+      x, y, width, height = w["numbers"].map { |b| [b].pack("V").unpack1("e") }
+      plus_half = ->(at, size) { [f32(at + f32(size * 0.5))].pack("e").unpack1("V") }
+      g["numbers"] == [plus_half.(x, width), plus_half.(y, height), w["numbers"][2], w["numbers"][3]]
+    end
+
+    # x rounded to the nearest 32-bit float.
+    def f32(x) = [x].pack("e").unpack1("e")
+
+    # A line for a grade's notes.
+    def note(d)
+      return "standard error was cut at 1 MB" if d["how"] == "cut"
+
+      parts = ["answer #{d['answer']}: #{d['how']}"]
+      parts << "got `#{d['got']}`" if d["got"]
+      parts << "want `#{d['want']}`" if d["want"]
+      parts.join(", ")
+    end
+  end
+
   # Grading one program against one task.
   module Grade
     LOCK = Mutex.new
@@ -1091,9 +1319,11 @@ module Eval
           FileUtils.cp(task.drive, File.join(dir, "check.drive")) if task.drive
           result = grade_dir(task, dir, compiler)
           stdout = result.delete("stdout")
+          draws = result.delete("draws_text")
           if keep
             FileUtils.mkdir_p(keep)
             File.write(File.join(keep, "graded.out"), stdout)
+            File.write(File.join(keep, "graded.draws"), draws) if task.draws?
           end
           result
         ensure
@@ -1105,7 +1335,7 @@ module Eval
     def grade_dir(task, dir, compiler)
       solution = File.join(dir, "solution.12am")
       unless File.file?(solution)
-        return { "verdict" => "no solution", "checks" => {}, "sha256" => nil, "stdout" => "" }
+        return { "verdict" => "no solution", "checks" => {}, "sha256" => nil, "stdout" => "", "draws_text" => "" }
       end
 
       env = environment(dir)
@@ -1128,6 +1358,8 @@ module Eval
         notes["build"] = b[:timeout] ? "time limit" : b[:err].lines.first(5).join unless checks["build"]
       end
       stdout = ""
+      draws_text = ""
+      difference = nil
       if checks["build"]
         run_env = task.drive ? env.merge("MIDNIGHT_DRIVE" => "check.drive") : env
         r = Guard.capture(run_env, [File.join(dir, "solution")], chdir: dir, limit: LIMIT, cap: CAP)
@@ -1138,8 +1370,15 @@ module Eval
           notes["output"] = r[:timeout] ? "time limit" : "status #{r[:status]}"
           notes["output"] += ", #{first_difference(r[:out], task.expected)}" if r[:status].zero?
         end
+        if task.draws?
+          draws_text = Draws.answers_text(r[:err])
+          difference = draws_difference(task, draws_text, r[:err_cut])
+          checks["draws"] = difference.nil?
+          notes["draws"] = Draws.note(difference) if difference
+        end
       else
         checks["output"] = false
+        checks["draws"] = false if task.draws?
       end
       unless task.loops.empty? && task.systems.empty?
         l = Guard.capture(env, [compiler, "loops", "solution.12am"], chdir: dir, limit: LIMIT, cap: CAP)
@@ -1157,9 +1396,20 @@ module Eval
       end
       verdict = checks.values.all? ? "pass" : "fail"
       ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round
-      { "verdict" => verdict, "checks" => checks, "notes" => notes, "sha256" => sha,
-        "program_sha256" => program_sha, "timeout" => timed_out, "load" => load, "ms" => ms,
-        "stdout" => stdout }
+      out = { "verdict" => verdict, "checks" => checks, "notes" => notes, "sha256" => sha,
+              "program_sha256" => program_sha, "timeout" => timed_out, "load" => load, "ms" => ms,
+              "stdout" => stdout, "draws_text" => draws_text }
+      out["draws"] = difference if difference
+      out
+    end
+
+    # Where the `draws` answers of a run (text, with `midnight: drive: `
+    # removed) first differ from the task's, or nil when they agree. cut:
+    # standard error was cut at the cap.
+    def draws_difference(task, text, cut)
+      return { "answer" => nil, "how" => "cut", "got" => nil, "want" => nil } if cut
+
+      Draws.difference(Draws.parse(text), Draws.parse(task.expected_draws), any: task.draws_any_order?)
     end
 
     def same_output?(got, want) = got.b == want.b
@@ -1587,8 +1837,10 @@ module Eval
                     "Output tokens", "Input tokens", "Cost (est. $)", "First try", "Verified"], rows)
       out << "\nMeans over graded runs. Cost is Claude Code's estimate at API prices.\n"
 
-      out << "\n## Diagnostics and run-time errors\n\n"
       graded = Runs.trials(results).values.reject { |r| %w[infrastructure isolation].include?(r["outcome"]) }
+      out << draws(tasks, models, cells) if graded.any? { |r| r["checks"].to_h.key?("draws") }
+
+      out << "\n## Diagnostics and run-time errors\n\n"
       groups = Hash.new { |h, k| h[k] = [] }
       graded.each { |r| r["diagnostics"].to_a.each { |d| groups[[d["kind"], d["template"]]] << [r, d] } }
       if groups.empty?
@@ -1653,6 +1905,39 @@ module Eval
       out
     end
 
+    # The section on the check `draws`: for each task and model that has
+    # it, the graded runs that built and failed it, by how their answers
+    # first differ; then the runs whose first differing shape is the
+    # expected one with two numbers exchanged, and those whose first
+    # differing shape is the expected rectangle placed by its centre.
+    def draws(tasks, models, cells)
+      out = +"\n## Draws\n\n"
+      hows = %w[answers frame missing extra order differs cut]
+      swapped = []
+      centred = []
+      rows = tasks.product(models).filter_map do |t, m|
+        rs = cells[[t, m]].select { |r| r["checks"].to_h.key?("draws") }
+        next if rs.empty?
+
+        failed = rs.select { |r| r.dig("checks", "build") && r.dig("checks", "draws") == false }
+        failed.each do |r|
+          name = "#{t}/#{m}/#{r['trial']}.#{r['attempt']}"
+          d = r["draws"].to_h
+          next unless d["how"] == "differs"
+
+          swapped << name if Draws.swapped?(d["got"], d["want"])
+          centred << name if Draws.by_centre?(d["got"], d["want"])
+        end
+        tally = failed.map { |r| r.dig("draws", "how") }.tally
+        ["`#{t}`", "`#{m}`", rs.size, failed.size, *hows.map { |h| tally[h].to_i }]
+      end
+      out << table(["Task", "Model", "Graded", "Built and failed draws", *hows.map(&:capitalize)], rows)
+      out << "\nHow each run's answers first differ from the expected ones.\n\n"
+      out << "- Two numbers exchanged: #{swapped.empty? ? 'none' : swapped.join(', ')}\n"
+      out << "- A rectangle placed by its centre: #{centred.empty? ? 'none' : centred.join(', ')}\n"
+      out
+    end
+
     # "yes" when every occurrence of a template is Ruby-shaped, "N of M"
     # when some are.
     def ruby_mark(kind, occurrences)
@@ -1714,11 +1999,13 @@ module Eval
       out << "\n## Tasks\n\n"
       marks = 0
       chance = 0.0
+      pooled = [0, 0, 0, 0]
       rows = tasks.product(models).map do |t, m|
         x = ca[[t, m]]
         y = cb[[t, m]]
         pa = x.count { |r| r["outcome"] == "pass" }
         pb = y.count { |r| r["outcome"] == "pass" }
+        pooled = pooled.zip([pa, x.size, pb, y.size]).map(&:sum)
         p = x.empty? || y.empty? ? nil : Stats.fisher(pa, x.size - pa, pb, y.size - pb)
         chance += Stats.chance_of_mark(pa, x.size, pb, y.size) if p
         mark = p && p < 0.1
@@ -1728,6 +2015,7 @@ module Eval
       out << Report.table(["Task", "Model", "A", "B", "Fisher p", ""], rows)
       out << "\n#{marks} marked (p < 0.1). Chance alone, with each row passing at its pooled rate in both, " \
              "would mark about #{Report.fmt(chance)} of #{rows.size} rows.\n"
+      out << "\n#{pooled_line(*pooled)}\n"
 
       out << "\n## Templates whose count changed\n\n"
       ta = template_counts(a, tasks)
@@ -1740,6 +2028,15 @@ module Eval
         out << "\nOccurrences over the tasks in both, in all their runs.\n"
       end
       out
+    end
+
+    # The passes and graded runs of A and of B over all the rows, and
+    # Fisher's exact test, two-sided, on their passes and failures.
+    def pooled_line(pa, na, pb, nb)
+      p = na.zero? || nb.zero? ? nil : Stats.fisher(pa, na - pa, pb, nb - pb)
+      "Over all rows: A passed #{pa} of #{na} graded runs (#{pct(na.zero? ? nil : pa.to_f / na)}), " \
+        "B #{pb} of #{nb} (#{pct(nb.zero? ? nil : pb.to_f / nb)}); " \
+        "Fisher's exact test, two-sided: p = #{p ? format('%.3f', p) : '–'}."
     end
 
     def pct(x, signed: false)
@@ -1919,6 +2216,7 @@ module Eval
     def build_record(transcript, status, started)
       calls = CallLog.read(File.join(@logs, "calls.jsonl"))
       FileUtils.cp(File.join(@logs, "calls.jsonl"), @keep) if File.exist?(File.join(@logs, "calls.jsonl"))
+      Eval.keep_compiled(@logs, @keep)
       program_dir = File.join(@keep, "program")
       Eval.keep_program(@root, program_dir)
       tool_calls = transcript.tool_calls
@@ -1993,6 +2291,8 @@ module Eval
       end
     rec["checks"] = graded["checks"]
     rec["failed_checks"] = graded["checks"].reject { |_, v| v }.keys
+    rec.delete("draws")
+    rec["draws"] = graded["draws"] if graded["draws"]
     rec.delete("grade_notes")
     rec["grade_notes"] = graded["notes"] unless graded["notes"].to_h.empty?
     rec["graded_sha256"] = graded["sha256"]
@@ -2007,6 +2307,18 @@ module Eval
       FileUtils.mkdir_p(File.dirname(File.join(dest, f)))
       FileUtils.cp(File.join(src, f), File.join(dest, f))
     end
+  end
+
+  # Copies the programs the wrapper kept at each check, build and run, one
+  # directory for each program's hash as the call log records it, from the
+  # log directory to keep/programs.
+  def self.keep_compiled(logs, keep)
+    src = File.join(logs, "programs")
+    return unless File.directory?(src)
+
+    FileUtils.mkdir_p(keep)
+    FileUtils.rm_rf(File.join(keep, "programs"))
+    FileUtils.cp_r(src, File.join(keep, "programs"))
   end
 
   # Claude Code's directory for a working directory's spilled tool results.
@@ -2040,7 +2352,7 @@ module Eval
     tmp = File.join(logs, "tmp")
     FileUtils.mkdir_p([home, xdg, tmp])
     config = { "root" => File.realpath(root), "log" => File.join(logs, "calls.jsonl"),
-               "compiler" => compiler, "path" => Env.coreutils, "home" => home, "xdg" => xdg,
+               "programs" => File.join(logs, "programs"), "compiler" => compiler, "path" => Env.coreutils, "home" => home, "xdg" => xdg,
                "tmp" => tmp, "limit" => limit, "cap" => cap }
     path = File.join(dir, "midnight")
     File.write(path, <<~SCRIPT)
@@ -2368,22 +2680,28 @@ module Eval
         check.(shown_prefix?(task), "the output in TASK.md is not a proper prefix of expected.out")
         check.(task.control? ? task.meta["ruby"].to_s.empty? : !task.meta["ruby"].to_s.empty?,
                task.control? ? "a control names Ruby forms" : "names no Ruby form")
+        if task.draws? || task.meta.key?("draws")
+          ok = task.draws? && ["in order", "any order"].include?(task.meta["draws"])
+          check.(ok, "expected.draws and `draws: in order` or `draws: any order` in meta go together")
+          next unless ok
+        end
         [task.path("solution.12am"), *task.programs("right")].each do |prog|
           g, secs = timed { Grade.grade(task, prog, compiler: compiler) }
           check.(g["verdict"] == "pass", "#{rel(task, prog)} does not pass: #{g['notes']}")
           check.(secs < BUILD_SECONDS, "#{rel(task, prog)} took #{secs.round(1)} s")
         end
-        only_loops = false
-        only_systems = false
+        only = Hash.new(false)
         task.programs("wrong").each do |prog|
           g, secs = timed { Grade.grade(task, prog, compiler: compiler) }
           check.(g["verdict"] != "pass", "#{rel(task, prog)} passes")
           check.(secs < BUILD_SECONDS, "#{rel(task, prog)} took #{secs.round(1)} s")
-          only_loops ||= g["checks"].reject { |k, _| k == "loops" }.values.all? && g["checks"]["loops"] == false
-          only_systems ||= g["checks"].reject { |k, _| k == "systems" }.values.all? && g["checks"]["systems"] == false
+          %w[loops systems draws].each do |name|
+            only[name] ||= g["checks"].reject { |k, _| k == name }.values.all? && g["checks"][name] == false
+          end
         end
-        check.(only_loops, "no program in wrong/ fails only `loops`") unless task.loops.empty?
-        check.(only_systems, "no program in wrong/ fails only `systems`") unless task.systems.empty?
+        check.(only["loops"], "no program in wrong/ fails only `loops`") unless task.loops.empty?
+        check.(only["systems"], "no program in wrong/ fails only `systems`") unless task.systems.empty?
+        check.(only["draws"], "no program in wrong/ fails only `draws`") if task.draws?
         if task.repair?
           g = Grade.grade(task, task.path("given", "solution.12am"), compiler: compiler)
           check.(g["verdict"] != "pass", "the given solution.12am passes")

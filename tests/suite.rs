@@ -18,7 +18,9 @@
 //! - `evals/tasks/NAME/`: `eval_solutions_pass` builds `solution.12am` and
 //!   every program of `right/` in both modes; each must exit 0 and print
 //!   exactly `expected.out`, run headless with `check.drive` when the task
-//!   has one, and meet the task's `loops` and `systems` files. Every
+//!   has one, give the `draws` answers of `expected.draws` when it has one
+//!   (as the evals' check compares them), and meet the task's `loops` and
+//!   `systems` files. Every
 //!   program of `wrong/` must fail one of those checks in release mode.
 //!
 //! Every program above runs with `MIDNIGHT_GPU=off`, so GPU systems run
@@ -560,6 +562,106 @@ fn task_loops(task: &Path) -> Vec<(String, String)> {
         .collect()
 }
 
+/// `same_draws` compares what lines draw, in either form, not their text.
+#[test]
+fn draws_compare_by_what_they_draw() {
+    let want = "draws: 2 ticks, 320x200, 2 draws\n  Window.background = Color(1, 2, 3, 255)\n  \
+                Draw.rect(1.0, 2.0, 3.0, 4.0, Color(9, 9, 9, 255))\n  \
+                Draw.circle(NaN, 1e+30, -0.0, Color(1, 1, 1, 128))\n";
+    let components = "draws: 2 ticks, 320x200, 2 draws\n  Window.background = Color(1, 2, 3, 255)\n  \
+                      Rect(1, 2.00, 3.0, 4.0, Color(9, 9, 9, 255), 3)\n  \
+                      Circle(NaN, 1000000000000000019884624838656.0, -0.0, Color(1, 1, 1, 128), 0)\n";
+    assert!(same_draws(components, want, false));
+    let swapped = want.replace("Draw.rect(1.0, 2.0", "Draw.rect(2.0, 1.0");
+    assert!(!same_draws(&swapped, want, false));
+    let zero = want.replace("-0.0, Color", "0.0, Color");
+    assert!(!same_draws(&zero, want, true));
+    let mut lines: Vec<&str> = want.lines().collect();
+    lines.swap(2, 3);
+    let reordered = lines.join("\n") + "\n";
+    assert!(!same_draws(&reordered, want, false));
+    assert!(same_draws(&reordered, want, true));
+    assert!(!same_draws(&want.replace("2 ticks", "3 ticks"), want, true));
+}
+
+/// Whether a task's `meta` says `draws: any order`: the shapes of each of
+/// its `draws` answers are then compared as a set with counts.
+fn task_draws_any_order(task: &Path) -> bool {
+    let text = std::fs::read_to_string(task.join("meta")).unwrap_or_default();
+    text.lines().any(|line| {
+        line.split_once(':')
+            .is_some_and(|(key, value)| key.trim() == "draws" && value.trim() == "any order")
+    })
+}
+
+/// What a line of a `draws` answer draws, as text that two lines share
+/// exactly when they draw the same: the shape, the bits of its numbers as
+/// 32-bit floats, and its colour, a `layer` left out. A line of neither
+/// form, `Draw.circle(…)` or `Circle(…)`, is itself.
+fn draw_key(line: &str) -> String {
+    let line = line.trim();
+    let parsed = (|| {
+        let (head, rest) = line.split_once('(')?;
+        let inner = rest.strip_suffix(')')?;
+        let kind = match head.strip_prefix("Draw.") {
+            Some(name) => name.to_string(),
+            None => head.to_lowercase(),
+        };
+        let count = match kind.as_str() {
+            "rect" => 4,
+            "circle" => 3,
+            "line" => 5,
+            "triangle" => 6,
+            _ => return None,
+        };
+        let (numbers, color) = inner.split_once("Color(")?;
+        let numbers: Vec<u32> = numbers
+            .split(',')
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(|n| {
+                let value: f32 = n.parse().ok()?;
+                Some(if value.is_nan() {
+                    0x7fc0_0000
+                } else {
+                    value.to_bits()
+                })
+            })
+            .collect::<Option<_>>()?;
+        let (bytes, _layer) = color.split_once(')')?;
+        (numbers.len() == count).then(|| format!("{kind} {numbers:?} {}", bytes.trim()))
+    })();
+    parsed.unwrap_or_else(|| line.to_string())
+}
+
+/// Whether two texts of `draws` answers draw the same, as the evals' check
+/// `draws` compares them: each answer's tick, size and background, and its
+/// shapes in order, or with `any_order` as a set with counts.
+fn same_draws(got: &str, want: &str, any_order: bool) -> bool {
+    let parse = |text: &str| {
+        let mut answers: Vec<(String, Vec<String>)> = Vec::new();
+        for line in text.lines() {
+            if let Some(header) = line.strip_prefix("draws: ") {
+                let frame: Vec<&str> = header.split(", ").take(2).collect();
+                answers.push((frame.join(", "), Vec::new()));
+            } else if let Some((frame, shapes)) = answers.last_mut() {
+                if shapes.is_empty() && line.trim().starts_with("Window.background = ") {
+                    frame.push_str(line.trim());
+                } else {
+                    shapes.push(draw_key(line));
+                }
+            }
+        }
+        if any_order {
+            for (_, shapes) in &mut answers {
+                shapes.sort();
+            }
+        }
+        answers
+    };
+    parse(got) == parse(want)
+}
+
 /// The lines of a task's `systems` file as `(name, each)`.
 fn task_systems(task: &Path) -> Vec<(String, bool)> {
     let text = std::fs::read_to_string(task.join("systems")).unwrap_or_default();
@@ -732,6 +834,12 @@ fn eval_checks(dir: &Path, task: &Path, source: &Path, mode: Mode) -> Result<Vec
                 "output (status {:?})\n--- expected\n{expected}--- actual\n{}--- stderr\n{}---",
                 run.status, run.stdout, run.stderr
             ));
+        }
+        if let Ok(want) = std::fs::read_to_string(task.join("expected.draws")) {
+            let got = draws_answers(&run.drive);
+            if !same_draws(&got, &want, task_draws_any_order(task)) {
+                failed.push(format!("draws\n--- expected\n{want}--- actual\n{got}---"));
+            }
         }
     }
     let loops = task_loops(task);

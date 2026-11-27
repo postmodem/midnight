@@ -45,7 +45,10 @@ login is an infrastructure error: the trial runs again, up to twice, and
 counts as neither a pass nor a fail.
 
 Transcripts, call logs and every program the agents left are kept under
-`evals/runs/`, which git ignores. Transcripts carry account details: they
+`evals/runs/`, which git ignores: with each run's call log, `programs/`
+holds the program as it was at every `check`, `build` and `run`, one
+directory for each hash the call log records, and `graded.out` and
+`graded.draws` what the graded program printed. Transcripts carry account details: they
 are not committed.
 
 ### A kit
@@ -107,7 +110,13 @@ isolate".
    in that place and Midnight does not.
 5. **The reference as read**: for each section of each documentation
    file, how many runs read any of it.
-6. Compiler bugs, escaped runs, runs for review, infrastructure errors,
+6. **Draws**, when a task has the check: per task and model, the runs
+   that built and failed it, by how their answers first differ (an
+   answer missing, the frame, a shape missing or too many, the order, or
+   a shape that differs); then the runs whose first differing shape is
+   the expected one with two numbers exchanged, and those whose first
+   differing shape is the expected rectangle moved by half its size.
+7. Compiler bugs, escaped runs, runs for review, infrastructure errors,
    denied tool calls, timeouts, and programs graded again alone.
 
 The finer measures (failed calls per run, first try, how often a
@@ -115,8 +124,9 @@ diagnostic comes up and repeats) show smaller effects than the pass rate.
 
 `compare A B` puts two runs side by side: pass@1 for each model in both,
 the passes per task, with a mark where Fisher's exact test gives p < 0.1
-and how many marks chance alone would give, and every template whose count
-changed. It names tasks whose text differs and any difference in models,
+and how many marks chance alone would give, and the passes and graded
+runs of each over all the rows with Fisher's test on them, and every
+template whose count changed. It names tasks whose text differs and any difference in models,
 effort, trials, kit, preamble, tools or Claude Code's version.
 
 ## Grading by hand
@@ -128,7 +138,14 @@ nix run .#eval -- self-test [TASK...]        # every task's own programs
 ```
 
 A program passes when it builds, prints `expected.out` byte for byte with
-status 0, and meets the task's `loops` and `systems` files. `grade` and
+status 0, gives the `draws` answers of `expected.draws` where the task has
+one, and meets the task's `loops` and `systems` files. The check **draws**
+reads every answer of `draws` in the standard error of the run that
+printed the output, and compares what each draws, not its text: the
+frame's tick, size and background, then the shapes, each as its kind,
+its numbers as 32-bit floats and its colour. With `draws: in order` in
+`meta` the shapes are compared in order; with `draws: any order`, as a
+set with counts. It fails when standard error was cut at 1 MB. `grade` and
 `self-test` use the compiler `MIDNIGHT_BIN` names, or build the working
 tree's.
 
@@ -138,13 +155,14 @@ A task is a directory under `evals/tasks/`:
 
 ```
 TASK.md          the task, after the preamble
-meta             areas:, control:, ruby:, minutes:
+meta             areas:, control:, ruby:, minutes:, draws:
 solution.12am    the reference solution, never shown to agents
 expected.out     what a correct program prints, in full
 right/*.12am     other correct programs, written differently
 wrong/*.12am     programs the grader must reject
 given/           files placed beside TASK.md (optional)
 check.drive      the commands grading runs a window program with (optional)
+expected.draws   every `draws` answer of check.drive, as the suite's .draws files (optional)
 loops            `WHERE PLACE` lines the program must meet (optional)
 systems          `NAME` or `NAME each` lines the program must meet (optional)
 ```
@@ -155,8 +173,10 @@ shows only the first lines of it; it asks for what to build in the
 domain's words, and names a construct only where a check needs it or the
 construct is the point; a task about entities, systems or events names
 the entities and the systems, in order, and has a `systems` file; a
-`wrong/` program fails only `loops`, and one only `systems`, where the
-task has those files.
+`wrong/` program fails only `loops`, one only `systems`, and one only
+**draws**, where the task has those files. A task that draws has the
+area `draw` and `expected.draws`, and `meta` says `draws: in order` or
+`draws: any order`.
 
 Before it is run, a new task gets an adversarial review: a fresh agent
 looks for correct programs it would reject, wrong ones it would pass,
