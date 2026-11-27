@@ -1,9 +1,14 @@
 # Midnight
 
-Midnight is a compiled, statically typed language built around the
-entity-component-system pattern, with syntax that started from Ruby's.
+Midnight is a compiled, statically typed language for games and
+simulations, written mostly by AI agents and read by agents and people.
 Entities, components, systems, queries, resources and events are language
-constructs, not a library. Source files end in `.12am`.
+constructs, not a library. A system runs on one core, on every core or on
+the GPU. Its output does not depend on the number of threads, and with
+`strict`, not on the GPU. The compiler tells you what moves between CPU
+and GPU memory and where each loop runs, rather than leaving you to guess.
+Source files end in `.12am`. [`docs/principles.md`](docs/principles.md)
+says what Midnight holds to.
 
 ```ruby
 component Position

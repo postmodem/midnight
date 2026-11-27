@@ -1,9 +1,10 @@
 # Midnight
 
-A compiled, Ruby-flavored language built around entities, components and
-systems. The compiler is Rust with no crates; it emits C11 that is built
-together with a C runtime. For each `each` of a `gpu system` it also emits a
-WGSL shader, which the runtime runs through `wgpu-native`. A GPU block that
+A compiled language for games and simulations, built around entities,
+components and systems. The compiler is Rust with no crates; it emits C11
+that is built together with a C runtime. For each `each` of a `gpu
+system` it also emits a WGSL shader, which the runtime runs through
+`wgpu-native`. A GPU block that
 runs on the CPU, and an ordinary `each` the compiler finds independent, run
 in pieces on several threads, with the output of one. A program with a
 window shows it through SDL 3, takes the keyboard and the mouse from it,

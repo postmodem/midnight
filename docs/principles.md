@@ -71,10 +71,10 @@ agents.
 
 ## The syntax is Midnight's own
 
-The syntax started from Ruby, for how it reads, and is still being
-discovered. It changes as programs and measurement show what works for
-agents and for people, and it will keep moving away from Ruby wherever
-that serves Midnight. Ruby is where it started, not a limit.
+The initial syntax borrowed from Ruby where Ruby reads well. It is still
+being discovered: it changes as programs and measurement show what works
+for agents and for people, and nothing borrowed stays only because Ruby
+has it.
 
 - A change to the syntax is made on evidence: programs that are hard to
   write correctly, hard to read, or mistakes agents make again and again.
