@@ -134,8 +134,8 @@ command that needs it.
   report and no live string or list buffer.
 - Never set `LD_LIBRARY_PATH`. The flake clears `NIX_HARDENING_ENABLE`
   wherever `midnight` invokes the C compiler, so programs are built with the
-  flags in the README's mode table and no others. A program with a GPU
-  system adds `MIDNIGHT_GPU_FLAGS`, whose runpaths are how it finds
+  flags in the mode table of `docs/building.md` and no others. A program
+  with a GPU system adds `MIDNIGHT_GPU_FLAGS`, whose runpaths are how it finds
   `wgpu-native` and the Vulkan loader; a program with a window adds
   `MIDNIGHT_WINDOW_FLAGS` too, for SDL 3. `midnight` removes
   `LD_LIBRARY_PATH` for the C compiler and for the program `run` starts.

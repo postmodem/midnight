@@ -2031,8 +2031,8 @@ of its columns, or the records of its draws for a table, is larger than
 the largest buffer the device binds. The
 blocks of strict GPU systems run on the CPU when the device fails the
 start-up check of [Strict GPU systems](#strict-gpu-systems), and follow the
-strict rules there, subnormals included. The README says how the device is
-chosen and how to see where each block runs.
+strict rules there, subnormals included. [Running programs](running.md)
+says how the device is chosen and how to see where each block runs.
 
 ### The transfer plan
 
@@ -2406,8 +2406,8 @@ for each processor core it is allowed to run on, the thread that runs the
 rest of the program among them. The other threads are created when a loop
 is first split. `MIDNIGHT_THREADS=N` sets the number; with 1 no thread is
 created and no loop is split. A program with no GPU system and no
-independent `each` has no threads and does not read the variable. The
-README describes the variable and its other words.
+independent `each` has no threads and does not read the variable.
+[Running programs](running.md) describes the variable and its other words.
 
 **Runtime errors.** An independent block can fail as any ordinary code
 can: `e[C]` on a dead entity or one without the component, division by
