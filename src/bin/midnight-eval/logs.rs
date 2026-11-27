@@ -540,16 +540,16 @@ pub fn isolation_problem(init: Option<&Value>, root: Option<&str>) -> Option<Str
     if let Some(root) = root
         && init.get("cwd").as_str() != Some(root)
     {
-        problems.push(format!("cwd {}", json::inspect(init.get("cwd"))));
+        problems.push(format!("cwd {}", json::generate(init.get("cwd"))));
     }
     if init.get("permissionMode").as_str() != Some("default") {
         problems.push(format!(
             "permission mode {}",
-            json::inspect(init.get("permissionMode"))
+            json::generate(init.get("permissionMode"))
         ));
     }
     if !tools_are_ours(init) {
-        problems.push(format!("tools {}", json::inspect(init.get("tools"))));
+        problems.push(format!("tools {}", json::generate(init.get("tools"))));
     }
     for (key, name) in [
         ("mcp_servers", "MCP servers"),
@@ -557,7 +557,7 @@ pub fn isolation_problem(init: Option<&Value>, root: Option<&str>) -> Option<Str
         ("slash_commands", "slash commands"),
     ] {
         if !init.get(key).items().is_empty() {
-            problems.push(format!("{name} {}", json::inspect(init.get(key))));
+            problems.push(format!("{name} {}", json::generate(init.get(key))));
         }
     }
     let outside: Vec<Value> = init
@@ -571,7 +571,7 @@ pub fn isolation_problem(init: Option<&Value>, root: Option<&str>) -> Option<Str
         .map(|p| p.get("name").clone())
         .collect();
     if !outside.is_empty() {
-        problems.push(format!("plugins {}", json::inspect(&Value::Arr(outside))));
+        problems.push(format!("plugins {}", json::generate(&Value::Arr(outside))));
     }
     if problems.is_empty() {
         None

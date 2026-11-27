@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use crate::draws::{self, Difference};
 use crate::guard::{self, Config, Env};
-use crate::json::{self, Map, Value};
+use crate::json::{Map, Value};
 use crate::obj;
 use crate::proc;
 use crate::task::Task;
@@ -294,14 +294,18 @@ fn chomp_bytes(b: &[u8]) -> &[u8] {
     }
 }
 
-/// The first line where got and want differ.
+/// The first line where got and want differ, each quoted, with bytes that
+/// are not UTF-8 shown as U+FFFD.
 pub fn first_difference(got: &[u8], want: &[u8]) -> String {
     let g = byte_lines(got);
     let w = byte_lines(want);
     let i = (0..g.len().max(w.len()))
         .find(|&k| g.get(k) != w.get(k))
         .unwrap_or(g.len().max(w.len()));
-    let show = |l: Option<&&[u8]>| json::inspect_bytes(l.map_or(&[][..], |l| chomp_bytes(l)));
+    let show = |l: Option<&&[u8]>| {
+        let line = l.map_or(&[][..], |l| chomp_bytes(l));
+        format!("{:?}", String::from_utf8_lossy(line))
+    };
     format!(
         "line {}: got {}, want {}",
         i + 1,
@@ -671,7 +675,7 @@ pub fn self_test(
             );
             check(
                 secs < BUILD_SECONDS,
-                format!("{} took {} s", rel(task, prog), round1(secs)),
+                format!("{} took {secs:.1} s", rel(task, prog)),
             );
         }
         let mut only_fails = [false; 3];
@@ -686,7 +690,7 @@ pub fn self_test(
             );
             check(
                 secs < BUILD_SECONDS,
-                format!("{} took {} s", rel(task, &prog), round1(secs)),
+                format!("{} took {secs:.1} s", rel(task, &prog)),
             );
             let checks = g.get("checks");
             for (k, name) in names.iter().enumerate() {
@@ -736,9 +740,4 @@ pub fn self_test(
         }
     }
     Ok((tasks.len(), problems))
-}
-
-/// x rounded to one decimal, as Ruby writes `x.round(1)`.
-fn round1(x: f64) -> String {
-    json::float_text((x * 10.0).round() / 10.0)
 }

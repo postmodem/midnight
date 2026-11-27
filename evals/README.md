@@ -268,8 +268,8 @@ nix develop -c cargo test --test harness
 They are `tests/harness.rs` and `tests/harness/`, and `cargo test` runs
 them with everything else. They need no network or account: they read
 recorded transcripts and call logs in `evals/test/fixtures/` (ids
-zeroed), check that every results file in `evals/results/` reads and
-writes back byte for byte, and run the wrapper, as built, in front of a
-stub compiler. With `MIDNIGHT_BIN` naming a packaged compiler, one more
-test grades a small task with it. `nix flake check` runs them as
-`checks.evals`, with the package as the compiler.
+zeroed), check that every results file in `evals/results/` reads,
+reports and writes back as the same values, and run the wrapper, as
+built, in front of a stub compiler. With `MIDNIGHT_BIN` naming a
+packaged compiler, one more test grades a small task with it. `nix flake
+check` runs them as `checks.evals`, with the package as the compiler.

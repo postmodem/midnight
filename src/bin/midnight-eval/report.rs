@@ -4,85 +4,21 @@
 use std::cmp::Ordering;
 
 use crate::draws;
-use crate::json::{self, Value};
+use crate::json::Value;
 
 // Statistics.
 
-/// A sum as Ruby's `Array#sum` makes it: whole numbers added exactly until
-/// the first float, then Kahan-Babuska summation.
-pub fn sum(xs: &[&Value]) -> f64 {
-    let mut ints: i64 = 0;
-    let mut i = 0;
-    while i < xs.len() {
-        match xs[i] {
-            Value::Int(n) => ints += n,
-            _ => break,
-        }
-        i += 1;
-    }
-    if i == xs.len() {
-        return ints as f64;
-    }
-    let mut f = ints as f64;
-    let mut c = 0.0;
-    for x in &xs[i..] {
-        let x = x.as_f64().unwrap_or(0.0);
-        kahan_add(&mut f, &mut c, x);
-    }
-    f + c
-}
-
-fn kahan_add(f: &mut f64, c: &mut f64, x: f64) {
-    if f.is_nan() {
-        return;
-    }
-    if x.is_nan() {
-        *f = x;
-        return;
-    }
-    if x.is_infinite() {
-        if f.is_infinite() && x.signum() != f.signum() {
-            *f = f64::NAN;
-        } else {
-            *f = x;
-        }
-        return;
-    }
-    if f.is_infinite() {
-        return;
-    }
-    let t = *f + x;
-    if f.abs() >= x.abs() {
-        *c += (*f - t) + x;
-    } else {
-        *c += (x - t) + *f;
-    }
-    *f = t;
-}
-
-/// A sum of floats, as Ruby's `sum` makes it.
-pub fn fsum(xs: impl IntoIterator<Item = f64>) -> f64 {
-    let mut f = 0.0;
-    let mut c = 0.0;
-    for x in xs {
-        kahan_add(&mut f, &mut c, x);
-    }
-    f + c
-}
-
+/// The mean of numbers; anything else counts as 0.
 pub fn mean(xs: &[&Value]) -> Option<f64> {
-    if xs.is_empty() {
-        None
-    } else {
-        Some(sum(xs) / xs.len() as f64)
-    }
+    let xs: Vec<f64> = xs.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect();
+    fmean(&xs)
 }
 
 pub fn fmean(xs: &[f64]) -> Option<f64> {
     if xs.is_empty() {
         None
     } else {
-        Some(fsum(xs.iter().copied()) / xs.len() as f64)
+        Some(xs.iter().sum::<f64>() / xs.len() as f64)
     }
 }
 
@@ -92,7 +28,7 @@ pub fn se(xs: &[f64]) -> Option<f64> {
         return None;
     }
     let m = fmean(xs)?;
-    let ss = fsum(xs.iter().map(|x| (x - m) * (x - m)));
+    let ss: f64 = xs.iter().map(|x| (x - m) * (x - m)).sum();
     Some((ss / (xs.len() - 1) as f64).sqrt() / (xs.len() as f64).sqrt())
 }
 
@@ -307,15 +243,11 @@ pub fn chance_of_mark(pa: i64, na: i64, pb: i64, nb: i64) -> f64 {
     let rate = (pa + pb) as f64 / (na + nb) as f64;
     let binom =
         |n: i64, k: i64| choose_f(n, k) * rate.powf(k as f64) * (1.0 - rate).powf((n - k) as f64);
-    fsum((0..=na).map(|a| {
-        fsum((0..=nb).map(|b| {
-            if fisher(a, na - a, b, nb - b) < 0.1 {
-                binom(na, a) * binom(nb, b)
-            } else {
-                0.0
-            }
-        }))
-    }))
+    (0..=na)
+        .flat_map(|a| (0..=nb).map(move |b| (a, b)))
+        .filter(|&(a, b)| fisher(a, na - a, b, nb - b) < 0.1)
+        .map(|(a, b)| binom(na, a) * binom(nb, b))
+        .sum()
 }
 
 // Runs.
@@ -435,7 +367,7 @@ pub fn task_names(results: &Value) -> Vec<Value> {
 pub fn fmt(x: Option<f64>, digits: usize) -> String {
     match x {
         None => "–".to_string(),
-        Some(x) => json::fixed(x, digits),
+        Some(x) => format!("{x:.digits$}"),
     }
 }
 
@@ -1072,7 +1004,7 @@ fn pct(x: Option<f64>, signed: bool) -> String {
     match x {
         None => "–".to_string(),
         Some(x) => {
-            let s = json::fixed(x * 100.0, 1);
+            let s = format!("{:.1}", x * 100.0);
             if signed && !s.starts_with('-') {
                 format!("+{s}%")
             } else {
@@ -1191,7 +1123,7 @@ pub fn render_compare(a: &Value, b: &Value) -> String {
                 format!("`{}`", m.to_text()),
                 format!("{pa}/{nx}"),
                 format!("{pb}/{ny}"),
-                p.map(|p| json::fixed(p, 3))
+                p.map(|p| format!("{p:.3}"))
                     .unwrap_or_else(|| "–".to_string()),
                 if mark { "**differs**" } else { "" }.to_string(),
             ]);
@@ -1262,7 +1194,7 @@ pub fn pooled_line(pa: i64, na: i64, pb: i64, nb: i64) -> String {
         "Over all rows: A passed {pa} of {na} graded runs ({}), B {pb} of {nb} ({}); Fisher's exact test, two-sided: p = {}.",
         pct(rate(pa, na), false),
         pct(rate(pb, nb), false),
-        p.map(|p| json::fixed(p, 3))
+        p.map(|p| format!("{p:.3}"))
             .unwrap_or_else(|| "–".to_string())
     )
 }

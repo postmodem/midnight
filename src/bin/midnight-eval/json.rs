@@ -1,7 +1,6 @@
 //! JSON: a value, a reader of any JSON text, and the two forms the harness
 //! writes: one line with no spaces (call logs) and an indented file
-//! (results). Numbers are written as Ruby writes them, so results files
-//! read and written again come out the same.
+//! (results).
 
 use std::fmt::Write as _;
 
@@ -161,15 +160,16 @@ impl Value {
         !matches!(self, Value::Null | Value::Bool(false))
     }
 
-    /// The text interpolation gives: nothing for null, a string as it is.
+    /// The value as text: nothing for null, a string as it is, a number as
+    /// Rust writes it, an array or object as JSON on one line.
     pub fn to_text(&self) -> String {
         match self {
             Value::Null => String::new(),
             Value::Bool(b) => b.to_string(),
             Value::Int(n) => n.to_string(),
-            Value::Float(x) => float_text(*x),
+            Value::Float(x) => x.to_string(),
             Value::Str(s) => s.clone(),
-            Value::Arr(_) | Value::Obj(_) => inspect(self),
+            Value::Arr(_) | Value::Obj(_) => generate(self),
         }
     }
 
@@ -534,7 +534,7 @@ fn write_value(out: &mut String, v: &Value, indent: Option<&str>, depth: usize) 
         Value::Int(n) => {
             let _ = write!(out, "{n}");
         }
-        Value::Float(x) => out.push_str(&float_text(*x)),
+        Value::Float(x) => out.push_str(&number(*x)),
         Value::Str(s) => string(out, s),
         Value::Arr(a) => {
             if a.is_empty() {
@@ -597,293 +597,12 @@ pub fn string(out: &mut String, text: &str) {
     out.push('"');
 }
 
-/// The digits of a number written `D.DDDe±N`, and the place of its decimal
-/// point: 0.DIGITS * 10^point.
-fn digits_of(e: &str) -> (String, i32) {
-    let (mantissa, exp) = e.split_once('e').unwrap_or((e, "0"));
-    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
-    let exp: i32 = exp.parse().unwrap_or(0);
-    (digits, exp + 1)
-}
-
-/// The shortest digits that read back as x, and the place of the decimal
-/// point: x = 0.DIGITS * 10^point. Where x lies exactly halfway between two
-/// such strings, the one whose last digit is even.
-fn shortest(x: f64) -> (String, i32) {
-    let x = x.abs();
-    let (digits, point) = digits_of(&format!("{x:e}"));
-    let k = digits.len();
-    let (exact, exact_point) = digits_of(&format!("{x:.800e}"));
-    let last = digits.as_bytes()[k - 1] - b'0';
-    if last.is_multiple_of(2) || exact_point != point || exact.len() <= k {
-        return (digits, point);
-    }
-    let rest = &exact[k..];
-    let tie = rest.starts_with('5') && rest[1..].bytes().all(|b| b == b'0');
-    if !tie {
-        return (digits, point);
-    }
-    let truncated = &exact[..k];
-    let other = if truncated == digits {
-        increment(truncated)
+/// A float as JSON: the shortest digits that read back as x, with `.0` on
+/// a whole number; null for NaN and the infinities.
+pub fn number(x: f64) -> String {
+    if x.is_finite() {
+        format!("{x:?}")
     } else {
-        truncated.to_string()
-    };
-    let (other_digits, other_point) = if other.len() > k {
-        (other[..k].to_string(), point + 1)
-    } else {
-        (other, point)
-    };
-    let text = format!("0.{other_digits}e{other_point}");
-    if text.parse::<f64>().ok() == Some(x) {
-        let trimmed = other_digits.trim_end_matches('0');
-        let trimmed = if trimmed.is_empty() { "0" } else { trimmed };
-        (trimmed.to_string(), other_point)
-    } else {
-        (digits, point)
+        "null".to_string()
     }
-}
-
-/// A string of decimal digits plus one.
-fn increment(digits: &str) -> String {
-    let mut d: Vec<u8> = digits.bytes().collect();
-    let mut i = d.len();
-    loop {
-        if i == 0 {
-            d.insert(0, b'1');
-            break;
-        }
-        i -= 1;
-        if d[i] == b'9' {
-            d[i] = b'0';
-        } else {
-            d[i] += 1;
-            break;
-        }
-    }
-    String::from_utf8(d).unwrap_or_default()
-}
-
-/// A float as Ruby's `Float#to_s` writes it: `1.0`, `0.25`, `1.0e-05`,
-/// `1.0e+16`.
-pub fn float_text(x: f64) -> String {
-    if x.is_nan() {
-        return "NaN".to_string();
-    }
-    if x.is_infinite() {
-        return if x > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
-    }
-    let sign = if x.is_sign_negative() { "-" } else { "" };
-    if x == 0.0 {
-        return format!("{sign}0.0");
-    }
-    let (digits, point) = shortest(x);
-    let n = digits.len() as i32;
-    let limit = if point < n { 16 } else { 15 };
-    let body = if !(-3..=limit).contains(&point) {
-        let rest = if digits.len() > 1 { &digits[1..] } else { "0" };
-        let e = point - 1;
-        format!(
-            "{}.{}e{}{:02}",
-            &digits[..1],
-            rest,
-            if e < 0 { '-' } else { '+' },
-            e.abs()
-        )
-    } else if point <= 0 {
-        format!("0.{}{}", "0".repeat((-point) as usize), digits)
-    } else if point >= n {
-        format!("{}{}.0", digits, "0".repeat((point - n) as usize))
-    } else {
-        format!(
-            "{}.{}",
-            &digits[..point as usize],
-            &digits[point as usize..]
-        )
-    };
-    format!("{sign}{body}")
-}
-
-const TENS: [f64; 23] = [
-    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16,
-    1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
-];
-
-/// x with n digits after the point, as Ruby's `format("%.Nf")` writes it.
-/// Its digits come from double arithmetic with an error bound: a remainder
-/// within the bound of one half is a tie, rounded to an even last digit.
-/// Where that cannot decide, the exact value is rounded.
-pub fn fixed(x: f64, n: usize) -> String {
-    if !x.is_finite() || x == 0.0 {
-        return format!("{x:.n$}");
-    }
-    if x < 0.0 {
-        let body = fixed(-x, n);
-        return format!("-{body}");
-    }
-    match quick_fixed(x, n) {
-        Some(s) => s,
-        None => format!("{x:.n$}"),
-    }
-}
-
-fn quick_fixed(x: f64, n: usize) -> Option<String> {
-    let mut k = x.log10().floor() as i32;
-    if k.unsigned_abs() as usize >= TENS.len() || n > 20 {
-        return None;
-    }
-    let mut d = if k > 0 {
-        x / TENS[k as usize]
-    } else if k < 0 {
-        x * TENS[(-k) as usize]
-    } else {
-        x
-    };
-    let mut ieps = 2.0;
-    let mut ilim = n as i32 + k + 1;
-    if d < 1.0 && ilim > 0 {
-        ilim -= 1;
-        k -= 1;
-        d *= 10.0;
-        ieps += 1.0;
-    }
-    if !(1..=14).contains(&ilim) {
-        return None;
-    }
-    let mut eps = (ieps * d + 7.0) * 2f64.powi(-52);
-    eps *= TENS[(ilim - 1) as usize];
-    let mut digits: Vec<u8> = Vec::new();
-    let mut i = 1;
-    loop {
-        let l = d as i64;
-        d -= l as f64;
-        digits.push(l as u8);
-        if i == ilim {
-            let up = if d > 0.5 + eps {
-                true
-            } else if d < 0.5 - eps {
-                false
-            } else {
-                digits.last().is_some_and(|d| d % 2 == 1)
-            };
-            if up {
-                let mut j = digits.len();
-                loop {
-                    if j == 0 {
-                        digits.insert(0, 1);
-                        k += 1;
-                        break;
-                    }
-                    j -= 1;
-                    digits[j] += 1;
-                    if digits[j] < 10 {
-                        break;
-                    }
-                    digits[j] = 0;
-                }
-            }
-            break;
-        }
-        d *= 10.0;
-        i += 1;
-    }
-    let text: String = digits.iter().map(|d| (b'0' + d) as char).collect();
-    let e = k + 1;
-    let (int, frac) = if e > 0 {
-        let e = e as usize;
-        let int = if text.len() >= e {
-            text[..e].to_string()
-        } else {
-            format!("{text}{}", "0".repeat(e - text.len()))
-        };
-        (int, text.get(e..).unwrap_or("").to_string())
-    } else {
-        (
-            "0".to_string(),
-            format!("{}{}", "0".repeat((-e) as usize), text),
-        )
-    };
-    let mut frac: String = frac.chars().take(n).collect();
-    while frac.len() < n {
-        frac.push('0');
-    }
-    Some(if n == 0 { int } else { format!("{int}.{frac}") })
-}
-
-/// A value as Ruby's `inspect` writes it: strings quoted and escaped,
-/// arrays `[a, b]`, objects `{"k" => v}`, null `nil`.
-pub fn inspect(v: &Value) -> String {
-    match v {
-        Value::Null => "nil".to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Int(n) => n.to_string(),
-        Value::Float(x) => float_text(*x),
-        Value::Str(s) => inspect_str(s),
-        Value::Arr(a) => format!("[{}]", a.iter().map(inspect).collect::<Vec<_>>().join(", ")),
-        Value::Obj(m) => {
-            if m.is_empty() {
-                return "{}".to_string();
-            }
-            let parts: Vec<String> = m
-                .iter()
-                .map(|(k, v)| format!("{} => {}", inspect_str(k), inspect(v)))
-                .collect();
-            format!("{{{}}}", parts.join(", "))
-        }
-    }
-}
-
-/// A string as Ruby's `String#inspect` writes it.
-pub fn inspect_str(s: &str) -> String {
-    let mut out = String::from("\"");
-    let chars: Vec<char> = s.chars().collect();
-    for (i, &c) in chars.iter().enumerate() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{c}' => out.push_str("\\f"),
-            '\u{b}' => out.push_str("\\v"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{7}' => out.push_str("\\a"),
-            '\u{1b}' => out.push_str("\\e"),
-            '#' if matches!(chars.get(i + 1), Some('{' | '$' | '@')) => out.push_str("\\#"),
-            c if (c as u32) < 0x20 => {
-                let _ = write!(out, "\\u{:04X}", c as u32);
-            }
-            '\u{7f}' => out.push_str("\\u007F"),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-/// Bytes as Ruby's `inspect` writes a binary string: printable ASCII as
-/// it is, every other byte as `\xHH`.
-pub fn inspect_bytes(b: &[u8]) -> String {
-    let mut out = String::from("\"");
-    for (i, &c) in b.iter().enumerate() {
-        match c {
-            b'"' => out.push_str("\\\""),
-            b'\\' => out.push_str("\\\\"),
-            b'\n' => out.push_str("\\n"),
-            b'\r' => out.push_str("\\r"),
-            b'\t' => out.push_str("\\t"),
-            0x0c => out.push_str("\\f"),
-            0x0b => out.push_str("\\v"),
-            0x08 => out.push_str("\\b"),
-            0x07 => out.push_str("\\a"),
-            0x1b => out.push_str("\\e"),
-            b'#' if matches!(b.get(i + 1), Some(b'{' | b'$' | b'@')) => out.push_str("\\#"),
-            0x20..=0x7e => out.push(c as char),
-            _ => {
-                let _ = write!(out, "\\x{c:02X}");
-            }
-        }
-    }
-    out.push('"');
-    out
 }

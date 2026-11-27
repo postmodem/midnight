@@ -1363,12 +1363,12 @@ fn verify(rec: &Value, token: &str) -> Result<Vec<String>, Failure> {
     let mut problems = Vec::new();
     let init = transcript.init().cloned().unwrap_or(Value::Null);
     if !logs::tools_are_ours(&init) {
-        problems.push(format!("tools {}", json::inspect(init.get("tools"))));
+        problems.push(format!("tools {}", json::generate(init.get("tools"))));
     }
     if !init.get("mcp_servers").items().is_empty() {
         problems.push(format!(
             "MCP servers {}",
-            json::inspect(init.get("mcp_servers"))
+            json::generate(init.get("mcp_servers"))
         ));
     }
     match rec.get("task").as_str() {
@@ -1401,7 +1401,7 @@ fn verify(rec: &Value, token: &str) -> Result<Vec<String>, Failure> {
                 let list: Vec<Value> = outside.iter().map(|e| e.get("path").clone()).collect();
                 problems.push(format!(
                     "the audit found paths the wrapper did not refuse: {}",
-                    json::inspect(&Value::Arr(list))
+                    json::generate(&Value::Arr(list))
                 ));
             }
             let listed = rec
@@ -1430,7 +1430,7 @@ fn verify(rec: &Value, token: &str) -> Result<Vec<String>, Failure> {
                 transcript.tool_calls().len(),
                 rec.get("denied").items().len(),
                 calls.len(),
-                json::inspect(&Value::from(dropped)),
+                json::generate(&Value::from(dropped)),
                 rec.get("review").items().len()
             );
         }
@@ -1440,7 +1440,7 @@ fn verify(rec: &Value, token: &str) -> Result<Vec<String>, Failure> {
                 .map(|r| r.get("result").to_text())
                 .unwrap_or_default();
             let reply = text::strip(&reply).to_string();
-            let head = json::inspect_str(text::first_chars(&reply, 80));
+            let head = format!("{:?}", text::first_chars(&reply, 80));
             let bare = reply.replace('`', "");
             let bare = bare.strip_suffix('.').unwrap_or(&bare);
             if !bare.eq_ignore_ascii_case("done") {

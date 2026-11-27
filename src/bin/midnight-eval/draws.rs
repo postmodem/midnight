@@ -72,19 +72,20 @@ pub fn answers_text(stderr: &str) -> String {
     out
 }
 
-/// A 32-bit float's bits from the text a draw prints it as; None when the
-/// text is no number.
+/// A 32-bit float's bits from the text a draw prints it as: `NaN`,
+/// `Infinity`, `-Infinity` or a decimal number; None for anything else.
 pub fn bits(text: &str) -> Option<u32> {
     let t = text::strip(text);
-    let x = match t {
-        "NaN" => f64::NAN,
+    let decimal = t
+        .bytes()
+        .all(|b| b.is_ascii_digit() || b"+-.eE".contains(&b));
+    let x: f64 = match t {
+        "NaN" => return Some(0x7fc0_0000),
         "Infinity" => f64::INFINITY,
         "-Infinity" => f64::NEG_INFINITY,
-        _ => text::ruby_float(t)?,
+        _ if decimal => t.parse().ok()?,
+        _ => return None,
     };
-    if x.is_nan() {
-        return Some(0x7fc0_0000);
-    }
     Some((x as f32).to_bits())
 }
 

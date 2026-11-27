@@ -201,7 +201,11 @@ fn output_is_compared_as_bytes() {
     );
     assert_eq!(
         grade::first_difference("tick 1: 20.5 °C\n".as_bytes(), b"tick 1: 20.5 C\n"),
-        "line 1: got \"tick 1: 20.5 \\xC2\\xB0C\", want \"tick 1: 20.5 C\""
+        "line 1: got \"tick 1: 20.5 °C\", want \"tick 1: 20.5 C\""
+    );
+    assert_eq!(
+        grade::first_difference(b"a\nb\t\xff\n", b"a\n"),
+        "line 2: got \"b\\t\u{fffd}\", want \"\""
     );
 }
 

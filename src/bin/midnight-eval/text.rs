@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Whitespace as Ruby's `\s` has it.
+/// Whitespace: space, tab, line feed, vertical tab, form feed, return.
 pub fn is_space(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\u{b}' | '\u{c}' | '\r')
 }
@@ -70,7 +70,7 @@ pub fn scrub(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// Whether a word char of Ruby's `\w`.
+/// Whether an ASCII letter, digit or `_`.
 pub fn is_word(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
@@ -88,8 +88,8 @@ pub fn assignment(text: &str) -> Option<(&str, &str)> {
     Some((name, &text[eq + 1..]))
 }
 
-/// The words of a shell command as Ruby's `Shellwords.split` gives them:
-/// quotes and backslashes removed; an error for an unmatched quote or a NUL.
+/// The words of a shell command, split at whitespace, with quotes and
+/// backslashes removed; an error for an unmatched quote or a NUL.
 pub fn shell_split(line: &str) -> Result<Vec<String>, String> {
     let c: Vec<char> = line.chars().collect();
     let mut words = Vec::new();
@@ -250,10 +250,9 @@ pub fn brace_expand(pattern: &str) -> Vec<String> {
     vec![pattern.to_string()]
 }
 
-/// Whether path matches a glob pattern as Ruby's `File.fnmatch?` with
-/// `FNM_EXTGLOB` decides, and with `FNM_PATHNAME` when pathname: `*` and
-/// `?` match no `/` then, and `**/` matches any directories. A wildcard
-/// matches no `.` at the start of a name.
+/// Whether path matches a glob pattern, with `{a,b}` alternatives. When
+/// pathname, `*` and `?` match no `/`, and `**/` matches any directories.
+/// A wildcard matches no `.` at the start of a name.
 pub fn fnmatch(pattern: &str, path: &str, pathname: bool) -> bool {
     brace_expand(pattern).iter().any(|p| {
         let p: Vec<char> = p.chars().collect();
@@ -403,7 +402,7 @@ pub fn home() -> String {
 }
 
 /// The absolute path path names from dir, with `.`, `..` and repeated
-/// slashes taken out by their text, as Ruby's `File.expand_path` does.
+/// slashes taken out by their text, without looking at the file system.
 /// `~` and `~/…` are under the home directory; `~user` gives None.
 pub fn expand_path(path: &str, dir: &str) -> Option<String> {
     let full = if path == "~" || path.starts_with("~/") {
@@ -438,7 +437,7 @@ pub fn normalize(path: &str) -> String {
     format!("/{}", parts.join("/"))
 }
 
-/// The directory part of a path, as Ruby's `File.dirname`.
+/// The directory part of a path: `.` for none, `/` for the root.
 pub fn dirname(path: &str) -> String {
     let trimmed = path.trim_end_matches('/');
     if trimmed.is_empty() {
@@ -457,7 +456,7 @@ pub fn dirname(path: &str) -> String {
     }
 }
 
-/// The last part of a path, as Ruby's `File.basename`.
+/// The last part of a path, trailing slashes ignored.
 pub fn basename(path: &str) -> &str {
     let trimmed = path.trim_end_matches('/');
     if trimmed.is_empty() {
@@ -553,64 +552,4 @@ pub fn iso8601(t: SystemTime) -> String {
 pub fn iso8601_ms(t: SystemTime) -> String {
     let (y, mo, d, h, mi, s, ms) = utc_parts(t);
     format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{ms:03}Z")
-}
-
-/// A float from text as Ruby's `Float()` reads it: decimal with optional
-/// `_` between digits, or hexadecimal with `0x`; None for anything else.
-pub fn ruby_float(text: &str) -> Option<f64> {
-    let t = strip(text);
-    let (neg, body) = match t.strip_prefix('-') {
-        Some(r) => (true, r),
-        None => (false, t.strip_prefix('+').unwrap_or(t)),
-    };
-    let value = if let Some(hex) = body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
-        if hex.is_empty() || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
-            return None;
-        }
-        u64::from_str_radix(hex, 16).ok()? as f64
-    } else {
-        let mut clean = String::new();
-        let c: Vec<char> = body.chars().collect();
-        let mut digits = 0;
-        let mut i = 0;
-        let mut seen_e = false;
-        let mut exp_digits = 0;
-        while i < c.len() {
-            let ch = c[i];
-            match ch {
-                '0'..='9' => {
-                    if seen_e {
-                        exp_digits += 1;
-                    } else {
-                        digits += 1;
-                    }
-                    clean.push(ch);
-                }
-                '_' => {
-                    let ok = i > 0
-                        && c[i - 1].is_ascii_digit()
-                        && c.get(i + 1).is_some_and(|d| d.is_ascii_digit());
-                    if !ok {
-                        return None;
-                    }
-                }
-                '.' if !seen_e && !clean.contains('.') => clean.push('.'),
-                'e' | 'E' if !seen_e && digits > 0 => {
-                    seen_e = true;
-                    clean.push('e');
-                    if matches!(c.get(i + 1), Some('+' | '-')) {
-                        clean.push(c[i + 1]);
-                        i += 1;
-                    }
-                }
-                _ => return None,
-            }
-            i += 1;
-        }
-        if digits == 0 || (seen_e && exp_digits == 0) {
-            return None;
-        }
-        clean.parse::<f64>().ok()?
-    };
-    Some(if neg { -value } else { value })
 }

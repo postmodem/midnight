@@ -324,9 +324,9 @@ pub fn children(dir: &str) -> Vec<String> {
 }
 
 /// Every entry under base as a relative path, each directory's entries in
-/// sorted order, a directory before what is in it, as Ruby's `**/*` gives
-/// them: links to directories are listed but not entered, and names that
-/// start with `.` are skipped unless dot.
+/// sorted order, a directory before what is in it: links to directories
+/// are listed but not entered, and names that start with `.` are skipped
+/// unless dot.
 pub fn walk(base: &str, dot: bool) -> Vec<String> {
     let mut out = Vec::new();
     walk_into(base, "", dot, &mut out);

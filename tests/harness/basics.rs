@@ -1,4 +1,4 @@
-//! JSON, SHA-256, numbers as Ruby writes them, shell words and glob
+//! JSON, SHA-256, numbers in results and reports, shell words and glob
 //! patterns, results files read and written again, and grading with the
 //! real compiler where MIDNIGHT_BIN names one.
 
@@ -8,6 +8,7 @@ use crate::grade;
 use crate::help::{Temp, repo};
 use crate::json::{self, Value};
 use crate::proc;
+use crate::report;
 use crate::sha256;
 use crate::task::Task;
 use crate::text;
@@ -38,7 +39,7 @@ fn json_reads_any_json() {
 }
 
 #[test]
-fn json_writes_as_ruby_does() {
+fn json_writes_one_line_and_indented() {
     let v =
         json::parse("{\"a\":[1,2.0,\"\\u0001\\u007f/é\"],\"b\":{},\"c\":[],\"d\":{\"e\":null}}")
             .expect("JSON");
@@ -54,27 +55,55 @@ fn json_writes_as_ruby_does() {
         json::generate(&Value::from("\u{8}\u{c}\n\r\t\"\\")),
         "\"\\b\\f\\n\\r\\t\\\"\\\\\""
     );
-}
-
-#[test]
-fn values_as_ruby_inspects_them() {
-    let v = json::parse("{\"output\":\"status 1\",\"x\":null,\"a\":[1,\"b\"]}").expect("JSON");
     assert_eq!(
-        json::inspect(&v),
-        "{\"output\" => \"status 1\", \"x\" => nil, \"a\" => [1, \"b\"]}"
-    );
-    assert_eq!(
-        json::inspect_str("\u{1}\u{1b}\u{7f}#{x}é"),
-        "\"\\u0001\\e\\u007F\\#{x}é\""
-    );
-    assert_eq!(
-        json::inspect_bytes("tick 1: 20.5 °C".as_bytes()),
-        "\"tick 1: 20.5 \\xC2\\xB0C\""
+        v.get("d").to_text(),
+        "{\"e\":null}",
+        "an object as text is JSON"
     );
 }
 
 #[test]
-fn results_files_read_and_write_back_the_same() {
+fn floats_are_json_and_read_back_the_same() {
+    for (x, text) in [
+        (1.0, "1.0"),
+        (0.1 + 0.2, "0.30000000000000004"),
+        (-0.0, "-0.0"),
+        (1e-5, "1e-5"),
+        (1e16, "1e16"),
+        (f64::NAN, "null"),
+        (f64::INFINITY, "null"),
+    ] {
+        assert_eq!(json::number(x), text, "{x}");
+    }
+    let xs = [
+        0.0,
+        -0.0,
+        1.0,
+        0.1,
+        2.0 / 3.0,
+        1e-7,
+        123456789012345.0,
+        1234567890123456.8,
+        9.759759907609144e16,
+        7.191893270562275e-05,
+        f64::MAX,
+        f64::MIN_POSITIVE,
+        5e-324,
+        -1.5e300,
+    ];
+    for x in xs {
+        let text = json::generate(&Value::Arr(vec![Value::Float(x), Value::Int(3)]));
+        let back = json::parse(&text).expect("valid JSON");
+        let Value::Float(y) = back.items()[0] else {
+            panic!("{text}: not a float")
+        };
+        assert_eq!(y.to_bits(), x.to_bits(), "{text}");
+        assert_eq!(back.items()[1], Value::Int(3), "{text}");
+    }
+}
+
+#[test]
+fn results_files_read_report_and_write_back() {
     let mut files: Vec<String> = proc::children(&format!("{}/evals/results", repo()))
         .into_iter()
         .filter(|f| f.ends_with(".json"))
@@ -82,87 +111,23 @@ fn results_files_read_and_write_back_the_same() {
         .collect();
     files.push(format!("{}/evals/test/fixtures/results-a.json", repo()));
     files.push(format!("{}/evals/test/fixtures/results-b.json", repo()));
+    let first = json::parse(&proc::read(&files[0]).expect("a results file")).expect("JSON");
     for f in files {
         let text = proc::read(&f).expect("a results file");
         let v = json::parse(&text).expect("JSON");
-        assert_eq!(format!("{}\n", json::pretty(&v)), text, "{f}");
+        assert!(report::render(&v).contains("## Pass rates"), "{f}");
+        assert!(report::render_compare(&first, &v).starts_with('#'), "{f}");
+        let again = json::parse(&json::pretty(&v)).expect("JSON written back");
+        assert_eq!(again, v, "{f}");
     }
 }
 
 #[test]
-fn floats_as_ruby_writes_them() {
-    for (x, text) in [
-        (1.0, "1.0"),
-        (0.1 + 0.2, "0.30000000000000004"),
-        (1e-5, "1.0e-05"),
-        (0.0001, "0.0001"),
-        (1e14, "100000000000000.0"),
-        (1e15, "1.0e+15"),
-        (123456789012345.0, "123456789012345.0"),
-        (1234567890123456.8, "1234567890123456.8"),
-        (12345678901234567.0, "1.2345678901234568e+16"),
-        (0.00012, "0.00012"),
-        (5048710871122148.0, "5.048710871122148e+15"),
-        (1221336002775921.2, "1221336002775921.2"),
-        (1e16, "1.0e+16"),
-        (3.805629266812557e17, "3.805629266812557e+17"),
-        (2.75303133667458e-06, "2.75303133667458e-06"),
-        (-0.0, "-0.0"),
-        (245906243263069.2, "245906243263069.2"),
-    ] {
-        assert_eq!(json::float_text(x), text);
-    }
-    // x, then %.0f, %.1f, %.2f and %.3f as Ruby 3.4 writes them.
-    let table = [
-        (0.35, "0", "0.4", "0.35", "0.350"),
-        (0.3499999999999999, "0", "0.4", "0.35", "0.350"),
-        (0.045, "0", "0.0", "0.04", "0.045"),
-        (2.675, "3", "2.7", "2.68", "2.675"),
-        (1.005, "1", "1.0", "1.00", "1.005"),
-        (0.15, "0", "0.2", "0.15", "0.150"),
-        (99.95, "100", "100.0", "99.95", "99.950"),
-        (0.05, "0", "0.1", "0.05", "0.050"),
-        (2.5, "2", "2.5", "2.50", "2.500"),
-        (0.25, "0", "0.2", "0.25", "0.250"),
-        (0.125, "0", "0.1", "0.12", "0.125"),
-        (0.375, "0", "0.4", "0.38", "0.375"),
-        (0.0005, "0", "0.0", "0.00", "0.001"),
-        (0.00049, "0", "0.0", "0.00", "0.000"),
-        (0.0, "0", "0.0", "0.00", "0.000"),
-        (66.66666666666667, "67", "66.7", "66.67", "66.667"),
-        (83.125, "83", "83.1", "83.12", "83.125"),
-        (50.35, "50", "50.4", "50.35", "50.350"),
-        (80.349, "80", "80.3", "80.35", "80.349"),
-        (2.6666666666666665, "3", "2.7", "2.67", "2.667"),
-        (
-            245906243263069.2,
-            "245906243263069",
-            "245906243263069.2",
-            "245906243263069.19",
-            "245906243263069.188",
-        ),
-        (
-            9.759759907609144e16,
-            "97597599076091440",
-            "97597599076091440.0",
-            "97597599076091440.00",
-            "97597599076091440.000",
-        ),
-        (7.191893270562275e-05, "0", "0.0", "0.00", "0.000"),
-    ];
-    for (x, f0, f1, f2, f3) in table {
-        assert_eq!(
-            [
-                json::fixed(x, 0),
-                json::fixed(x, 1),
-                json::fixed(x, 2),
-                json::fixed(x, 3)
-            ],
-            [f0, f1, f2, f3],
-            "{x}"
-        );
-    }
-    assert_eq!(json::fixed(-0.0004, 1), "-0.0");
+fn numbers_in_reports() {
+    assert_eq!(report::fmt(None, 1), "–");
+    assert_eq!(report::fmt(Some(200.0 / 3.0), 1), "66.7");
+    assert_eq!(report::fmt(Some(2.0), 1), "2.0");
+    assert_eq!(report::fmt(Some(0.0123), 3), "0.012");
 }
 
 #[test]
