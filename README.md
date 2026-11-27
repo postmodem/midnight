@@ -236,8 +236,8 @@ WGSL shader for each loop of a GPU system, which runs through
 | [`bench/README.md`](bench/README.md)           | The benchmarks                                        |
 | [`specs/`](specs/)                             | One spec per change, with its acceptance criteria and outcome |
 
-The evals measure how well agents write Midnight from its documentation
-alone. They run only when a spec asks them a question, and its Outcome
+The evals measure how well agents work with Midnight from its
+documentation and tools alone. They run only when a spec asks them a question, and its Outcome
 says what they showed. [`evals/README.md`](evals/README.md) says how to
 run them.
 

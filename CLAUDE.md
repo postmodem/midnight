@@ -11,8 +11,8 @@ window shows it through SDL 3, takes the keyboard and the mouse from it,
 and draws its frames on the same device, or runs headless. Any program
 can be driven by commands, which let it run a tick at a time and print
 its entities and resources between ticks, and the compiler and programs
-write JSON lines when asked. `evals/` measures how well agents write it
-from its documentation alone; its harness is `src/bin/midnight-eval/`, a
+write JSON lines when asked. `evals/` measures how well agents work with it
+from its documentation and tools alone; its harness is `src/bin/midnight-eval/`, a
 second binary of the crate. `README.md` has the overview.
 
 ## What defines what

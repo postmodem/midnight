@@ -1,7 +1,8 @@
 # Evals
 
-The evals measure how well agents write Midnight when all they know of it
-is its documentation. Each task is a program to write or to repair. The
+The evals measure how well agents work with Midnight when all they know
+of it is its documentation and its tools. Each task is a program to write
+or to repair, which the agent may check, run and drive as it works. The
 harness gives it to Claude Code in a directory of its own, grades the
 program the agent leaves, and writes a results file and a report: how
 often each model passed, which compiler calls failed and why, and which
