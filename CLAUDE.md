@@ -148,6 +148,11 @@ command that needs it.
   per model on the commit that adds or changes it, and the results are
   committed in the next commit. Results are committed; transcripts never
   are.
+- A spec that runs the evals states, before the first run, which result
+  would change its decision; with none, the runs are a regression check
+  only. A worse result is not a veto by itself: the evals measure writing,
+  not review or correctness beyond the task's checks, and the Outcome
+  says what was weighed against it.
 - The README's paragraph on the evals names no task and no rule of
   grading: every agent the evals start reads the README.
 

@@ -180,6 +180,16 @@ breaks `eval_solutions_pass`, and the task changes with it.
   rests on it.
 - When a task is added or changed, as above.
 
+## What a result decides
+
+- A spec that runs the evals says, before the first run, which result
+  would change its decision. If none would, the runs are a regression
+  check only, and the Outcome says so.
+- A worse result is not a veto by itself. The evals measure how agents
+  write a program, not how easily a person reviews it or whether it is
+  right beyond the task's checks, and a change is weighed on those as
+  well. The Outcome says what was weighed against the result.
+
 ## The harness's tests
 
 ```sh
