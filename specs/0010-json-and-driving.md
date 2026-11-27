@@ -715,6 +715,10 @@ it: `.draws`, `.queries` and `.frames` each hold their own.
 8. A query of a column on the device is a read by top-level code.
 9. The JSON forms are documented in `docs/json.md`, the commands in the
    reference.
+10. Every window command needs an open window; sent while none is open,
+    it stops the program.
+11. Formatters are generated for every component and resource, within a
+    measured bound on build time.
 
 ## Measured in planning
 
