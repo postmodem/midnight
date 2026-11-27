@@ -354,8 +354,8 @@ fn compile_in(
     if gpu_flags.is_some() {
         command.arg("-DMN_GPU");
     }
-    // The runtime keeps the window's state and reads MIDNIGHT_WINDOW,
-    // MIDNIGHT_DRIVE and MIDNIGHT_GPU when the program has a window, and
+    // The runtime keeps the window's state and reads MIDNIGHT_WINDOW and
+    // MIDNIGHT_GPU when the program has a window, and
     // shows it and draws its frames when midnight_window.c is built with it.
     if window {
         command.arg("-DMN_WINDOW");

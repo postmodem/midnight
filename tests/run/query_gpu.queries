@@ -1,0 +1,8 @@
+query Position from 60: 2 ticks, 64 rows, 60 to 63
+  Entity(60v1) Position(x: 63.0)
+  Entity(61v1) Position(x: 64.0)
+  Entity(62v1) Position(x: 65.0)
+  Entity(63v1) Position(x: 66.0)
+query Position from 62: 4 ticks, 64 rows, 62 to 63
+  Entity(62v1) Position(x: 68.0)
+  Entity(63v1) Position(x: 69.0)

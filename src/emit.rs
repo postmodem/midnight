@@ -26,6 +26,7 @@ use crate::tir::{self, ComponentId, Cores, Program, Query, QueryId, Run, StmtKin
 
 use analysis::Folded;
 use body::FnCx;
+use types::Form;
 
 /// The name the driver gives the generated file.
 const C_FILE: &str = "program.c";
@@ -517,7 +518,11 @@ impl<'a> Cx<'a> {
             } else if prog.window.is_some_and(|window| window.mouse.0 == index) {
                 let _ = writeln!(defs, "static struct {MOUSE_STRUCT} {{");
             } else {
-                defs.push_str("static struct {\n");
+                let _ = writeln!(
+                    defs,
+                    "static struct {} {{",
+                    names::resource_struct(&resource.name)
+                );
             }
             for index in cx
                 .cx
@@ -544,6 +549,96 @@ impl<'a> Cx<'a> {
         (defs, init, drop)
     }
 
+    /// The resources the drive's `resource` reads: those the program
+    /// declares, not the built-in `Window` and `Mouse`.
+    fn drive_resources(&self) -> Vec<usize> {
+        let prog = self.prog;
+        (0..prog.resources.len())
+            .filter(|&index| {
+                !prog
+                    .window
+                    .is_some_and(|window| window.resource.0 == index || window.mouse.0 == index)
+            })
+            .collect()
+    }
+
+    fn resource_count(&self) -> usize {
+        self.drive_resources().len()
+    }
+
+    /// The lines of the `MnResourceInfo` table: each resource's name, its
+    /// storage (NULL with no fields) and its two forms of the drive.
+    fn resource_info(&mut self) -> String {
+        let prog = self.prog;
+        let mut out = String::new();
+        for index in self.drive_resources() {
+            let resource = &prog.resources[index];
+            let data = if resource.fields.is_empty() {
+                "NULL".to_string()
+            } else {
+                format!("&{}", names::resource(&resource.name))
+            };
+            let text = self.resource_show_fn(index, Form::Text);
+            let json = self.resource_show_fn(index, Form::Json);
+            let _ = writeln!(
+                out,
+                "    {{{}, {data}, {text}, {json}}},",
+                names::c_string(resource.name.as_bytes())
+            );
+        }
+        out
+    }
+
+    /// The function that appends a resource's form of the drive, as a
+    /// struct of its fields, given its storage.
+    fn resource_show_fn(&mut self, index: usize, form: Form) -> String {
+        let prog = self.prog;
+        let resource = &prog.resources[index];
+        let prefix = match form {
+            Form::Text => "Show",
+            Form::Json => "Json",
+        };
+        let name = format!("{prefix}_{}", names::resource(&resource.name));
+        let mut body = String::new();
+        if resource.fields.is_empty() {
+            body.push_str("    (void)p;\n");
+        } else {
+            let _ = writeln!(
+                body,
+                "    const struct {} *v = p;",
+                names::resource_struct(&resource.name)
+            );
+        }
+        let (mut text, close, comma) = match form {
+            Form::Text => (format!("{}(", resource.name), ")", ", "),
+            Form::Json => ("{".to_string(), "}", ","),
+        };
+        for (i, field) in resource.fields.iter().enumerate() {
+            if i > 0 {
+                text.push_str(comma);
+            }
+            match form {
+                Form::Text => {
+                    let _ = write!(text, "{}: ", field.name);
+                }
+                Form::Json => {
+                    let _ = write!(text, "\"{}\":", field.name);
+                }
+            }
+            let _ = writeln!(body, "    {}", types::sb_bytes("sb", &text));
+            text.clear();
+            let value = format!("v->{}", names::field(&field.name));
+            let line = self.show_stmt("sb", &value, &field.ty, form);
+            let _ = writeln!(body, "    {line}");
+        }
+        text.push_str(close);
+        let _ = writeln!(body, "    {}", types::sb_bytes("sb", &text));
+        let signature = format!("static void {name}(MnBuilder *sb, const void *p)");
+        let _ = writeln!(self.helper_protos, "{signature};");
+        let _ = writeln!(self.helper_defs, "{signature} {{\n{body}}}\n");
+        name
+    }
+
     /// The component and event descriptions, the list of systems and the
     /// `MnProgram`.
     fn tables(&mut self) -> String {
@@ -568,8 +663,24 @@ impl<'a> Cx<'a> {
             out.push_str("static const MnComponentInfo component_info[] = {\n");
             for component in &prog.components {
                 let ty = component.record.map(Type::Record);
-                out.push_str(&info(self, &component.name, ty.as_ref()));
+                let line = info(self, &component.name, ty.as_ref());
+                let shown = match &ty {
+                    Some(ty) => format!(
+                        ", {}, {}}},\n",
+                        self.show_fn(ty, Form::Text),
+                        self.show_fn(ty, Form::Json)
+                    ),
+                    None => ", NULL, NULL},\n".to_string(),
+                };
+                out.push_str(line.strip_suffix("},\n").unwrap_or(&line));
+                out.push_str(&shown);
             }
+            out.push_str("};\n\n");
+        }
+        let resources = self.resource_info();
+        if !resources.is_empty() {
+            out.push_str("static const MnResourceInfo resource_info[] = {\n");
+            out.push_str(&resources);
             out.push_str("};\n\n");
         }
         if !prog.events.is_empty() {
@@ -616,11 +727,12 @@ impl<'a> Cx<'a> {
         }
         let _ = writeln!(
             out,
-            "static const MnProgram program = {{\n    {},\n    {},\n    {},\n    drop_globals,\n    \"{}\",\n}};\n",
+            "static const MnProgram program = {{\n    {},\n    {},\n    {},\n    drop_globals,\n    \"{}\",\n    {},\n}};\n",
             table("component_info", prog.components.len()),
             table("event_info", prog.events.len()),
             table("systems", prog.systems.len()),
             env!("CARGO_PKG_VERSION"),
+            table("resource_info", self.resource_count()),
         );
         out
     }

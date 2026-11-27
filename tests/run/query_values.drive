@@ -1,0 +1,21 @@
+# Before the first tick.
+query Body
+resource Score
+resource Flags
+tick
+query Body, Label
+query Body, with: Red
+query Body, without: Frozen
+query Entity, Link
+query Label, with: [Body], without: Frozen
+query Dot
+query Dot from 120
+query Dot from 129
+query Dot from 500
+query Entity, with: Frozen
+tick
+# After the despawns and the queued `add`.
+query Body, with: Red
+query Dot from 100
+resource Score
+query Ghost, without: Red from 0

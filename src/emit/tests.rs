@@ -301,7 +301,7 @@ fn move_is_a_loop_over_columns() {
         &c,
         "static MnQuery q0 = {q0_with, 2, q0_without, 1, NULL, 0, 0, 0};",
     );
-    assert_has(&c, "{\"Frozen\", 0, 1, NULL},");
+    assert_has(&c, "{\"Frozen\", 0, 1, NULL, NULL, NULL},");
     let report = function_text(&c, "static void S_report(void)");
     assert_seq(
         report,
@@ -1518,11 +1518,11 @@ fn entities_and_their_components() {
     );
     assert_has(
         &c,
-        "{\"Named\", sizeof(T_Named), _Alignof(T_Named), Drop_T_Named},",
+        "{\"Named\", sizeof(T_Named), _Alignof(T_Named), Drop_T_Named, Show_T_Named, Json_T_Named},",
     );
     assert_has(
         &c,
-        "{\"Health\", sizeof(T_Health), _Alignof(T_Health), NULL},",
+        "{\"Health\", sizeof(T_Health), _Alignof(T_Health), NULL, Show_T_Health, Json_T_Health},",
     );
     assert_has(&c, "mn_remove(f_1, ids");
     assert_has(&c, "mn_out_bool(eq_entity(e_0, f_1));");
@@ -2004,7 +2004,7 @@ fn globals_are_set_up_once_and_released() {
     assert_seq(
         &c,
         &[
-            "static struct {",
+            "static struct Res_Score {",
             "int64_t points;",
             "int64_t best;",
             "MnString title;",

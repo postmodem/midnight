@@ -9,6 +9,14 @@ use crate::tir::{Compact, EnumId, Program, Type};
 use super::Cx;
 use super::names;
 
+/// A form a value of the world is written in for the drive's `query` and
+/// `resource`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+    Text,
+    Json,
+}
+
 pub fn compact_cty(compact: Compact) -> &'static str {
     match compact {
         Compact::Float32 => "float",
@@ -414,6 +422,118 @@ impl Cx<'_> {
                 format!("static void {name}(MnBuilder *sb, MnList v)")
             }
             _ => unreachable!("only records and lists have formatting functions"),
+        };
+        let _ = writeln!(self.helper_protos, "{signature};");
+        let _ = writeln!(self.helper_defs, "{signature} {{\n{body}}}\n");
+        name
+    }
+
+    /// A statement that appends the value `c`, stored as `ty`, to the
+    /// builder `sb` points at, in a form of the drive: text as `to_s`
+    /// writes it inside a record but for `Float32`, which has the fewest
+    /// digits a 32-bit and a 64-bit reader both read back, or JSON.
+    pub fn show_stmt(&mut self, sb: &str, c: &str, ty: &Type, form: Form) -> String {
+        match (form, ty) {
+            (Form::Text, Type::Compact(Compact::Float32)) => format!("mn_sb_float32({sb}, {c});"),
+            (Form::Text, Type::Record(_) | Type::List(_)) => self.show_call(sb, c, ty, form),
+            (Form::Text, _) => self.fmt_stmt(sb, c, ty, true),
+            (Form::Json, Type::Float) => format!("mn_json_float({sb}, {c});"),
+            (Form::Json, Type::Compact(Compact::Float32)) => format!("mn_json_float32({sb}, {c});"),
+            (Form::Json, Type::Int | Type::Compact(_)) => format!("mn_sb_int({sb}, {c});"),
+            (Form::Json, Type::Bool) => format!("mn_sb_bool({sb}, {c});"),
+            (Form::Json, Type::String) => format!("mn_json_str({sb}, {c});"),
+            (Form::Json, Type::Entity) => format!("mn_json_entity({sb}, {c});"),
+            (Form::Json, Type::Enum(id)) => {
+                format!("mn_json_str({sb}, {}[{c}]);", self.enum_names(*id))
+            }
+            (Form::Json, Type::Record(_) | Type::List(_)) => self.show_call(sb, c, ty, form),
+            (_, Type::Void) => unreachable!("no text for no value"),
+        }
+    }
+
+    /// A call of [`Cx::show_fn`] for the value `c`: a record by address, a
+    /// list by value.
+    fn show_call(&mut self, sb: &str, c: &str, ty: &Type, form: Form) -> String {
+        let name = self.show_fn(ty, form);
+        match ty {
+            Type::Record(_) => format!("{name}({sb}, &{c});"),
+            _ => format!("{name}({sb}, {c});"),
+        }
+    }
+
+    /// The function that appends a record's or a list's form of the drive
+    /// to a builder: `(MnBuilder *, const void *)` for a record, whose
+    /// address it takes, or `(MnBuilder *, MnList)`. The built-in `Color`
+    /// is `[r,g,b,a]` in JSON.
+    pub fn show_fn(&mut self, ty: &Type, form: Form) -> String {
+        let prog = self.prog;
+        let prefix = match form {
+            Form::Text => "Show",
+            Form::Json => "Json",
+        };
+        let name = format!("{prefix}_{}", names::mangle(prog, ty));
+        if !self.claim(&name) {
+            return name;
+        }
+        let mut body = String::new();
+        let signature = match ty {
+            Type::Record(id) => {
+                let item = &prog.records[id.0];
+                let _ = writeln!(body, "    const {} *v = p;", self.cty(ty));
+                let color = form == Form::Json && item.name == "Color";
+                let (open, close) = match (form, color) {
+                    (Form::Text, _) => (format!("{}(", item.name), ")"),
+                    (Form::Json, true) => ("[".to_string(), "]"),
+                    (Form::Json, false) => ("{".to_string(), "}"),
+                };
+                let mut text = open;
+                for (index, field) in item.fields.iter().enumerate() {
+                    if index > 0 {
+                        text.push_str(match form {
+                            Form::Text => ", ",
+                            Form::Json => ",",
+                        });
+                    }
+                    match (form, color) {
+                        (Form::Text, _) => {
+                            let _ = write!(text, "{}: ", field.name);
+                        }
+                        (Form::Json, false) => {
+                            let _ = write!(text, "\"{}\":", field.name);
+                        }
+                        (Form::Json, true) => {}
+                    }
+                    let _ = writeln!(body, "    {}", sb_bytes("sb", &text));
+                    text.clear();
+                    let value = format!("v->{}", names::field(&field.name));
+                    let line = self.show_stmt("sb", &value, &field.ty, form);
+                    let _ = writeln!(body, "    {line}");
+                }
+                text.push_str(close);
+                let _ = writeln!(body, "    {}", sb_bytes("sb", &text));
+                if item.fields.is_empty() {
+                    body.push_str("    (void)v;\n");
+                }
+                format!("static void {name}(MnBuilder *sb, const void *p)")
+            }
+            Type::List(elem) => {
+                let cty = self.cty(elem);
+                let line = self.show_stmt("sb", "d[i]", elem, form);
+                let comma = match form {
+                    Form::Text => ", ",
+                    Form::Json => ",",
+                };
+                let _ = writeln!(body, "    int64_t n = mn_list_len(v);");
+                let _ = writeln!(body, "    {}", sb_bytes("sb", "["));
+                let _ = writeln!(body, "    for (int64_t i = 0; i < n; i++) {{");
+                let _ = writeln!(body, "        const {cty} *d = mn_list_data(v);");
+                let _ = writeln!(body, "        if (i > 0) {}", sb_bytes("sb", comma));
+                let _ = writeln!(body, "        {line}");
+                let _ = writeln!(body, "    }}");
+                let _ = writeln!(body, "    {}", sb_bytes("sb", "]"));
+                format!("static void {name}(MnBuilder *sb, MnList v)")
+            }
+            _ => unreachable!("only records and lists have functions of the drive"),
         };
         let _ = writeln!(self.helper_protos, "{signature};");
         let _ = writeln!(self.helper_defs, "{signature} {{\n{body}}}\n");

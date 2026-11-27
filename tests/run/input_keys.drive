@@ -1,3 +1,5 @@
+# The tick before the window opens.
+tick
 # The first tick: nothing held.
 tick
 # W held across ticks.

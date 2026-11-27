@@ -207,6 +207,23 @@ void mn_json_float32(MnBuilder *b, float value) {
     mn_sb_bytes(b, text, format_number(value, true, text));
 }
 
+void mn_sb_float32(MnBuilder *b, float value) {
+    char text[MN_FLOAT_TEXT];
+    mn_sb_bytes(b, text, format_number(value, true, text));
+}
+
+void mn_json_str(MnBuilder *b, MnString s) {
+    mn_json_bytes(b, s ? s->bytes : "", s ? s->len : 0);
+}
+
+static int format_entity(MnEntity e, char *out);
+
+void mn_json_entity(MnBuilder *b, MnEntity e) {
+    char text[MN_ENTITY_TEXT];
+    int len = format_entity(e, text);
+    mn_json_bytes(b, text, len);
+}
+
 /* Says that a variable has a word it does not know. */
 static void say_unknown_word(const char *variable, const char *word, size_t len) {
     if (!json_lines) {
@@ -306,11 +323,14 @@ _Noreturn void mn_panic(MnLoc loc, const char *format, ...) {
 
 static void gpu_stats_line(void);
 
+static void drive_finish(void);
+
 #ifdef MN_WINDOW
 static void window_finish(void);
 #endif
 
 _Noreturn void mn_exit(int64_t status) {
+    drive_finish();
 #ifdef MN_WINDOW
     window_finish();
 #endif
@@ -1155,64 +1175,25 @@ static struct {
     bool strict_cpu;
 } gpu_options;
 
-/* ---- The window ------------------------------------------------------------ */
+/* ---- Driving ---------------------------------------------------------------- */
 
-#ifdef MN_WINDOW
-const MnWindowProgram *mn_window_program;
-
-/* The window as the runtime knows it. `open` is true from Window.open to
- * the tick that reports the close; the sizes are what the desktop gives
- * now, and reach the resource when a tick begins. */
+/* The commands of MIDNIGHT_DRIVE, which every program reads. */
 static struct {
-    bool headless;
-    bool info;
-
-    bool open;
-    bool closing;
-    int64_t width;
-    int64_t height;
-    int64_t pixel_width;
-    int64_t pixel_height;
-    /* A headless window's scale: `scale_num / scale_den` pixels a point. */
-    int64_t scale_num;
-    int64_t scale_den;
-
     /* MIDNIGHT_DRIVE, or NULL. */
-    const char *drive_name;
-    FILE *drive;
+    const char *name;
+    FILE *file;
     /* The commands have run out. */
-    bool drive_done;
-    int64_t drive_line;
-    char *line;
-    size_t line_capacity;
-    /* The `tick` command being carried out: its text, and how many of its
-     * ticks are still to begin and have begun. */
+    bool done;
+    int64_t line;
+    char *buf;
+    size_t capacity;
+    /* The `tick` command being carried out: its text, its line, and how
+     * many of its ticks are still to begin and have begun. */
     char *tick_text;
+    int64_t tick_line;
     int64_t ticks_left;
     int64_t ticks_run;
-    /* The line of the `tick` command being carried out. */
-    int64_t tick_line;
-
-    /* The last frame: its size in pixels and in points, its background,
-     * and the value of Time.tick when it was made. Its draws are
-     * drawing.frame. */
-    uint32_t frame_width;
-    uint32_t frame_height;
-    int64_t frame_point_width;
-    int64_t frame_point_height;
-    MnColor frame_background;
-    int64_t frame_tick;
-    /* Goes up with every frame. */
-    uint64_t frame_number;
-
-    /* The window is on the desktop, through midnight_window.c. */
-    bool shown;
-    /* When the last tick of a shown window was due, in nanoseconds of the
-     * monotonic clock; `paced` is false until the first tick after
-     * Window.open. */
-    bool paced;
-    int64_t due;
-} win;
+} drive;
 
 /* Says a line of a command's text answer: `midnight: drive: ` and it. */
 static void drive_answer(const char *format, ...)
@@ -1238,13 +1219,13 @@ static void answer_begin(MnBuilder *b, const char *command, int64_t line) {
 }
 
 /* Answers a command that has nothing to say but itself. */
-static void drive_answer_command(const char *text) {
+static MN_MAYBE_UNUSED void drive_answer_command(const char *text) {
     if (!json_lines) {
         drive_answer("%s", text);
         return;
     }
     MnBuilder b = {0};
-    answer_begin(&b, text, win.drive_line);
+    answer_begin(&b, text, drive.line);
     j_say(&b);
 }
 
@@ -1259,16 +1240,86 @@ static _Noreturn void drive_fail(const char *format, ...) {
     if (json_lines) {
         MnBuilder b = {0};
         j_begin(&b, "drive_error");
-        j_str(&b, "file", win.drive_name);
-        j_int(&b, "line", win.drive_line);
+        j_str(&b, "file", drive.name);
+        j_int(&b, "line", drive.line);
         j_str(&b, "message", message);
         j_say(&b);
     } else {
-        say_text("midnight: drive: %s:%lld: %s\n", win.drive_name,
-                 (long long)win.drive_line, message);
+        say_text("midnight: drive: %s:%lld: %s\n", drive.name,
+                 (long long)drive.line, message);
     }
     mn_leave(1);
 }
+
+/* A whole number from 1 to `most`, the whole of `word`, or -1. */
+static int64_t drive_count(const char *word, int64_t most) {
+    int64_t value = 0;
+    if (*word == '\0') return -1;
+    for (const char *c = word; *c != '\0'; c++) {
+        if (*c < '0' || *c > '9') return -1;
+        value = value * 10 + (*c - '0');
+        if (value > most) return -1;
+    }
+    return value < 1 ? -1 : value;
+}
+
+/* The command's words, split at spaces and tabs, in place. Returns how
+ * many there are, at most `most`; one more means too many. */
+static int drive_words(char *text, char **words, int most) {
+    int count = 0;
+    char *at = text;
+    while (*at != '\0') {
+        while (*at == ' ' || *at == '\t') *at++ = '\0';
+        if (*at == '\0') break;
+        if (count == most) return most + 1;
+        words[count++] = at;
+        while (*at != '\0' && *at != ' ' && *at != '\t') at++;
+    }
+    return count;
+}
+
+/* ---- The window ------------------------------------------------------------ */
+
+#ifdef MN_WINDOW
+const MnWindowProgram *mn_window_program;
+
+/* The window as the runtime knows it. `open` is true from Window.open to
+ * the tick that reports the close; the sizes are what the desktop gives
+ * now, and reach the resource when a tick begins. */
+static struct {
+    bool headless;
+    bool info;
+
+    bool open;
+    bool closing;
+    int64_t width;
+    int64_t height;
+    int64_t pixel_width;
+    int64_t pixel_height;
+    /* A headless window's scale: `scale_num / scale_den` pixels a point. */
+    int64_t scale_num;
+    int64_t scale_den;
+
+    /* The last frame: its size in pixels and in points, its background,
+     * and the value of Time.tick when it was made. Its draws are
+     * drawing.frame. */
+    uint32_t frame_width;
+    uint32_t frame_height;
+    int64_t frame_point_width;
+    int64_t frame_point_height;
+    MnColor frame_background;
+    int64_t frame_tick;
+    /* Goes up with every frame. */
+    uint64_t frame_number;
+
+    /* The window is on the desktop, through midnight_window.c. */
+    bool shown;
+    /* When the last tick of a shown window was due, in nanoseconds of the
+     * monotonic clock; `paced` is false until the first tick after
+     * Window.open. */
+    bool paced;
+    int64_t due;
+} win;
 
 /* ---- Drawing ---- */
 
@@ -1645,35 +1696,35 @@ static void window_event(const char *event, const char *text) {
 }
 
 void mn_window_key(uint32_t key, bool down) {
-    if (win.drive_name || key >= MN_KEY_COUNT) return;
+    if (drive.name || key >= MN_KEY_COUNT) return;
     input_happened(down ? HAPPENED_KEY_DOWN : HAPPENED_KEY_UP, key, 0.0, 0.0);
 }
 
 void mn_window_button(uint32_t button, bool down, double x, double y) {
-    if (win.drive_name || button >= MN_MOUSE_BUTTON_COUNT) return;
+    if (drive.name || button >= MN_MOUSE_BUTTON_COUNT) return;
     input_happened(down ? HAPPENED_BUTTON_DOWN : HAPPENED_BUTTON_UP, button, x, y);
 }
 
 void mn_window_move(double x, double y) {
-    if (win.drive_name) return;
+    if (drive.name) return;
     if (input.desktop_left && win.info) window_event("pointer_inside", "pointer inside");
     input.desktop_left = false;
     input_happened(HAPPENED_MOVE, 0, x, y);
 }
 
 void mn_window_leave(void) {
-    if (win.drive_name) return;
+    if (drive.name) return;
     input.desktop_left = true;
     input_happened(HAPPENED_LEAVE, 0, 0.0, 0.0);
 }
 
 void mn_window_wheel(double x, double y) {
-    if (win.drive_name) return;
+    if (drive.name) return;
     input_happened(HAPPENED_WHEEL, 0, x, y);
 }
 
 void mn_window_focus(bool gained) {
-    if (win.drive_name) return;
+    if (drive.name) return;
     if (gained && win.info) window_event("focused", "focused");
     input_happened(gained ? HAPPENED_FOCUS : HAPPENED_BLUR, 0, 0.0, 0.0);
 }
@@ -1839,7 +1890,7 @@ const char *mn_window_device(struct WGPUSurfaceImpl *surface) {
 }
 #endif
 
-/* Reads MIDNIGHT_WINDOW, MIDNIGHT_DRIVE and MIDNIGHT_GPU. */
+/* Reads MIDNIGHT_WINDOW and MIDNIGHT_GPU. */
 static void window_start(void) {
     gpu_read_options();
     const char *list = getenv("MIDNIGHT_WINDOW");
@@ -1855,41 +1906,12 @@ static void window_start(void) {
         list += len;
         if (*list == ',') list++;
     }
-    const char *drive = getenv("MIDNIGHT_DRIVE");
-    if (drive && *drive != '\0') win.drive_name = drive;
 }
 
 /* The pixels of `points` at the headless window's scale, halves rounded
  * up. */
 static int64_t scaled(int64_t points) {
     return (points * win.scale_num * 2 + win.scale_den) / (win.scale_den * 2);
-}
-
-/* A whole number from 1 to `most`, the whole of `word`, or -1. */
-static int64_t drive_count(const char *word, int64_t most) {
-    int64_t value = 0;
-    if (*word == '\0') return -1;
-    for (const char *c = word; *c != '\0'; c++) {
-        if (*c < '0' || *c > '9') return -1;
-        value = value * 10 + (*c - '0');
-        if (value > most) return -1;
-    }
-    return value < 1 ? -1 : value;
-}
-
-/* The command's words, split at spaces and tabs, in place. Returns how
- * many there are, at most `most`; one more means too many. */
-static int drive_words(char *text, char **words, int most) {
-    int count = 0;
-    char *at = text;
-    while (*at != '\0') {
-        while (*at == ' ' || *at == '\t') *at++ = '\0';
-        if (*at == '\0') break;
-        if (count == most) return most + 1;
-        words[count++] = at;
-        while (*at != '\0' && *at != ' ' && *at != '\t') at++;
-    }
-    return count;
 }
 
 static void window_capture(const char *text, const char *file);
@@ -1916,7 +1938,7 @@ static void draws_json(const MnDraws *frame, const char *command) {
     };
     static const int numbers[] = {0, 4, 3, 5, 6};
     MnBuilder b = {0};
-    answer_begin(&b, command, win.drive_line);
+    answer_begin(&b, command, drive.line);
     j_int(&b, "frame_tick", win.frame_tick);
     j_int(&b, "width", win.frame_point_width);
     j_int(&b, "height", win.frame_point_height);
@@ -1949,7 +1971,6 @@ static void draws_json(const MnDraws *frame, const char *command) {
 static void window_draws(void) {
     static const char *const shapes[] = {"", "rect", "circle", "line", "triangle"};
     static const int numbers[] = {0, 4, 3, 5, 6};
-    if (!win.open) drive_fail("can't list the draws: no window is open");
     /* The frame's records in order, those on the device brought back. */
     const DrawList *list = &drawing.frame;
     size_t total = 0;
@@ -2034,35 +2055,14 @@ static void window_draws(void) {
     free(gathered);
 }
 
-/* Carries out one command, given without its line break and without the
- * spaces around it. Returns true when it lets ticks run. */
-static bool drive_command(char *text) {
-    if (strncmp(text, "capture", 7) == 0 &&
-        (text[7] == ' ' || text[7] == '\t' || text[7] == '\0')) {
+/* Carries out a command of the window, `text` as written and split into
+ * `words`, while the window is open. */
+static void window_command(const char *text, char **words, int count) {
+    const char *name = words[0];
+    if (strcmp(name, "capture") == 0) {
         const char *file = text + 7;
         while (*file == ' ' || *file == '\t') file++;
         window_capture(text, file);
-        return false;
-    }
-    char *copy = mn_malloc(strlen(text) + 1);
-    strcpy(copy, text);
-    char *words[5];
-    int count = drive_words(copy, words, 4);
-    const char *name = words[0];
-    bool runs = false;
-    if (strcmp(name, "tick") == 0) {
-        int64_t ticks = 1;
-        if (count == 2) ticks = drive_count(words[1], INT64_MAX / 16);
-        if (count > 2 || ticks < 1) {
-            drive_fail("`tick` takes a number of ticks from 1 up, or nothing");
-        }
-        free(win.tick_text);
-        win.tick_text = mn_malloc(strlen(text) + 1);
-        strcpy(win.tick_text, text);
-        win.ticks_left = ticks;
-        win.ticks_run = 0;
-        win.tick_line = win.drive_line;
-        runs = true;
     } else if (strcmp(name, "resize") == 0 || strcmp(name, "scale") == 0) {
         if (!win.headless) {
             drive_fail("`%s` needs MIDNIGHT_WINDOW=headless", name);
@@ -2103,8 +2103,8 @@ static bool drive_command(char *text) {
             win.scale_num = num;
             win.scale_den = den;
         }
-        if (win.open && (scaled(win.width) > MN_WINDOW_LARGEST ||
-                         scaled(win.height) > MN_WINDOW_LARGEST)) {
+        if (scaled(win.width) > MN_WINDOW_LARGEST ||
+            scaled(win.height) > MN_WINDOW_LARGEST) {
             drive_fail("a frame of %lldx%lld pixels is larger than %d by %d",
                        (long long)scaled(win.width),
                        (long long)scaled(win.height), MN_WINDOW_LARGEST,
@@ -2118,83 +2118,16 @@ static bool drive_command(char *text) {
         window_draws();
     } else if (strcmp(name, "close") == 0) {
         if (count != 1) drive_fail("`close` takes nothing");
-        if (win.open) {
-            win.closing = true;
-            input_happened(HAPPENED_CLOSE, 0, 0.0, 0.0);
-        }
+        win.closing = true;
+        input_happened(HAPPENED_CLOSE, 0, 0.0, 0.0);
         input.commands.focused = false;
         input.commands.left = true;
         memset(input.commands.keys, 0, sizeof input.commands.keys);
         memset(input.commands.buttons, 0, sizeof input.commands.buttons);
         drive_answer_command(text);
-    } else if (drive_input(text, words, count)) {
     } else {
-        drive_fail("unknown command `%s`", name);
+        drive_input(text, words, count);
     }
-    free(copy);
-    return runs;
-}
-
-/* Reads and carries out commands until one lets ticks run, or until
- * `until_tick` is false and the commands run out. Returns false when they
- * have run out. */
-static bool drive_until_tick(void) {
-    if (win.drive_done) return false;
-    if (!win.drive) {
-        win.drive = fopen(win.drive_name, "r");
-        if (!win.drive) {
-            if (json_lines) {
-                MnBuilder b = {0};
-                j_begin(&b, "drive_unopened");
-                j_str(&b, "file", win.drive_name);
-                j_str(&b, "message", strerror(errno));
-                j_say(&b);
-            } else {
-                say_text("midnight: drive: can't open %s: %s\n", win.drive_name,
-                         strerror(errno));
-            }
-            mn_leave(1);
-        }
-    }
-    for (;;) {
-        ssize_t got = getline(&win.line, &win.line_capacity, win.drive);
-        if (got < 0) {
-            win.drive_done = true;
-            return false;
-        }
-        win.drive_line++;
-        char *text = win.line;
-        size_t len = (size_t)got;
-        while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r' ||
-                           text[len - 1] == ' ' || text[len - 1] == '\t')) {
-            len--;
-        }
-        text[len] = '\0';
-        while (*text == ' ' || *text == '\t') text++;
-        if (*text == '\0' || *text == '#') continue;
-        if (drive_command(text)) return true;
-    }
-}
-
-/* Answers the `tick` command when its last tick has run, or with the
- * number that ran when the program ended first. */
-static void drive_tick_answer(bool ending) {
-    if (!win.tick_text) return;
-    if (win.ticks_left != 0 && !ending) return;
-    if (json_lines) {
-        MnBuilder b = {0};
-        answer_begin(&b, win.tick_text, win.tick_line);
-        j_int(&b, "ran", win.ticks_run);
-        j_bool(&b, "ended", win.ticks_left != 0);
-        j_say(&b);
-    } else if (win.ticks_left == 0) {
-        drive_answer("%s", win.tick_text);
-    } else {
-        drive_answer("%s: the program ended after %lld tick%s", win.tick_text,
-                     (long long)win.ticks_run, win.ticks_run == 1 ? "" : "s");
-    }
-    free(win.tick_text);
-    win.tick_text = NULL;
 }
 
 /* Makes the frame of the window as the resource has it now, with the draws
@@ -2332,7 +2265,7 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
     input_opened(&input.now);
     input_opened(&input.commands);
     input.desktop_left = true;
-    if (win.headless || win.drive_name) {
+    if (win.headless || drive.name) {
         input.commands.focused = true;
         input_happened(HAPPENED_FOCUS, 0, 0.0, 0.0);
     }
@@ -2359,13 +2292,13 @@ void mn_window_open(MnString title, int64_t width, int64_t height, MnLoc loc) {
         j_key(&b, "shown");
         mn_json_bytes(&b, how, (int64_t)driver);
         if (how[driver] == ',') j_str(&b, "present", how + driver + 2);
-        j_bool(&b, "driven", win.drive_name != NULL);
+        j_bool(&b, "driven", drive.name != NULL);
         j_say(&b);
     } else if (win.info) {
         say_text("midnight: window: %lldx%lld points, %lldx%lld pixels, %s\n",
                  (long long)win.width, (long long)win.height,
                  (long long)win.pixel_width, (long long)win.pixel_height, how);
-        if (win.drive_name) say_text("midnight: window: input from commands\n");
+        if (drive.name) say_text("midnight: window: input from commands\n");
     }
 }
 
@@ -2397,24 +2330,15 @@ static void window_pace(void) {
 
 /* What happens before the first system of a tick runs. */
 static void window_tick_begin(void) {
-    input_clear();
-    if (win.open && win.drive_name && win.ticks_left == 0 &&
-        !drive_until_tick()) {
-        win.closing = true;
-    }
-    if (win.ticks_left > 0) {
-        win.ticks_left--;
-        win.ticks_run++;
-    }
     if (!win.open) {
         input.count = 0;
         input_assign();
         return;
     }
-    if (win.drive_done) win.closing = true;
+    if (drive.done) win.closing = true;
 #ifdef MN_FRAMES
     if (win.shown) {
-        if (!win.drive_name) window_pace();
+        if (!drive.name) window_pace();
         MnWindowSizes sizes;
         mn_window_poll(&sizes);
         win.width = sizes.width;
@@ -2464,7 +2388,6 @@ static void window_tick_end(void) {
         if (win.shown) window_draw();
 #endif
     }
-    drive_tick_answer(false);
 }
 
 #ifdef MN_FRAMES
@@ -2660,7 +2583,6 @@ static void png_make(PngOut *out, uint32_t width, uint32_t height,
  * pixels. */
 static void window_capture(const char *text, const char *file) {
     if (*file == '\0') drive_fail("`capture` takes the name of a file");
-    if (!win.open) drive_fail("can't capture: no window is open");
 #ifndef MN_FRAMES
     (void)text;
     drive_fail("can't capture: the program was built without the window flags");
@@ -2685,7 +2607,7 @@ static void window_capture(const char *text, const char *file) {
         char hex[9];
         snprintf(hex, sizeof hex, "%08x", (unsigned)crc);
         MnBuilder b = {0};
-        answer_begin(&b, text, win.drive_line);
+        answer_begin(&b, text, drive.line);
         j_str(&b, "file", file);
         j_int(&b, "frame_tick", win.frame_tick);
         j_int(&b, "pixel_width", frame.width);
@@ -2703,19 +2625,10 @@ static void window_capture(const char *text, const char *file) {
 /* When the program ends: answers the `tick` command, carries out the
  * commands up to the next `tick`, and closes the window. */
 static void window_finish(void) {
-    drive_tick_answer(true);
-    if (win.drive_name && !win.drive_done) drive_until_tick();
-    free(win.tick_text);
-    win.tick_text = NULL;
-    free(win.line);
-    win.line = NULL;
     free(input.list);
     input.list = NULL;
     input.count = 0;
     input.capacity = 0;
-    if (win.drive) fclose(win.drive);
-    win.drive = NULL;
-    win.drive_done = true;
     win.open = false;
     list_free(&drawing.list);
     list_free(&drawing.frame);
@@ -2730,6 +2643,507 @@ static void window_finish(void) {
 }
 #endif
 
+/* ---- Reading commands ------------------------------------------------------ */
+
+/* ---- `query` and `resource` ---- */
+
+/* The most rows an answer to `query` lists. */
+#define MN_QUERY_ROWS 100
+
+typedef enum {
+    TOKEN_END,
+    TOKEN_NAME,
+    TOKEN_NUMBER,
+    TOKEN_COMMA,
+    TOKEN_WITH,
+    TOKEN_WITHOUT,
+    TOKEN_OPEN,
+    TOKEN_CLOSE,
+    TOKEN_BAD,
+} TokenKind;
+
+typedef struct {
+    TokenKind kind;
+    const char *at;
+    size_t len;
+} Token;
+
+/* The next token of a `query` or `resource` line, read as the source
+ * reads the same words, spaces and tabs between them skipped. */
+static Token next_token(const char **at) {
+    const char *c = *at;
+    while (*c == ' ' || *c == '\t') c++;
+    Token token = {TOKEN_BAD, c, 1};
+    if (*c == '\0') {
+        token.kind = TOKEN_END;
+        token.len = 0;
+    } else if (*c == ',') {
+        token.kind = TOKEN_COMMA;
+    } else if (*c == '[') {
+        token.kind = TOKEN_OPEN;
+    } else if (*c == ']') {
+        token.kind = TOKEN_CLOSE;
+    } else if ((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '_') {
+        const char *end = c;
+        while ((*end >= 'a' && *end <= 'z') || (*end >= 'A' && *end <= 'Z') ||
+               (*end >= '0' && *end <= '9') || *end == '_') {
+            end++;
+        }
+        token.kind = TOKEN_NAME;
+        token.len = (size_t)(end - c);
+        if (*end == ':' && token.len == 4 && memcmp(c, "with", 4) == 0) {
+            token.kind = TOKEN_WITH;
+            token.len = 5;
+        } else if (*end == ':' && token.len == 7 && memcmp(c, "without", 7) == 0) {
+            token.kind = TOKEN_WITHOUT;
+            token.len = 8;
+        }
+    } else if (*c >= '0' && *c <= '9') {
+        const char *end = c;
+        while (*end >= '0' && *end <= '9') end++;
+        token.kind = TOKEN_NUMBER;
+        token.len = (size_t)(end - c);
+    }
+    *at = c + token.len;
+    return token;
+}
+
+static bool token_is(Token token, const char *word) {
+    return token.kind == TOKEN_NAME && strlen(word) == token.len &&
+           memcmp(token.at, word, token.len) == 0;
+}
+
+/* The component or tag a name names, or MN_NONE. */
+static uint32_t component_named(Token token) {
+    const MnProgram *program = mn_world.program;
+    for (uint32_t i = 0; i < program->component_count; i++) {
+        const char *name = program->components[i].name;
+        if (strlen(name) == token.len && memcmp(name, token.at, token.len) == 0) {
+            return i;
+        }
+    }
+    return MN_NONE;
+}
+
+/* `Time.tick` as `N ticks`. */
+static const char *ticks_said(char *out, size_t size) {
+    snprintf(out, size, "%lld tick%s", (long long)mn_time.tick,
+             mn_time.tick == 1 ? "" : "s");
+    return out;
+}
+
+/* Carries out `query TERMS [from N]`, `text` the command as written. */
+static void drive_query(const char *text) {
+    static const char *const unreadable = "`query` takes the terms of an `each`";
+    const MnProgram *program = mn_world.program;
+    uint32_t most = program->component_count + 1;
+    uint32_t *with = mn_calloc(most, sizeof(uint32_t));
+    uint32_t *without = mn_calloc(most, sizeof(uint32_t));
+    uint32_t *terms = mn_calloc(most, sizeof(uint32_t));
+    uint32_t with_count = 0;
+    uint32_t without_count = 0;
+    uint32_t term_count = 0;
+    uint32_t filter_count = 0;
+    uint32_t *filters = mn_calloc(most, sizeof(uint32_t));
+    bool entity = false;
+    bool seen_with = false;
+    bool seen_without = false;
+    int64_t from = 0;
+    const char *at = text + 5;
+
+    /* Takes a name that stands as a term (`filter` false) or a filter. */
+    enum { TERMS, AFTER_TERM, FILTER, AFTER_FILTER, DONE } state = TERMS;
+    bool in_list = false;
+    bool listing_with = false;
+    for (;;) {
+        Token token = next_token(&at);
+        if (state == TERMS) {
+            if (token.kind == TOKEN_WITH || token.kind == TOKEN_WITHOUT) {
+                if (term_count == 0 && !entity) {
+                    drive_fail("query: at least one component or `Entity` comes before "
+                               "`with:` and `without:`");
+                }
+                state = FILTER;
+            } else if (token.kind != TOKEN_NAME) {
+                drive_fail("%s", unreadable);
+            } else if (token_is(token, "Entity")) {
+                if (entity) drive_fail("query: `Entity` appears twice");
+                entity = true;
+                state = AFTER_TERM;
+                continue;
+            } else {
+                uint32_t id = component_named(token);
+                if (id == MN_NONE) {
+                    drive_fail("query: `%.*s` is not a component or tag of this program",
+                               (int)token.len, token.at);
+                }
+                for (uint32_t i = 0; i < with_count; i++) {
+                    if (with[i] == id) {
+                        drive_fail("query: `%.*s` appears twice", (int)token.len, token.at);
+                    }
+                }
+                if (program->components[id].size == 0) {
+                    drive_fail("query: tag `%.*s` can't be a term; filter with `with: %.*s`",
+                               (int)token.len, token.at, (int)token.len, token.at);
+                }
+                with[with_count++] = id;
+                terms[term_count++] = id;
+                state = AFTER_TERM;
+                continue;
+            }
+        }
+        if (state == FILTER) {
+            bool is_with = token.kind == TOKEN_WITH;
+            if ((is_with && seen_with) || (!is_with && seen_without)) {
+                drive_fail("%s", unreadable);
+            }
+            if (is_with) {
+                seen_with = true;
+            } else {
+                seen_without = true;
+            }
+            listing_with = is_with;
+            Token name = next_token(&at);
+            in_list = name.kind == TOKEN_OPEN;
+            if (in_list) name = next_token(&at);
+            for (;;) {
+                if (name.kind != TOKEN_NAME) drive_fail("%s", unreadable);
+                if (token_is(name, "Entity")) drive_fail("query: `Entity` can't be a filter");
+                uint32_t id = component_named(name);
+                if (id == MN_NONE) {
+                    drive_fail("query: `%.*s` is not a component or tag of this program",
+                               (int)name.len, name.at);
+                }
+                bool twice = false;
+                for (uint32_t i = 0; i < with_count; i++) twice = twice || with[i] == id;
+                for (uint32_t i = 0; i < without_count; i++) twice = twice || without[i] == id;
+                if (twice) drive_fail("query: `%.*s` appears twice", (int)name.len, name.at);
+                if (listing_with) {
+                    with[with_count++] = id;
+                } else {
+                    without[without_count++] = id;
+                }
+                filters[filter_count++] = id;
+                if (!in_list) break;
+                Token next = next_token(&at);
+                if (next.kind == TOKEN_CLOSE) break;
+                if (next.kind != TOKEN_COMMA) drive_fail("%s", unreadable);
+                name = next_token(&at);
+            }
+            state = AFTER_FILTER;
+            continue;
+        }
+        if (state == AFTER_TERM || state == AFTER_FILTER) {
+            if (token.kind == TOKEN_END) break;
+            if (token.kind == TOKEN_COMMA) {
+                Token peek_at_text = {TOKEN_END, NULL, 0};
+                const char *peek = at;
+                peek_at_text = next_token(&peek);
+                if (state == AFTER_FILTER &&
+                    peek_at_text.kind != TOKEN_WITH && peek_at_text.kind != TOKEN_WITHOUT) {
+                    drive_fail("%s", unreadable);
+                }
+                state = TERMS;
+                continue;
+            }
+            if (token_is(token, "from")) {
+                Token number = next_token(&at);
+                if (number.kind != TOKEN_NUMBER) {
+                    drive_fail("query: `from` takes a row number from 0 up");
+                }
+                for (size_t i = 0; i < number.len; i++) {
+                    int digit = number.at[i] - '0';
+                    from = from > (INT64_MAX - digit) / 10 ? INT64_MAX : from * 10 + digit;
+                }
+                if (next_token(&at).kind != TOKEN_END) drive_fail("%s", unreadable);
+                break;
+            }
+            drive_fail("%s", unreadable);
+        }
+    }
+    free(filters);
+
+    MnQuery query = {with, with_count, without, without_count, NULL, 0, 0, 0};
+    mn_query_refresh(&query);
+    if (mn_gpu_only && term_count != 0) {
+        MnUse *uses = mn_calloc(term_count, sizeof(MnUse));
+        for (uint32_t i = 0; i < term_count; i++) uses[i] = (MnUse){terms[i], MN_USE_READ};
+        mn_gpu_use(&query, uses, term_count);
+        free(uses);
+    }
+    int64_t count = 0;
+    for (uint32_t t = 0; t < query.table_count; t++) count += query.tables[t]->count;
+    int64_t listed = from >= count ? 0 : count - from;
+    if (listed > MN_QUERY_ROWS) listed = MN_QUERY_ROWS;
+
+    MnBuilder b = {0};
+    if (json_lines) {
+        answer_begin(&b, text, drive.line);
+        j_int(&b, "count", count);
+        j_int(&b, "from", from);
+        j_key(&b, "rows");
+        j_lit(&b, "[");
+    } else {
+        char ticks[48];
+        j_lit(&b, "midnight: drive: ");
+        j_lit(&b, text);
+        j_lit(&b, ": ");
+        j_lit(&b, ticks_said(ticks, sizeof ticks));
+        char rows[96];
+        int len = snprintf(rows, sizeof rows, ", %lld row%s", (long long)count,
+                           count == 1 ? "" : "s");
+        if (listed < count && listed == 0) {
+            len += snprintf(rows + len, sizeof rows - (size_t)len, ", none from %lld",
+                            (long long)from);
+        } else if (listed < count) {
+            len += snprintf(rows + len, sizeof rows - (size_t)len, ", %lld to %lld",
+                            (long long)from, (long long)(from + listed - 1));
+        }
+        mn_sb_bytes(&b, rows, len);
+        j_lit(&b, "\n");
+    }
+    int64_t row_at = 0;
+    for (uint32_t t = 0; t < query.table_count && listed > 0; t++) {
+        const MnTable *table = query.tables[t];
+        for (uint32_t row = 0; row < table->count && listed > 0; row++, row_at++) {
+            if (row_at < from) continue;
+            if (json_lines) {
+                if (row_at > from) j_lit(&b, ",");
+                j_lit(&b, "{\"entity\":");
+                mn_json_entity(&b, table->entities[row]);
+            } else {
+                j_lit(&b, "midnight: drive:   ");
+                mn_sb_entity(&b, table->entities[row]);
+            }
+            for (uint32_t i = 0; i < term_count; i++) {
+                const MnComponentInfo *info = &program->components[terms[i]];
+                const char *value =
+                    (const char *)table->columns[terms[i]] + (size_t)row * info->size;
+                if (json_lines) {
+                    j_key(&b, info->name);
+                    info->json(&b, value);
+                } else {
+                    j_lit(&b, " ");
+                    info->text(&b, value);
+                }
+            }
+            j_lit(&b, json_lines ? "}" : "\n");
+            listed--;
+        }
+    }
+    if (json_lines) {
+        j_lit(&b, "]");
+        j_say(&b);
+    } else {
+        say(b.bytes, (size_t)b.len);
+        free(b.bytes);
+    }
+    free(query.tables);
+    free(with);
+    free(without);
+    free(terms);
+}
+
+/* Carries out `resource NAME`, `text` the command as written. */
+static void drive_resource(const char *text) {
+    static const char *const builtins[] = {"Time", "Window", "Keyboard", "Mouse"};
+    const char *at = text + 8;
+    Token name = next_token(&at);
+    if (name.kind != TOKEN_NAME || next_token(&at).kind != TOKEN_END) {
+        drive_fail("`resource` takes the name of a resource");
+    }
+    for (size_t i = 0; i < sizeof builtins / sizeof builtins[0]; i++) {
+        if (token_is(name, builtins[i])) {
+            drive_fail("resource: `%s` is built in; `resource` reads the program's own "
+                       "resources",
+                       builtins[i]);
+        }
+    }
+    const MnProgram *program = mn_world.program;
+    const MnResourceInfo *resource = NULL;
+    for (uint32_t i = 0; i < program->resource_count && !resource; i++) {
+        if (token_is(name, program->resources[i].name)) resource = &program->resources[i];
+    }
+    if (!resource) {
+        drive_fail("resource: `%.*s` is not a resource of this program", (int)name.len,
+                   name.at);
+    }
+    MnBuilder b = {0};
+    if (json_lines) {
+        answer_begin(&b, text, drive.line);
+        j_str(&b, "resource", resource->name);
+        j_key(&b, "fields");
+        resource->json(&b, resource->data);
+        j_say(&b);
+        return;
+    }
+    char ticks[48];
+    j_lit(&b, "midnight: drive: ");
+    j_lit(&b, text);
+    j_lit(&b, ": ");
+    j_lit(&b, ticks_said(ticks, sizeof ticks));
+    j_lit(&b, ", ");
+    resource->text(&b, resource->data);
+    j_lit(&b, "\n");
+    say(b.bytes, (size_t)b.len);
+    free(b.bytes);
+}
+
+/* The commands that need an open window. */
+static bool window_command_named(const char *name) {
+    static const char *const names[] = {"resize", "scale", "close", "capture", "draws",
+                                        "key",    "mouse", "scroll", "blur",   "focus"};
+    for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
+        if (strcmp(name, names[i]) == 0) return true;
+    }
+    return false;
+}
+
+/* Carries out one command, given without its line break and without the
+ * spaces around it. Returns true when it lets ticks run. */
+static bool drive_command(char *text) {
+    char *copy = mn_malloc(strlen(text) + 1);
+    strcpy(copy, text);
+    char *words[5];
+    int count = drive_words(copy, words, 4);
+    const char *name = words[0];
+    bool runs = false;
+    if (strcmp(name, "tick") == 0) {
+        int64_t ticks = 1;
+        if (count == 2) ticks = drive_count(words[1], INT64_MAX / 16);
+        if (count > 2 || ticks < 1) {
+            drive_fail("`tick` takes a number of ticks from 1 up, or nothing");
+        }
+        free(drive.tick_text);
+        drive.tick_text = mn_malloc(strlen(text) + 1);
+        strcpy(drive.tick_text, text);
+        drive.ticks_left = ticks;
+        drive.ticks_run = 0;
+        drive.tick_line = drive.line;
+        runs = true;
+    } else if (strcmp(name, "query") == 0) {
+        drive_query(text);
+    } else if (strcmp(name, "resource") == 0) {
+        drive_resource(text);
+    } else if (window_command_named(name)) {
+#ifdef MN_WINDOW
+        bool open = win.open;
+#else
+        bool open = false;
+#endif
+        if (!open && strcmp(name, "capture") == 0) {
+            drive_fail("can't capture: no window is open");
+        }
+        if (!open && strcmp(name, "draws") == 0) {
+            drive_fail("can't list the draws: no window is open");
+        }
+        if (!open) drive_fail("can't `%s`: no window is open", text);
+#ifdef MN_WINDOW
+        window_command(text, words, count);
+#endif
+    } else {
+        drive_fail("unknown command `%s`", name);
+    }
+    free(copy);
+    return runs;
+}
+
+/* Reads and carries out commands until one lets ticks run. Returns false
+ * when they have run out. */
+static bool drive_until_tick(void) {
+    if (drive.done) return false;
+    if (!drive.file) {
+        drive.file = fopen(drive.name, "r");
+        if (!drive.file) {
+            if (json_lines) {
+                MnBuilder b = {0};
+                j_begin(&b, "drive_unopened");
+                j_str(&b, "file", drive.name);
+                j_str(&b, "message", strerror(errno));
+                j_say(&b);
+            } else {
+                say_text("midnight: drive: can't open %s: %s\n", drive.name,
+                         strerror(errno));
+            }
+            mn_leave(1);
+        }
+    }
+    for (;;) {
+        ssize_t got = getline(&drive.buf, &drive.capacity, drive.file);
+        if (got < 0) {
+            drive.done = true;
+            return false;
+        }
+        drive.line++;
+        char *text = drive.buf;
+        size_t len = (size_t)got;
+        while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r' ||
+                           text[len - 1] == ' ' || text[len - 1] == '\t')) {
+            len--;
+        }
+        text[len] = '\0';
+        while (*text == ' ' || *text == '\t') text++;
+        if (*text == '\0' || *text == '#') continue;
+        if (drive_command(text)) return true;
+    }
+}
+
+/* Answers the `tick` command when its last tick has run, or with the
+ * number that ran when the program ended first. */
+static void drive_tick_answer(bool ending) {
+    if (!drive.tick_text) return;
+    if (drive.ticks_left != 0 && !ending) return;
+    if (json_lines) {
+        MnBuilder b = {0};
+        answer_begin(&b, drive.tick_text, drive.tick_line);
+        j_int(&b, "ran", drive.ticks_run);
+        j_bool(&b, "ended", drive.ticks_left != 0);
+        j_say(&b);
+    } else if (drive.ticks_left == 0) {
+        drive_answer("%s", drive.tick_text);
+    } else {
+        drive_answer("%s: the program ended after %lld tick%s", drive.tick_text,
+                     (long long)drive.ticks_run, drive.ticks_run == 1 ? "" : "s");
+    }
+    free(drive.tick_text);
+    drive.tick_text = NULL;
+}
+
+/* Reads MIDNIGHT_DRIVE. */
+static void drive_start(void) {
+    const char *name = getenv("MIDNIGHT_DRIVE");
+    if (name && *name != '\0') drive.name = name;
+}
+
+/* Before a tick begins: carries out commands until one lets it run, unless
+ * a `tick` command still has ticks to run or the commands have run out. */
+static void drive_tick_begin(void) {
+    if (drive.name && drive.ticks_left == 0) drive_until_tick();
+    if (drive.ticks_left > 0) {
+        drive.ticks_left--;
+        drive.ticks_run++;
+    }
+}
+
+/* When a tick has ended: answers its `tick` command if that is done. */
+static void drive_tick_end(void) {
+    drive_tick_answer(false);
+}
+
+/* When the program ends: answers a pending `tick` command and carries out
+ * the commands up to the next `tick`. */
+static void drive_finish(void) {
+    drive_tick_answer(true);
+    if (drive.name && !drive.done) drive_until_tick();
+    free(drive.tick_text);
+    drive.tick_text = NULL;
+    free(drive.buf);
+    drive.buf = NULL;
+    if (drive.file) fclose(drive.file);
+    drive.file = NULL;
+    drive.done = true;
+}
+
 /* ---- Systems and ticks --------------------------------------------------- */
 
 #ifdef MN_GPU_SYSTEMS
@@ -2739,6 +3153,10 @@ static void gpu_tick_end(void);
 static void tick(void) {
     MnWorld *w = &mn_world;
     const MnProgram *program = w->program;
+#ifdef MN_WINDOW
+    input_clear();
+#endif
+    drive_tick_begin();
 #ifdef MN_WINDOW
     window_tick_begin();
 #endif
@@ -2758,6 +3176,7 @@ static void tick(void) {
 #ifdef MN_WINDOW
     window_tick_end();
 #endif
+    drive_tick_end();
 }
 
 void mn_tick(MnLoc loc) {
@@ -4787,6 +5206,7 @@ void mn_start(const MnProgram *program) {
 #ifdef MN_WINDOW
     window_start();
 #endif
+    drive_start();
     clock_gettime(CLOCK_MONOTONIC, &mn_started);
 }
 
@@ -4850,6 +5270,7 @@ static MN_MAYBE_UNUSED void say_buffers_alive(int64_t count) {
 }
 
 void mn_finish(void) {
+    drive_finish();
 #ifdef MN_WINDOW
     window_finish();
 #endif

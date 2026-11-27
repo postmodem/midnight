@@ -276,22 +276,40 @@ fn split_drive(stderr: &str) -> (String, String) {
 
 const DRIVE_SAID: &str = "midnight: drive: ";
 
-/// The lines of the `draws` answers among a run's answers: each answer's
-/// first line, `draws: …`, and the lines after it, which begin with two
-/// spaces.
-fn draws_answers(answers: &str) -> String {
-    answers
-        .split_inclusive('\n')
-        .filter(|line| line.starts_with("draws: ") || line.starts_with("  "))
-        .collect()
+/// A run's answers split by their first line, each with the lines after it
+/// that begin with two spaces: those of `draws` (`draws: …`), those of
+/// `query` and `resource` (`query …:`, `resource …:`), and the others.
+fn split_answers(answers: &str) -> [String; 3] {
+    let mut split: [String; 3] = Default::default();
+    let mut kind = 2;
+    for line in answers.split_inclusive('\n') {
+        if !line.starts_with("  ") {
+            kind = if line.starts_with("draws: ") {
+                0
+            } else if line.starts_with("query ") || line.starts_with("resource ") {
+                1
+            } else {
+                2
+            };
+        }
+        split[kind].push_str(line);
+    }
+    split
 }
 
-/// A run's answers without those of `draws`.
-fn without_draws(answers: &str) -> String {
-    answers
-        .split_inclusive('\n')
-        .filter(|line| !line.starts_with("draws: ") && !line.starts_with("  "))
-        .collect()
+/// The answers of `draws` among a run's answers.
+fn draws_answers(answers: &str) -> String {
+    split_answers(answers)[0].clone()
+}
+
+/// The answers of `query` and `resource` among a run's answers.
+fn query_answers(answers: &str) -> String {
+    split_answers(answers)[1].clone()
+}
+
+/// A run's answers but those of `draws`, `query` and `resource`.
+fn other_answers(answers: &str) -> String {
+    split_answers(answers)[2].clone()
 }
 
 /// The `.12am` files directly inside `dir`, sorted. Empty if it is missing.
@@ -464,16 +482,35 @@ fn example_programs() {
 /// the release run writes the file; no other test does.
 #[test]
 fn draws_match_expected() {
+    answers_match_expected("draws", draws_answers, "the answers of `draws`");
+}
+
+/// Every program of `tests/run` and `examples` with a `NAME.queries` file,
+/// run headless with its `NAME.drive` and no device, in both build modes,
+/// gives exactly those answers of `query` and `resource`.
+#[test]
+fn queries_match_expected() {
+    answers_match_expected(
+        "queries",
+        query_answers,
+        "the answers of `query` and `resource`",
+    );
+}
+
+/// Runs every program of `tests/run` and `examples` with a file of
+/// `extension` in both modes and requires `pick` of its answers to be that
+/// file's text; `UPDATE_EXPECT=1` rewrites it from the release run.
+fn answers_match_expected(extension: &str, pick: fn(&str) -> String, what: &str) {
     let sources: Vec<PathBuf> = programs("tests/run")
         .into_iter()
         .chain(examples())
-        .filter(|source| source.with_extension("draws").exists())
+        .filter(|source| source.with_extension(extension).exists())
         .collect();
     assert!(
         !sources.is_empty(),
-        "no program with a .draws file under tests/run and examples of the working directory"
+        "no program with a .{extension} file under tests/run and examples of the working directory"
     );
-    let dir = scratch("draws");
+    let dir = scratch(extension);
     let jobs: Vec<(&PathBuf, Mode)> = sources
         .iter()
         .flat_map(|source| MODES.map(|mode| (source, mode)))
@@ -492,15 +529,15 @@ fn draws_match_expected() {
         if update_expect() && *mode == Mode::Debug {
             return Ok(());
         }
-        expect(
-            &source.with_extension("draws"),
-            &draws_answers(&run.drive),
-            "the answers of `draws`",
-        )
-        .map_err(|message| format!("{label}: {message}"))
+        expect(&source.with_extension(extension), &pick(&run.drive), what)
+            .map_err(|message| format!("{label}: {message}"))
     });
     let _ = std::fs::remove_dir_all(&dir);
-    report("runs with draws", jobs.len(), failures);
+    report(
+        &format!("runs with .{extension} files"),
+        jobs.len(),
+        failures,
+    );
 }
 
 #[test]
@@ -1540,6 +1577,8 @@ struct DeviceRun {
     strict: Option<String>,
     /// The answers to the `draws` commands.
     draws: String,
+    /// The answers of `query` and `resource`.
+    queries: String,
 }
 
 /// What one `stats` line counts.
@@ -1657,9 +1696,11 @@ fn run_on_device(
         stats: String::new(),
         strict: None,
         draws: String::new(),
+        queries: String::new(),
     };
     let (answers, stderr) = split_drive(&text(&output.stderr));
     run.draws = draws_answers(&answers);
+    run.queries = query_answers(&answers);
     let reason = cpu_reason_of(source);
     let stderr = cpu_runs_as_stated(&stderr, reason.as_deref(), more.contains(&"strict-cpu"))?;
     for line in stderr.split_inclusive('\n') {
@@ -1753,6 +1794,12 @@ fn run_gpu_program(
     } else {
         None
     };
+    let queries_path = source.with_extension("queries");
+    let expected_queries = if queries_path.exists() {
+        Some(read(&queries_path)?)
+    } else {
+        None
+    };
     let strict = gpu_system_lines(&program).any(|line| line.starts_with("strict "));
     let mut runs: Vec<(&[&str], Option<&str>)> =
         vec![(&[], None), (&["rows"], None), (&[], Some(DEVICE_THREADS))];
@@ -1805,6 +1852,19 @@ fn run_gpu_program(
                          --- expected\n{expected_draws}--- actual\n{}---",
                         draws_path.display(),
                         run.draws
+                    ));
+                }
+            }
+        }
+        if let Some(expected_queries) = &expected_queries {
+            match compare_output(expected_queries, &run.queries, tolerance) {
+                Ok(difference) => found.1 = found.1.max(difference),
+                Err(message) => {
+                    return Err(format!(
+                        "{label}: the answers of `query` and `resource` differ from {}: {message}\n\
+                         --- expected\n{expected_queries}--- actual\n{}---",
+                        queries_path.display(),
+                        run.queries
                     ));
                 }
             }
@@ -2293,7 +2353,7 @@ fn window_frames() {
         if !(update_expect() && *mode == Mode::Debug) {
             expect(
                 &source.with_extension("frames"),
-                &without_draws(&run.drive),
+                &other_answers(&run.drive),
                 "the answers",
             )
             .map_err(|message| format!("{label}: {message}"))?;
@@ -3291,8 +3351,9 @@ fn run_both_forms(command: &mut Command, limit: Duration) -> Result<TimedRun, St
     }
     let lines = json_lines::parse_form(&json.raw).map_err(|e| format!("{e}\n{}", json.raw))?;
     let said = json_lines::runtime_text(&lines)?;
-    if said != plain.raw {
-        return Err(differs("standard error", &plain.raw, &said));
+    let expected = json_lines::with_leaves(&plain.raw);
+    if said != expected {
+        return Err(differs("standard error", &expected, &said));
     }
     Ok(plain)
 }
@@ -3504,6 +3565,11 @@ fn run_with_threads(
     } else {
         None
     };
+    let mut expected_queries = if source.with_extension("queries").exists() {
+        Some(read("queries")?)
+    } else {
+        None
+    };
     for setting in settings {
         let label = format!("{} ({how}, MIDNIGHT_THREADS={setting})", source.display());
         let mut command = on_cpu(exe, source);
@@ -3548,6 +3614,16 @@ fn run_with_threads(
             }
             Some(_) => {}
             None => expected_draws = Some(draws),
+        }
+        let queries = query_answers(&run.drive);
+        match &expected_queries {
+            Some(expected) if *expected != queries => {
+                return Err(format!(
+                    "{label}: the answers of `query` and `resource` differ\n--- expected\n{expected}--- actual\n{queries}---"
+                ));
+            }
+            Some(_) => {}
+            None => expected_queries = Some(queries),
         }
     }
     Ok(())
@@ -3790,7 +3866,11 @@ fn programs_in_json() {
         let label = |message: String| format!("{} ({mode:?}): {message}", source.display());
         let exe = exe_path(&dir, source, *mode);
         build(source, &exe, *mode)?;
-        let run = run_both_forms(&mut on_cpu(&exe, source), RUN_LIMIT).map_err(label)?;
+        // With `info`, a GPU program also says it has no device and runs
+        // each block on the CPU.
+        let mut command = on_cpu(&exe, source);
+        command.env("MIDNIGHT_GPU", "off,info");
+        let run = run_both_forms(&mut command, RUN_LIMIT).map_err(label)?;
         let out = source.with_extension("out");
         if out.exists() && std::fs::read_to_string(&out).unwrap() != run.stdout {
             return Err(label("standard output differs from its `.out`".to_string()));
@@ -4214,6 +4294,33 @@ fn drive_errors() {
             "blur\n",
             "2: `blur` while the window does not have the focus",
         ),
+        // The window's commands once it has closed: after the program ends,
+        // and between the ticks after `World.run`, which wait for commands.
+        (
+            "close\ntick 5\nclose\n",
+            "close\ntick 5: the program ended after 3 ticks\n",
+            "3: can't `close`: no window is open",
+        ),
+        (
+            "close\ntick\ntick\nkey down A\n",
+            "close\ntick\ntick\n",
+            "4: can't `key down A`: no window is open",
+        ),
+        (
+            "close\ntick\nresize 0 0\n",
+            "close\ntick\n",
+            "3: can't `resize 0 0`: no window is open",
+        ),
+        (
+            "close\ntick\ndraws\n",
+            "close\ntick\n",
+            "3: can't list the draws: no window is open",
+        ),
+        (
+            "close\ntick\ncapture\n",
+            "close\ntick\n",
+            "3: can't capture: no window is open",
+        ),
     ];
     let mut failures = Vec::new();
     for (index, (commands, answers, error)) in cases.iter().enumerate() {
@@ -4226,14 +4333,14 @@ fn drive_errors() {
             ));
         }
     }
-    // A program that shows its window takes no `resize`; one that never
-    // opens it carries the command out when it ends.
+    // A program that never opens its window takes no command of the window
+    // when it ends, and says so before it would ask for `headless`.
     let quiet = build_text(&dir, "quiet", "Window.background = Color(1, 2, 3)\n");
     let (run, file) = drive(&dir, &quiet, "shown", "", "resize 10 10\n");
-    let expected = format!("{file}:1: `resize` needs MIDNIGHT_WINDOW=headless\n");
+    let expected = format!("{file}:1: can't `resize 10 10`: no window is open\n");
     if run.status != Some(1) || run.drive != expected {
         failures.push(format!(
-            "resize with a window: exited with {:?}\n--- expected\n{expected}--- answers\n{}---",
+            "resize with no window open: exited with {:?}\n--- expected\n{expected}--- answers\n{}---",
             run.status, run.drive
         ));
     }
@@ -4272,12 +4379,12 @@ fn drive_answers() {
         &exe,
         "ended",
         "headless",
-        "  tick   2  \n# no answer\n\nclose\ntick 5\nclose\n\tclose\ntick\nclose\n",
+        "  tick   2  \n# no answer\n\nclose\ntick 5\n",
     );
     assert_eq!(run.status, Some(0), "{}", run.stderr);
     assert_eq!(
         run.drive,
-        "tick   2\nclose\ntick 5: the program ended after 3 ticks\nclose\nclose\n"
+        "tick   2\nclose\ntick 5: the program ended after 3 ticks\n"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -4421,9 +4528,196 @@ fn only_programs_with_a_window_read_the_window_variables() {
         .env("MIDNIGHT_WINDOW", "bogus")
         .env("MIDNIGHT_DRIVE", dir.join("missing").join("commands"));
     let run = run_within(&mut command, PANIC_LIMIT);
-    assert_eq!(run.status, Some(0));
-    assert_eq!((run.stderr.as_str(), run.drive.as_str()), ("", ""));
+    let expected = format!(
+        "can't open {}: No such file or directory\n",
+        dir.join("missing").join("commands").display()
+    );
+    assert_eq!(run.status, Some(1));
+    assert_eq!(
+        (run.stderr.as_str(), run.drive.as_str()),
+        ("", expected.as_str())
+    );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Every error of `query` and `resource` stops the program with status 1
+/// and the file and line of the command; when two apply, the first in the
+/// line is reported.
+#[test]
+fn query_errors() {
+    let dir = scratch("query-errors");
+    let exe = build_text(
+        &dir,
+        "world",
+        "component Body\n  x: Int\nend\n\ntag Frozen\n\nresource Score\n  points: Int = 0\nend\n\n\
+         spawn Body(1), Frozen\nWorld.tick\n",
+    );
+    let not_component = "query: `Ghost` is not a component or tag of this program";
+    let unreadable = "`query` takes the terms of an `each`";
+    let no_resource = "`resource` takes the name of a resource";
+    let cases = [
+        ("query Ghost", not_component),
+        ("query Body, without: Ghost", not_component),
+        (
+            "query Frozen",
+            "query: tag `Frozen` can't be a term; filter with `with: Frozen`",
+        ),
+        (
+            "query Body, with: Entity",
+            "query: `Entity` can't be a filter",
+        ),
+        ("query Body, Body", "query: `Body` appears twice"),
+        ("query Entity, Entity", "query: `Entity` appears twice"),
+        (
+            "query Body, with: Frozen, without: [Frozen]",
+            "query: `Frozen` appears twice",
+        ),
+        (
+            "query with: Frozen",
+            "query: at least one component or `Entity` comes before `with:` and `without:`",
+        ),
+        (
+            "query Body from",
+            "query: `from` takes a row number from 0 up",
+        ),
+        (
+            "query Body from -1",
+            "query: `from` takes a row number from 0 up",
+        ),
+        ("query", unreadable),
+        ("query Body;", unreadable),
+        ("query Body,", unreadable),
+        ("query Body with: Frozen", unreadable),
+        ("query Body, with: Frozen, with: Frozen", unreadable),
+        ("query Body, with: Frozen, Body", unreadable),
+        ("query Body, with: [Frozen", unreadable),
+        ("query Body from 1 2", unreadable),
+        (
+            "query Body, with : Frozen",
+            "query: `with` is not a component or tag of this program",
+        ),
+        // Two apply: the first in the line.
+        ("query Ghost, Frozen", not_component),
+        ("query Body, Body, Ghost", "query: `Body` appears twice"),
+        (
+            "resource Ghost",
+            "resource: `Ghost` is not a resource of this program",
+        ),
+        (
+            "resource Time",
+            "resource: `Time` is built in; `resource` reads the program's own resources",
+        ),
+        (
+            "resource Mouse",
+            "resource: `Mouse` is built in; `resource` reads the program's own resources",
+        ),
+        ("resource", no_resource),
+        ("resource Score Score", no_resource),
+        ("resource Score!", no_resource),
+    ];
+    let mut failures = Vec::new();
+    for (index, (command, message)) in cases.iter().enumerate() {
+        let (run, file) = drive(
+            &dir,
+            &exe,
+            &format!("case{index}"),
+            "",
+            &format!("tick\n{command}\n"),
+        );
+        let expected = format!("tick\n{file}:2: {message}\n");
+        if run.status != Some(1) || run.drive != expected || !run.stderr.is_empty() {
+            failures.push(format!(
+                "{command}: exited with {:?}\n--- expected\n{expected}--- answers\n{}--- stderr\n{}---",
+                run.status, run.drive, run.stderr
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("query and resource errors", cases.len(), failures);
+}
+
+/// A program without a window, driven: it runs no tick its commands did
+/// not let run, then ticks freely once they run out; a pending `tick` is
+/// answered and the commands up to the next one are carried out when it
+/// ends; every command of the window stops it.
+#[test]
+fn a_program_without_a_window_is_driven() {
+    let dir = scratch("windowless-driven");
+    let exe = build_text(
+        &dir,
+        "count",
+        "component Counter\n  n: Int\nend\n\n\
+         system count\n  each Counter do |c|\n    c.n += 1\n    puts \"tick #{Time.tick}: #{c.n}\"\n  end\n  World.stop if Time.tick == 4\nend\n\n\
+         spawn Counter(0)\nputs \"before\"\nWorld.run\nputs \"ended at #{Time.tick}\"\n",
+    );
+    let count: String = (0..5)
+        .map(|tick| format!("tick {tick}: {}\n", tick + 1))
+        .collect();
+    let printed = format!("before\n{count}ended at 5\n");
+    let mut failures = Vec::new();
+    for (commands, status, answers) in [
+        ("tick 2\ntick\n", 0, "tick 2\ntick\n".to_string()),
+        (
+            "tick 2\ntick 9\nresize 1 1\n",
+            1,
+            "tick 2\ntick 9: the program ended after 3 ticks\nFILE:3: can't `resize 1 1`: no window is open\n"
+                .to_string(),
+        ),
+        ("", 0, String::new()),
+    ] {
+        let (run, file) = drive(&dir, &exe, "count", "", commands);
+        let answers = answers.replace("FILE", &file);
+        if run.status != Some(status)
+            || run.stdout != printed
+            || run.drive != answers
+            || !run.stderr.is_empty()
+        {
+            failures.push(format!(
+                "{commands:?}: exited with {:?}\n--- answers\n{}--- stdout\n{}--- stderr\n{}---",
+                run.status, run.drive, run.stdout, run.stderr
+            ));
+        }
+    }
+    // A pending `tick` waits: one tick, then the program waits for no more.
+    let (run, _) = drive(&dir, &exe, "one", "", "tick\n# then nothing\n");
+    if run.stdout != printed || run.drive != "tick\n" {
+        failures.push(format!("one tick: {}{}", run.stdout, run.drive));
+    }
+    // Every command of the window stops a program without one.
+    for command in [
+        "resize 10 10",
+        "scale 2",
+        "close",
+        "key down A",
+        "key A",
+        "mouse move 1 1",
+        "mouse down Left",
+        "mouse leave",
+        "scroll 0 1",
+        "blur",
+        "focus",
+    ] {
+        let (run, file) = drive(&dir, &exe, "window", "bogus", &format!("tick\n{command}\n"));
+        let expected = format!("tick\n{file}:2: can't `{command}`: no window is open\n");
+        if run.status != Some(1) || run.drive != expected || !run.stderr.is_empty() {
+            failures.push(format!(
+                "{command}: exited with {:?}\n--- answers\n{}--- stderr\n{}---",
+                run.status, run.drive, run.stderr
+            ));
+        }
+    }
+    for (command, message) in [
+        ("draws", "can't list the draws: no window is open"),
+        ("capture x.png", "can't capture: no window is open"),
+    ] {
+        let (run, file) = drive(&dir, &exe, "window", "", &format!("{command}\n"));
+        let expected = format!("{file}:1: {message}\n");
+        if run.status != Some(1) || run.drive != expected {
+            failures.push(format!("{command}: {:?}\n{}", run.status, run.drive));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("windowless driven runs", 17, failures);
 }
 
 /// A program with a loop that can be split reports a word of
@@ -4773,7 +5067,7 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
     let answered = shown.wait_for(Duration::from_secs(120), |said| {
         let answers = split_drive(said).0;
         match &expected {
-            Some(expected) => without_draws(&answers) == *expected,
+            Some(expected) => other_answers(&answers) == *expected,
             None => answers.lines().filter_map(capture_answer).count() == captures,
         }
     });
@@ -4803,7 +5097,7 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
     }
     said?;
     if let Some(expected) = &expected
-        && without_draws(&run.drive) != *expected
+        && other_answers(&run.drive) != *expected
     {
         return Err(format!(
             "the answers differ from the headless run's\n--- expected\n{expected}--- actual\n{}---",
@@ -5024,6 +5318,40 @@ fn watched(name: &str, act: &[&[&str]], printed: &str) {
     }
     let _ = std::fs::remove_dir_all(&dir);
     report("runs with a window", MODES.len(), failures);
+}
+
+/// Window mode: a shown window takes no `resize` or `scale`, which need
+/// `MIDNIGHT_WINDOW=headless`.
+#[test]
+fn window_shown_takes_no_resize() {
+    let Some(device) = window_device() else {
+        return;
+    };
+    let _compositor = COMPOSITOR
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let dir = scratch("window-no-resize");
+    let exe = build_text(&dir, "driven", DRIVEN);
+    let mut failures = Vec::new();
+    for name in ["resize 10 10", "scale 2"] {
+        let commands = dir.join("commands.drive");
+        std::fs::write(&commands, format!("tick\n{name}\n")).expect("write commands");
+        let mut run = Shown::start(&exe, &dir, Some(&commands), device).finish(RUN_LIMIT);
+        let word = name.split(' ').next().unwrap();
+        let expected = format!(
+            "tick\n{}:2: `{word}` needs MIDNIGHT_WINDOW=headless\n",
+            commands.display()
+        );
+        let said = window_said(&mut run, device);
+        if run.status != Some(1) || run.drive != expected || said.is_err() {
+            failures.push(format!(
+                "{name}: exited with {:?}, {said:?}\n--- expected\n{expected}--- answers\n{}---",
+                run.status, run.drive
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("shown windows given resize or scale", 2, failures);
 }
 
 /// Window mode: a close by the compositor ends `World.run`, after a tick

@@ -1,0 +1,6 @@
+query Count: 0 ticks, 2 rows
+  Entity(0v1) Count(n: 0)
+  Entity(1v1) Count(n: 1)
+query Entity, Count: 0 ticks, 2 rows
+  Entity(0v1) Count(n: 1)
+  Entity(1v1) Count(n: 2)

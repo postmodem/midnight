@@ -1,0 +1,40 @@
+# json: run
+# The JSON of `query` and `resource`: every kind of value, strings with
+# control characters and non-ASCII text, a resource and one with no fields.
+
+enum Mood
+  Calm
+  Angry
+end
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+component Body
+  pos: Vec2
+  speed: Float32
+  path: [Float32] = []
+  mood: Mood = Mood::Calm
+  name: String = ""
+  link: Entity = Entity.none
+  tint: Color = Color(0, 0, 0)
+  big: Int = 0
+  small: UInt8 = 0
+  alive: Bool = true
+end
+
+tag Frozen
+
+resource Score
+  points: Int = 7
+  label: String = "\0é\"\\\r"
+end
+
+resource Flags
+end
+
+a = spawn Body(Vec2(1.5, -2.25), 0.1, [7.0385306918512091e-26], Mood::Angry, "tab\there\e→", Entity.none, Color(1, 2, 3, 4), -9007199254740993, 255, false)
+spawn Body(Vec2(0.0, 0.0), 0.0 / 0.0, [], Mood::Calm, "", a), Frozen
+World.tick

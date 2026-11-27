@@ -1,0 +1,19 @@
+# `query` at the end of a program, and after `exit` inside an `each`: the
+# commands see the world as `exit` left it, without the changes the loop
+# had queued.
+
+component Count
+  n: Int
+end
+
+system step
+  each Entity, Count do |e, c|
+    c.n += 1
+    e.despawn
+    exit(0) if c.n == 2
+  end
+end
+
+spawn Count(0)
+spawn Count(1)
+World.tick

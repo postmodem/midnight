@@ -134,6 +134,11 @@ pub fn resource(name: &str) -> String {
     format!("R_{}", sanitize(name))
 }
 
+/// The struct tag of a resource's storage.
+pub fn resource_struct(name: &str) -> String {
+    format!("Res_{}", sanitize(name))
+}
+
 pub fn func(prog: &Program, id: usize) -> String {
     let func = &prog.funcs[id];
     let (base, suffix) = match func.name.as_str() {

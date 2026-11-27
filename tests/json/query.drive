@@ -1,0 +1,5 @@
+tick
+query Body
+query Entity, Body, without: Frozen from 1
+resource Score
+resource Flags

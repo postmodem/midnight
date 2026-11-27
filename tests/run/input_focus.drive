@@ -22,6 +22,9 @@ tick
 # The close releases A and Left.
 close
 tick
+# The two ticks between the windows.
+tick
+tick
 # The window opened again.
 tick
 key A

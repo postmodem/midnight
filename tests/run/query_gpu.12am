@@ -1,0 +1,21 @@
+# `query` of a component whose current copy is on the device: it reads
+# the column as top-level code would, behind one wait, and `stats` counts
+# the download in the line of the last tick that ended.
+
+component Position
+  x: Float32
+end
+
+gpu system move
+  each Position do |p|
+    p.x += 1.5
+  end
+end
+
+64.times do |i|
+  spawn Position(i)
+end
+4.times do
+  World.tick
+end
+puts "ticks: #{Time.tick}"

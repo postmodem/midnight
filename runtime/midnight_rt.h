@@ -85,6 +85,8 @@ _Noreturn void mn_panic(MnLoc loc, const char *format, ...)
 
 /* ---- Program description --------------------------------------------- */
 
+struct MnBuilder;
+
 /* One per component or tag, indexed by component id. */
 typedef struct MnComponentInfo {
     const char *name;
@@ -92,7 +94,22 @@ typedef struct MnComponentInfo {
     uint32_t align; /* 1 for a tag */
     /* Releases what a value owns; NULL when it owns nothing. */
     void (*drop)(void *value);
+    /* Append a value to a builder as the drive's `query` writes it: as
+     * text, which is `to_s` but for Float32 numbers, and as JSON. NULL for
+     * a tag. */
+    void (*text)(struct MnBuilder *sb, const void *value);
+    void (*json)(struct MnBuilder *sb, const void *value);
 } MnComponentInfo;
+
+/* One per resource the program declares, for the drive's `resource`: its
+ * storage, NULL for a resource with no fields, and its forms as a struct
+ * of its fields, as for components. */
+typedef struct MnResourceInfo {
+    const char *name;
+    const void *data;
+    void (*text)(struct MnBuilder *sb, const void *data);
+    void (*json)(struct MnBuilder *sb, const void *data);
+} MnResourceInfo;
 
 /* One per event type, indexed by event id. */
 typedef struct MnEventInfo {
@@ -116,6 +133,8 @@ typedef struct MnProgram {
     /* The version of the compiler that built the program, which the first
      * line of the JSON form names. */
     const char *version;
+    const MnResourceInfo *resources;
+    uint32_t resource_count;
 } MnProgram;
 
 /* Call once, first. The program description must outlive the program. */
@@ -536,8 +555,13 @@ void mn_sb_write(MnBuilder *sb);
  *                    64-bit number rounded to 32 bits; non-finite values as
  *                    for Float */
 void mn_json_bytes(MnBuilder *sb, const char *bytes, int64_t len);
+void mn_json_str(MnBuilder *sb, MnString s);
 void mn_json_float(MnBuilder *sb, double value);
 void mn_json_float32(MnBuilder *sb, float value);
+/* An entity as JSON: the string `to_s` gives it. */
+void mn_json_entity(MnBuilder *sb, MnEntity e);
+/* A Float32 as text, by the rule of mn_json_float32. */
+void mn_sb_float32(MnBuilder *sb, float value);
 
 /* ---- Output -------------------------------------------------------------- */
 
@@ -731,10 +755,10 @@ void mn_sleep(double seconds);
  * and those of `Mouse` when a tick begins, and at no other time.
  *
  * When a tick begins, the keys and buttons pressed and released and the
- * wheel's sums are cleared, whether a window is open or not. When a window
- * is open, the tick then does this before the first system runs: it
- * carries out MIDNIGHT_DRIVE's commands until one lets the tick run, or
- * waits for the tick's time; takes what happened to the window since the
+ * wheel's sums are cleared, whether a window is open or not, and then the
+ * commands are carried out, as "Driving" says. When a window is open, the
+ * tick then does this before the first system runs: unless it is driven,
+ * it waits for the tick's time; takes what happened to the window since the
  * last tick began; when a size changed, assigns the four sizes and emits
  * one WindowResized; applies what happened to the keyboard, the mouse and
  * the focus, in order, emitting their events; assigns the fields of
@@ -743,8 +767,20 @@ void mn_sleep(double seconds);
  * mn_stop. When the tick has ended, the window shows the frame of that
  * tick.
  *
- * mn_finish and mn_exit carry out the commands up to the next `tick` and
- * close the window.
+ * mn_finish and mn_exit close the window, after the commands of "Driving".
+ *
+ * ---- Driving ----
+ *
+ * Every program reads MIDNIGHT_DRIVE when mn_start runs. When it names a
+ * file, a driven program runs no tick that a command did not let run:
+ * before each tick begins, window open or not, the runtime carries out
+ * commands until one lets the tick run, and when they have run out the
+ * ticks run freely, an open window closing as by `close`, and one opened
+ * later in its first tick. mn_finish and mn_exit first answer a pending
+ * `tick` and carry out the commands up to the next one. Commands are
+ * carried out only between ticks, on the thread that runs them. The
+ * window's commands need `win.open`; without a window they stop the
+ * program. A run-time error or a command error ends the program at once.
  */
 
 /* The largest width and height of a frame, in pixels. */

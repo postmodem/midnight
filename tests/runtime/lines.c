@@ -23,7 +23,7 @@
 static void drop_nothing(void) {}
 
 static const MnProgram program = {
-    NULL, 0, NULL, 0, NULL, 0, drop_nothing, "test",
+    NULL, 0, NULL, 0, NULL, 0, drop_nothing, "test", NULL, 0,
 };
 
 static float float_of(uint32_t bits) {

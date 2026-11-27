@@ -257,6 +257,145 @@ const SHAPES: [(&str, &[&str]); 4] = [
     ("triangle", &["x1", "y1", "x2", "y2", "x3", "y3"]),
 ];
 
+/// The leaves of a value of the world in its text form, in order: numbers
+/// as written (`n:`), Booleans (`b:`), and as strings (`s:`) strings
+/// unescaped, entities, enum variants and non-finite numbers. Struct and
+/// field names and punctuation are left out, so that the JSON form, which
+/// has no struct names, gives the same leaves.
+pub fn text_leaves(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut leaves = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c.is_whitespace() || matches!(c, ',' | '(' | ')' | '[' | ']') {
+            i += 1;
+        } else if c == '"' {
+            let mut out = String::new();
+            i += 1;
+            while i < chars.len() && chars[i] != '"' {
+                if chars[i] == '\\' && i + 1 < chars.len() {
+                    i += 1;
+                    match chars[i] {
+                        'n' => out.push('\n'),
+                        't' => out.push('\t'),
+                        'r' => out.push('\r'),
+                        '0' => out.push('\0'),
+                        'e' => out.push('\x1b'),
+                        'x' => {
+                            let hex: String = chars[i + 1..i + 3].iter().collect();
+                            out.push(u8::from_str_radix(&hex, 16).unwrap_or(0) as char);
+                            i += 2;
+                        }
+                        other => out.push(other),
+                    }
+                } else {
+                    out.push(chars[i]);
+                }
+                i += 1;
+            }
+            i += 1;
+            leaves.push(format!("s:{out}"));
+        } else if c.is_alphabetic() || c == '_' {
+            let start = i;
+            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let word: String = chars[start..i].iter().collect();
+            match chars.get(i) {
+                Some(':') => i += 1,
+                Some('(') if word == "Entity" => {
+                    let end = chars[i..]
+                        .iter()
+                        .position(|&c| c == ')')
+                        .map_or(chars.len(), |p| i + p + 1);
+                    let entity: String = chars[start..end].iter().collect();
+                    leaves.push(format!("s:{entity}"));
+                    i = end;
+                }
+                Some('(') => {}
+                _ if word == "true" || word == "false" => leaves.push(format!("b:{word}")),
+                _ => leaves.push(format!("s:{word}")),
+            }
+        } else if c == '-' && chars[i..].starts_with(&['-', 'I']) {
+            leaves.push("s:-Infinity".to_string());
+            i += 9;
+        } else {
+            let start = i;
+            while i < chars.len()
+                && (chars[i].is_ascii_digit() || matches!(chars[i], '-' | '+' | '.' | 'e'))
+            {
+                i += 1;
+            }
+            if i == start {
+                i += 1;
+                continue;
+            }
+            leaves.push(format!("n:{}", chars[start..i].iter().collect::<String>()));
+        }
+    }
+    leaves
+}
+
+/// The leaves of a JSON value, as [`text_leaves`] gives them.
+pub fn json_leaves(value: &Value, leaves: &mut Vec<String>) {
+    match value {
+        Value::Null => leaves.push("null".to_string()),
+        Value::Bool(b) => leaves.push(format!("b:{b}")),
+        Value::Number(text) => leaves.push(format!("n:{text}")),
+        Value::Str(text) => leaves.push(format!("s:{text}")),
+        Value::Array(items) => items.iter().for_each(|item| json_leaves(item, leaves)),
+        Value::Object(members) => members.iter().for_each(|(_, v)| json_leaves(v, leaves)),
+    }
+}
+
+/// A run's standard error with the values of each `query` row and
+/// `resource` answer written as their leaves, as [`runtime_text`] writes
+/// them from JSON.
+pub fn with_leaves(stderr: &str) -> String {
+    let mut out = String::new();
+    let mut in_query = false;
+    for line in stderr.split_inclusive('\n') {
+        let said = line.strip_prefix("midnight: drive: ");
+        match said {
+            Some(answer) if answer.starts_with("query ") => {
+                in_query = true;
+                out.push_str(line);
+            }
+            Some(answer) if in_query && answer.starts_with("  ") => {
+                let row = answer.trim_start().trim_end_matches('\n');
+                let (entity, rest) = row.split_once(' ').unwrap_or((row, ""));
+                out.push_str(&format!(
+                    "midnight: drive:   {entity} {}\n",
+                    text_leaves(rest).join(" ")
+                ));
+            }
+            Some(answer) if answer.starts_with("resource ") => {
+                in_query = false;
+                let answer = answer.trim_end_matches('\n');
+                let (head, value) = answer
+                    .split_once(" ticks, ")
+                    .or_else(|| answer.split_once(" tick, "))
+                    .unwrap_or((answer, ""));
+                let ticks = if answer.contains(" ticks, ") {
+                    "ticks"
+                } else {
+                    "tick"
+                };
+                out.push_str(&format!(
+                    "midnight: drive: {head} {ticks}, {}\n",
+                    text_leaves(value).join(" ")
+                ));
+            }
+            _ => {
+                in_query = false;
+                out.push_str(line);
+            }
+        }
+    }
+    out
+}
+
 /// The text of an answer, each line without `midnight: drive: `.
 fn answer_text(line: &Value) -> Result<Vec<String>, String> {
     let command = line.str("command")?;
@@ -317,6 +456,51 @@ fn answer_text(line: &Value) -> Result<Vec<String>, String> {
                 lines.push(format!("  Draw.{shape}({})", args.join(", ")));
             }
             lines
+        }
+        "query" => {
+            let tick = line.int("tick")?;
+            let count = line.int("count")?;
+            let from = line.int("from")?;
+            let rows = line.array("rows")?;
+            let listed = rows.len() as i64;
+            let mut head = format!(
+                "{command}: {}, {}",
+                counted(tick, "tick"),
+                counted(count, "row")
+            );
+            if listed < count && listed == 0 {
+                head.push_str(&format!(", none from {from}"));
+            } else if listed < count {
+                head.push_str(&format!(", {from} to {}", from + listed - 1));
+            }
+            let mut lines = vec![head];
+            for row in rows {
+                let members = row.members().ok_or("a row is an object")?;
+                let (key, entity) = members.first().ok_or("an empty row")?;
+                if key != "entity" {
+                    return Err(format!("a row begins with `{key}`"));
+                }
+                let mut leaves = Vec::new();
+                for (_, value) in &members[1..] {
+                    json_leaves(value, &mut leaves);
+                }
+                lines.push(format!(
+                    "  {} {}",
+                    entity.as_str().ok_or("an entity")?,
+                    leaves.join(" ")
+                ));
+            }
+            lines
+        }
+        "resource" => {
+            line.str("resource")?;
+            let mut leaves = Vec::new();
+            json_leaves(line.get("fields").ok_or("no fields")?, &mut leaves);
+            vec![format!(
+                "{command}: {}, {}",
+                counted(line.int("tick")?, "tick"),
+                leaves.join(" ")
+            )]
         }
         _ => vec![command.to_string()],
     })

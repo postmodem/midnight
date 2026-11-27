@@ -1,0 +1,81 @@
+# `query` and `resource` between ticks: values of every kind (numbers,
+# Float32 and its lists, NaN, a whole number past 2^53, strings with
+# control characters and non-ASCII text, lists, nested structs, enums,
+# entities, colors), rows over several tables in visiting order, filters,
+# `from` within and past the count, more than 100 rows, a resource and
+# one with no fields, after a despawn and queued changes, and at the end.
+
+enum Mood
+  Calm
+  Angry
+end
+
+struct Vec2
+  x: Float
+  y: Float
+end
+
+component Body
+  pos: Vec2
+  speed: Float32
+  path: [Float32] = []
+  mood: Mood = Mood::Calm
+end
+
+component Label
+  name: String
+  tags: [Int] = []
+end
+
+component Link
+  target: Entity
+  tint: Color
+end
+
+component Dot
+  id: Int
+end
+
+component Ghost
+  seen: Bool
+end
+
+tag Frozen
+tag Red
+
+resource Score
+  points: Int = 0
+  best: Int = 9007199254740993
+  ratio: Float = 0.0
+end
+
+resource Flags
+end
+
+system grow
+  each Dot do |dot|
+    dot.id += 1000
+  end
+  Score.points += 10
+end
+
+system shed
+  each Entity, Dot do |e, dot|
+    e.despawn if dot.id % 7 == 1
+  end
+end
+
+a = spawn Body(Vec2(1.5, -2.25), 0.1, [0.1, 7.0385306918512091e-26], Mood::Angry), Label("tab\there \"é\" \e", [1, 2])
+b = spawn Body(Vec2(0.0, 0.0), 0.0 / 0.0), Frozen
+spawn Link(a, Color(1, 2, 3)), Label("→ ünïcödé")
+spawn Link(Entity.none, Color(10, 20, 30, 40)), Red
+spawn Body(Vec2(3.0, 4.0), 1.0e30), Label("third table"), Red
+150.times do |i|
+  spawn Dot(i)
+end
+Score.ratio = 1.0 / 3.0
+puts "spawned"
+World.tick
+b.add(Red)
+World.tick
+puts "ticks: #{Time.tick}"
