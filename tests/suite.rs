@@ -2811,6 +2811,113 @@ fn frames_are_the_colors_painted() {
     assert_eq!(captures, painted);
 }
 
+/// `runtime/font.txt` has the form and the glyphs the spec gives it, and
+/// the table the driver writes for a program that draws text holds the
+/// same bits.
+#[test]
+fn font_file_is_the_font() {
+    let file = std::fs::read_to_string("runtime/font.txt").expect("read runtime/font.txt");
+    let font = render::Font::read(&file).unwrap();
+    let mut codes: Vec<Option<u32>> = (0x20..=0x7e)
+        .chain((0xa0..=0xff).filter(|&code| code != 0xad))
+        .map(Some)
+        .collect();
+    codes.push(None);
+    assert_eq!(font.codes, codes);
+    assert_eq!(font.glyphs.len(), 191);
+    let replacement: [u8; 12] = [0, 0, 0, 31, 17, 17, 17, 17, 17, 31, 0, 0];
+    assert_eq!(font.glyphs[190], replacement);
+    assert_eq!(font.glyphs[font.glyph(0xa0)], [0; 12]);
+    assert!(font.glyphs[font.glyph(0xf0)][3] & 1 << 5 != 0);
+    assert!(
+        font.glyphs[..190]
+            .iter()
+            .zip(&codes)
+            .all(|(rows, code)| *code == Some(0xf0) || rows.iter().all(|row| row & 1 << 5 == 0))
+    );
+
+    let header: Vec<&str> = file
+        .lines()
+        .take_while(|line| line.starts_with("# "))
+        .collect();
+    let header = header.join("\n");
+    for needed in [
+        "https://datagoblin.itch.io/monogram",
+        "81d0540290f73d6317dc86e34978af80babf8e24129941cdf087b0fdfb75c287",
+        "847e18d10ecd0fd4362ee0088a1bc56f9b203136b544d45db17426ff91913938",
+        "CC0 1.0",
+        "Vin\u{ed}cius Men\u{e9}zio",
+    ] {
+        assert!(header.contains(needed), "the header does not name {needed}");
+    }
+
+    // The driver's table, from the build directory of a program that draws
+    // text, kept by a C compiler that fails.
+    let dir = scratch("font-file");
+    let source = dir.join("text.12am");
+    std::fs::write(
+        &source,
+        "Window.open(\"text\", 64, 32)\nDraw.text(0, 0, \"A\", 12, Color(255, 255, 255))\nWorld.tick\n",
+    )
+    .unwrap();
+    let output = midnight()
+        .arg("build")
+        .arg(&source)
+        .args(["--format", "json", "-o"])
+        .arg(dir.join("text"))
+        .env("MIDNIGHT_CC", "false")
+        .env("MIDNIGHT_GPU_FLAGS", "-lm")
+        .env("MIDNIGHT_WINDOW_FLAGS", "-lm")
+        .output()
+        .unwrap();
+    let lines = json_lines::parse_form(&text(&output.stderr)).unwrap();
+    let kept = lines
+        .iter()
+        .find(|line| line.kind() == "c_compiler")
+        .and_then(|line| line.str("kept").ok())
+        .unwrap_or_else(|| panic!("no kept build: {}", text(&output.stderr)))
+        .to_string();
+    let build = Path::new(&kept).parent().unwrap().to_path_buf();
+    let table = std::fs::read_to_string(build.join("midnight_font.h")).expect("midnight_font.h");
+    let _ = std::fs::remove_dir_all(&build);
+    let words = |line: &str| -> Vec<u32> {
+        line.split(',')
+            .filter_map(|word| {
+                let word = word.trim().trim_end_matches('u');
+                word.strip_prefix("0x")
+                    .map(|hex| u32::from_str_radix(hex, 16).unwrap())
+                    .or_else(|| (word == "0").then_some(0))
+            })
+            .collect()
+    };
+    let glyphs: Vec<Vec<u32>> = table
+        .lines()
+        .filter(|line| line.contains("/* U+") || line.contains("/* replacement"))
+        .map(|line| words(line.split("/*").next().unwrap()))
+        .collect();
+    assert_eq!(glyphs.len(), font.glyphs.len());
+    for (g, (got, rows)) in glyphs.iter().zip(&font.glyphs).enumerate() {
+        let mut want = vec![0u32; 4];
+        for (r, row) in rows.iter().enumerate() {
+            want[r / 4] |= u32::from(*row) << ((r % 4) * 6);
+        }
+        assert_eq!(*got, want, "glyph {g}");
+    }
+    let index: Vec<usize> = table
+        .split("mn_font_glyph[256] = {")
+        .nth(1)
+        .and_then(|rest| rest.split("};").next())
+        .expect("the table of code points")
+        .split(',')
+        .filter_map(|entry| entry.trim().parse().ok())
+        .collect();
+    assert_eq!(index.len(), 256);
+    for (code, glyph) in index.iter().enumerate() {
+        assert_eq!(*glyph, font.glyph(code as u32), "U+{code:04X}");
+    }
+    assert!(table.contains("#define MN_FONT_GLYPHS 191\n#define MN_FONT_REPLACEMENT 190\n"));
+}
+
 /// A PNG file of a stored block and one of a fixed-code block with a copy
 /// both decode, and a wrong CRC is found.
 #[test]

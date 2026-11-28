@@ -10,6 +10,7 @@ pub enum Shape {
     Circle,
     Line,
     Triangle,
+    Text,
 }
 
 impl Shape {
@@ -19,18 +20,21 @@ impl Shape {
             "circle" => (Shape::Circle, 3),
             "line" => (Shape::Line, 5),
             "triangle" => (Shape::Triangle, 6),
+            "text" => (Shape::Text, 3),
             _ => return None,
         })
     }
 }
 
 /// One draw: its shape, its numbers in the order of the statement's
-/// arguments (unused ones zero) and its color.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// arguments (unused ones zero; for text `x`, `y` and `size`), its color,
+/// and the text of a draw of text.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Draw {
     pub shape: Shape,
     pub n: [f32; 6],
     pub color: [u8; 4],
+    pub text: String,
 }
 
 /// A frame as `draws` lists it: the window's size in points, its
@@ -53,6 +57,43 @@ fn color(text: &str) -> Option<([u8; 4], &str)> {
         .map(|byte| byte.parse().ok())
         .collect::<Option<_>>()?;
     Some((bytes.try_into().ok()?, rest))
+}
+
+/// The string written in Midnight's quoted form at the start of `text`, as
+/// `to_s` writes a `String` inside a struct, and what follows it.
+fn quoted(text: &str) -> Option<(String, &str)> {
+    let mut bytes = Vec::new();
+    let mut rest = text.strip_prefix('"')?.as_bytes();
+    loop {
+        match *rest.first()? {
+            b'"' => break,
+            b'\\' => {
+                let (byte, skip) = match *rest.get(1)? {
+                    b'n' => (b'\n', 2),
+                    b't' => (b'\t', 2),
+                    b'r' => (b'\r', 2),
+                    b'0' => (0, 2),
+                    b'e' => (0x1b, 2),
+                    b'\\' => (b'\\', 2),
+                    b'"' => (b'"', 2),
+                    b'#' => (b'#', 2),
+                    b'x' => {
+                        let hex = std::str::from_utf8(rest.get(2..4)?).ok()?;
+                        (u8::from_str_radix(hex, 16).ok()?, 4)
+                    }
+                    _ => return None,
+                };
+                bytes.push(byte);
+                rest = &rest[skip..];
+            }
+            byte => {
+                bytes.push(byte);
+                rest = &rest[1..];
+            }
+        }
+    }
+    let after = &text[text.len() - rest.len() + 1..];
+    Some((String::from_utf8(bytes).ok()?, after))
 }
 
 /// Reads the lines of one `draws` answer, with or without
@@ -83,13 +124,24 @@ pub fn parse(answer: &str) -> Result<Frame, String> {
             let (shape, count) = Shape::named(name)?;
             let mut n = [0.0f32; 6];
             let mut rest = rest;
-            for number in n.iter_mut().take(count) {
-                let (text, after) = rest.split_once(", ")?;
-                *number = text.parse().ok()?;
+            let mut text = String::new();
+            for (k, number) in n.iter_mut().take(count).enumerate() {
+                if shape == Shape::Text && k == 2 {
+                    let (string, after) = quoted(rest)?;
+                    text = string;
+                    rest = after.strip_prefix(", ")?;
+                }
+                let (digits, after) = rest.split_once(", ")?;
+                *number = digits.parse().ok()?;
                 rest = after;
             }
             let (color, rest) = color(rest)?;
-            (rest == ")").then_some(Draw { shape, n, color })
+            (rest == ")").then_some(Draw {
+                shape,
+                n,
+                color,
+                text,
+            })
         })();
         draws.push(draw.ok_or_else(|| format!("not a draw: {line}"))?);
     }
@@ -119,6 +171,168 @@ fn edge(a: (f32, f32), b: (f32, f32), c: (f32, f32)) -> bool {
     e > 0.0 || (e == 0.0 && on_edge_counts(b.0 - a.0, b.1 - a.1))
 }
 
+/// The font of `runtime/font.txt`: each glyph's twelve rows of six
+/// pixels, bit `j` the column `j` from the left, and the glyph of each
+/// code point it has. The replacement glyph is the last.
+pub struct Font {
+    pub glyphs: Vec<[u8; 12]>,
+    pub codes: Vec<Option<u32>>,
+}
+
+impl Font {
+    /// Reads a font file. Says what is wrong with one that does not have
+    /// the form of `runtime/font.txt`.
+    pub fn read(file: &str) -> Result<Font, String> {
+        let mut glyphs = Vec::new();
+        let mut codes = Vec::new();
+        let mut lines = file.lines().peekable();
+        while lines.peek().is_some_and(|line| line.starts_with("# ")) {
+            lines.next();
+        }
+        while let Some(name) = lines.next() {
+            let code = if name == "replacement" {
+                None
+            } else {
+                let hex = name
+                    .strip_prefix("U+")
+                    .filter(|hex| {
+                        hex.len() == 4
+                            && hex
+                                .bytes()
+                                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_lowercase())
+                    })
+                    .ok_or_else(|| format!("not a glyph's name: {name}"))?;
+                Some(u32::from_str_radix(hex, 16).map_err(|e| e.to_string())?)
+            };
+            let mut rows = [0u8; 12];
+            for row in &mut rows {
+                let line = lines
+                    .next()
+                    .ok_or_else(|| format!("{name}: fewer than 12 rows"))?;
+                if line.len() != 6 || !line.bytes().all(|b| b == b'#' || b == b'.') {
+                    return Err(format!("{name}: not a row of 6 pixels: {line}"));
+                }
+                for (j, pixel) in line.bytes().enumerate() {
+                    if pixel == b'#' {
+                        *row |= 1 << j;
+                    }
+                }
+            }
+            glyphs.push(rows);
+            codes.push(code);
+            if code.is_none() {
+                break;
+            }
+        }
+        if let Some(line) = lines.next() {
+            return Err(format!("a line after the replacement glyph: {line}"));
+        }
+        if codes.last() != Some(&None) {
+            return Err("no replacement glyph last".to_string());
+        }
+        if !file.ends_with('\n') {
+            return Err("the file does not end with a newline".to_string());
+        }
+        Ok(Font { glyphs, codes })
+    }
+
+    /// The glyph that a character shows.
+    pub fn glyph(&self, code: u32) -> usize {
+        self.codes
+            .iter()
+            .position(|known| *known == Some(code))
+            .unwrap_or(self.glyphs.len() - 1)
+    }
+}
+
+/// The built-in font.
+pub fn font() -> &'static Font {
+    static FONT: std::sync::OnceLock<Font> = std::sync::OnceLock::new();
+    FONT.get_or_init(|| {
+        Font::read(include_str!("../../runtime/font.txt")).expect("runtime/font.txt reads")
+    })
+}
+
+/// A character of a draw of text that shows a glyph: the text's corner
+/// and the side of a pixel of the font, `u`, the glyph, and the first
+/// column and row of its cell, counted in pixels of the font from the
+/// text's corner.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Cell {
+    pub x: f32,
+    pub y: f32,
+    pub u: f32,
+    pub glyph: usize,
+    pub column: u32,
+    pub row: u32,
+}
+
+impl Cell {
+    /// The bound before column `c` of the font's pixels.
+    fn left(&self, c: u32) -> f32 {
+        self.x + c as f32 * self.u
+    }
+
+    /// The bound before row `r` of the font's pixels.
+    fn top(&self, r: u32) -> f32 {
+        self.y + r as f32 * self.u
+    }
+
+    /// Whether the cell covers the pixel whose center is `(px, py)`: the
+    /// center lies in the rectangle of one of its glyph's set pixels.
+    pub fn covers(&self, px: f32, py: f32) -> bool {
+        let rows = &font().glyphs[self.glyph];
+        (0..12).any(|r| {
+            self.top(self.row + r) <= py
+                && py < self.top(self.row + r + 1)
+                && (0..6).any(|j| {
+                    rows[r as usize] & (1 << j) != 0
+                        && self.left(self.column + j) <= px
+                        && px < self.left(self.column + j + 1)
+                })
+        })
+    }
+
+    /// The cell's rectangle in points, `(x0, x1)` and `(y0, y1)`.
+    fn bounds(&self) -> ((f32, f32), (f32, f32)) {
+        (
+            (self.left(self.column), self.left(self.column + 6)),
+            (self.top(self.row), self.top(self.row + 12)),
+        )
+    }
+}
+
+/// The characters of a draw of text that show a glyph, in order: every
+/// character but a space, U+00A0 and `"\n"`, which begins a line.
+pub fn cells(draw: &Draw) -> Vec<Cell> {
+    let [x, y, size, ..] = draw.n;
+    if x.is_nan() || y.is_nan() || size.is_nan() || size <= 0.0 {
+        return Vec::new();
+    }
+    let u = size / 12.0;
+    let mut out = Vec::new();
+    let (mut column, mut row) = (0u32, 0u32);
+    for c in draw.text.chars() {
+        if c == '\n' {
+            column = 0;
+            row += 12;
+            continue;
+        }
+        if c != ' ' && c != '\u{a0}' {
+            out.push(Cell {
+                x,
+                y,
+                u,
+                glyph: font().glyph(u32::from(c)),
+                column,
+                row,
+            });
+        }
+        column += 6;
+    }
+    out
+}
+
 /// Whether `draw` covers the pixel whose center is `(px, py)` in points.
 pub fn covers(draw: &Draw, px: f32, py: f32) -> bool {
     let n = draw.n;
@@ -126,6 +340,7 @@ pub fn covers(draw: &Draw, px: f32, py: f32) -> bool {
         return false;
     }
     match draw.shape {
+        Shape::Text => cells(draw).iter().any(|cell| cell.covers(px, py)),
         Shape::Rect => {
             let [x, y, width, height, ..] = n;
             width > 0.0 && height > 0.0 && x <= px && px < x + width && y <= py && py < y + height
@@ -208,6 +423,7 @@ fn bounds(draw: &Draw) -> ((f32, f32), (f32, f32)) {
             span(&[n[0], n[2], n[4]], 0.0),
             span(&[n[1], n[3], n[5]], 0.0),
         ),
+        Shape::Text => unreachable!("text is rendered by its cells"),
     }
 }
 
@@ -239,26 +455,41 @@ pub fn render(frame: &Frame, pixel_width: u32, pixel_height: u32) -> Picture {
         if a == 0 {
             continue;
         }
-        let ((x0, x1), (y0, y1)) = bounds(draw);
-        let columns = pixel_span(x0, x1, step_x, pixel_width);
-        let rows = pixel_span(y0, y1, step_y, pixel_height);
-        for j in rows {
-            let py = (j as f32 + 0.5) * step_y;
-            for i in columns.clone() {
-                let px = (i as f32 + 0.5) * step_x;
-                if !covers(draw, px, py) {
-                    continue;
-                }
-                let at = j as usize * pixel_width as usize + i as usize;
-                let pixel = &mut rgba[at * 4..at * 4 + 4];
-                if a == 255 {
-                    pixel[..3].copy_from_slice(&draw.color[..3]);
-                    layers[at] = 0;
-                } else {
-                    for (byte, color) in pixel.iter_mut().zip(draw.color).take(3) {
-                        *byte = over(a, color, *byte);
+        // A draw of text is the cells of its characters, which never
+        // overlap; any other draw is its shape.
+        let parts: Vec<(_, Option<Cell>)> = if draw.shape == Shape::Text {
+            cells(draw)
+                .into_iter()
+                .map(|cell| (cell.bounds(), Some(cell)))
+                .collect()
+        } else {
+            vec![(bounds(draw), None)]
+        };
+        for (((x0, x1), (y0, y1)), cell) in parts {
+            let columns = pixel_span(x0, x1, step_x, pixel_width);
+            let rows = pixel_span(y0, y1, step_y, pixel_height);
+            for j in rows {
+                let py = (j as f32 + 0.5) * step_y;
+                for i in columns.clone() {
+                    let px = (i as f32 + 0.5) * step_x;
+                    let hit = match &cell {
+                        Some(cell) => cell.covers(px, py),
+                        None => covers(draw, px, py),
+                    };
+                    if !hit {
+                        continue;
                     }
-                    layers[at] += 1;
+                    let at = j as usize * pixel_width as usize + i as usize;
+                    let pixel = &mut rgba[at * 4..at * 4 + 4];
+                    if a == 255 {
+                        pixel[..3].copy_from_slice(&draw.color[..3]);
+                        layers[at] = 0;
+                    } else {
+                        for (byte, color) in pixel.iter_mut().zip(draw.color).take(3) {
+                            *byte = over(a, color, *byte);
+                        }
+                        layers[at] += 1;
+                    }
                 }
             }
         }
@@ -320,7 +551,45 @@ mod tests {
             shape,
             n,
             color: WHITE,
+            text: String::new(),
         }
+    }
+
+    fn text(x: f32, y: f32, string: &str, size: f32) -> Draw {
+        Draw {
+            text: string.to_string(),
+            ..draw(Shape::Text, &[x, y, size])
+        }
+    }
+
+    /// The glyph of `c` as the pixels it sets, (column, row) from the
+    /// cell's top left.
+    fn glyph_pixels(c: char) -> Vec<(u32, u32)> {
+        let rows = font().glyphs[font().glyph(u32::from(c))];
+        (0..12u32)
+            .flat_map(|r| (0..6u32).map(move |j| (j, r)))
+            .filter(|&(j, r)| rows[r as usize] & (1 << j) != 0)
+            .collect()
+    }
+
+    /// The pixels of the font of `draw` (set or not) whose rectangles hold
+    /// the point `(px, py)`, as (cell, column, row) in pixels of the font.
+    fn font_pixels_at(draw: &Draw, px: f32, py: f32) -> Vec<(usize, u32, u32)> {
+        let mut found = Vec::new();
+        for (k, cell) in cells(draw).iter().enumerate() {
+            for r in cell.row..cell.row + 12 {
+                for c in cell.column..cell.column + 6 {
+                    if cell.left(c) <= px
+                        && px < cell.left(c + 1)
+                        && cell.top(r) <= py
+                        && py < cell.top(r + 1)
+                    {
+                        found.push((k, c, r));
+                    }
+                }
+            }
+        }
+        found
     }
 
     /// The pixels `draw` covers in a frame of `width` by `height` points
@@ -458,7 +727,7 @@ mod tests {
         let whole = draw(Shape::Triangle, &[0.0, 0.0, 100.0, 0.0, 0.0, 100.0]);
         assert!(!at_one(&whole).is_empty());
         for k in 0..6 {
-            let mut with_nan = whole;
+            let mut with_nan = whole.clone();
             with_nan.n[k] = f32::NAN;
             assert!(at_one(&with_nan).is_empty(), "a NaN at {k}");
         }
@@ -505,7 +774,7 @@ mod tests {
                     width: 320,
                     height: 200,
                     background: [0, 0, 0, 255],
-                    draws: vec![*shape],
+                    draws: vec![shape.clone()],
                 };
                 let picture = render(&frame, pixels.0, pixels.1);
                 let drawn: Vec<(u32, u32)> = (0..pixels.1)
@@ -612,10 +881,276 @@ mod tests {
             frame.draws[0],
             draw(Shape::Rect, &[0.0, 190.0, 320.0, 10.0]).with([40, 40, 60, 255])
         );
-        let line = frame.draws[1];
+        let line = &frame.draws[1];
         assert!(line.n[0].is_nan() && line.n[1] == f32::NEG_INFINITY && line.n[2] == 1e30);
         assert!(line.n[3] == 0.0 && line.n[3].is_sign_negative() && line.n[4] == 1.0 / 3.0);
         assert!(parse("draws: 1 tick, 2x2, 1 draw\n  Window.background = Color(0, 0, 0, 255)\n  Draw.oval(1.0, Color(0, 0, 0, 255))\n").is_err());
+    }
+
+    /// Every pixel whose center lies in a cell of `draw` lies in exactly one
+    /// pixel of the font, and no other pixel lies in one.
+    fn tiles(draw: &Draw, pixels: (u32, u32)) {
+        let step_x = 320.0 / pixels.0 as f32;
+        let step_y = 200.0 / pixels.1 as f32;
+        let cells = cells(draw);
+        let (mut x0, mut x1, mut y0, mut y1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+        for cell in &cells {
+            let ((a, b), (c, d)) = cell.bounds();
+            (x0, x1, y0, y1) = (x0.min(a), x1.max(b), y0.min(c), y1.max(d));
+        }
+        for j in pixel_span(y0, y1, step_y, pixels.1) {
+            for i in pixel_span(x0, x1, step_x, pixels.0) {
+                let (px, py) = ((i as f32 + 0.5) * step_x, (j as f32 + 0.5) * step_y);
+                let found = font_pixels_at(draw, px, py);
+                let inside = cells.iter().any(|cell| {
+                    let ((x0, x1), (y0, y1)) = cell.bounds();
+                    x0 <= px && px < x1 && y0 <= py && py < y1
+                });
+                assert_eq!(
+                    found.len(),
+                    usize::from(inside),
+                    "{draw:?} at {pixels:?}, pixel {i} {j}: {found:?}"
+                );
+            }
+        }
+    }
+
+    const TEXT_PLACES: [(f32, f32); 4] = [(10.0, 20.0), (10.5, 20.5), (0.3, 7.7), (101.25, 3.125)];
+    const TEXT_SIZES: [f32; 7] = [12.0, 24.0, 48.0, 10.0, 17.0, 7.3, 13.000_001];
+
+    #[test]
+    fn characters_and_lines_share_their_bounds() {
+        for pixels in SCALES {
+            for (x, y) in TEXT_PLACES {
+                for size in TEXT_SIZES {
+                    for string in ["AB", "A\nB", "MW\nQ\u{f0}"] {
+                        let draw = text(x, y, string, size);
+                        let cells = cells(&draw);
+                        if string == "AB" {
+                            assert_eq!(cells[0].bounds().0.1, cells[1].bounds().0.0);
+                        } else {
+                            assert_eq!(cells[0].bounds().1.1, cells[cells.len() / 2].bounds().1.0);
+                        }
+                        tiles(&draw, pixels);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_size_of_twelve_at_a_scale_of_one_is_the_font() {
+        // The reference's example: the cell covers columns 10 to 15 and rows
+        // 20 to 31, the letter columns 10 to 14 and rows 23 to 29.
+        let a = text(10.0, 20.0, "A", 12.0);
+        let want: Vec<(u32, u32)> = glyph_pixels('A')
+            .iter()
+            .map(|&(j, r)| (10 + j, 20 + r))
+            .collect();
+        let mut got = at_one(&a);
+        got.sort_by_key(|&(i, j)| (j, i));
+        let mut want_sorted = want.clone();
+        want_sorted.sort_by_key(|&(i, j)| (j, i));
+        assert_eq!(got, want_sorted);
+        assert!(
+            got.iter()
+                .all(|&(i, j)| (10..15).contains(&i) && (23..30).contains(&j))
+        );
+
+        // Every glyph of the font, one pixel of the font on one pixel.
+        let all: String = (0x20u32..=0xff)
+            .filter_map(char::from_u32)
+            .filter(|c| !c.is_control())
+            .collect();
+        let line = text(0.0, 0.0, &all, 12.0);
+        let size = (6 * all.chars().count() as u32, 12);
+        let mut got = covered(&line, size, size);
+        let mut want = Vec::new();
+        for (k, c) in all.chars().enumerate() {
+            if c == ' ' || c == '\u{a0}' {
+                continue;
+            }
+            want.extend(glyph_pixels(c).iter().map(|&(j, r)| (6 * k as u32 + j, r)));
+        }
+        got.sort_unstable();
+        want.sort_unstable();
+        assert_eq!(got, want);
+
+        // At 24, and at 12 on a scale of 2, each pixel of the font is two by two.
+        let doubled: Vec<(u32, u32)> = want_sorted
+            .iter()
+            .flat_map(|&(i, j)| {
+                [
+                    (2 * i, 2 * j),
+                    (2 * i + 1, 2 * j),
+                    (2 * i, 2 * j + 1),
+                    (2 * i + 1, 2 * j + 1),
+                ]
+            })
+            .collect();
+        let mut doubled = doubled;
+        doubled.sort_unstable();
+        let mut big = covered(&text(20.0, 40.0, "A", 24.0), (128, 128), (128, 128));
+        big.sort_unstable();
+        assert_eq!(big, doubled);
+        let mut scaled = covered(&a, (128, 128), (256, 256));
+        scaled.sort_unstable();
+        assert_eq!(scaled, doubled);
+    }
+
+    #[test]
+    fn sizes_that_make_u_inexact() {
+        let mut inexact = 0;
+        for size in [10.0f32, 17.0, 7.3, 13.000_001, 100.0 / 3.0] {
+            if f64::from(size / 12.0) != f64::from(size) / 12.0 {
+                inexact += 1;
+            }
+            for pixels in SCALES.into_iter().chain([(333, 211)]) {
+                for (x, y) in TEXT_PLACES {
+                    let draw = text(x, y, "Hg\u{f0}\n\u{e9}#", size);
+                    tiles(&draw, pixels);
+                    let frame = Frame {
+                        width: 320,
+                        height: 200,
+                        background: [0, 0, 0, 255],
+                        draws: vec![draw.clone()],
+                    };
+                    let picture = render(&frame, pixels.0, pixels.1);
+                    let drawn: Vec<(u32, u32)> = (0..pixels.1)
+                        .flat_map(|j| (0..pixels.0).map(move |i| (i, j)))
+                        .filter(|(i, j)| {
+                            let at = (*j * pixels.0 + *i) as usize * 4;
+                            picture.rgba[at..at + 3] != [0, 0, 0]
+                        })
+                        .collect();
+                    let (step_x, step_y) = (320.0 / pixels.0 as f32, 200.0 / pixels.1 as f32);
+                    let near = |low: f32, high: f32, step: f32, count: u32| {
+                        pixel_span(low - 4.0, high + 4.0, step, count)
+                    };
+                    let last = cells(&draw).last().unwrap().bounds();
+                    let mut want = Vec::new();
+                    for j in near(y, last.1.1, step_y, pixels.1) {
+                        for i in near(x, x + 6.0 * size, step_x, pixels.0) {
+                            let (px, py) = ((i as f32 + 0.5) * step_x, (j as f32 + 0.5) * step_y);
+                            if covers(&draw, px, py) {
+                                want.push((i, j));
+                            }
+                        }
+                    }
+                    assert_eq!(drawn, want, "{size} {x} {y} {pixels:?}");
+                }
+            }
+        }
+        assert!(inexact >= 3);
+        // A bound comes from the text's corner: at 10 points, the fourth
+        // character's first column is x + 18 * u, which is not the sum of
+        // the widths of the cells before it.
+        let draw = text(0.1, 0.0, "ABCD", 10.0);
+        let u = 10.0f32 / 12.0;
+        assert_eq!(cells(&draw)[3].bounds().0.0, 0.1 + 18.0 * u);
+    }
+
+    #[test]
+    fn the_replacement_glyph_and_eth() {
+        let replacement = font().glyphs.len() - 1;
+        let lacking = text(
+            0.0,
+            0.0,
+            "\t\r\u{1b}\0\u{7f}\u{85}\u{ad}\u{20ac}\u{2192}\u{1f600}",
+            12.0,
+        );
+        let cells = cells(&lacking);
+        assert_eq!(cells.len(), 10);
+        for (k, cell) in cells.iter().enumerate() {
+            assert_eq!(
+                (cell.glyph, cell.column),
+                (replacement, 6 * k as u32),
+                "{k}"
+            );
+        }
+        let mut box_pixels = at_one(&text(10.0, 20.0, "\t", 12.0));
+        box_pixels.sort_unstable();
+        let mut want: Vec<(u32, u32)> = (10..15)
+            .flat_map(|i| (23..30).map(move |j| (i, j)))
+            .filter(|&(i, j)| i == 10 || i == 14 || j == 23 || j == 29)
+            .collect();
+        want.sort_unstable();
+        assert_eq!(box_pixels, want);
+
+        // `ð` reaches the sixth column of its cell; the next cell begins after it.
+        let eth = at_one(&text(10.0, 20.0, "\u{f0}A", 12.0));
+        assert!(eth.contains(&(15, 23)));
+        let a: Vec<(u32, u32)> = glyph_pixels('A')
+            .iter()
+            .map(|&(j, r)| (16 + j, 20 + r))
+            .collect();
+        assert!(a.iter().all(|pixel| eth.contains(pixel)));
+        assert_eq!(eth.len(), glyph_pixels('\u{f0}').len() + a.len());
+    }
+
+    #[test]
+    fn line_breaks() {
+        let at = |string: &str| -> Vec<(u32, u32)> {
+            cells(&text(5.0, 5.0, string, 12.0))
+                .iter()
+                .map(|cell| (cell.column, cell.row))
+                .collect()
+        };
+        assert_eq!(at("\nA"), [(0, 12)]);
+        assert_eq!(at("A\n\nB"), [(0, 0), (0, 24)]);
+        assert_eq!(at("A\n"), at("A"));
+        assert_eq!(at("A\r\nB"), [(0, 0), (6, 0), (0, 12)]);
+        assert_eq!(at(" A\u{a0}B"), [(6, 0), (18, 0)]);
+        assert_eq!(
+            at_one(&text(5.0, 5.0, "A\n", 12.0)),
+            at_one(&text(5.0, 5.0, "A", 12.0))
+        );
+    }
+
+    #[test]
+    fn text_that_covers_nothing() {
+        for draw in [
+            text(f32::NAN, 0.0, "A", 12.0),
+            text(0.0, f32::NAN, "A", 12.0),
+            text(0.0, 0.0, "A", f32::NAN),
+            text(0.0, 0.0, "A", 0.0),
+            text(0.0, 0.0, "A", -0.0),
+            text(0.0, 0.0, "A", -12.0),
+            text(0.0, 0.0, "", 12.0),
+            text(0.0, 0.0, "  \n\u{a0}", 12.0),
+        ] {
+            assert!(at_one(&draw).is_empty(), "{draw:?}");
+            let frame = Frame {
+                width: 128,
+                height: 128,
+                background: [0, 0, 0, 255],
+                draws: vec![draw],
+            };
+            assert!(
+                render(&frame, 128, 128)
+                    .rgba
+                    .chunks(4)
+                    .all(|p| p == [0, 0, 0, 255])
+            );
+        }
+        assert!(!at_one(&text(0.0, 0.0, "A", 12.0)).is_empty());
+    }
+
+    #[test]
+    fn text_is_read() {
+        let frame = parse(
+            "draws: 1 tick, 320x200, 2 draws\n  Window.background = Color(0, 0, 0, 255)\n  \
+             Draw.text(8.0, 8.5, \"A, \\\"B\\\"\\n\\t\\r\\0\\e\\\\\\#{x}\\x01\\x7F é\", 24.0, Color(1, 2, 3, 255))\n  \
+             Draw.text(NaN, 0.0, \"\", -1.0, Color(0, 0, 0, 0))\n",
+        )
+        .unwrap();
+        assert_eq!(frame.draws[0], {
+            let mut d = text(8.0, 8.5, "A, \"B\"\n\t\r\0\u{1b}\\#{x}\u{1}\u{7f} é", 24.0);
+            d.color = [1, 2, 3, 255];
+            d
+        });
+        assert!(frame.draws[1].n[0].is_nan() && frame.draws[1].text.is_empty());
+        assert!(parse("draws: 1 tick, 2x2, 1 draw\n  Window.background = Color(0, 0, 0, 255)\n  Draw.text(1.0, 1.0, \"open, 2.0, Color(0, 0, 0, 255))\n").is_err());
     }
 
     impl Draw {
