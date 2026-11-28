@@ -34,7 +34,9 @@ typedef struct MnSpan {
 
 /* A frame: the window's size and background after a tick, and the draws of
  * the tick, span after span, each record in order. The background's alpha
- * is ignored. The spans stay valid until the next frame is made. */
+ * is ignored. The spans stay valid until the next frame is made, and so do
+ * the bytes of its text: a record of kind MN_DRAW_TEXT names its string by
+ * offset and length in `text`. Records on the device are never of text. */
 typedef struct MnFrame {
     uint32_t width;  /* pixels, 1 to MN_WINDOW_LARGEST */
     uint32_t height; /* pixels, 1 to MN_WINDOW_LARGEST */
@@ -43,6 +45,8 @@ typedef struct MnFrame {
     MnColor background;
     const MnSpan *spans;
     size_t span_count;
+    const char *text;
+    size_t text_length;
     /* Goes up with every frame the runtime makes. */
     uint64_t number;
 } MnFrame;

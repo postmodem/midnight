@@ -1006,7 +1006,15 @@ bool mn_button_released(uint32_t button);
  * the block's records for the table. A run first stores kind 0 in each of
  * its records, so a draw the run does not reach is a draw of nothing. Its
  * records, in the order of the query's tables and rows, take the place in
- * the frame that the draws of an ordinary `each` would.
+ * the frame that the draws of an ordinary `each` would. A GPU block never
+ * draws text.
+ *
+ * A draw of text, of kind MN_DRAW_TEXT, holds x, y and size in n[0] to
+ * n[2], and in the bytes of n[3] and n[4] two uint32_t: the offset and the
+ * length of its string's bytes in the bytes of the list of draws it
+ * belongs to; n[5] is zero. The list owns those bytes: they are copied
+ * when the draw is made, cleared and swapped with the records, and a frame
+ * has them beside its spans.
  */
 
 enum {
@@ -1015,6 +1023,7 @@ enum {
     MN_DRAW_CIRCLE,   /* x, y, radius */
     MN_DRAW_LINE,     /* x1, y1, x2, y2, width */
     MN_DRAW_TRIANGLE, /* x1, y1, x2, y2, x3, y3 */
+    MN_DRAW_TEXT,     /* x, y, size, then where its text is (below) */
 };
 
 typedef struct MnDraw {
@@ -1029,6 +1038,12 @@ typedef struct MnDraw {
  * a piece may call it (see "Several threads"); the draw is then kept with
  * the piece. */
 MnDraw *mn_draw(void);
+
+/* Makes a draw of text, copying the bytes of `text`. While no window is
+ * open it keeps nothing. Never called in a piece (see "Several threads"):
+ * a debug build stops if it is. A frame whose text would not fit in
+ * 2^32 - 1 bytes stops the program as out of memory. */
+void mn_draw_text(float x, float y, MnString text, float size, MnColor color);
 
 /* ---- GPU systems ------------------------------------------------------------- */
 
