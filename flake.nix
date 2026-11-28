@@ -88,7 +88,9 @@
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
           nativeCheckInputs = [ pkgs.clang ];
-          # The unit tests and the suite; checks.evals runs the harness's.
+          # The package builds without its tests; checks.package runs the
+          # unit tests and the suite, and checks.evals the harness's.
+          doCheck = false;
           cargoTestFlags = [
             "--bins"
             "--test"
@@ -449,7 +451,7 @@
           midnight = midnightFor pkgs;
         in
         {
-          package = midnight;
+          package = midnight.overrideAttrs { doCheck = true; };
 
           clippy = midnight.overrideAttrs (old: {
             pname = "midnight-clippy";

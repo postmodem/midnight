@@ -1,5 +1,6 @@
 # Stars fall; move the basket with the arrow keys to catch them. The score
-# is at the top left, padded with zeros. Three stars missed and the game is
+# is at the top left, padded with zeros, and the keys are named at the
+# bottom for the first two seconds. Three stars missed and the game is
 # over: "GAME OVER" is drawn in the middle of the window, the score under
 # it, and Escape ends the program.
 #
@@ -70,6 +71,12 @@ system show
   Draw.text(8, 8, "SCORE #{points}", 24, Color(255, 255, 255))
   lives = ("*" * (3 - Score.missed).clamp(0, 3)).rjust(3)
   Draw.text(Window.width - 3 * 12 - 8, 8, lives, 24, Color(255, 120, 120))
+  hint = ""
+  hint = "ARROW KEYS MOVE" if Time.tick <= 120
+  hint = "ESCAPE QUITS" if over?
+  if hint.length > 0
+    Draw.text((Window.width - hint.length * 12) / 2, 152, hint, 24, Color(160, 160, 200))
+  end
   if over?
     message = "GAME OVER"
     Draw.text((Window.width - message.length * 24) / 2, 64, message, 48, Color(255, 80, 80))
