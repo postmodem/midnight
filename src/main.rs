@@ -10,6 +10,7 @@ mod lexer;
 mod loops;
 mod parser;
 mod plan;
+mod session;
 mod source;
 mod tir;
 
@@ -29,11 +30,19 @@ Usage:
   midnight loops FILE                      print where each loop runs
   midnight emit-c FILE                     print the generated C
   midnight emit-wgsl FILE                  print the shader of every GPU block
+  midnight session start FILE [--name NAME] [--debug] [--idle MINUTES]
+                                           build FILE and hold it in a session
+  midnight session stop [NAME]             end a session
+  midnight session list                    list the sessions
+  midnight drive [--session NAME] COMMAND...
+                                           send commands to a session, or with
+                                           `-` each line of standard input
   midnight --version | --help
 
-Options of build, run, check, plan and loops:
+Options of build, run, check, plan, loops, session and drive:
   --format text|json   write diagnostics and output as text (the default) or
-                       as JSON lines; `run --format json` also sets
+                       as JSON lines; `run --format json` and
+                       `session start --format json` also set
                        MIDNIGHT_FORMAT=json for the program
 
 Environment:
@@ -73,6 +82,15 @@ fn main() -> ExitCode {
         Some("--version" | "-V") => {
             println!("midnight {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
+        }
+        Some("session" | "drive" | session::HOLDER) => {
+            return match session::main(&args) {
+                Ok(status) => ExitCode::from(status),
+                Err(session::Usage(message)) => {
+                    eprintln!("midnight: {message}\n\n{USAGE}");
+                    ExitCode::from(USAGE_ERROR)
+                }
+            };
         }
         _ => {}
     }

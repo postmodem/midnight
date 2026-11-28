@@ -5521,6 +5521,690 @@ fn session_capture() {
     report("captures in a session", MODES.len(), failures);
 }
 
+/// A place for `midnight session` and `midnight drive` to keep sessions in
+/// a test: an `XDG_RUNTIME_DIR` of its own, short enough for a socket, and
+/// a directory for programs.
+struct SessionPlace {
+    runtime: PathBuf,
+    dir: PathBuf,
+}
+
+impl SessionPlace {
+    fn new(name: &str) -> SessionPlace {
+        let runtime = std::env::temp_dir().join(format!("mn-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&runtime);
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&runtime)
+            .expect("make a runtime directory");
+        SessionPlace {
+            runtime,
+            dir: scratch(&format!("session-{name}")),
+        }
+    }
+
+    /// Writes `text` as `NAME.12am` and returns its path.
+    fn program(&self, name: &str, text: &str) -> PathBuf {
+        let source = self.dir.join(format!("{name}.12am"));
+        std::fs::write(&source, text).expect("write a program");
+        source
+    }
+
+    /// `midnight ARGS` with this place's runtime directory, no device, the
+    /// display variables naming nothing, in the directory of programs.
+    fn command(&self, args: &[&OsStr]) -> Command {
+        let mut command = midnight();
+        command.args(args);
+        no_display(&mut command);
+        command
+            .env("XDG_RUNTIME_DIR", &self.runtime)
+            .env("MIDNIGHT_GPU", "off")
+            .env("MIDNIGHT_CFLAGS", STRICT_CFLAGS)
+            .env_remove("MIDNIGHT_WINDOW")
+            .env_remove("MIDNIGHT_FORMAT")
+            .env_remove("MIDNIGHT_THREADS")
+            .env_remove("MIDNIGHT_DRIVE")
+            .current_dir(&self.dir);
+        command
+    }
+
+    /// Runs `midnight ARGS`: its status, standard output and error.
+    fn run(&self, args: &[&str]) -> (Option<i32>, String, String) {
+        let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+        let output = self.command(&args).output().expect("run midnight");
+        (
+            output.status.code(),
+            text(&output.stdout),
+            text(&output.stderr),
+        )
+    }
+
+    fn sessions(&self) -> PathBuf {
+        self.runtime.join("midnight").join("sessions")
+    }
+}
+
+impl Drop for SessionPlace {
+    fn drop(&mut self) {
+        // Stops every session left, then removes both directories.
+        if let Ok(entries) = std::fs::read_dir(self.sessions()) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let _ = self.run(&["session", "stop", &name]);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&self.runtime);
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+use std::os::unix::fs::DirBuilderExt;
+
+/// A program that prints each tick and lets ticks run until it is stopped.
+const TICKER: &str = "\
+resource Clock
+  ticks: Int = 0
+end
+
+system count
+  Clock.ticks += 1
+  puts \"tick #{Clock.ticks}\"
+end
+
+World.run
+";
+
+/// `midnight session start`, `drive`, `stop` and `list`, and every message
+/// of theirs, with sessions kept in a runtime directory of the test's own.
+#[test]
+fn session_commands() {
+    let place = SessionPlace::new("commands");
+    let ticker = place.program("ticker", TICKER);
+    let ticker = ticker.to_str().unwrap();
+    let ok = |result: (Option<i32>, String, String), status: i32, out: &str, err: &str| {
+        assert_eq!(
+            (result.0, result.1.as_str(), result.2.as_str()),
+            (Some(status), out, err)
+        );
+    };
+    let none = "midnight: no session is running; start one with `midnight session start FILE`\n";
+    ok(place.run(&["session", "list"]), 0, "", "");
+    ok(place.run(&["drive", "tick"]), 1, "", none);
+    ok(place.run(&["session", "stop"]), 1, "", none);
+
+    // Start, drive one command, several, `-`, a refusal and `quit`.
+    ok(
+        place.run(&["session", "start", ticker]),
+        0,
+        "",
+        "midnight: session: started `ticker`\n",
+    );
+    ok(
+        place.run(&["drive", "tick"]),
+        0,
+        "tick 1\n",
+        "midnight: drive: tick\n",
+    );
+    ok(
+        place.run(&["drive", "tick 2", "resource Clock"]),
+        0,
+        "tick 2\ntick 3\n",
+        "midnight: drive: tick 2\nmidnight: drive: resource Clock: 3 ticks, Clock(ticks: 3)\n",
+    );
+    let mut command = place.command(&[OsStr::new("drive"), OsStr::new("-")]);
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run midnight drive -");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"tick\n# a comment\nresource Clok\ntick\n")
+        .unwrap();
+    let output = child.wait_with_output().expect("wait for drive");
+    assert_eq!(
+        (output.status.code(), text(&output.stdout), text(&output.stderr)),
+        (
+            Some(1),
+            "tick 4\ntick 5\n".to_string(),
+            "midnight: drive: tick\n\
+             midnight: drive: refused: resource: `Clok` is not a resource of this program; it has Clock\n\
+             midnight: drive: tick\n"
+                .to_string()
+        )
+    );
+    ok(
+        place.run(&["drive", "a\nb"]),
+        2,
+        "",
+        &format!(
+            "midnight: a command is one line; give each as its own argument\n\n{}\n",
+            usage()
+        ),
+    );
+    ok(
+        place.run(&["drive"]),
+        2,
+        "",
+        &format!(
+            "midnight: `drive` needs a command, or `-` for commands on standard input\n\n{}\n",
+            usage()
+        ),
+    );
+    for (args, message) in [
+        (vec!["session"], "`session` needs `start`, `stop` or `list`"),
+        (vec!["session", "pause"], "unknown command `session pause`"),
+        (vec!["session", "start"], "`session start` needs a file"),
+        (
+            vec!["session", "start", "a.12am", "--speed"],
+            "unknown option `--speed` for `session start`",
+        ),
+        (
+            vec!["session", "start", "a.12am", "b.12am"],
+            "unexpected argument `b.12am`",
+        ),
+        (
+            vec!["session", "start", "a.12am", "--name"],
+            "`--name` needs a value",
+        ),
+        (
+            vec!["session", "list", "--format", "xml"],
+            "`--format` takes `text` or `json`, not `xml`",
+        ),
+        (
+            vec!["session", "stop", "--format", "json", "--format", "json"],
+            "`--format` is given twice",
+        ),
+        (vec!["session", "stop", "a", "b"], "unexpected argument `b`"),
+        (
+            vec!["drive", "--format"],
+            "`--format` needs `text` or `json`",
+        ),
+        (
+            vec!["drive", "--nope", "tick"],
+            "unknown option `--nope` for `drive`",
+        ),
+        (
+            vec!["drive", "-", "tick"],
+            "`drive -` takes its commands from standard input alone",
+        ),
+    ] {
+        ok(
+            place.run(&args),
+            2,
+            "",
+            &format!("midnight: {message}\n\n{}\n", usage()),
+        );
+    }
+
+    // Two sessions: `list`, and no `--session`.
+    let other = place.program("other-one", TICKER);
+    ok(
+        place.run(&["session", "start", other.to_str().unwrap(), "--name", "b"]),
+        0,
+        "",
+        "midnight: session: started `b`\n",
+    );
+    ok(
+        place.run(&["drive", "--session", "b", "tick"]),
+        0,
+        "tick 1\n",
+        "midnight: drive: tick\n",
+    );
+    let list = format!(
+        "b       {other}  1 tick   running\nticker  {ticker}     5 ticks  running\n",
+        other = other.display()
+    );
+    ok(place.run(&["session", "list"]), 0, &list, "");
+    ok(
+        place.run(&["drive", "tick"]),
+        1,
+        "",
+        "midnight: 2 sessions are running (b, ticker); name one with `--session`\n",
+    );
+    ok(
+        place.run(&["session", "start", ticker]),
+        1,
+        "",
+        "midnight: session `ticker` is already running; stop it, or give another `--name`\n",
+    );
+    ok(
+        place.run(&["session", "stop", "b"]),
+        0,
+        "",
+        "midnight: session: `b` stopped with status 0\n",
+    );
+    ok(
+        place.run(&["drive", "--session", "b", "tick"]),
+        1,
+        "",
+        "midnight: no session `b` is running; `midnight session list` lists those that are\n",
+    );
+
+    // `quit` stops the program with status 0, and so does `drive`.
+    ok(
+        place.run(&["drive", "tick", "quit", "tick"]),
+        0,
+        "tick 6\n",
+        "midnight: drive: tick\nmidnight: drive: quit\nmidnight: session: `ticker` stopped with status 0\n",
+    );
+    assert!(!place.sessions().join("ticker").exists());
+
+    // A program that stops with an error.
+    let failing = place.program(
+        "failing",
+        "system step\n  values = [1]\n  puts values[Time.tick]\nend\n\nWorld.run\n",
+    );
+    ok(
+        place.run(&["session", "start", failing.to_str().unwrap()]),
+        0,
+        "",
+        "midnight: session: started `failing`\n",
+    );
+    ok(
+        place.run(&["drive", "tick 3", "tick"]),
+        1,
+        "1\n",
+        &format!(
+            "{}:3: runtime error: index 1 out of range for a list of length 1\n\
+             midnight: session: `failing` stopped with status 1\n",
+            failing.display()
+        ),
+    );
+
+    // Names, `awake`, and a program that writes no `ready`.
+    ok(
+        place.run(&["session", "start", ticker, "--name", "my.game"]),
+        1,
+        "",
+        "midnight: `my.game` can't name a session: a name is 1 to 32 ASCII letters, digits, `-` and `_`; give one with `--name`\n",
+    );
+    let dotted = place.program("my.game", TICKER);
+    ok(
+        place.run(&["session", "start", dotted.to_str().unwrap()]),
+        1,
+        "",
+        "midnight: `my.game` can't name a session: a name is 1 to 32 ASCII letters, digits, `-` and `_`; give one with `--name`\n",
+    );
+    let mut command = place.command(&[
+        OsStr::new("session"),
+        OsStr::new("start"),
+        OsStr::new(ticker),
+    ]);
+    let output = command
+        .env("MIDNIGHT_THREADS", "4,awake")
+        .output()
+        .expect("run midnight");
+    assert_eq!(
+        (output.status.code(), text(&output.stderr)),
+        (
+            Some(1),
+            "midnight: MIDNIGHT_THREADS has `awake`, which keeps every thread busy while a session waits\n"
+                .to_string()
+        )
+    );
+    let busy = place.program("busy", "puts \"busy\"\nsleep(30.0)\nWorld.tick\n");
+    let mut command =
+        place.command(&[OsStr::new("session"), OsStr::new("start"), busy.as_os_str()]);
+    let started = Instant::now();
+    let output = command
+        .env("MIDNIGHT_SESSION_START_SECONDS", "2")
+        .output()
+        .expect("run midnight");
+    assert_eq!(
+        (output.status.code(), text(&output.stdout), text(&output.stderr)),
+        (
+            Some(1),
+            "busy\n".to_string(),
+            "midnight: the program wrote no `ready` within 2 seconds; a program reads its first command at its first tick, or at its end\n"
+                .to_string()
+        )
+    );
+    assert!(started.elapsed() < Duration::from_secs(10));
+    ok(place.run(&["session", "list"]), 0, "", "");
+
+    // A caller with MIDNIGHT_FORMAT=json and no `--format` holds a text
+    // session.
+    let mut command = place.command(&[
+        OsStr::new("session"),
+        OsStr::new("start"),
+        OsStr::new(ticker),
+    ]);
+    let output = command
+        .env("MIDNIGHT_FORMAT", "json")
+        .output()
+        .expect("run midnight");
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    ok(
+        place.run(&["drive", "tick"]),
+        0,
+        "tick 1\n",
+        "midnight: drive: tick\n",
+    );
+
+    // JSON forms.
+    let first = json_first_line();
+    ok(
+        place.run(&["drive", "--format", "json", "tick", "resource Nope"]),
+        1,
+        "tick 2\n",
+        &format!(
+            "{first}midnight: drive: tick\nmidnight: drive: refused: resource: `Nope` is not a resource of this program; it has Clock\n"
+        ),
+    );
+    ok(
+        place.run(&["session", "list", "--format", "json"]),
+        0,
+        &format!(
+            "{first}{{\"kind\":\"session_listed\",\"name\":\"ticker\",\"file\":{},\"tick\":2,\"ended\":false}}\n",
+            quoted(ticker)
+        ),
+        "",
+    );
+    ok(
+        place.run(&["session", "stop", "--format", "json"]),
+        0,
+        "",
+        &format!(
+            "{first}{{\"kind\":\"session\",\"name\":\"ticker\",\"event\":\"stopped\",\"status\":0}}\n"
+        ),
+    );
+    ok(
+        place.run(&["drive", "--format", "json", "tick"]),
+        1,
+        "",
+        &format!(
+            "{first}{{\"kind\":\"session_error\",\"message\":\"no session is running; start one with `midnight session start FILE`\"}}\n"
+        ),
+    );
+    let (status, out, err) = place.run(&["session", "start", ticker, "--format", "json"]);
+    assert_eq!((status, out.as_str()), (Some(0), ""));
+    assert_eq!(
+        err,
+        format!(
+            "{first}{first}{{\"kind\":\"session\",\"name\":\"ticker\",\"event\":\"started\"}}\n"
+        )
+    );
+    ok(
+        place.run(&["drive", "tick"]),
+        0,
+        "tick 1\n",
+        "{\"kind\":\"answer\",\"name\":\"tick\",\"command\":\"tick\",\"line\":1,\"tick\":1,\"ran\":1,\"ended\":false}\n",
+    );
+
+    // `session stop` of a program in a long `tick` ends it within six
+    // seconds, and the `drive` that sent the `tick` says so.
+    ok(
+        place.run(&["session", "stop"]),
+        0,
+        "",
+        "midnight: session: `ticker` stopped with status 0\n",
+    );
+    let quiet = place.program(
+        "quiet",
+        "resource Clock\n  ticks: Int = 0\nend\n\nsystem count\n  i = 0\n  while i < 100000\n    Clock.ticks += i % 7\n    i += 1\n  end\nend\n\nWorld.run\n",
+    );
+    ok(
+        place.run(&["session", "start", quiet.to_str().unwrap()]),
+        0,
+        "",
+        "midnight: session: started `quiet`\n",
+    );
+    let mut command = place.command(&[OsStr::new("drive"), OsStr::new("tick 1000000000")]);
+    let driving = command
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run midnight drive");
+    std::thread::sleep(Duration::from_millis(300));
+    let started = Instant::now();
+    let (status, _, err) = place.run(&["session", "stop"]);
+    assert!(
+        started.elapsed() < Duration::from_secs(6),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(status, Some(0), "{err}");
+    assert!(
+        err.ends_with("midnight: session: `quiet` stopped with status 137\n"),
+        "{err}"
+    );
+    let driven = driving.wait_with_output().expect("wait for drive");
+    assert_eq!(driven.status.code(), Some(1), "{}", text(&driven.stderr));
+    ok(place.run(&["session", "list"]), 0, "", "");
+
+    // Idle: `--idle 1`, with the holder's minute made two seconds.
+    let mut command = place.command(&[
+        OsStr::new("session"),
+        OsStr::new("start"),
+        OsStr::new(ticker),
+        OsStr::new("--idle"),
+        OsStr::new("1"),
+    ]);
+    let output = command
+        .env("MIDNIGHT_SESSION_IDLE_SECONDS", "2")
+        .output()
+        .expect("run midnight");
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    ok(
+        place.run(&["drive", "tick"]),
+        0,
+        "tick 1\n",
+        "midnight: drive: tick\n",
+    );
+    let started = Instant::now();
+    while place.sessions().join("ticker").exists() && started.elapsed() < Duration::from_secs(10) {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let idle = started.elapsed();
+    assert!(
+        idle >= Duration::from_millis(1500) && idle < Duration::from_secs(5),
+        "stopped after {idle:?}"
+    );
+    for minutes in ["0", "1441", "x"] {
+        let (status, _, err) = place.run(&["session", "start", ticker, "--idle", minutes]);
+        assert_eq!(status, Some(2));
+        assert!(err.starts_with(&format!(
+            "midnight: `--idle` takes a number of minutes from 1 to 1440, not `{minutes}`\n"
+        )));
+    }
+
+    // A stale session: its holder killed. Its program ends within a
+    // second, and every command treats the session as not running.
+    ok(
+        place.run(&["session", "start", ticker]),
+        0,
+        "",
+        "midnight: session: started `ticker`\n",
+    );
+    let session = place.sessions().join("ticker");
+    let program = session.join("program");
+    if cfg!(target_os = "linux") {
+        let holder = holder_of(&session).expect("the holder is running");
+        let programs = processes_running(&program);
+        assert_eq!(programs.len(), 1, "{programs:?}");
+        let killed = Command::new("sh")
+            .args(["-c", &format!("kill -KILL {holder}")])
+            .status()
+            .expect("run sh");
+        assert!(killed.success());
+        let started = Instant::now();
+        while !processes_running(&program).is_empty() && started.elapsed() < Duration::from_secs(5)
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "the program ran {:?} after its holder was killed",
+            started.elapsed()
+        );
+        assert!(place.sessions().join("ticker").exists());
+        ok(place.run(&["session", "list"]), 0, "", "");
+        assert!(!place.sessions().join("ticker").exists());
+    }
+
+    // A window program: `info` from the caller gives a `headless` line, an
+    // empty MIDNIGHT_WINDOW runs headless too, and LD_LIBRARY_PATH is
+    // removed.
+    let window = place.program(
+        "window",
+        "Window.open(\"w\", 8, 8)\nsystem s\n  puts \"tick #{Time.tick}\"\nend\nWorld.run\n",
+    );
+    let broken = place.dir.join("broken");
+    std::fs::create_dir_all(&broken).expect("make a directory");
+    for library in ["libasound.so.2", "libSDL3.so.0"] {
+        std::fs::write(broken.join(library), b"").expect("write a library");
+    }
+    for (words, library_path, line) in [
+        (
+            "info",
+            false,
+            "midnight: window: 8x8 points, 8x8 pixels, headless\nmidnight: window: input from commands\n",
+        ),
+        ("", true, ""),
+    ] {
+        let mut command = place.command(&[
+            OsStr::new("session"),
+            OsStr::new("start"),
+            window.as_os_str(),
+        ]);
+        command.env("MIDNIGHT_WINDOW", words);
+        if library_path {
+            command.env("LD_LIBRARY_PATH", &broken);
+        }
+        let output = command.output().expect("run midnight");
+        let err = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(0), "{err}");
+        assert!(
+            err.starts_with(line) && err.ends_with("midnight: session: started `window`\n"),
+            "{err}"
+        );
+        ok(
+            place.run(&["drive", "tick"]),
+            0,
+            "tick 0\n",
+            "midnight: drive: tick\n",
+        );
+        let (status, _, _) = place.run(&["session", "stop"]);
+        assert_eq!(status, Some(0));
+    }
+
+    // Where sessions live: a directory of mode 0755 is refused, and so is
+    // a socket path of 101 bytes.
+    let open = SessionPlace::new("open");
+    std::fs::DirBuilder::new()
+        .mode(0o755)
+        .create(open.runtime.join("midnight"))
+        .expect("make a directory");
+    std::fs::set_permissions(
+        open.runtime.join("midnight"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .expect("set a mode");
+    ok(
+        open.run(&["session", "start", ticker]),
+        1,
+        "",
+        &format!(
+            "midnight: can't keep sessions in `{}`: it must be the user's own, with mode 0700\n",
+            open.runtime.join("midnight").display()
+        ),
+    );
+    let long = SessionPlace::new("long");
+    let fixed = long.runtime.as_os_str().len() + "/midnight/sessions/n/socket".len();
+    let deeper = long.runtime.join("a".repeat(101 - fixed - 1));
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&deeper)
+        .expect("make a directory");
+    let socket = deeper.join("midnight/sessions/n/socket");
+    assert_eq!(socket.as_os_str().len(), 101);
+    let mut command = long.command(&[
+        OsStr::new("session"),
+        OsStr::new("start"),
+        OsStr::new(ticker),
+        OsStr::new("--name"),
+        OsStr::new("n"),
+    ]);
+    let output = command
+        .env("XDG_RUNTIME_DIR", &deeper)
+        .output()
+        .expect("run midnight");
+    assert_eq!(
+        (output.status.code(), text(&output.stderr)),
+        (
+            Some(1),
+            format!(
+                "midnight: the socket `{}` would be longer than 100 bytes; set XDG_RUNTIME_DIR to a shorter directory\n",
+                socket.display()
+            )
+        )
+    );
+}
+
+use std::os::unix::fs::PermissionsExt;
+
+/// The ids of the processes whose executable is `exe`.
+fn processes_running(exe: &Path) -> Vec<u32> {
+    let Ok(exe) = std::fs::canonicalize(exe) else {
+        return Vec::new();
+    };
+    std::fs::read_dir("/proc")
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
+            let target = std::fs::read_link(entry.path().join("exe")).ok()?;
+            (target == exe).then_some(pid)
+        })
+        .collect()
+}
+
+/// The id of the holder of the session in `session`: the process whose
+/// arguments are the holder's word and that directory.
+fn holder_of(session: &Path) -> Option<u32> {
+    let wanted = session.to_string_lossy().into_owned();
+    std::fs::read_dir("/proc")
+        .into_iter()
+        .flatten()
+        .find_map(|entry| {
+            let entry = entry.ok()?;
+            let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
+            let args = std::fs::read(entry.path().join("cmdline")).ok()?;
+            let args: Vec<String> = args
+                .split(|&byte| byte == 0)
+                .map(|arg| String::from_utf8_lossy(arg).into_owned())
+                .collect();
+            (args.get(1).map(String::as_str) == Some("session-holder")
+                && args.get(2) == Some(&wanted))
+            .then_some(pid)
+        })
+}
+
+/// The usage text `midnight` prints after a usage error.
+fn usage() -> String {
+    let output = midnight().arg("--help").output().expect("run midnight");
+    text(&output.stdout)
+}
+
+/// `text` as a JSON string.
+fn quoted(text: &str) -> String {
+    let mut out = String::from("\"");
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// A program with a loop that can be split reports a word of
 /// `MIDNIGHT_THREADS` it does not know, and goes on. A program with no
 /// such loop does not read the variable.
