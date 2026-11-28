@@ -13,6 +13,7 @@ const WINDOW_H: &str = include_str!("../runtime/midnight_window.h");
 const WINDOW_C: &str = include_str!("../runtime/midnight_window.c");
 const POOL_H: &str = include_str!("../runtime/midnight_pool.h");
 const POOL_C: &str = include_str!("../runtime/midnight_pool.c");
+const FONT: &str = include_str!("../runtime/font.txt");
 
 /// What a program needs of the runtime besides `midnight_rt.c`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -24,6 +25,8 @@ pub struct Parts {
     pub threads: bool,
     /// The program has a window.
     pub window: bool,
+    /// The program draws text.
+    pub text: bool,
 }
 
 /// A message of the compiler's own, kept in parts so that it can be
@@ -312,6 +315,7 @@ fn compile_in(
         gpu,
         threads,
         window,
+        text,
     } = parts;
     let write = |name: &str, text: &str| {
         std::fs::write(dir.join(name), text).map_err(|error| Message::CantWrite {
@@ -330,6 +334,9 @@ fn compile_in(
     if window_flags.is_some() {
         write("midnight_window.h", WINDOW_H)?;
         write("midnight_window.c", WINDOW_C)?;
+        if text {
+            write("midnight_font.h", &font_header(FONT))?;
+        }
     }
     if threads {
         write("midnight_pool.h", POOL_H)?;
@@ -362,6 +369,10 @@ fn compile_in(
     }
     if window_flags.is_some() {
         command.arg("-DMN_FRAMES");
+        // midnight_window.c draws text with the font of midnight_font.h.
+        if text {
+            command.arg("-DMN_TEXT");
+        }
     }
     // The runtime reads MIDNIGHT_THREADS and splits loops when the pool is
     // built with it.
@@ -407,6 +418,74 @@ fn compile_in(
         kept: Some(dir.join("program.c").display().to_string()),
         error: None,
     })
+}
+
+/// The text of `midnight_font.h` for the font file `font`: each glyph's
+/// pixels as four words, and the glyph of each code point below 256.
+fn font_header(font: &str) -> String {
+    let mut codes: Vec<Option<u32>> = Vec::new();
+    let mut bits: Vec<[u32; 4]> = Vec::new();
+    let mut row = 12;
+    for line in font.lines() {
+        if line.starts_with("# ") {
+            continue;
+        }
+        if let Some(hex) = line.strip_prefix("U+") {
+            codes.push(u32::from_str_radix(hex, 16).ok());
+            bits.push([0; 4]);
+            row = 0;
+        } else if line == "replacement" {
+            codes.push(None);
+            bits.push([0; 4]);
+            row = 0;
+        } else if row < 12 {
+            let words = bits.last_mut().expect("a glyph line follows its name");
+            for (column, pixel) in line.bytes().enumerate() {
+                if pixel == b'#' {
+                    words[row / 4] |= 1 << ((row % 4) * 6 + column);
+                }
+            }
+            row += 1;
+        }
+    }
+    let replacement = codes
+        .iter()
+        .position(Option::is_none)
+        .expect("the font has a replacement glyph");
+    let mut glyph_of = [replacement; 256];
+    for (glyph, code) in codes.iter().enumerate() {
+        if let Some(code) = code.filter(|code| *code < 256) {
+            glyph_of[code as usize] = glyph;
+        }
+    }
+    let mut out = String::from(
+        "/*\n * The built-in font, made by midnight from runtime/font.txt, which says\n \
+         * where it comes from. Glyph g is the words mn_font_bits[4 * g] to\n \
+         * [4 * g + 3]: row r of its cell, 0 at the top, is the six bits from bit\n \
+         * 6 * (r % 4) of word r / 4, column j, 0 at the left, at bit j; the fourth\n \
+         * word is zero. mn_font_glyph[c] is the glyph of the code point c, the\n \
+         * replacement where the font has none; the replacement is the glyph of\n \
+         * every code point from 256 on.\n */\n\n",
+    );
+    out.push_str(&format!(
+        "#define MN_FONT_GLYPHS {}\n#define MN_FONT_REPLACEMENT {replacement}\n\n",
+        bits.len()
+    ));
+    out.push_str("static const uint32_t mn_font_bits[MN_FONT_GLYPHS * 4] = {\n");
+    for (words, code) in bits.iter().zip(&codes) {
+        let name = code.map_or("replacement".to_string(), |code| format!("U+{code:04X}"));
+        out.push_str(&format!(
+            "    0x{:06x}u, 0x{:06x}u, 0x{:06x}u, 0u, /* {name} */\n",
+            words[0], words[1], words[2]
+        ));
+    }
+    out.push_str("};\n\nstatic const uint8_t mn_font_glyph[256] = {\n");
+    for chunk in glyph_of.chunks(16) {
+        let entries: Vec<String> = chunk.iter().map(|glyph| glyph.to_string()).collect();
+        out.push_str(&format!("    {},\n", entries.join(", ")));
+    }
+    out.push_str("};\n");
+    out
 }
 
 fn make_build_dir() -> Result<PathBuf, Message> {

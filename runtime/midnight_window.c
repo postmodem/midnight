@@ -15,6 +15,24 @@
 #include <webgpu/webgpu.h>
 #include <webgpu/wgpu.h>
 
+#ifdef MN_TEXT
+#include "midnight_font.h"
+
+/* The kind of a glyph's record, which only this file makes: from a record
+ * of text, one for each character that shows a glyph. Its numbers are the
+ * text's x and y and u, the side of a pixel of the font in points; then,
+ * as 32-bit whole numbers, the glyph, and the first column and the first
+ * row of the character's cell counted in pixels of the font from the
+ * text's top left corner. */
+#define GLYPH_KIND 6u
+
+/* The most glyph records made at once. */
+#define GLYPHS_AT_ONCE 4096u
+
+#define FONT_STRING(n) #n
+#define FONT_COUNT(n) FONT_STRING(n)
+#endif
+
 static struct {
     /* The frame texture and the number of the frame it holds, when
      * `holds`. */
@@ -32,6 +50,12 @@ static struct {
     WGPUBindGroup shape_group;
     WGPUBuffer records;
     uint64_t records_capacity;
+#ifdef MN_TEXT
+    /* The font's glyphs, bound beside the uniform, and where the records
+     * of glyphs are made before they are sent. */
+    WGPUBuffer font;
+    MnDraw *glyphs;
+#endif
     /* Where the frame is copied to be read back, and its size in bytes. */
     WGPUBuffer readback;
     uint64_t readback_size;
@@ -93,6 +117,9 @@ static const char *SHAPE_WGSL =
     "  pad: u32,\n"
     "};\n"
     "@group(0) @binding(0) var<uniform> u: U;\n"
+#ifdef MN_TEXT
+    "@group(0) @binding(1) var<uniform> font: array<vec4<u32>, " FONT_COUNT(MN_FONT_GLYPHS) ">;\n"
+#endif
     "\n"
     "struct V {\n"
     "  @builtin(position) pos: vec4<f32>,\n"
@@ -135,6 +162,17 @@ static const char *SHAPE_WGSL =
     "      lo = vec2<f32>(min(min(p[0], p[2]), p[4]), min(min(p[1], p[3]), p[5]));\n"
     "      hi = vec2<f32>(max(max(p[0], p[2]), p[4]), max(max(p[1], p[3]), p[5]));\n"
     "    }\n"
+#ifdef MN_TEXT
+    /* A glyph: its cell, six columns and twelve rows of the font's
+     * pixels. */
+    "    case 6u: {\n"
+    "      shown = !(is_nan(a.y) || is_nan(a.z) || is_nan(a.w)) && p[2] > 0.0;\n"
+    "      let c0 = i32(b.y);\n"
+    "      let r0 = i32(b.z);\n"
+    "      lo = vec2<f32>(text_edge(p[0], c0, p[2]), text_edge(p[1], r0, p[2]));\n"
+    "      hi = vec2<f32>(text_edge(p[0], c0 + 6, p[2]), text_edge(p[1], r0 + 12, p[2]));\n"
+    "    }\n"
+#endif
     "    default: {\n"
     "    }\n"
     "  }\n"
@@ -178,6 +216,33 @@ static const char *SHAPE_WGSL =
     "  return e > 0.0 || (e == 0.0 && on_edge_counts(b - a));\n"
     "}\n"
     "\n"
+#ifdef MN_TEXT
+    /* The bound before column (or row) i of the font's pixels in a text
+     * from o whose pixels are s points: one product, then one sum. */
+    "fn text_edge(o: f32, i: i32, s: f32) -> f32 {\n"
+    "  return o + mul(f32(i), s);\n"
+    "}\n"
+    "\n"
+    /* The column (or row) e from lo - 1 to hi with text_edge(e) <= p <
+     * text_edge(e + 1): lo - 1 when p is before the bound of lo, hi when
+     * it is at or after the bound of hi. A division gives a first guess;
+     * the tests of the bounds move it to the answer, a step at a time. */
+    "fn text_locate(o: f32, s: f32, p: f32, lo: i32, hi: i32) -> i32 {\n"
+    "  let guess = clamp(floor((p - o) / s), f32(lo - 1), f32(hi));\n"
+    "  var e = clamp(i32(guess), lo - 1, hi);\n"
+    "  for (var step = lo; step <= hi; step = step + 1) {\n"
+    "    if (e >= lo && text_edge(o, e, s) > p) {\n"
+    "      e = e - 1;\n"
+    "    } else if (e < hi && text_edge(o, e + 1, s) <= p) {\n"
+    "      e = e + 1;\n"
+    "    } else {\n"
+    "      break;\n"
+    "    }\n"
+    "  }\n"
+    "  return e;\n"
+    "}\n"
+    "\n"
+#endif
     "@fragment\n"
     "fn fs(v: V) -> @location(0) vec4<f32> {\n"
     "  let c = vec2<f32>(mul(v.pos.x, u.inv.x), mul(v.pos.y, u.inv.y));\n"
@@ -236,6 +301,20 @@ static const char *SHAPE_WGSL =
     "      }\n"
     "      inside = w != 0.0 && edge(p1, p2, c) && edge(p2, p3, c) && edge(p3, p1, c);\n"
     "    }\n"
+#ifdef MN_TEXT
+    "    case 6u: {\n"
+    "      let c0 = i32(v.b.y);\n"
+    "      let r0 = i32(v.b.z);\n"
+    "      let col = text_locate(n0, n2, c.x, c0, c0 + 6);\n"
+    "      let row = text_locate(n1, n2, c.y, r0, r0 + 12);\n"
+    "      if (col >= c0 && col < c0 + 6 && row >= r0 && row < r0 + 12) {\n"
+    "        let j = u32(col - c0);\n"
+    "        let r = u32(row - r0);\n"
+    "        let word = font[min(v.b.x, " FONT_COUNT(MN_FONT_REPLACEMENT) "u)][r >> 2u];\n"
+    "        inside = ((word >> ((r & 3u) * 6u + j)) & 1u) != 0u;\n"
+    "      }\n"
+    "    }\n"
+#endif
     "    default: {\n"
     "    }\n"
     "  }\n"
@@ -267,14 +346,34 @@ static void shapes_make(void) {
     win.shape_uniform = wgpuDeviceCreateBuffer(device, &uniform_descriptor);
     if (!win.shape_uniform) window_fail("can't make a buffer of 32 bytes");
 
-    WGPUBindGroupLayoutEntry entry = {0};
-    entry.binding = 0;
-    entry.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
-    entry.buffer.type = WGPUBufferBindingType_Uniform;
-    entry.buffer.minBindingSize = 32;
+#ifdef MN_TEXT
+    enum { BINDINGS = 2 };
+    WGPUBufferDescriptor font_descriptor = {0};
+    font_descriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+    font_descriptor.size = sizeof mn_font_bits;
+    win.font = wgpuDeviceCreateBuffer(device, &font_descriptor);
+    if (!win.font) {
+        window_fail("can't make a buffer of %llu bytes",
+                    (unsigned long long)font_descriptor.size);
+    }
+    wgpuQueueWriteBuffer(mn_gpu_queue(), win.font, 0, mn_font_bits, sizeof mn_font_bits);
+#else
+    enum { BINDINGS = 1 };
+#endif
+    WGPUBindGroupLayoutEntry entries[BINDINGS] = {0};
+    entries[0].binding = 0;
+    entries[0].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+    entries[0].buffer.type = WGPUBufferBindingType_Uniform;
+    entries[0].buffer.minBindingSize = 32;
+#ifdef MN_TEXT
+    entries[1].binding = 1;
+    entries[1].visibility = WGPUShaderStage_Fragment;
+    entries[1].buffer.type = WGPUBufferBindingType_Uniform;
+    entries[1].buffer.minBindingSize = sizeof mn_font_bits;
+#endif
     WGPUBindGroupLayoutDescriptor layout_descriptor = {0};
-    layout_descriptor.entryCount = 1;
-    layout_descriptor.entries = &entry;
+    layout_descriptor.entryCount = BINDINGS;
+    layout_descriptor.entries = entries;
     WGPUBindGroupLayout layout = wgpuDeviceCreateBindGroupLayout(device, &layout_descriptor);
     WGPUPipelineLayoutDescriptor pipeline_layout_descriptor = {0};
     pipeline_layout_descriptor.bindGroupLayoutCount = 1;
@@ -282,14 +381,19 @@ static void shapes_make(void) {
     WGPUPipelineLayout pipeline_layout =
         wgpuDeviceCreatePipelineLayout(device, &pipeline_layout_descriptor);
 
-    WGPUBindGroupEntry bind = {0};
-    bind.binding = 0;
-    bind.buffer = win.shape_uniform;
-    bind.size = 32;
+    WGPUBindGroupEntry binds[BINDINGS] = {0};
+    binds[0].binding = 0;
+    binds[0].buffer = win.shape_uniform;
+    binds[0].size = 32;
+#ifdef MN_TEXT
+    binds[1].binding = 1;
+    binds[1].buffer = win.font;
+    binds[1].size = sizeof mn_font_bits;
+#endif
     WGPUBindGroupDescriptor group_descriptor = {0};
     group_descriptor.layout = layout;
-    group_descriptor.entryCount = 1;
-    group_descriptor.entries = &bind;
+    group_descriptor.entryCount = BINDINGS;
+    group_descriptor.entries = binds;
     win.shape_group = wgpuDeviceCreateBindGroup(device, &group_descriptor);
 
     /* A record: the kind and the first three numbers, then the other three
@@ -358,6 +462,15 @@ static void shapes_drop(void) {
     win.shape_uniform = NULL;
     win.records = NULL;
     win.records_capacity = 0;
+#ifdef MN_TEXT
+    if (win.font) {
+        wgpuBufferDestroy(win.font);
+        wgpuBufferRelease(win.font);
+    }
+    win.font = NULL;
+    free(win.glyphs);
+    win.glyphs = NULL;
+#endif
 }
 
 /* Makes the buffer of records hold `count` records, unless it does. */
@@ -438,6 +551,166 @@ static WGPURenderPassEncoder frame_pass(WGPUCommandEncoder encoder,
     return pass;
 }
 
+/* Sends `count` records at `records` to the buffer of records, at places no
+ * recorded command reads, and draws them. When the buffer is full, the
+ * commands so far are submitted and recording goes on in a new encoder and
+ * pass. */
+static void records_send(WGPUCommandEncoder *encoder, WGPURenderPassEncoder *pass,
+                         uint64_t *used, const MnDraw *records, uint64_t count) {
+    uint64_t done = 0;
+    while (done < count) {
+        if (*used == win.records_capacity) {
+            wgpuRenderPassEncoderEnd(*pass);
+            wgpuRenderPassEncoderRelease(*pass);
+            mn_gpu_device_submit_commands(wgpuCommandEncoderFinish(*encoder, NULL), false);
+            wgpuCommandEncoderRelease(*encoder);
+            *encoder = wgpuDeviceCreateCommandEncoder(mn_gpu_device(), NULL);
+            *pass = frame_pass(*encoder, NULL);
+            *used = 0;
+        }
+        uint64_t n = count - done;
+        if (n > win.records_capacity - *used) n = win.records_capacity - *used;
+        uint64_t offset = *used * sizeof(MnDraw);
+        uint64_t bytes = n * sizeof(MnDraw);
+        wgpuQueueWriteBuffer(mn_gpu_queue(), win.records, offset, records + done,
+                             (size_t)bytes);
+        wgpuRenderPassEncoderSetVertexBuffer(*pass, 0, win.records, offset, bytes);
+        wgpuRenderPassEncoderDraw(*pass, 6, (uint32_t)n, 0, 0);
+        *used += n;
+        done += n;
+    }
+}
+
+#ifdef MN_TEXT
+/* The code point that begins at `*at` in the `length` bytes of `text`,
+ * with `*at` moved past it. A byte that does not begin a character in
+ * UTF-8 is a character of its own, beyond the font. */
+static uint32_t text_next(const unsigned char *text, size_t length, size_t *at) {
+    unsigned char lead = text[*at];
+    size_t more = lead < 0x80 ? 0 : (lead & 0xE0) == 0xC0 ? 1 : (lead & 0xF0) == 0xE0 ? 2
+                : (lead & 0xF8) == 0xF0 ? 3 : 4;
+    if (more == 0) {
+        *at += 1;
+        return lead;
+    }
+    if (more == 4 || *at + more >= length) {
+        *at += 1;
+        return 0xFFFD;
+    }
+    uint32_t code = lead & (0x3Fu >> more);
+    for (size_t k = 1; k <= more; k++) {
+        unsigned char next = text[*at + k];
+        if ((next & 0xC0) != 0x80) {
+            *at += 1;
+            return 0xFFFD;
+        }
+        code = code << 6 | (next & 0x3Fu);
+    }
+    *at += more + 1;
+    return code;
+}
+
+/* A record of text: whether it draws, and its numbers and bytes. */
+typedef struct TextRecord {
+    float x, y, u;
+    const unsigned char *bytes;
+    size_t length;
+} TextRecord;
+
+static bool text_record(const MnFrame *frame, const MnDraw *record, TextRecord *text) {
+    uint32_t place[2];
+    memcpy(&place[0], &record->n[3], sizeof place[0]);
+    memcpy(&place[1], &record->n[4], sizeof place[1]);
+    float x = record->n[0], y = record->n[1], size = record->n[2];
+    if (isnan(x) || isnan(y) || !(size > 0.0f)) return false;
+    if (place[0] > frame->text_length || place[1] > frame->text_length - place[0]) {
+        return false;
+    }
+    text->x = x;
+    text->y = y;
+    text->u = size / 12.0f;
+    text->bytes = (const unsigned char *)frame->text + place[0];
+    text->length = place[1];
+    return true;
+}
+
+/* Whether a character shows a glyph: all but a space, U+00A0 and a line's
+ * end. */
+static bool text_shows(uint32_t code) {
+    return code != ' ' && code != 0xA0 && code != '\n';
+}
+
+/* The number of records a span's records become: each record of text one
+ * for each character that shows a glyph, any other one. */
+static uint64_t span_glyph_count(const MnFrame *frame, const MnSpan *span, bool *texts) {
+    uint64_t count = 0;
+    *texts = false;
+    for (size_t r = 0; r < span->count; r++) {
+        const MnDraw *record = &span->records[r];
+        if (record->kind != MN_DRAW_TEXT) {
+            count++;
+            continue;
+        }
+        *texts = true;
+        TextRecord text;
+        if (!text_record(frame, record, &text)) continue;
+        for (size_t at = 0; at < text.length;) {
+            if (text_shows(text_next(text.bytes, text.length, &at))) count++;
+        }
+    }
+    return count;
+}
+
+/* Sends a span's records with each record of text replaced by the records
+ * of its glyphs, GLYPHS_AT_ONCE at a time. */
+static void span_send_glyphs(WGPUCommandEncoder *encoder, WGPURenderPassEncoder *pass,
+                             uint64_t *used, const MnFrame *frame, const MnSpan *span) {
+    if (!win.glyphs) win.glyphs = mn_realloc(NULL, GLYPHS_AT_ONCE * sizeof(MnDraw));
+    uint64_t made = 0;
+    for (size_t r = 0; r < span->count; r++) {
+        const MnDraw *record = &span->records[r];
+        if (record->kind != MN_DRAW_TEXT) {
+            win.glyphs[made++] = *record;
+            if (made == GLYPHS_AT_ONCE) {
+                records_send(encoder, pass, used, win.glyphs, made);
+                made = 0;
+            }
+            continue;
+        }
+        TextRecord text;
+        if (!text_record(frame, record, &text)) continue;
+        uint32_t column = 0, row = 0;
+        for (size_t at = 0; at < text.length;) {
+            uint32_t code = text_next(text.bytes, text.length, &at);
+            if (code == '\n') {
+                column = 0;
+                row += 12;
+                continue;
+            }
+            if (text_shows(code)) {
+                uint32_t glyph = code < 256 ? mn_font_glyph[code] : MN_FONT_REPLACEMENT;
+                MnDraw *out = &win.glyphs[made++];
+                memset(out, 0, sizeof *out);
+                out->kind = GLYPH_KIND;
+                out->n[0] = text.x;
+                out->n[1] = text.y;
+                out->n[2] = text.u;
+                memcpy(&out->n[3], &glyph, sizeof glyph);
+                memcpy(&out->n[4], &column, sizeof column);
+                memcpy(&out->n[5], &row, sizeof row);
+                out->color = record->color;
+                if (made == GLYPHS_AT_ONCE) {
+                    records_send(encoder, pass, used, win.glyphs, made);
+                    made = 0;
+                }
+            }
+            column += 6;
+        }
+    }
+    records_send(encoder, pass, used, win.glyphs, made);
+}
+#endif
+
 /* Records the rendering of `frame` into the frame texture: the background,
  * then each span's records in order, those of a GPU block from the buffer
  * the block wrote them to. Records in CPU memory are sent to the buffer of
@@ -459,7 +732,13 @@ static WGPUCommandEncoder frame_record(WGPUCommandEncoder encoder,
 
     uint64_t total = 0;
     for (size_t s = 0; s < frame->span_count; s++) {
-        if (frame->spans[s].records) total += frame->spans[s].count;
+        if (!frame->spans[s].records) continue;
+#ifdef MN_TEXT
+        bool texts;
+        total += span_glyph_count(frame, &frame->spans[s], &texts);
+#else
+        total += frame->spans[s].count;
+#endif
     }
     uint64_t most = mn_gpu_largest_buffer() / sizeof(MnDraw);
     if (most > total) most = total;
@@ -478,30 +757,21 @@ static WGPUCommandEncoder frame_record(WGPUCommandEncoder encoder,
             wgpuRenderPassEncoderDraw(pass, 6, (uint32_t)span->count, 0, 0);
             continue;
         }
-        if (span->count != 0) mn_gpu_uploads++;
-        size_t done = 0;
-        while (done < span->count) {
-            if (used == win.records_capacity) {
-                wgpuRenderPassEncoderEnd(pass);
-                wgpuRenderPassEncoderRelease(pass);
-                mn_gpu_device_submit_commands(wgpuCommandEncoderFinish(encoder, NULL),
-                                              false);
-                wgpuCommandEncoderRelease(encoder);
-                encoder = wgpuDeviceCreateCommandEncoder(mn_gpu_device(), NULL);
-                pass = frame_pass(encoder, NULL);
-                used = 0;
+#ifdef MN_TEXT
+        /* A span's records of text become the records of their glyphs; a
+         * span is sent when it has a record after that. */
+        bool texts;
+        uint64_t count = span_glyph_count(frame, span, &texts);
+        if (texts) {
+            if (count != 0) {
+                mn_gpu_uploads++;
+                span_send_glyphs(&encoder, &pass, &used, frame, span);
             }
-            uint64_t count = span->count - done;
-            if (count > win.records_capacity - used) count = win.records_capacity - used;
-            uint64_t offset = used * sizeof(MnDraw);
-            uint64_t bytes = count * sizeof(MnDraw);
-            wgpuQueueWriteBuffer(mn_gpu_queue(), win.records, offset,
-                                 span->records + done, (size_t)bytes);
-            wgpuRenderPassEncoderSetVertexBuffer(pass, 0, win.records, offset, bytes);
-            wgpuRenderPassEncoderDraw(pass, 6, (uint32_t)count, 0, 0);
-            used += count;
-            done += (size_t)count;
+            continue;
         }
+#endif
+        if (span->count != 0) mn_gpu_uploads++;
+        records_send(&encoder, &pass, &used, span->records, span->count);
     }
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
