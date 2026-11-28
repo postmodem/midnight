@@ -78,12 +78,14 @@ replay a file and when to hold a session, and how to look at a program.
 - `midnight session start`, `stop` and `list`, and `midnight drive`.
 - `docs/json.md` at `format` 2; the reference at 0.11; `docs/running.md`.
 - An Agent Skill in `skills/midnight/`.
-- A spike: agents on drive tasks with the session and the skill, against
-  files of commands, read by hand.
+- A spike: agents on drive tasks with files of commands, with the
+  session and the skill, and with a throwaway MCP server over the
+  session, read by hand.
 
 ## Non-goals
 
-- An MCP server, and every other integration.
+- An MCP server in the repository, and every other integration; the
+  spike's server is throwaway.
 - A shown window held by `midnight session`, which runs every program
   headless, and servicing a shown window while a program waits for a
   command.
@@ -427,10 +429,12 @@ sessions on rough tasks, read by hand. It informs and decides nothing.
   wrong place, seen only in a frame; a run-time error at tick 300 whose
   cause is in the world a few ticks before; a constant to tune until a
   behavior holds.
-- Two arms, at the same commit, run separately: the documentation and
+- Three arms, at the same commit, run separately: the documentation and
   files of commands, with `midnight session` and `midnight drive` not
-  allowed; the documentation, the session and the skill. Two models, one
-  or two sessions a task and arm.
+  allowed; the documentation, the session and the skill; the
+  documentation, the skill and a throwaway MCP server over the session,
+  kept with the planning notes and not in the repository, with no shell.
+  Two models, one or two sessions a task and arm.
 - Each agent has a directory and an `XDG_RUNTIME_DIR` of its own, the
   device allowed, and every session left running is stopped when its
   run ends. Slice 3 says whether this uses the evals' wrapper, and what
@@ -439,11 +443,12 @@ sessions on rough tasks, read by hand. It informs and decides nothing.
 - Read per session: turns, cost, refused commands, builds, replays,
   captures, and whether the task was done.
 - What would inform: the skill's wording, from the mistakes seen; and
-  the MCP question, if in the session arm more than one session in four
-  loses more than a third of its turns to holding the session (starting,
-  restarting, finding it, stopping it), which is the case for a server.
-  Without an MCP arm the spike says nothing on whether a server would do
-  better.
+  the MCP question: a server is worth a spec if the MCP arm does the
+  tasks it shares with the session arm in clearly fewer turns or at
+  clearly less cost, or if in the session arm more than one session in
+  four loses more than a third of its turns to holding the session
+  (starting, restarting, finding it, stopping it). Every task done in the
+  MCP arm must be doable in the session arm with the same commands.
 - Transcripts stay out of the repository; the Outcome summarizes.
 
 ### The runtime
@@ -636,9 +641,9 @@ window while a session waits.
   and a frame of a hundred thousand draws no longer floods a client.
 - **The skill is a guide in the repository.** Short, versioned with the
   reference, and read only by an agent working with Midnight.
-- **The spike has two arms.** It shows whether the session and the skill
-  help, and whether holding a session from the shell costs agents enough
-  turns to make the case for a server.
+- **The spike has three arms.** Files, the session at the shell, and a
+  throwaway MCP server over the session: it shows whether the session and
+  the skill help, and whether a server is worth a spec of its own.
 
 ## Measured in planning
 
