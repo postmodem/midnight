@@ -339,7 +339,38 @@ Counts: 292 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | A query on several threads, and of a column on the device, with `stats` counting the download | `query_values` (`thread_programs`), `query_gpu` (`gpu_programs`, `gpu_stats_match_expected`) |
 | `resource`, and one with no fields | `query_values`, `json/query` |
 | Every error of `query` and `resource`, and the first in the line when two apply | `query_errors` |
+| The errors that name what a program has: components and tags in declared order, a tag with ` (tag)`, resources without the built-in ones, `none` | `query_errors`, `session/refusals` (a window program), `session/never_ticks` |
 | A command of the window while none is open: without a window, before `Window.open`, after a close, after the program ends | `a_program_without_a_window_is_driven`, `drive_errors` |
+| `quit` in a file: a windowless `World.run` ended, nothing after it read; `quit` followed by anything | `quit_world_run`, `drive_errors` |
+
+### A session
+
+| Construct | Files |
+| --- | --- |
+| `MIDNIGHT_DRIVE=-` reads standard input; a session's answers are a file's | `session_programs`, `session_refuses_every_drive_error` |
+| Rule 1: every command error refused with the file's message, changing nothing the commands after it see; `resize` and `scale` check before they change | `session_refuses_every_drive_error`, `session/refusals` |
+| Rule 2: `ready` before the first line and after each, comments and empty lines included, `1 tick` and `N bytes out`; none after `quit` or a run-time error; the count of bytes splits standard output exactly | `session_programs` (`session/comments`, `session/runtime_error`), `session_live` |
+| Rule 3: the program waits at its end; `query` and `tick` after the end, `tick N` with 0 ticks; a program that never ticks | `session/ended`, `session/never_ticks`, `session_live` |
+| Rule 4: the end of input ends the program at once, windowless and with a window; a last line without a line break | `session_end_of_input`, `session/comments` |
+| `quit` before the end (status 0) and after `exit(3)` (status 3) | `session/quit_before_end`, `session/quit_after_end` |
+| A debug build after refusals of every kind ends with no sanitizer report and no live buffer | `session_programs` (debug, `session/refusals`) |
+| `capture` refused with no device, and into a file that can't be written; the captures after it those of a file | `session/capture`, `session_capture` (GPU mode) |
+| The session's lines in JSON | `session_programs` (both forms), `json/session` |
+
+### `midnight session` and `midnight drive`
+
+| Construct | Files |
+| --- | --- |
+| `session start`, `drive` with one command, several, `-`, a refusal, `quit`, a program stopping with an error; `list` of two sessions; `stop` | `session_commands` |
+| Names: in use, not a name (given and from the file), none running, two and no `--session`, a stale session after its holder is killed | `session_commands` |
+| `awake` refused; a program that writes no `ready` in time; usage errors with status 2 | `session_commands` |
+| A caller's `MIDNIGHT_FORMAT=json` without `--format` holds a text session; `--format json` of the four commands and `session_error` | `session_commands` |
+| `--idle`; `stop` of a program in a long `tick` within six seconds | `session_commands` |
+| A window program: `info` kept as `headless,info`, an empty `MIDNIGHT_WINDOW` headless, `LD_LIBRARY_PATH` removed | `session_commands` |
+| A sessions directory of mode 0755 refused; a socket path of 101 bytes refused | `session_commands` |
+| The program of a holder killed with `SIGKILL` ends within a second (Linux) | `session_commands` |
+| The holder survives the call that started it: an ordinary Bash tool call, a confined `claude -p`, the evals' wrapper | by hand, spec 0012's slice 2 gate |
+| The skill's form and its commands | `skill_is_short_and_works` |
 
 ## JSON output
 
@@ -353,6 +384,8 @@ Counts: 292 programs in `tests/run` (plus 4 helpers in `tests/run/lib`),
 | `MIDNIGHT_FORMAT`: `json`, `text`, any other value; `run --format json` and `--format text` | `the_format_variable_takes_one_word`, `run_passes_the_format` |
 | Every program's standard output unchanged and its standard error the same in JSON | `programs_in_json` |
 | `answer` of every command, `drive_error`, `drive_unopened`, `unknown_word`, `window_opened` | `drive_errors`, `drive_answers`, `query_errors`, `only_programs_with_a_window_read_the_window_variables`, `json/drive_window` |
+| `format` 2; `ready`, `refused`, a page of `draws` with `count` and `from`, `quit` | `json/session`, `json/drive_window`, `session_programs` |
+| `session`, `session_listed`, `session_error` | `session_commands` |
 | `threads`, `threads_split` | `splits_match_expected`, `only_programs_that_split_read_the_threads_variable` |
 | `gpu_device`, `gpu_strict`, `stats`, the `.frames` answers | `gpu_stats_match_expected`, `window_frames` (GPU mode) |
 | `runtime_error` | `programs_in_json` (`tests/panic`), `json/runtime_error` |
@@ -434,6 +467,8 @@ reference renderer, `tests/render/mod.rs`, at four scales.
 | A headless window asked for no frame renders nothing | `draw_stats` |
 | `draws`: the header with ticks, size and count, the background, one line a draw; before the first tick; in a program that never draws; after the program has ended; after a `resize` and a `scale` | `draw_none`, `draw_window`, `draw_shapes` |
 | `draws` with an argument, with no window open | `drive_errors` |
+| `draws` in pages of 100: the first, a middle, the last, past the end and past `INT64_MAX`, numbered among the draws listed where a GPU block's runs leave draws of nothing | `draws_from`, `draws_pages` (`draws_match_expected`, `gpu_programs`) |
+| A frame of more than 100 draws listed whole in pages and rendered | `window_drawn`, `window_shown` (`flock`, `draw_many`) |
 | With `MIDNIGHT_GPU=off`, `draws` works and `capture` captures nothing | `draws_match_expected`, `drive_errors` |
 
 ### Text

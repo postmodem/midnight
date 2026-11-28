@@ -2,7 +2,7 @@
 
 A built program reads a few environment variables when it starts. Each is
 a comma-separated list of words, but `MIDNIGHT_FORMAT`, one word, and
-`MIDNIGHT_DRIVE`, a file name; a word that is not in its table is
+`MIDNIGHT_DRIVE`, a file name or `-`; a word that is not in its table is
 reported once, when the program starts. [Building programs](building.md)
 says how programs are built and linked.
 
@@ -129,6 +129,86 @@ tick
 ' > look.drive
 MIDNIGHT_DRIVE=look.drive nix run . -- run examples/move.12am
 ```
+
+`MIDNIGHT_DRIVE=-` reads the commands from standard input instead, and
+puts the program in a **session**: a wrong command is refused and changes
+nothing, a `ready` line says each time the program waits for a command,
+the program waits at its end to be looked at, and the end of input ends
+it. A file ending with `quit` ends a program that would run freely once
+its commands ran out. [A session](language.md#a-session) has the rules.
+
+## Sessions
+
+A shell runs one command at a time, so something has to hold a program's
+input between them. `midnight session start` builds a program and leaves
+it waiting for commands in a session of its own, and `midnight drive`
+sends it commands, one call at a time:
+
+```sh
+midnight session start examples/catch.12am
+midnight drive 'key down ArrowLeft' 'tick 10' 'key up ArrowLeft'
+midnight drive 'resource Score' 'capture now.png'
+midnight drive 'query Ball' 'query Star'
+midnight session stop
+```
+
+```
+midnight: session: started `catch`
+midnight: drive: key down ArrowLeft
+midnight: drive: tick 10
+midnight: drive: key up ArrowLeft
+midnight: drive: resource Score: 10 ticks, Score(points: 0, missed: 0)
+midnight: drive: capture now.png: 10 ticks, 320x200, crc 2edd6de1
+midnight: drive: refused: query: `Ball` is not a component or tag of this program; it has Star
+midnight: drive: query Star: 10 ticks, 1 row
+midnight: drive:   Entity(0v1) Star(x: 131.0, y: 27.0)
+midnight: session: `catch` stopped with status 0
+```
+
+```
+midnight session start FILE [--name NAME] [--debug] [--format json] [--idle MINUTES]
+midnight session stop [NAME] [--format json]
+midnight session list [--format json]
+midnight drive [--session NAME] [--format json] COMMAND...
+midnight drive [--session NAME] [--format json] -
+```
+
+- **`session start`** builds `FILE` as `build` does, release unless
+  `--debug`, and prints the diagnostics and exits with status 1 if it has
+  errors. Otherwise the program starts headless, with `MIDNIGHT_DRIVE=-`,
+  in the directory `session start` was run in, and with the caller's
+  variables but `LD_LIBRARY_PATH`; `info` in the caller's
+  `MIDNIGHT_WINDOW` is kept. `session start` prints what the program
+  writes before it waits for its first command and returns. A program
+  that ends first, or writes no `ready` within 60 seconds, leaves no
+  session, and `session start` exits with status 1.
+- A session is named `NAME`, or after the file without `.12am`: 1 to 32
+  ASCII letters, digits, `-` and `_`. `--idle MINUTES` (60 unless given,
+  from 1 to 1440) stops a session that has had no command for that long.
+  `MIDNIGHT_THREADS` with `awake` is refused, since every thread would
+  stay busy while the session waits.
+- **`drive`** sends each argument as one command, or with `-` each line
+  of standard input, and prints what each brings: the program's standard
+  output first, then its lines on standard error. It exits with status 0
+  when every command was carried out, `quit` included, and 1 when one was
+  refused (the commands after it are still sent) or when the program
+  stopped by anything but `quit`. When the program stops, the commands
+  after it are not sent, and `drive` prints ``midnight: session: `NAME`
+  stopped with status N``. Two `drive` commands to one session take turns.
+- **`session stop`** closes the program's input, which ends it as `quit`
+  does once a running `tick` has run its ticks; after five seconds it is
+  killed. **`session list`** prints a line per session: its name, the
+  file, its ticks, and whether the program is `running` or has `ended`.
+- `--session` and `NAME` may be left out when exactly one session runs.
+- Sessions live in `midnight/sessions` under `$XDG_RUNTIME_DIR`, or in
+  `midnight-UID/sessions` under the temporary directory, each directory
+  the user's own with mode 0700; a session's socket path may be at most
+  100 bytes. A session whose holder is gone is cleared by the next
+  `session` or `drive` command. `capture` writes files relative to the
+  directory `session start` was run in.
+- A usage error (an unknown option, `--idle` out of range, `drive` with no
+  command, a command with a line break) exits with status 2, and every
+  other message with status 1.
 
 ## A window, headless and driven
 

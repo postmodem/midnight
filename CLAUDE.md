@@ -10,8 +10,10 @@ in pieces on several threads, with the output of one. A program with a
 window shows it through SDL 3, takes the keyboard and the mouse from it,
 and draws its frames, shapes and text, on the same device, or runs headless. Any program
 can be driven by commands, which let it run a tick at a time and print
-its entities and resources between ticks, and the compiler and programs
-write JSON lines when asked. `evals/` measures how well agents work with it
+its entities and resources between ticks, from a file or, in a session,
+from standard input; `midnight session` holds a program in a session
+(`src/session.rs`, a holder over a Unix socket) for `midnight drive`.
+The compiler and programs write JSON lines when asked. `evals/` measures how well agents work with it
 from its documentation and tools alone; its harness is `src/bin/midnight-eval/`, a
 second binary of the crate. `README.md` has the overview.
 
@@ -29,6 +31,10 @@ second binary of the crate. `README.md` has the overview.
 - `runtime/font.txt` is the definition of every glyph `Draw.text` draws,
   part of the reference's "Text": the compiler makes the font's table from
   it and the reference renderer reads it. Nothing else holds the glyphs.
+- `skills/midnight/SKILL.md` is the guide for agents that work with
+  Midnight, an Agent Skill of at most 150 lines: how to work, pointing
+  into the reference for what things mean. A change to the reference or
+  the commands that makes it wrong changes it in the same commit.
 - `specs/NNNN-name.md` is one spec per change, with a status line, acceptance
   criteria and, once implemented, an Outcome. Work starts from an approved
   spec. A draft spec is not to be implemented.
@@ -72,6 +78,7 @@ nix develop -c cargo fmt
 nix develop -c cargo run -- run FILE.12am  # also: build, check, emit-c; add --debug
 nix develop -c cargo run -- loops FILE.12am  # where each loop runs, and what keeps one on one core
 nix develop -c cargo run -- check --format json FILE.12am  # JSON lines; also build, run, plan, loops
+nix develop -c cargo run -- session start FILE.12am  # then `drive 'tick 3' 'query Ball'`, `session stop`
 nix flake check                            # package, clippy, rustfmt, nixfmt, evals' harness and tasks, GPU programs on llvmpipe, ThreadSanitizer, windows
 nix run .#bench                            # timings against bench/baseline.c
 nix run .#bench-cores                      # loops on one thread and on all cores
@@ -436,6 +443,32 @@ command that needs it.
 - A program that reads the keyboard or the mouse takes its input from its
   `.drive` file in every mode but `window_input`; `drive_errors` holds
   every command error, in the order they are reported.
+- Sessions:
+  - `tests/session/NAME.12am` with `NAME.drive`, `NAME.out` and
+    `NAME.session`: `session_programs` runs each with `MIDNIGHT_DRIVE=-`
+    and the `.drive` file as standard input, in both build modes and both
+    forms; standard output must be `NAME.out` and standard error
+    `NAME.session` followed by `status N`. Each program begins with an
+    `# expect:` comment. `UPDATE_EXPECT=1` rewrites both from the release
+    run. A program with refusals ends by its last statement, so that its
+    debug build checks its buffers.
+  - `session_refuses_every_drive_error` sends every case of
+    `DRIVE_ERRORS` in a session and requires the refusal, and the output
+    and answers of a file without the wrong command; `session_live` holds
+    the `ready` lines' counts of bytes to the output; `session_end_of_input`
+    the end of input; `session_capture` (GPU mode) a session's captures
+    to a file's.
+  - `session_commands` covers `midnight session` and `midnight drive`,
+    each message and the holder, with an `XDG_RUNTIME_DIR` of its own
+    (`SessionPlace`, which stops what it started) and the display
+    variables of `no_display`. `MIDNIGHT_SESSION_IDLE_SECONDS` and
+    `MIDNIGHT_SESSION_START_SECONDS`, which only the holder reads, shorten
+    its waits for tests.
+  - `skill_is_short_and_works` holds `skills/midnight/SKILL.md` to its
+    form, and runs every line of its `sh` blocks, which must exit 0, on a
+    device (GPU mode, or `llvmpipe` where the dev shell names it).
+  - Sessions run every program headless; nothing a session test starts
+    outlives the test.
 - Evals: there are no tasks under `evals/tasks/` now; "Adding a task" in
   `evals/README.md` says what one is, and `self-test NAME` checks its
   programs. The harness's tests are `tests/harness.rs` and

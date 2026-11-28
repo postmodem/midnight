@@ -146,8 +146,11 @@ prints its frames as text and captures them as PNG files.
 
 A driven program runs no tick a command did not let run, so the same
 commands give the same output on every machine, and an agent can check a
-game the way it checks any other program. The compiler and programs
-also write JSON lines, for tools that read what they say.
+game the way it checks any other program. A session holds a program
+between commands sent one at a time from a shell: a wrong command is
+refused and changes nothing, and a name that does not exist is answered
+with those that do. The compiler and programs also write JSON lines,
+for tools that read what they say.
 
 ## Try it
 
@@ -184,6 +187,12 @@ MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/shapes.drive nix run . -- run e
 printf 'tick 2\nquery Position, Velocity\n' > look.drive
 MIDNIGHT_DRIVE=look.drive nix run . -- run examples/move.12am
 
+# The game held in a session: steer, look, capture a frame, stop
+nix run . -- session start examples/catch.12am
+nix run . -- drive 'key down ArrowLeft' 'tick 10' 'key up ArrowLeft'
+nix run . -- drive 'query Star' 'resource Score' 'capture now.png'
+nix run . -- session stop
+
 # The same in JSON, and the compiler's errors in JSON
 MIDNIGHT_DRIVE=look.drive nix run . -- run examples/move.12am --format json
 nix run . -- check tests/fail/unknown_component_query_suggest.12am --format json
@@ -201,12 +210,20 @@ midnight plan FILE                       print the CPU-GPU transfers of one tick
 midnight loops FILE                      print where each loop runs
 midnight emit-c FILE                     print the generated C
 midnight emit-wgsl FILE                  print the shader of every GPU block
+midnight session start FILE [--name NAME] [--debug] [--idle MINUTES]
+                                         build FILE and hold it in a session
+midnight session stop [NAME]             end a session
+midnight session list                    list the sessions
+midnight drive [--session NAME] COMMAND...
+                                         send commands to a session, or with
+                                         `-` each line of standard input
 midnight --version | --help
 ```
 
-`build`, `run`, `check`, `plan` and `loops` take `--format json`, which
-writes their diagnostics and output as JSON lines;
+`build`, `run`, `check`, `plan`, `loops`, `session` and `drive` take
+`--format json`, which writes their diagnostics and output as JSON lines;
 [`docs/json.md`](docs/json.md) describes them.
+[`docs/running.md`](docs/running.md#sessions) describes sessions.
 
 `build` names the executable after the file, without its extension,
 unless `-o` says otherwise. `run` exits with the program's status. The
@@ -240,6 +257,12 @@ WGSL shader for each loop of a GPU system, which runs through
 | [`docs/development.md`](docs/development.md)   | Working on Midnight: the repository and its tests     |
 | [`bench/README.md`](bench/README.md)           | The benchmarks                                        |
 | [`specs/`](specs/)                             | One spec per change, with its acceptance criteria and outcome |
+| [`skills/midnight/`](skills/midnight/SKILL.md) | A short guide for agents that write and drive Midnight programs |
+
+The guide is an Agent Skill, as Claude Code reads them:
+copy or link `skills/midnight/` into a project's `.claude/skills/`, or
+into `~/.claude/skills/` for every project, and an agent loads it when
+it works with Midnight.
 
 The evals measure how well agents work with Midnight from its
 documentation and tools alone. They run only when a spec asks them a question, and its Outcome
@@ -248,13 +271,13 @@ run them.
 
 ## Status
 
-Midnight is at 0.9 and young. Until 1.0 a better syntax is worth a
+Midnight is at 0.11 and young. Until 1.0 a better syntax is worth a
 breaking change, and every spec that changes the language raises the
 minor version.
 
-There is no text, sound, sprites or 3D yet, and no files or command-line
-arguments. [Not in 0.9](docs/language.md#not-in-09) lists everything the
-language leaves out.
+There is no sound, sprites or 3D yet, and no files or command-line
+arguments. [Not in 0.11](docs/language.md#not-in-011) lists everything
+the language leaves out.
 
 It is tested on `x86_64-linux`: GPU systems on an NVIDIA device, on an AMD
 iGPU through Mesa's RADV and on Mesa's software Vulkan, and the window on

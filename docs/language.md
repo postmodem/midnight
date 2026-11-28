@@ -1,6 +1,6 @@
 # The Midnight language
 
-This is Midnight 0.10.
+This is Midnight 0.11.
 
 Midnight is a compiled, statically typed language for games and
 simulations, built around the entity-component-system (ECS) pattern. Its
@@ -684,19 +684,22 @@ unless a window is open: see [The window](#the-window).
 ## Driving
 
 `MIDNIGHT_DRIVE=FILE` gives any program its **commands**: one to a line,
-read from a file or a named pipe. A line that is empty or begins with `#`
-is skipped, and the spaces around a command are. With commands a program
-is **driven**, and it runs no tick that a command did not let run: before
-each tick begins, window open or not, the runtime carries out commands
-until one lets the tick run. So the same program and the same commands
-give the same answers on every machine; an agent that wants to look,
-decide and look again adds commands to its file and runs it again.
+read from a file or a named pipe, or, with `MIDNIGHT_DRIVE=-`, from
+standard input, which puts the program in a [session](#a-session). A
+line that is empty or begins with `#` is skipped, and the spaces around a
+command are. With commands a program is **driven**, and it runs no tick
+that a command did not let run: before each tick begins, window open or
+not, the runtime carries out commands until one lets the tick run. So
+the same program and the same commands give the same answers on every
+machine: a file of commands is a test or a replay, and a session is a
+conversation with a program that stays where it is between commands.
 
 | Command | Meaning |
 | ------- | ------- |
 | `tick`, `tick N` | Let the next tick, or the next `N` ticks, run. |
 | `query TERMS`, `query TERMS from N` | Print the entities an `each` with these terms would visit, and their components. |
 | `resource NAME` | Print a resource the program declares. |
+| `quit` | End the program where it stands. |
 
 The commands of a window are in [Without a display](#without-a-display)
 and [Commands for the keyboard and the mouse](#commands-for-the-keyboard-and-the-mouse);
@@ -705,18 +708,27 @@ they need an open window.
 - Commands are carried out between ticks, so `query` and `resource` see
   the world as the last tick and the top-level code after it left it,
   every queued change applied.
-- When the commands run out, ticks run freely; an open window is closed
-  as by `close`, and so is a window opened later, in its first tick. A
-  program whose `World.run` ends only by `World.stop` runs until it calls
-  it.
+- When the commands of a file run out, ticks run freely; an open window
+  is closed as by `close`, and so is a window opened later, in its first
+  tick. A program whose `World.run` ends only by `World.stop` runs until
+  it calls it, or until a `quit` ends the file.
 - When the program ends by its last statement or by `exit`, the commands
   up to the next `tick` are carried out. After `exit` they see the world
   as it was where `exit` was called, part way through a tick if it was
   called in a system, with `Time.tick` the tick in progress, and, if it
   was called inside an `each`, without the changes that loop queued.
+- **`quit`** takes nothing and is answered `midnight: drive: quit`; the
+  program carries out no other command. Before the program's end it ends
+  as `exit` would between ticks: standard output written out, an open
+  window closed without a tick, the last `stats` line written, status 0.
+  After the program's end, `quit` lets the end go on as the end of a
+  file's commands does: an open window is closed, the last `stats` line
+  is written, a debug build checks its buffers, and the status is the
+  one the program ended with.
 - A run-time error, an error of the device or the window, or a wrong
-  command ends the program at once: a pending `tick` is not answered and
-  no further command is carried out.
+  command in a file ends the program at once: a pending `tick` is not
+  answered and no further command is carried out. In a session a wrong
+  command is refused instead.
 - Each command is answered on standard error, when it has been carried
   out: `midnight: drive: ` and the command as it was written, and more
   for some. For `tick` the line comes when its last tick has finished,
@@ -766,27 +778,37 @@ is current too, so later `stats` lines can differ from those of a run
 without the query. What the program prints does not change.
 
 These stop the program with status 1 and a line that names the file and
-the line number; when more than one applies, the first in the line, left
-to right, is reported:
+the line number, or are refused in a session; when more than one
+applies, the first in the line, left to right, is reported:
 
 ```
-query: `NAME` is not a component or tag of this program
+query: `NAME` is not a component or tag of this program; it has NAMES
 query: tag `NAME` can't be a term; filter with `with: NAME`
 query: `Entity` can't be a filter
 query: `NAME` appears twice
 query: at least one component or `Entity` comes before `with:` and `without:`
 query: `from` takes a row number from 0 up
 `query` takes the terms of an `each`
-resource: `NAME` is not a resource of this program
+resource: `NAME` is not a resource of this program; it has NAMES
 resource: `NAME` is built in; `resource` reads the program's own resources
 `resource` takes the name of a resource
 unknown command `NAME`
 `tick` takes a number of ticks from 1 up, or nothing
+`quit` takes nothing
 can't `COMMAND`: no window is open
 ```
 
 The last of the `query` and `resource` groups is for a line that cannot
-be read as the command at all. A command of the window while
+be read as the command at all. `NAMES` lists what the program has, in
+the order it declares them, a required file's where its `require` is,
+all on the one line: for `query` its components and tags together, a tag
+followed by ` (tag)`; for `resource` its resources, the built-in ones
+left out; `none` when there are none.
+
+```
+query: `Bal` is not a component or tag of this program; it has Ball, Paddle, Frozen (tag)
+resource: `Average` is not a resource of this program; it has Score, Stats
+``` A command of the window while
 `Window.open?` is false stops the program with ``can't `COMMAND`: no
 window is open``, `COMMAND` as written (`capture` and `draws` say ``can't
 capture: no window is open`` and ``can't list the draws: no window is
@@ -801,6 +823,86 @@ midnight: drive: steps.drive:4: query: `Postion` is not a component or tag of th
 
 `MIDNIGHT_FORMAT=json` writes each answer and error as a JSON object;
 [JSON output](json.md) describes them.
+
+### A session
+
+With `MIDNIGHT_DRIVE=-` the program reads its commands from standard
+input and is **in a session**. Everything above holds: the same
+commands, the same answers, the same tick rule. Four rules differ.
+
+1. **A wrong command is refused.** Every command error that stops a
+   program driven by a file, of this section, of the window and of the
+   keyboard and the mouse, `capture` with no device among them, instead
+   writes `midnight: drive: refused: ` and the error's message, without
+   the file and the line, and the program goes on to the next command:
+
+   ```
+   midnight: drive: refused: a frame of 16000x40 pixels is larger than 8192 by 8192
+   ```
+
+   A refused command changes nothing in the program: no tick runs, no
+   input is given, no window changes size or scale, and the commands
+   before and after it are carried out as if it had not been sent. A
+   `capture` refused because its file cannot be written may have created
+   or emptied that file, opened a headless window's device (and printed
+   its `info` line), and counted a submission and a wait in the next
+   `stats` line. A run-time error, an error of the device or the window,
+   and running out of memory still end the program at once.
+
+2. **A `ready` line each time the program waits for a command.** Before
+   it reads the first line, and after each line it reads, the program
+   writes a `ready` line, unless it ends while carrying the line out:
+   after `quit`, a run-time error, an error of the device or the window,
+   or running out of memory none follows, and the end of standard error
+   is the end of the answer. It gives `Time.tick`, the number of bytes
+   the program has written to standard output since it started, and
+   whether the program has ended; `1 tick` and `1 byte out` for one:
+
+   ```
+   midnight: drive: ready: 10 ticks, 117 bytes out
+   midnight: drive: ready: 64 ticks, 2048 bytes out, the program has ended
+   ```
+
+   Standard output is written out before it. A line that is empty or a
+   comment gets its `ready` too. What the program writes while it
+   carries out a line (its output, the answers, `info` lines) comes
+   before that line's `ready`. A `stats` line comes where a file has it:
+   the line of a tick with the command that lets the next tick run, or
+   with `quit` or the end of input. So a client that writes a line and
+   reads up to the next `ready`, or to the end of standard error, never
+   waits for nothing, and the count of bytes splits standard output,
+   read on a pipe of its own, exactly between the lines.
+
+3. **At its end, a program in a session waits.** When the program ends
+   by its last statement or by `exit`, a pending `tick` is answered as in
+   a file, and the program then carries out commands until `quit` or the
+   end of input: `query`, `resource`, `draws` and `capture` see the world
+   as a file's end commands do. A `tick` is answered `tick: the program
+   ended after 0 ticks` (`tick 5: …` for `tick 5`) and changes nothing.
+   Its `ready` lines say `the program has ended`.
+
+4. **The end of input ends the program** as `quit` does, without writing
+   a line: at once when the program is waiting for a command, and
+   otherwise when the `tick` it is carrying out has run its ticks. A last
+   line without a line break is carried out first. A program whose
+   standard output or error has no reader left may end earlier, by
+   `SIGPIPE`.
+
+Commands are read between ticks only: a `tick N` that is running is not
+interrupted. A program in a session may show its window, but the window
+is not serviced while the program waits for a command: a resize or close
+at the desktop is seen when the next tick begins. With
+`MIDNIGHT_THREADS` set to `awake` every thread keeps polling while the
+program waits.
+
+The commands of a session without its refused ones, up to its first
+`tick` after the program's end, make a file of commands that gives the
+same standard output and answers, the line numbers of the JSON form
+aside.
+
+`midnight session start` holds a program in a session for commands sent
+one call at a time with `midnight drive`; [Running](running.md#sessions)
+describes them.
 
 ## The window
 
@@ -1011,7 +1113,7 @@ Each needs an open window.
 | `scale S`      | A point becomes `S` pixels, a decimal number from 0.5 to 4 with at most six places; a pixel size is the size in points times `S`, halves rounded up. Headless only. |
 | `close`        | The window is closed, as if at the desktop.                |
 | `capture FILE` | Write the last frame to `FILE` as a PNG.                   |
-| `draws`        | Print the last frame as text: its size, its background and its draws, in order. See [The command `draws`](#the-command-draws). |
+| `draws`, `draws from N` | Print the last frame as text: its size, its background and its draws, in order, at most 100. See [The command `draws`](#the-command-draws). |
 
 - `resize`, `scale` and `close` take effect in the tick that begins next,
   through the events above. `close` is carried out in its place among the
@@ -1036,7 +1138,9 @@ Each needs an open window.
   in a program that is not headless or that would make a frame larger
   than 8192 pixels on a side, and a `capture` that cannot be made (no
   device, the file cannot be written) stop the program with status 1 and
-  a line that names the file and the line number:
+  a line that names the file and the line number, or are refused in a
+  [session](#a-session). `resize` and `scale` check the frame's size
+  before they change the window:
 
   ```
   midnight: drive: steps.drive:4: `resize` needs MIDNIGHT_WINDOW=headless
@@ -1526,13 +1630,14 @@ labels for a few entities, or from a loop over a component the CPU keeps.
 
 | Command | Meaning |
 | ------- | ------- |
-| `draws` | Print the last frame as text: its size, its background and its draws, in order. |
+| `draws` | Print the last frame as text: its size, its background and its first 100 draws, in order. |
+| `draws from N` | The same, from draw `N`, a whole number from 0 up. |
 
 It is answered on standard error, like every command of
-[Without a display](#without-a-display), and it is the one command whose
-answer has more than one line: one for the frame, one for the background
-and one for each draw. Every line begins `midnight: drive: `, and the
-lines after the first go on with two spaces:
+[Without a display](#without-a-display), and, as `query` is, with more
+than one line: one for the frame, one for the background and one for
+each draw listed. Every line begins `midnight: drive: `, and the lines
+after the first go on with two spaces:
 
 ```
 midnight: drive: draws: 3 ticks, 320x200, 3 draws
@@ -1543,8 +1648,20 @@ midnight: drive:   Draw.circle(197.0, 96.0, 4.0, Color(255, 200, 0, 255))
 ```
 
 - The last frame is the one `capture` would write. The first line gives
-  the value `Time.tick` had when the frame was made, the window's size in
-  points, and the number of draws listed: `1 tick` and `1 draw` for one.
+  the command, the value `Time.tick` had when the frame was made, the
+  window's size in points, and the number of draws in the frame: `1
+  tick` and `1 draw` for one.
+- At most 100 draws are listed, as `query` lists rows. Draws are numbered
+  from 0 among those `draws` lists, so the count, `N` and the range are
+  all over draws listed. When the draws that follow are not all of them,
+  the first line ends with the first and last listed, or `none from N`
+  when none is. The background is printed on every page:
+
+  ```
+  midnight: drive: draws: 3 ticks, 320x200, 960 draws, 0 to 99
+  midnight: drive: draws from 900: 3 ticks, 320x200, 960 draws, 900 to 959
+  midnight: drive: draws from 2000: 3 ticks, 320x200, 960 draws, none from 2000
+  ```
 - The background is printed with the `a` the program gave it, which
   changes nothing in the picture.
 - A draw is printed as the statement that made it, with the numbers it
@@ -1561,10 +1678,15 @@ midnight: drive:   Draw.circle(197.0, 96.0, 4.0, Color(255, 200, 0, 255))
   prints the 32-bit number; `puts` of a `Float32` field holding the same
   value prints it as the 64-bit `Float` it is read as.
 - `draws` needs no device and works with `MIDNIGHT_GPU=off`. Where the
-  draws of a GPU block are in GPU memory they are brought back for it,
-  behind one wait.
-- It takes no argument, and it is an error, as for `capture`, when no
-  window is open: `can't list the draws: no window is open`.
+  draws of a GPU block are in GPU memory they are brought back for each
+  page, behind one wait. A page checks its words before it brings
+  anything back.
+- It is an error, as for `capture`, when no window is open: `can't list
+  the draws: no window is open`. ``draws: `from` takes a draw number from
+  0 up`` is the error for `from` with no number after it, or one that is
+  not all digits, and
+  ``\`draws\` takes nothing, or `from` and a draw number`` for anything
+  else after `draws`.
 - It writes no file.
 
 What drawing costs, and what follows from it, is in
@@ -1837,8 +1959,9 @@ window that is shown. A headless program without commands has no input.
   ends are judged the same way.
 
 These stop the program with status 1 and a line that names the file and
-the line number, as a wrong command of the window does, and in this order
-when more than one applies:
+the line number, as a wrong command of the window does, or are refused
+in a [session](#a-session), and are judged in this order when more than
+one applies:
 
 1. any of these while no window is open: ``can't `COMMAND`: no window is
    open``, as [Driving](#driving) says;
@@ -3166,7 +3289,9 @@ What follows from this:
   in GPU memory bring its array back every tick (see
   [Draws on several cores](#draws-on-several-cores)).
 - **`draws` is for looking and for tests.** On a device it brings a GPU
-  block's records back behind a wait.
+  block's records back behind a wait, all of them for every page: a
+  frame of 100,000 draws listed whole is 1,000 pages, and as many
+  downloads of every record.
 
 ## Errors
 
@@ -3205,8 +3330,9 @@ The runtime errors are:
   resource field or a constant.
 - `ljust` or `rjust` given an empty padding string, whatever `n` is.
 
-The commands of `MIDNIGHT_DRIVE` stop a program with errors of their own;
-see [Driving](#driving), [Without a display](#without-a-display) and
+The commands of `MIDNIGHT_DRIVE` stop a program with errors of their own,
+which a [session](#a-session) refuses instead; see [Driving](#driving),
+[Without a display](#without-a-display) and
 [Commands for the keyboard and the mouse](#commands-for-the-keyboard-and-the-mouse).
 
 In a GPU system an error is reported when the `each` it happened in ends,
@@ -3312,7 +3438,7 @@ argument by position; it is not an expression. The `NL` after `do |…|`, and th
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.10
+## Not in 0.11
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
@@ -3343,12 +3469,13 @@ commands that look at pixels; arguments of a draw given by name; three
 dimensions; code written in Midnight that runs for each pixel; and lines
 for draws in `midnight plan`.
 
-Driving leaves these out: a session that stays open, with a channel of
-its own for commands and answers and errors that leave the program
-running; capturing a frame at every tick by one command; changing the
-world from commands, and commands that wait for a condition; pending
-events, single fields, filters on values and the built-in resources in
-`query` and `resource`.
+Driving leaves these out: interrupting a `tick N` that is running;
+servicing a shown window while a session waits for a command; frames
+sent over the pipe instead of written to a file; capturing a frame at
+every tick by one command; changing the world from commands, commands
+that wait for a condition, and looking at the world after a run-time
+error; pending events, single fields, filters on values and the
+built-in resources in `query` and `resource`.
 
 The keyboard and the mouse leave these out: text input (characters, the
 layout's names for keys, dead keys, input methods), key repeat and the

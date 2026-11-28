@@ -37,11 +37,13 @@ The first line of every JSON form, from the compiler and from a program,
 is
 
 ```json
-{"kind":"midnight","format":1,"version":"0.9.0"}
+{"kind":"midnight","format":2,"version":"0.11.0"}
 ```
 
 `format` is the version of the forms on this page, an integer; `version`
-is the compiler's, the one that built the program.
+is the compiler's, the one that built the program. `format` 2 came with
+Midnight 0.11, when a `draws` answer began to list a page of a frame's
+draws rather than all of them.
 
 ### Numbers
 
@@ -181,20 +183,34 @@ kind.
 | `answer` | each drive command carried out | below |
 | `drive_error` | a command that stops the program | `file`, `line`, `message` |
 | `drive_unopened` | a file of commands that can't be opened | `file`, `message` |
+| `ready` | a program in a session waits for a command | `tick`, `output_bytes`, `ended` |
+| `refused` | a command refused in a session | `command`, `line`, `message` |
+
+`ready` and `refused` are the lines of a [session](language.md#a-session):
+`output_bytes` counts every byte the program has written to standard
+output, and `ended` is true once the program has reached its end.
+`refused` has the command as written and the message of the error a
+file would report, without the file and the line.
+
+```json
+{"kind":"ready","tick":10,"output_bytes":117,"ended":false}
+{"kind":"refused","command":"query Bal","line":3,"message":"query: `Bal` is not a component or tag of this program; it has Ball"}
+```
 
 ### `answer`
 
 Every answer has `name` (the command's first word), `command` (the line
-as written, the spaces around it removed), `line` (its line in the file)
+as written, the spaces around it removed), `line` (its line in the file,
+or on standard input in a session, empty lines and comments counted)
 and `tick` (the value of `Time.tick` when it is answered: one more than
 the tick that last ended), then members by command:
 
 | Command | Members |
 | ------- | ------- |
 | `tick`, `tick N` | `ran` (the ticks that ran), `ended` (true when the program ended first) |
-| `resize`, `scale`, `close`, the keyboard and mouse commands | none |
+| `resize`, `scale`, `close`, `quit`, the keyboard and mouse commands | none |
 | `capture FILE` | `file`, `frame_tick`, `pixel_width`, `pixel_height`, `crc` (eight hex digits, as the text) |
-| `draws` | `frame_tick`, `width`, `height`, `background` (a color, with the `a` the program gave it), `draws`: an array of shapes |
+| `draws`, `draws from N` | `frame_tick`, `width`, `height`, `background` (a color, with the `a` the program gave it), `count` (the draws in the frame, all of them), `from` (the first draw listed), `draws`: an array of at most 100 shapes |
 | `query …` | `count` (the entities that match, all of them), `from` (the first row listed), `rows`: an array of at most 100 rows |
 | `resource NAME` | `resource` (the name), `fields`: the resource as an object |
 
@@ -205,7 +221,7 @@ table (`x`, `y`, `width`, `height`, `radius`, `x1` … `y3`, `text`,
 string of any length is written whole.
 
 ```json
-{"kind":"answer","name":"draws","command":"draws","line":2,"tick":1,"frame_tick":1,"width":64,"height":48,"background":[10,20,30,255],"draws":[{"shape":"circle","x":10.0,"y":10.0,"radius":2.25,"color":[4,5,6,7]},{"shape":"text","x":4.0,"y":4.5,"text":"SCORE 00040\nLIVES 3","size":24.0,"color":[255,255,255,255]}]}
+{"kind":"answer","name":"draws","command":"draws","line":2,"tick":1,"frame_tick":1,"width":64,"height":48,"background":[10,20,30,255],"count":2,"from":0,"draws":[{"shape":"circle","x":10.0,"y":10.0,"radius":2.25,"color":[4,5,6,7]},{"shape":"text","x":4.0,"y":4.5,"text":"SCORE 00040\nLIVES 3","size":24.0,"color":[255,255,255,255]}]}
 ```
 
 A row of `query` is an object: `entity`, then a member for each
@@ -223,3 +239,27 @@ variant's name as a string; a `String` is a string; `Bool` is `true` or
 In an answer, `tick` is `Time.tick` when it is answered: one more than
 the tick that last ended, or, after `exit` in a system, the tick in
 progress. In a `stats` line, `tick` is the tick the line counts.
+
+## Sessions
+
+`midnight session start`, `stop` and `list` and `midnight drive` take
+`--format text|json` for their own lines, as the compiler does: with
+`json` each writes the first line first, on standard error, or on
+standard output for `session list`, whose lines go there. `session start
+--format json` also makes the session's program write JSON, and passes
+its lines on after the compiler's, beginning with the program's own first
+line, as `run --format json` does. `drive` passes the program's lines on
+in the session's form, whatever its own.
+
+| Kind | When | Members |
+| ---- | ---- | ------- |
+| `session` | a session started or stopped | `name`, `event` (`started` or `stopped`), `status` (optional: for `stopped`, the program's status, or 128 plus the signal that ended it) |
+| `session_listed` | `midnight session list`, one per session | `name`, `file` (as `session start` was given it), `tick`, `ended` |
+| `session_error` | a message of `session` or `drive` | `message`: the text's line after `midnight: ` |
+
+```json
+{"kind":"session","name":"catch","event":"started"}
+{"kind":"session_listed","name":"catch","file":"examples/catch.12am","tick":10,"ended":false}
+{"kind":"session","name":"catch","event":"stopped","status":0}
+{"kind":"session_error","message":"no session is running; start one with `midnight session start FILE`"}
+```

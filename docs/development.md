@@ -23,7 +23,8 @@ starts from an approved spec in [`specs/`](../specs/).
 
 ```
 src/            the compiler, one module per stage:
-                source, lexer, parser, check, plan, loops, emit, driver
+                source, lexer, parser, check, plan, loops, emit, driver;
+                session, `midnight session` and `midnight drive`
 runtime/        midnight_rt.h, midnight_rt.c; midnight_gpu.h, midnight_gpu.c
                 for programs with a GPU system or a window;
                 midnight_window.h, midnight_window.c for programs with a
@@ -42,6 +43,9 @@ tests/panic/    programs that must stop with the run-time error in NAME.err
 tests/plan/     programs whose transfer plan must be exactly NAME.plan
 tests/loops/    programs for which `midnight loops` must print exactly
                 NAME.loops
+tests/session/  programs held in a session with NAME.drive on standard
+                input, which must print NAME.out and write NAME.session
+                to standard error
 tests/pool/     stress.c, which exercises the thread pool on its own
 tests/device/   strict_div_sqrt.c, strict `/` and `sqrt` on the device
 tests/render/   the reference renderer that captures are held to

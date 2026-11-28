@@ -1,6 +1,6 @@
 # 0012 — Sessions
 
-- **Status:** approved
+- **Status:** implemented
 - **Depends on:** 0011
 
 ## Goal
@@ -667,3 +667,122 @@ From the planning probe and audit, on the development machine (RTX
   lost to restarts after a wrong command, one session restarting seven
   times while guessing names; a program left running after its client
   was killed kept a core busy.
+
+## Outcome
+
+Implemented, with the differences listed under "Differences from the
+design". Every criterion passes on x86_64-linux: a Ryzen 9 9950X3D beside
+an RTX 5090 and `llvmpipe` of Mesa 26.1.8, `wgpu-native` 27.0.4.0, SDL
+3.4.10, sway 1.12, clang 21.1.8, Claude Code 2.1.327 for the gate and the
+spike.
+
+### Acceptance criteria
+
+| # | Result |
+| - | ------ |
+| 1 | `session_programs` gives the `.out` and `.session` of all eight programs of `tests/session` in release and debug, and the same through `run_both_forms` in JSON; `json/session` pins the JSON of a session. |
+| 2 | `session_refuses_every_drive_error` passes for all 67 cases of `DRIVE_ERRORS`: each refused with the file's message, and the output and every other answer those of a file without the wrong command. |
+| 3 | `session_live` passes: each command's output is the bytes its `ready` counts, and every answer comes before its `ready`. |
+| 4 | `session_end_of_input` passes, windowless and with a headless window (status 0 within a second, nothing of a fourth tick); in `session_commands` the program of a holder killed with `SIGKILL` has ended within a second. |
+| 5 | `quit_world_run` (a file), `session/quit_before_end` (status 0) and `session/quit_after_end` (the status of `exit(3)`). |
+| 6 | `draws_from` and `draws_pages` (also on the device, through `gpu_programs`) pass; `window_drawn` and `window_shown` list `flock` and `draw_many` in pages and pass on the RTX 5090 and on `llvmpipe`, in the build sandbox too; only `draw_many.draws` changed among the `.draws` files. |
+| 7 | `session_commands` passes; the gate passed before any of `src/session.rs` was written (below). |
+| 8 | `session_programs` runs every program of `tests/session` in debug, `session/refusals` with refusals of every kind and then the end of input after its last statement: no sanitizer report, no live buffer. |
+| 9 | Of the expected files of 0.10.0, only `draw_many.draws`, the `query` and `resource` errors of `query_errors`, the `draws` error of `drive_errors` and the ten `.json` files changed, the last in their first line and, in `json/drive_window` and `json/run_text`, by the `count` and `from` that a `draws` answer gains in `format` 2. `emit-c` and `emit-wgsl` of all 901 programs of 0.10.0 give 0.10.0's output but for the version string. |
+| 10 | The suite, the software and hardware GPU modes, the window tests and `nix flake check` pass. In one run of `nix flake check`, `window_keeps_time` (3.4 s for 120 ticks drawing 10,000 shapes on `llvmpipe`) and once the harness's timed self-test failed while every check ran at once; each passed run alone, and every other check passed. |
+| 11 | The reference says 0.11, `midnight --version` prints `midnight 0.11.0`, `docs/json.md` has `format` 2 and the new kinds, the README's commands work as written, `skill_is_short_and_works` passes (113 lines of body), and `tests/COVERAGE.md` has "A session" and "`midnight session` and `midnight drive`". |
+| 12 | The spike ran: below. |
+| 13 | Every session runs headless; the tests run with the display variables of `no_display`; window programs ran headless or inside `tests/window/compositor.sh`. |
+
+### The gate
+
+Run with a holder of the same design written for the purpose (std only,
+`process_group(0)`, standard streams on `/dev/null`, a child under it, a
+Unix socket) before `src/session.rs`:
+
+- An ordinary Bash tool call: the holder was re-parented to init in its
+  own group and answered the next call.
+- `claude -p` confined as the evals run agents (`--restricted`, only
+  `Bash(midnight *)`, `env -i` with a runtime directory of its own),
+  Haiku: started in one Bash call, answered the next two. It outlived
+  `claude` itself, so the spike stopped every session after each run.
+- The evals' wrapper, as `proc::capture` runs a call (a group of its own,
+  both streams read to their end, the group killed after): the call
+  returned in 18 ms, the kill reached nothing, and the holder answered
+  and stopped from later wrapped calls.
+
+### Measured
+
+On the RTX 5090, `flock` driven by its `.drive` file without the capture:
+0.23 s in release with one page of `draws`, 1.3 s with all 1,000 pages of
+its 100,000 draws; 1.5 s and 4.3 s in debug. `window_drawn` with `flock`
+and `draw_many` in pages takes 35 s on the RTX 5090 and 16 s on
+`llvmpipe`, in both build modes and at four scales.
+
+### The spike
+
+Three tasks: a door placed by the house's width, seen in the frame; a
+run-time error at tick 374 from a particle that reaches the wall exactly;
+a constant to tune until a thrown ball lands in a range. Three arms at the
+same build, run separately: files of commands with `midnight session` and
+`drive` denied; the session and the skill; the skill and a throwaway MCP
+server whose tools are the CLI's commands, a capture also returned as an
+image, with no shell. Sonnet and Haiku, one session each: 18 sessions.
+Each agent had a directory and `XDG_RUNTIME_DIR` of its own, no display
+and the device; after each run its sessions were listed and none was left
+running. The skill was given as a plugin of the session, and no
+`CLAUDE.md` of the account reached the agents.
+
+| Arm | Turns | Cost at API prices | Builds | Replays | Done |
+| --- | --- | --- | --- | --- | --- |
+| Files | 73 | $0.17 | 23 | 12 | 6 of 6 |
+| Session + skill | 61 | $0.16 | 13 | 0 | 6 of 6 |
+| MCP + skill | 62 | $0.21 | 13 | 0 | 6 of 6 |
+
+No command was refused in any session. Sonnet found both bugs by reading
+the source in every arm and ran the program to confirm; Haiku looked. In
+the files arm it wrote copies of the program with `puts` lines and built
+11 times for the crash; with a session it stepped and queried in 5. No
+session lost a third of its turns to holding a session: agents chained
+`session start`, `drive` and `session stop` in one call. The tuning task
+was solved by arithmetic in every arm.
+
+What it informed:
+
+- **The skill.** Two mistakes seen went into it: driving a session after
+  editing the source, which holds the program as built, and copies of the
+  program with `puts` where `query` shows the state.
+- **The MCP question.** The MCP arm did its tasks in about the turns of
+  the session arm (62 against 61) and at more cost, and no session lost a
+  third of its turns to holding one: by the measure stated before the
+  runs, a server is not worth a spec now. Every task of the MCP arm was
+  done in the session arm with the same commands.
+
+The tasks are small and one session a cell is rough: it says the session
+and the skill cost nothing in turns or money and save builds where an
+agent looks, not that they make agents succeed more. Transcripts and the
+pilot stay with the planning notes.
+
+### Differences from the design
+
+- `midnight drive` and `session stop` print ``no session `NAME` is
+  running; `midnight session list` lists those that are`` for a name that
+  does not run; the spec gave no text.
+- The message of a program that writes no `ready` gives the seconds the
+  holder waited, 60 unless the test variable shortens them. What the
+  program wrote is passed on as far as it was written out: the holder
+  ends it with `SIGKILL`.
+- The holder sends a command's standard output on as it arrives rather
+  than at the `ready`, so a long printing `tick` does not grow its memory;
+  the lines on standard error still come after it, as the spec orders.
+- The holder removes the session's directory before it tells its client
+  the program stopped, so a `session start` of the same name right after
+  `drive quit` finds the name free.
+- `session stop` and `session list` work with a holder of another version;
+  `drive` refuses it, as the design says.
+- `drive -` followed by commands as arguments is a usage error.
+- `window_shown` lists frames in pages as `window_drawn` does, its count
+  taken from a run with no device.
+- Criterion 9 left out the `count` and `from` of `draws` answers in the
+  two `.json` files that hold one; they come with `format` 2.
+- The README's Status said 0.9 and "no text"; it now says 0.11.

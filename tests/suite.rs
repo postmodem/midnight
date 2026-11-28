@@ -6145,6 +6145,100 @@ fn session_commands() {
     );
 }
 
+/// `skills/midnight/SKILL.md` is an Agent Skill: frontmatter with `name:
+/// midnight` and a `description`, and a body of at most 150 lines. Every
+/// line of its `sh` code blocks, run in order in a directory that has
+/// `examples/`, with sessions kept in a runtime directory of the test's
+/// own, exits with status 0: on the device of GPU mode, or on `llvmpipe`
+/// when `MIDNIGHT_TEST_SOFTWARE_ICD` names it, since the skill captures a
+/// frame. With neither, only the form is checked.
+#[test]
+fn skill_is_short_and_works() {
+    let skill = std::fs::read_to_string("skills/midnight/SKILL.md").expect("read the skill");
+    let mut parts = skill.splitn(3, "---\n");
+    assert_eq!(parts.next(), Some(""), "the skill begins with frontmatter");
+    let front = parts.next().expect("frontmatter");
+    let body = parts.next().expect("a body");
+    assert!(
+        front.lines().any(|line| line == "name: midnight"),
+        "{front}"
+    );
+    assert!(
+        front.lines().any(|line| line
+            .strip_prefix("description: ")
+            .is_some_and(|text| text.len() > 40)),
+        "{front}"
+    );
+    let lines = body.lines().count();
+    assert!(lines <= 150, "the body has {lines} lines");
+
+    let device = Device::from_env()
+        .or_else(|| std::env::var_os("MIDNIGHT_TEST_SOFTWARE_ICD").map(|_| Device::Software));
+    let Some(device) = device else {
+        note("skill_is_short_and_works: no device, the commands not run");
+        return;
+    };
+    let mut commands = Vec::new();
+    let mut in_block = false;
+    for line in body.lines() {
+        match line {
+            "```sh" => in_block = true,
+            "```" => in_block = false,
+            line if in_block && !line.trim().is_empty() && !line.starts_with('#') => {
+                commands.push(line.to_string())
+            }
+            _ => {}
+        }
+    }
+    assert!(
+        commands
+            .iter()
+            .any(|line| line.starts_with("midnight session start")),
+        "{commands:?}"
+    );
+    let place = SessionPlace::new("skill");
+    std::os::unix::fs::symlink(
+        std::path::absolute("examples").expect("an absolute path"),
+        place.dir.join("examples"),
+    )
+    .expect("link examples");
+    let compiler = PathBuf::from(
+        std::env::var_os("MIDNIGHT_BIN")
+            .filter(|path| !path.is_empty())
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_midnight").into()),
+    );
+    let compiler_dir =
+        std::path::absolute(compiler.parent().expect("a directory")).expect("an absolute path");
+    let mut path = OsString::from(compiler_dir.as_os_str());
+    if let Some(rest) = std::env::var_os("PATH") {
+        path.push(":");
+        path.push(rest);
+    }
+    for line in &commands {
+        let mut command = Command::new("sh");
+        command.args(["-c", line]);
+        no_display(&mut command);
+        on_device(&mut command, device);
+        command
+            .env("PATH", &path)
+            .env("XDG_RUNTIME_DIR", &place.runtime)
+            .env("MIDNIGHT_CFLAGS", STRICT_CFLAGS)
+            .env_remove("MIDNIGHT_WINDOW")
+            .env_remove("MIDNIGHT_FORMAT")
+            .env_remove("MIDNIGHT_THREADS")
+            .env_remove("MIDNIGHT_DRIVE")
+            .current_dir(&place.dir);
+        let output = command.output().expect("run sh");
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{line}\n--- stdout\n{}--- stderr\n{}",
+            text(&output.stdout),
+            text(&output.stderr)
+        );
+    }
+}
+
 use std::os::unix::fs::PermissionsExt;
 
 /// The ids of the processes whose executable is `exe`.
