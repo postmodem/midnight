@@ -211,7 +211,7 @@ fn compile(path: &Path, check_only: bool, format: Format) -> Option<(String, dri
         gpu,
         threads: emit::has_split_loops(&program),
         window: program.window.is_some(),
-        text: false,
+        text: emit::draws_text(&program),
     };
     Some((emit::emit(&program, &sources), parts))
 }

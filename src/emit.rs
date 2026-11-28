@@ -22,7 +22,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 
 use crate::source::{SourceMap, Span};
-use crate::tir::{self, ComponentId, Cores, Program, Query, QueryId, Run, StmtKind, Term, Type};
+use crate::tir::{
+    self, ComponentId, Cores, Program, Query, QueryId, Run, Shape, StmtKind, Term, Type,
+};
 
 use analysis::Folded;
 use body::FnCx;
@@ -127,6 +129,28 @@ pub fn has_split_loops(program: &Program) -> bool {
         if let analysis::Node::Stmt(stmt) = node
             && let StmtKind::Each {
                 run: Run::Cores(_), ..
+            } = &stmt.kind
+        {
+            found = true;
+        }
+    };
+    for func in &program.funcs {
+        analysis::walk_block(&func.body.block, &mut look);
+    }
+    for system in &program.systems {
+        analysis::walk_block(&system.body.block, &mut look);
+    }
+    analysis::walk_block(&program.main.block, &mut look);
+    found
+}
+
+/// Whether a program has a `Draw.text`.
+pub fn draws_text(program: &Program) -> bool {
+    let mut found = false;
+    let mut look = |node: analysis::Node| {
+        if let analysis::Node::Stmt(stmt) = node
+            && let StmtKind::Draw {
+                shape: Shape::Text, ..
             } = &stmt.kind
         {
             found = true;
