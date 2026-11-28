@@ -1,0 +1,27 @@
+# Text drawn in the ways that decide its pixels, each held to the reference
+# renderer at every scale: sizes whose font pixels are whole points (12,
+# 24, 48) and sizes that make them inexact (10, 17, 7.3), at whole, half
+# and other positions; several lines; characters the font lacks, which
+# show the replacement glyph; `ð`, the one glyph that reaches the sixth
+# column of its cell; and translucent text over a shape and under one.
+
+Window.background = Color(20, 20, 40)
+Window.open("Text", 200, 170)
+
+system show
+  Draw.rect(0, 0, 200, 14, Color(60, 60, 90))
+  Draw.text(2, 1, "SCORE 00042", 12, Color(255, 255, 255))
+  Draw.text(4, 16, "Hg ð é\nÀÿ£°±×", 24, Color(255, 220, 0))
+  Draw.text(120.5, 16.5, "half\nway", 10, Color(0, 255, 255))
+  Draw.text(3.3, 70.7, "17pt\tx\r\n€→\e", 17, Color(255, 0, 255))
+  Draw.text(120.25, 60.75, "7.3 pt", 7.3, Color(255, 255, 255))
+  Draw.text(150, 70, "A", 48, Color(200, 255, 200))
+  Draw.rect(4, 118, 90, 26, Color(0, 160, 0))
+  Draw.text(6, 120, "glass", 24, Color(255, 255, 255, 128))
+  Draw.text(110, 125, "OVER\nUNDER", 12, Color(255, 80, 80, 200))
+  Draw.circle(135, 137, 14, Color(0, 128, 255, 160))
+  Draw.text(0, 146, "\nstart", 12, Color(255, 255, 255))
+end
+
+World.run
+puts "drawn in #{Time.tick} ticks"

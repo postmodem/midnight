@@ -2137,6 +2137,69 @@ fn stats_programs() -> Vec<PathBuf> {
         .collect()
 }
 
+/// Rendering a frame with text makes the uploads the frame makes without
+/// it: `tests/run/text_stats.12am`, run on the device with its captures,
+/// gives the `stats` lines of `text_stats_shapes`, the same program with
+/// every `Draw.text` taken out.
+#[test]
+fn text_stats() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let dir = scratch("text-stats");
+    let run = |source: &Path, mode: Mode| -> Result<String, String> {
+        let exe = exe_path(&dir, source, mode);
+        build(source, &exe, mode)?;
+        let captures = dir.join(format!(
+            "{}-{mode:?}-captures",
+            source.file_stem().unwrap().to_string_lossy()
+        ));
+        std::fs::create_dir_all(&captures).unwrap();
+        let mut command = Command::new(&exe);
+        headless(&mut command, source, true);
+        command.current_dir(&captures);
+        let mut words = vec!["info", "stats"];
+        if device == Device::Software {
+            words.push("software");
+            command
+                .env("VK_DRIVER_FILES", software_driver())
+                .env_remove("VK_ADD_DRIVER_FILES");
+        }
+        command.env("MIDNIGHT_GPU", words.join(","));
+        let output = command.output().expect("run program");
+        let stderr = text(&output.stderr);
+        if output.status.code() != Some(0) {
+            return Err(format!(
+                "{}: exited with {:?}\n{stderr}",
+                source.display(),
+                output.status
+            ));
+        }
+        let shots = std::fs::read_dir(&captures).unwrap().count();
+        if shots != 3 {
+            return Err(format!("{}: {shots} captures, not 3", source.display()));
+        }
+        Ok(stderr
+            .lines()
+            .filter_map(|line| line.strip_prefix("midnight: gpu: tick "))
+            .map(|line| format!("{line}\n"))
+            .collect())
+    };
+    let text = Path::new("tests/run/text_stats.12am");
+    let shapes = Path::new("tests/run/text_stats_shapes.12am");
+    for mode in MODES {
+        let with = run(text, mode).unwrap();
+        let without = run(shapes, mode).unwrap();
+        assert!(with.lines().count() == 4, "{mode:?}: {with}");
+        assert_eq!(
+            with, without,
+            "{mode:?}: the `stats` lines with text and without"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    note(&format!("text_stats: on {device:?}"));
+}
+
 #[test]
 fn gpu_stats_match_expected() {
     let Some(device) = Device::from_env() else {

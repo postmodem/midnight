@@ -1,0 +1,22 @@
+# One line of text at each size from 5 to 28 points and a sixth of a point
+# more, at positions that step by fractions of a point, held to the
+# reference renderer at every scale: most of these sizes make a pixel of
+# the font a size no 32-bit float holds exactly.
+
+Window.background = Color(0, 0, 0)
+Window.open("Sizes", 240, 330)
+
+system show
+  i = 0
+  y = 1.0
+  while i < 24
+    size = 5 + i + i / 6.0
+    x = 1 + i * 0.37
+    Draw.text(x, y, "Ag%#@ÿ\t", size, Color(255, 255, 255))
+    y += size * 0.55
+    i += 1
+  end
+end
+
+World.run
+puts "drawn in #{Time.tick} ticks"

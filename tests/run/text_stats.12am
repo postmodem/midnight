@@ -1,0 +1,37 @@
+# Shapes and text drawn from ordinary systems on both sides of a GPU
+# system that draws, a frame captured in each tick: rendering a frame
+# with text makes the uploads the frame makes without it,
+# `text_stats_shapes`, which is this program with no `Draw.text`.
+
+component Dot
+  x: Float32
+  v: Float32
+end
+
+system under
+  Draw.rect(0, 0, 96, 12, Color(40, 40, 80))
+  Draw.text(2, 0, "tick #{Time.tick}", 12, Color(255, 255, 255))
+end
+
+gpu system fly
+  each Dot do |dot|
+    dot.x += dot.v
+    dot.x -= 96 if dot.x >= 96
+    Draw.rect(dot.x, 30, 2, 2, Color(255, 255, 0))
+  end
+end
+
+system over
+  Draw.circle(48, 48, 8, Color(0, 255, 0))
+  Draw.text(4, 40, "ok\n  ", 24, Color(0, 0, 255, 128))
+end
+
+Window.background = Color(0, 0, 0)
+Window.open("Stats", 96, 64)
+i = 0
+while i < 50
+  spawn Dot(i * 2, 0.5 + 0.25 * (i % 3))
+  i += 1
+end
+World.run
+puts "ran #{Time.tick} ticks"
