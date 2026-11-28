@@ -84,6 +84,14 @@ has it.
   case, for an agent writing it and for a person reviewing it.
 - Before 1.0, a better syntax is worth a breaking change.
 
+## Grown by building things in it
+
+Midnight grows from the programs written in it: small simulations and
+games first, then larger ones. What those programs need, or find hard,
+chooses the next spec, and each spec is checked against programs that
+use it. A feature waits until a program wants it, and a feature that
+programs want gets built in depth, not as a token.
+
 ## Built through agentic engineering
 
 Midnight itself is built the way its programs are: by agents, from specs a
