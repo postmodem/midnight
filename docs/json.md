@@ -198,13 +198,14 @@ the tick that last ended), then members by command:
 | `query …` | `count` (the entities that match, all of them), `from` (the first row listed), `rows`: an array of at most 100 rows |
 | `resource NAME` | `resource` (the name), `fields`: the resource as an object |
 
-A shape is an object with `shape` (`rect`, `circle`, `line` or
-`triangle`) and its arguments under the names of the reference's table
-(`x`, `y`, `width`, `height`, `radius`, `x1` … `y3`), each a `Float32`,
-then `color`:
+A shape is an object with `shape` (`rect`, `circle`, `line`, `triangle`
+or `text`) and its arguments in order under the names of the reference's
+table (`x`, `y`, `width`, `height`, `radius`, `x1` … `y3`, `text`,
+`size`), each number a `Float32` and `text` a string, then `color`. A
+string of any length is written whole.
 
 ```json
-{"kind":"answer","name":"draws","command":"draws","line":2,"tick":1,"frame_tick":1,"width":64,"height":48,"background":[10,20,30,255],"draws":[{"shape":"circle","x":10.0,"y":10.0,"radius":2.25,"color":[4,5,6,7]}]}
+{"kind":"answer","name":"draws","command":"draws","line":2,"tick":1,"frame_tick":1,"width":64,"height":48,"background":[10,20,30,255],"draws":[{"shape":"circle","x":10.0,"y":10.0,"radius":2.25,"color":[4,5,6,7]},{"shape":"text","x":4.0,"y":4.5,"text":"SCORE 00040\nLIVES 3","size":24.0,"color":[255,255,255,255]}]}
 ```
 
 A row of `query` is an object: `entity`, then a member for each

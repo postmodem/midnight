@@ -5,7 +5,9 @@
 #
 # bench/draw_frame.12am runs with 0, 10,000, 100,000 and 1,000,000 shapes,
 # drawn by its GPU system and, as a second program, by the same system
-# made ordinary, whose list is sent to the device every tick. Each runs
+# made ordinary, whose list is sent to the device every tick. Then
+# bench/draw_text.12am runs with 0, 10,000 and 100,000 characters of
+# text, in lines of 40 at 24 points, drawn by an ordinary system. Each runs
 # RUNS times (default 3) with its window shown and headless, and the
 # fastest run of each counts. A headless window makes no picture, so
 # "frame" is shown minus headless: the time a frame of those shapes adds
@@ -56,5 +58,15 @@ for shapes in 0 10000 100000 1000000; do
     frame=$(awk -v a="$shown" -v b="$headless" 'BEGIN { printf "%.3f", a - b }')
     printf '%-10s %-11s %9s ms %9s ms %9s ms\n' "$shapes" "$side" "$shown" "$headless" "$frame"
   done
+done
+printf '\n%-10s %-11s %12s %12s %12s\n' characters "drawn by" shown headless frame
+for characters in 0 10000 100000; do
+  name="draw_text_$characters"
+  sed "s/^CHARACTERS = .*/CHARACTERS = $characters/" "$here/bench/draw_text.12am" > "$work/$name.12am"
+  $midnight build "$work/$name.12am" -o "$work/$name"
+  shown=$(best "$work/$name" "")
+  headless=$(best "$work/$name" headless)
+  frame=$(awk -v a="$shown" -v b="$headless" 'BEGIN { printf "%.3f", a - b }')
+  printf '%-10s %-11s %9s ms %9s ms %9s ms\n' "$characters" cpu "$shown" "$headless" "$frame"
 done
 echo "device: $device"

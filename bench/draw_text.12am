@@ -1,0 +1,36 @@
+# CHARACTERS characters of text in lines of 40 at 24 points, drawn by an
+# ordinary system in a window of 1920 by 1080 at a scale of 1, for TICKS
+# ticks with no pause between them. Prints the time per tick.
+#
+# bench/draws.sh runs it with CHARACTERS set to several numbers, shown in
+# the compositor of the window tests and headless, as it runs
+# bench/draw_frame.12am.
+
+CHARACTERS = 100_000
+TICKS = 200
+
+resource Lines
+  text: String = "Midnight draws text in monogram, 40 wide"
+end
+
+system show
+  (CHARACTERS / 40).times do |i|
+    Draw.text((i / 45 % 4) * 480, (i % 45) * 24, Lines.text, 24, Color(255, 255, (i * 7) % 256))
+  end
+end
+
+Time.dt = 0.0
+Window.open("Draw text", 1920, 1080)
+
+10.times do
+  World.tick
+end
+
+start = clock
+TICKS.times do
+  World.tick
+end
+seconds = clock - start
+
+puts "characters: #{CHARACTERS}"
+puts "ms_per_tick: #{(seconds * 1000 / TICKS).round(3)}"

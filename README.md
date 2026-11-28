@@ -112,12 +112,14 @@ A GPU system agrees closely with its CPU run and with other GPUs, but not
 to the last bit. Declare it `strict gpu system` and it gives the same bits
 on every device and on the CPU, at a cost in speed.
 
-### A window, shapes, keyboard and mouse
+### A window, shapes, text, keyboard and mouse
 
 `Window.open` shows a window, and every tick ends with a frame of what it
-drew. Four statements draw: `Draw.rect`, `Draw.circle`, `Draw.line` and
-`Draw.triangle`. They work in GPU systems too, where nothing travels back
-to the CPU.
+drew. Four statements draw shapes: `Draw.rect`, `Draw.circle`, `Draw.line`
+and `Draw.triangle`. They work in GPU systems too, where nothing travels
+back to the CPU. `Draw.text` draws text in a built-in pixel font,
+[monogram](https://datagoblin.itch.io/monogram), whose characters all
+have one width, so a score is centered with arithmetic.
 
 ```ruby
 system show
@@ -125,6 +127,7 @@ system show
   each Ball do |ball|
     Draw.circle(ball.x, ball.y, 4, Color(255, 200, 0))
   end
+  Draw.text(8, 8, "SCORE #{Score.points.to_s.rjust(5, "0")}", 24, Color(255, 255, 255))
   World.stop if Keyboard.pressed?(Key::Escape)
 end
 ```
@@ -166,10 +169,12 @@ nix run . -- plan tests/plan/reader.12am
 # The GPU: gravity among bodies
 nix run . -- run examples/nbody.12am
 
-# Windows: 100,000 points moved and drawn on the GPU,
-# and a window whose color follows the pointer (Escape ends it)
+# Windows: 100,000 points moved and drawn on the GPU, a window whose
+# color follows the pointer, and a game: catch falling stars with the
+# arrow keys (Escape ends each)
 nix run . -- run examples/flock.12am
 nix run . -- run examples/input.12am
+nix run . -- run examples/catch.12am
 
 # The same kind of program headless: each frame printed as the
 # statements that drew it, and saved as shapes.png and shapes-cloud.png

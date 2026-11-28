@@ -40,7 +40,10 @@ submission of work to the device and every wait for it. The first line is
 `tick 0`. A line is printed when the next tick starts, or when the program
 ends, so it counts what top-level code transfers after the tick, as
 `midnight plan` does; the last line also counts the code after the loop
-that ticks.
+that ticks. A frame that is rendered counts one upload for each run of draws
+made on the CPU that has something for the device: a run of shapes, with
+or without text among them, or a run of text alone that shows a
+character. Text adds no upload to a run that holds a shape.
 
 ```sh
 MIDNIGHT_GPU=stats MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/flock.drive nix run . -- run examples/flock.12am

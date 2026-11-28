@@ -1,6 +1,6 @@
 # The Midnight language
 
-This is Midnight 0.9.
+This is Midnight 0.10.
 
 Midnight is a compiled, statically typed language for games and
 simulations, built around the entity-component-system (ECS) pattern. Its
@@ -384,7 +384,7 @@ iteration. This holds for every loop form, including `each` and `on`. The
 one exception is the `each` of a [GPU system](#gpu-systems), which `break`
 cannot leave.
 
-Blocks are not values in 0.8. `do |…| … end` is accepted only by the loop
+Blocks are not values. `do |…| … end` is accepted only by the loop
 forms in this document.
 
 ## Functions
@@ -1086,8 +1086,9 @@ spawn Ball(200, 90, -1, 2)
 World.run
 ```
 
-A program draws with statements. `Draw.rect`, `Draw.circle`, `Draw.line`
-and `Draw.triangle` each add one shape to the frame the tick ends with,
+A program draws with statements. `Draw.rect`, `Draw.circle`, `Draw.line`,
+`Draw.triangle` and `Draw.text` each add one shape, or a text, to the
+frame the tick ends with,
 and what is drawn later covers what was drawn earlier: systems in their
 order, statements in theirs. Nothing is drawn that the source does not
 draw, and there is no drawing state: a shape's position, size and color
@@ -1095,7 +1096,7 @@ are its arguments.
 
 `Draw` is a built-in name and can't be declared by a program. A program
 that names it has a window (see [The window](#the-window)). `Draw` is not
-a value and has no fields. Its members are four statements:
+a value and has no fields. Its members are five statements:
 
 | Statement | Draws |
 | --------- | ----- |
@@ -1103,17 +1104,19 @@ a value and has no fields. Its members are four statements:
 | `Draw.circle(x, y, radius, color)` | The disc around `x`, `y`. |
 | `Draw.line(x1, y1, x2, y2, width, color)` | The line from `x1`, `y1` to `x2`, `y2`, `width` points thick, with round ends. |
 | `Draw.triangle(x1, y1, x2, y2, x3, y3, color)` | The triangle with those corners, in either direction. |
+| `Draw.text(x, y, text, size, color)` | The text whose first character's cell has its top left corner at `x`, `y`, in lines `size` points high (see [Text](#text)). |
 
-- Every argument but the last is a `Float`, and an `Int` converts as
-  everywhere. `color` is a `Color`.
+- Every argument of a shape but the last is a `Float`; `Draw.text` takes
+  a `String` third. An `Int` converts to `Float` as everywhere. `color` is
+  a `Color`.
 - Positions and sizes are in **points**, from the window's top left
   corner, `x` to the right and `y` down: the space of `Mouse.x`,
   `Mouse.y`, `Window.width` and `Window.height`. A shape may lie partly or
   wholly outside the window; the part outside is not drawn.
 - Each is a statement: it has no value. It is written with its
   parentheses and every argument, by position.
-- A `width`, a `height` or a `radius` that is not greater than zero draws
-  nothing, and so does a shape with a NaN among its numbers. Neither is an
+- A `width`, a `height`, a `radius` or a `size` that is not greater than
+  zero draws nothing, and so does a shape with a NaN among its numbers. Neither is an
   error.
 - The numbers of a draw are kept as 32-bit `Float`s, each rounded to the
   nearest when the statement runs.
@@ -1227,9 +1230,10 @@ on its own, on the numbers as the draw keeps them. `(px, py)` is the
 center.
 
 - **Nothing.** A draw covers no pixel when one of its numbers is a NaN;
-  when a rectangle's `width` or `height`, a circle's `radius` or a line's
-  `width` is not greater than zero; and when a triangle's `w`, below, is
-  zero. The tests that follow are for the others.
+  when a rectangle's `width` or `height`, a circle's `radius`, a line's
+  `width` or a text's `size` is not greater than zero; when a triangle's
+  `w`, below, is zero; and when a text is empty. Which pixels the
+  characters of a text cover is in [Text](#text). The tests that follow are for the others.
 - **Rectangle:** `x <= px`, `px < x + width`, `y <= py` and
   `py < y + height`.
 - **Circle:** with `dx = px - x` and `dy = py - y`:
@@ -1310,6 +1314,166 @@ error: a draw can't stand in a loop inside a GPU block
   adds the same draws to the list.
 - A draw is not one of the things a block assigns. A block that only draws
   writes no component.
+- A GPU system draws shapes only: `Draw.text` is a compile error there
+  (see [Text](#text)).
+
+### Text
+
+```ruby
+resource Score
+  points: Int = 0
+  missed: Int = 0
+end
+
+system show
+  points = Score.points.to_s.rjust(5, "0")
+  Draw.text(8, 8, "SCORE #{points}", 24, Color(255, 255, 255))
+  if Score.missed >= 3
+    message = "GAME OVER"
+    Draw.text((Window.width - message.length * 12) / 2, 88, message, 24, Color(255, 80, 80))
+  end
+end
+```
+
+`Draw.text(x, y, text, size, color)` draws `text` with the one font built
+into Midnight, monogram, whose characters all take a cell of the same
+size.
+
+| Argument | Type | Meaning |
+| -------- | ---- | ------- |
+| `x`, `y` | `Float` | The top left corner of the first character's cell, in points. |
+| `text`   | `String` | What is drawn. |
+| `size`   | `Float` | The height of a line, in points. |
+| `color`  | `Color` | The color of the characters. Nothing is drawn behind them. |
+
+- It follows every rule of the four shapes: a statement with no value,
+  every argument given by position, an `Int` converting to `Float`,
+  allowed wherever a statement can stand but in a GPU system, its numbers
+  kept as 32-bit `Float`s, and a draw while no window is open dropped
+  after its arguments are evaluated. Its arguments are evaluated in the
+  order written.
+- `size` is the height of a line, from the top of one line to the top of
+  the next; the space between lines is part of it. It is not a "font
+  size" in the sense of other toolkits.
+- A `size` that is not greater than zero draws nothing, and so does a
+  draw with a NaN among its numbers. Neither is an error. An empty string
+  draws nothing.
+
+**Lines and cells.** The text is read as characters (Unicode code
+points), left to right. `"\n"` ends a line: the next character's cell is
+at `x` again, one line lower. Every other character takes one cell, the
+next to the right. A pixel of the font is `u = size / 12` points square,
+a cell is 6 of them wide and 12 high, and a line is 12 high:
+
+- a line of `n` characters, `"\n"` not counted, lies within the
+  rectangle from `x`, `y` to `x + (6 * n) * u`, `y + 12 * u`;
+- the line `i`, counting from 0, begins at `y + (12 * i) * u`.
+
+When `size` is a whole multiple of 3, `u` is exact, and these are
+`n * size / 2` points wide, `size` high, and `y + i * size`: what a
+program computes from `length`. Use a `size` of 24 or a multiple of it,
+which also keeps the font's pixels even (below):
+
+```ruby
+title = "MIDNIGHT"
+Draw.text((Window.width - title.length * 24) / 2, 40, title, 48, Color(255, 255, 255))
+```
+
+**What a cell shows.**
+
+- A character of the font shows its glyph. The font has the 95 printable
+  characters of ASCII (`" "` to `"~"`) and the characters U+00A0 to
+  U+00FF but U+00AD: letters with accents, `£`, `°`, `±`, `×` and the
+  rest.
+- A space and U+00A0 show nothing.
+- Every other character shows the **replacement glyph**, a hollow box:
+  U+00AD, control characters such as `"\t"`, `"\r"` and `"\e"`, and every
+  character beyond U+00FF. So `"\r\n"` ends a line with the replacement
+  glyph in the cell before the break. A character the font lacks is never
+  an error and never moves the characters after it.
+
+**Even pixels.** On a window whose scale is `s`, a pixel of the font
+covers `size / 12 * s` pixels of the frame, and the font's pixels are all
+the same size only when that is a whole number. Text at a `size` that is
+a multiple of 24 looks even at scales of 1, 1.5 and 2, and a multiple of
+48 at 1.25 as well; a multiple of 12, at scales of 1 and 2. Other sizes
+are drawn by the same rule and are as exact, but some of the font's rows
+and columns are a pixel wider than others.
+
+**The font.** The font is monogram by Vinícius Menézio
+(<https://datagoblin.itch.io/monogram>), released under CC0 1.0: it can
+be used, changed and shipped by anyone, in any program, with no notice.
+The file `runtime/font.txt` in Midnight's repository is the definition of
+every glyph: for each character of the font, and for the replacement
+glyph, 12 rows of 6 pixels, `#` for a set pixel and `.` for a clear one.
+Capital letters stand in rows 3 to 9 counted from 0 at the top, accents
+over capitals reach row 0, and descenders reach row 11. Glyphs are 5
+pixels wide with column 5 clear, but for `ð`, whose stroke reaches column
+5. The replacement glyph is the outline of the capital letters' box, rows
+3 to 9 and columns 0 to 4.
+
+**Which pixels text covers.** This extends
+[Which pixels a shape covers](#which-pixels-a-shape-covers), with its
+pixel centers and its 32-bit steps. `u = size / 12` is one 32-bit
+division. For the line `i` of the text, counting from 0, and the cell `k`
+of that line, the font's pixel in column `j` (0 to 5) and row `r` (0 to
+11) of the cell's glyph covers the rectangle
+
+```
+from x + c * u        to x + (c + 1) * u,     c = 6 * k + j
+from y + R * u        to y + (R + 1) * u,     R = 12 * i + r
+```
+
+each bound computed as the product of the whole number (`c`, `c + 1`,
+`R` or `R + 1`, converted to the nearest 32-bit `Float`) and `u`,
+rounded, then the sum, rounded. A pixel of the frame is covered when its
+center is in a rectangle of a set pixel of a glyph, by the rectangle
+test: `left <= px < right` and `top <= py < bottom`.
+
+- Every bound is computed from the start of the text, not from the cell:
+  two pixels of the font side by side, in one glyph or in two, share the
+  bound between them, so text has no gap and no overlap between its
+  characters or its lines, whatever the numbers.
+- The whole numbers are exact as 32-bit `Float`s below 16,777,216: up to
+  2,796,202 characters a line and 1,398,101 lines.
+- At a scale of 1, `Draw.text(10, 20, "A", 12, c)` puts each pixel of the
+  font on one pixel of the frame: the cell covers columns 10 to 15 and
+  rows 20 to 31, and the letter's pixels lie in columns 10 to 14 and rows
+  23 to 29.
+
+**In a GPU system.** `Draw.text` in a GPU block, anywhere in it, or in a
+function a GPU system calls, is a compile error at the statement: a GPU
+system has no strings.
+
+```
+error: `Draw.text` can't stand in a GPU system
+  --> stars.12am:14:5
+   |
+14 |     Draw.text(star.x, star.y, "*", 12, Color(255, 255, 0))
+   |     ^^^^^^^^^ draw text from an ordinary system: a GPU system has no strings
+```
+
+It is the one error the statement gets there: its text is not checked
+further, and neither is where in the block it stands. Its other arguments
+are checked as GPU code.
+
+**Mistakes the compiler explains.** A string given first or second (as
+in `Draw.text("SCORE", 8, 8, 24, c)`), four arguments with the size left
+out, and a number given as the text are each an error that says what to
+write:
+
+```
+error: `Draw.text` takes a `String` to draw
+  --> score.12am:9:19
+   |
+ 9 |   Draw.text(8, 8, Score.points, 24, Color(255, 255, 255))
+   |                   ^^^^^^^^^^^^ write `"#{Score.points}"` to draw a value
+```
+
+So are `Draw.print`, `Draw.puts`, `Draw.string`, `Draw.label`,
+`Draw.write` and `Draw.fill_text`, functions named `text`, `draw_text`,
+`print_text` and `fill_text`, and a `Text` or a `Label` constructed or
+spawned, where the program declares none by that name.
 
 ### Draws on several cores
 
@@ -1321,6 +1485,15 @@ which is the order one thread makes them in. A draw weighs what an `emit`
 does: its arguments and 8 (see
 [What several cores cost](#what-several-cores-cost)). `midnight loops` has
 no reason for a draw.
+
+Text is the exception that follows from what strings are: every
+expression of type `String` keeps an `each` on one core (rule 1 of
+[Independent loops](#several-cores)), so an `each` that draws text runs on
+one core, and `midnight loops` gives the reason it gives for any string,
+``uses a `String` at line N``. A label drawn for each entity of a
+component that a GPU system keeps in GPU memory brings that component's
+array back in every tick, as any ordinary system that reads it does. Draw
+labels for a few entities, or from a loop over a component the CPU keeps.
 
 ### Determinism of a frame
 
@@ -1334,12 +1507,17 @@ no reason for a draw.
   from it only at a pixel for which the two sides of one of the tests,
   computed as above, are equal or one 32-bit step apart, and for a shape
   with a number that is infinite, or below about 1.18e-38 in magnitude and
-  not zero, or whose test overflows.
+  not zero, or whose test overflows. For text the same holds of each of
+  its font's pixels, and a device may also differ for a text whose `size`
+  is below about 1.41e-37 and not zero (its `u` is then below 1.18e-38),
+  and for a text with a line of more than 2,796,202 characters or more
+  than 1,398,101 lines.
 - **A color with an `a` of 255** gives exactly its bytes on every device.
 - **A color with an `a` from 1 to 254** may be rounded differently by a
   device: each of a pixel's three bytes may differ from the rule above by
   one for each such draw over the pixel since the last draw with an `a` of
-  255 covered it.
+  255 covered it. A text is one draw for this: no two of its font's pixels
+  cover one pixel of the frame.
 - **A program cannot read a frame.** What is drawn never reaches what a
   program computes, so a difference between two devices' pictures is never
   a difference in a program's output.
@@ -1373,7 +1551,13 @@ midnight: drive:   Draw.circle(197.0, 96.0, 4.0, Color(255, 200, 0, 255))
   keeps: each with the fewest digits that read back as the same 32-bit
   value, read either as a 32-bit or as a 64-bit number rounded to 32
   bits, in the form `to_s` gives a `Float`, and the color with its four
-  bytes. A draw that covers nothing is printed like any other. `draws`
+  bytes. A text is printed with its string written as `to_s` writes a
+  `String` inside a struct: quoted; `\n`, `\t`, `\r`, `\0`, `\e`, `\\` and
+  `\"` escaped; `\#` before `{`; every other byte below 0x20 as `\x` and
+  two upper-case hexadecimal digits; everything else as itself. So every
+  draw is one line, and a string of any length is printed whole:
+  `Draw.text(8.0, 8.0, "SCORE 00040\nLIVES 3", 24.0, Color(255, 255, 255, 255))`.
+  A draw that covers nothing is printed like any other. `draws`
   prints the 32-bit number; `puts` of a `Float32` field holding the same
   value prints it as the 64-bit `Float` it is read as.
 - `draws` needs no device and works with `MIDNIGHT_GPU=off`. Where the
@@ -1737,7 +1921,7 @@ allowed:
 - calling functions that follow the rules below;
 - one nested `each`, directly inside the block: not inside a loop or a
   branch, and with no `each` inside it;
-- draws, directly in the block: see
+- draws of shapes, directly in the block: see
   [Draws in a GPU system](#draws-in-a-gpu-system).
 
 Everything else is a compile error that names the construct and gives the
@@ -2597,6 +2781,7 @@ are constants.
 | `s.upcase`, `s.downcase`    | ASCII letters converted; others unchanged.       |
 | `s.include?(t)`, `s.start_with?(t)`, `s.end_with?(t)` | `Bool`.                |
 | `s.ljust(n)`, `s.rjust(n)`  | Padded with spaces to at least `n` characters.   |
+| `s.ljust(n, pad)`, `s.rjust(n, pad)` | Padded with `pad`, repeated and cut after a whole character, to at least `n` characters: `"42".rjust(5, "0")` is `"00042"`, `"ab".ljust(7, "xy")` is `"abxyxyx"`. An empty `pad` is a runtime error. |
 | `s.to_i`, `s.to_f`          | The number at the start of the string, or zero.  |
 | `s + t`, `s * n`            | Concatenation and repetition.                    |
 
@@ -2916,8 +3101,13 @@ What follows from this:
 - Each draw statement of a GPU block has a record of 32 bytes among every
   run's records, used or not: a block with three draws keeps 96 bytes for
   each entity. On a device they are written there and nothing travels.
+- A draw of text in ordinary code appends 32 bytes and the bytes of its
+  string to the frame's list.
 - A shape costs the device a test for every pixel of the smallest upright
   rectangle that holds it, covered or not.
+- When a frame is rendered, the CPU writes 32 bytes for each character of
+  a text that shows a glyph, and the device tests every pixel of each such
+  character's cell, made one pixel larger, as for a small rectangle.
 - A headless window makes no picture until a frame is captured. A window
   that is hidden makes none.
 - A frame is handed to the device when its tick ends. The next frame is
@@ -2942,6 +3132,19 @@ which each run reaches, cost the RTX 5090 the same, the Radeon about 6%
 more and `llvmpipe` about 65% more: the three records left unused are
 handed to the device too. A million draws in an ordinary `each` take
 about 2 ms of the CPU's time in a tick, whether a frame is made or not.
+
+Text at 24 points, in lines of 40 characters of which 34 show a glyph,
+drawn by an ordinary `each`, adds to a tick:
+
+| Characters | RTX 5090 | Integrated Radeon | `llvmpipe`, 32 threads |
+| ---------- | -------- | ----------------- | ---------------------- |
+| none       | 0.15 ms  | 0.20 ms           | 0.86 ms                |
+| 10,000     | 0.18 ms  | 1.7 ms            | 5.4 ms                 |
+| 100,000    | 0.58 ms  | 15 ms             | 40 ms                  |
+
+A glyph's cell at 24 points is 12 by 24 pixels, a little larger than the
+shapes above. Copying the text into the list costs the CPU about 0.01 ms
+a tick for 100,000 characters, whether a frame is made or not.
 `bench/draws.sh` measures these on the machine it runs on.
 
 What follows from this:
@@ -2958,6 +3161,10 @@ What follows from this:
   and makes the block wait as any operation that can fail does: `clamp`
   each number to 0 and 255, or read the color from a component, a
   constant or a resource field.
+- **Draw text from loops the CPU keeps.** A loop that draws text runs on
+  one core, and labels for the entities of a component a GPU system keeps
+  in GPU memory bring its array back every tick (see
+  [Draws on several cores](#draws-on-several-cores)).
 - **`draws` is for looking and for tests.** On a device it brings a GPU
   block's records back behind a wait.
 
@@ -2996,6 +3203,7 @@ The runtime errors are:
   or more than 8192, or when no window can be shown,
 - an `Int` that does not fit in 32 bits where a GPU system reads it from a
   resource field or a constant.
+- `ljust` or `rjust` given an empty padding string, whatever `n` is.
 
 The commands of `MIDNIGHT_DRIVE` stop a program with errors of their own;
 see [Driving](#driving), [Without a display](#without-a-display) and
@@ -3013,7 +3221,11 @@ one thread: that of the earliest failing row in visiting order. See
 Drawing adds no runtime error: a shape of no size, or with a NaN among its
 numbers, draws nothing, and a draw while no window is open is dropped.
 
-There are no exceptions to catch in 0.8.
+A program that runs out of memory stops with `midnight: out of memory`,
+and so does one whose frame has text that would not fit in 2^32 - 1
+bytes.
+
+There are no exceptions to catch.
 
 ## Grammar
 
@@ -3094,13 +3306,13 @@ place       = postfix
 and `ASSIGN_OP` is one of `= += -= *= /= %=`. A place that is a bare `IDENT`
 not yet in scope creates the variable.
 A `do_block` after a call is accepted only for the loop forms listed in this
-document. A draw, `Draw.rect(…)` and the other three, is a `simple`
+document. A draw, `Draw.rect(…)` and the other four, is a `simple`
 statement written in the form of a call, with its parentheses and every
 argument by position; it is not an expression. The `NL` after `do |…|`, and the one after the last statement of a
 block, may be left out when the block goes on along the same line:
 `xs.length.times do |i| xs[i] *= 2 end`.
 
-## Not in 0.9
+## Not in 0.10
 
 These are deliberately absent from this version: optional values and `nil`,
 maps and sets, ranges and slices, string indexing, user-defined generics,
@@ -3115,7 +3327,11 @@ window from the program, full screen and an icon; refusing a close the
 user asked for; and running faster or slower than real time while a
 window is open.
 
-Drawing leaves these out: text, images and sprites; outlines, rounded
+Drawing leaves these out: images and sprites; fonts other than the
+built-in one, fonts as values, and text whose characters differ in width;
+a call that measures text, alignment, wrapping, rotation, outlines and
+shadows of text; characters outside the font drawn as themselves,
+combining marks, right-to-left text and shaping; outlines, rounded
 rectangles, ellipses, arcs, polygons of more than three corners, curves
 and paths; any order but the program's, such as layers, sorting by a key
 or a depth buffer; a camera, a view transform, a logical size that
@@ -3152,7 +3368,7 @@ result across entities, such as a sum or a minimum, into a resource; spatial
 structures, so a nested `each` visits every pair; `Math` functions other
 than `Math.sqrt`, and `**` other than a square, in a strict GPU system; a
 draw in a loop inside a GPU block, in its nested `each` and in a function
-a GPU system calls; and the use of more than one GPU.
+a GPU system calls; `Draw.text`; and the use of more than one GPU.
 
 ## Specs
 

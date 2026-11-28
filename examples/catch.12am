@@ -1,0 +1,84 @@
+# Stars fall; move the basket with the arrow keys to catch them. The score
+# is at the top left, padded with zeros. Three stars missed and the game is
+# over: "GAME OVER" is drawn in the middle of the window, the score under
+# it, and Escape ends the program.
+#
+#   nix run . -- run examples/catch.12am
+#
+# Run it headless, with its commands, to see its frames as text:
+#
+#   MIDNIGHT_WINDOW=headless MIDNIGHT_DRIVE=examples/catch.drive \
+#     nix run . -- run examples/catch.12am
+
+component Star
+  x: Float
+  y: Float
+end
+
+resource Basket
+  x: Float = 140
+end
+
+resource Score
+  points: Int = 0
+  missed: Int = 0
+end
+
+WIDTH = 40
+GROUND = 184
+
+def over? -> Bool
+  Score.missed >= 3
+end
+
+system steer
+  unless over?
+    Basket.x -= 4 if Keyboard.down?(Key::ArrowLeft)
+    Basket.x += 4 if Keyboard.down?(Key::ArrowRight)
+    Basket.x = Basket.x.clamp(0.0, (Window.width - WIDTH).to_f)
+  end
+  World.stop if Keyboard.pressed?(Key::Escape)
+end
+
+system drop
+  if !over? && Time.tick % 45 == 1
+    spawn Star(8 + rand(Window.width - 16), 0)
+  end
+end
+
+system fall
+  each Entity, Star do |e, star|
+    star.y += 3
+    if star.y >= GROUND
+      if star.x >= Basket.x && star.x <= Basket.x + WIDTH
+        Score.points += 10
+      elsif !over?
+        Score.missed += 1
+      end
+      e.despawn
+    end
+  end
+end
+
+system show
+  Draw.rect(0, GROUND + 6, Window.width, Window.height - GROUND - 6, Color(40, 40, 60))
+  each Star do |star|
+    Draw.circle(star.x, star.y, 5, Color(255, 220, 80))
+  end
+  Draw.rect(Basket.x, GROUND, WIDTH, 6, Color(120, 200, 255))
+  points = Score.points.to_s.rjust(5, "0")
+  Draw.text(8, 8, "SCORE #{points}", 24, Color(255, 255, 255))
+  lives = ("*" * (3 - Score.missed).clamp(0, 3)).rjust(3)
+  Draw.text(Window.width - 3 * 12 - 8, 8, lives, 24, Color(255, 120, 120))
+  if over?
+    message = "GAME OVER"
+    Draw.text((Window.width - message.length * 24) / 2, 64, message, 48, Color(255, 80, 80))
+    score = "SCORE #{Score.points}"
+    Draw.text((Window.width - score.length * 12) / 2, 120, score, 24, Color(255, 255, 255))
+  end
+end
+
+Window.background = Color(16, 16, 32)
+Window.open("Catch", 320, 200)
+World.run
+puts "#{Score.points} points, #{Score.missed} missed, after #{Time.tick} ticks"

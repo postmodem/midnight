@@ -420,7 +420,7 @@ reference renderer, `tests/render/mod.rs`, at four scales.
 | A draw with no window open evaluates its arguments and is dropped; a window opened again | `draw_window` |
 | Order: systems in source order, statements in theirs, entities in visiting order; an argument that draws comes first | `draw_order`, `draw_mixed` |
 | A program that draws and opens no window | `fail/draw_without_window` |
-| The names of other toolkits, unknown members, a color first, shapes not in 0.8 | `fail/draw_shape_names`, `fail/draw_unknown_member`, `fail/draw_color_first`, `fail/draw_not_shapes` |
+| The names of other toolkits, unknown members, a color first, `Draw.sprite` and `Draw.image` not in this version | `fail/draw_shape_names`, `fail/draw_unknown_member`, `fail/draw_color_first`, `fail/draw_not_shapes` |
 | Which pixels a shape covers: the examples, shared edges, a line one point wide, shapes far larger than the frame, the cut to the frame | the renderer's unit tests `the_examples_of_the_reference`, `rectangles_side_by_side_neither_overlap_nor_leave_a_gap`, `triangles_that_share_edges_cover_each_pixel_once`, `a_line_one_point_wide_is_one_row_or_column`, `shapes_far_larger_than_the_frame`, `a_frame_of_every_size_is_covered_by_its_own_rectangle`; on devices `draw_many`, `draw_huge` in `window_drawn` and `window_frames` |
 | Color: the bytes as they are, the rule for a translucent draw, a pixel under translucent draws within one step of the rule for each | `the_color_rule`; `draw_layers`, `examples/shapes` in `window_drawn` |
 | An opaque frame is the same bytes on every device | the `.frames` files of `draw_many` and `draw_huge`, in `window_frames` on hardware and `llvmpipe` |
@@ -435,6 +435,28 @@ reference renderer, `tests/render/mod.rs`, at four scales.
 | `draws`: the header with ticks, size and count, the background, one line a draw; before the first tick; in a program that never draws; after the program has ended; after a `resize` and a `scale` | `draw_none`, `draw_window`, `draw_shapes` |
 | `draws` with an argument, with no window open | `drive_errors` |
 | With `MIDNIGHT_GPU=off`, `draws` works and `capture` captures nothing | `draws_match_expected`, `drive_errors` |
+
+### Text
+
+| Construct | Files |
+| --- | --- |
+| `Draw.text`: an `Int` and a `Float` among its numbers; `"\n"` at the start, in the middle and at the end; `"\r\n"`, `"\t"`, `"\e"`, `"\0"`, `"`, `\\`, `"\#{"`, U+007F, U+0085; Latin-1 letters, `ð`, U+00A0, U+00AD, `€`, `→`, an emoji; an empty string; a `size` of zero, a negative one, a NaN in each number; a draw before `Window.open` whose argument prints | `text_draw` |
+| Its arguments in the order written; a shape drawn by the function that gives the text comes before it | `text_order` |
+| Text from top-level code, a system, an `each`, a function and `on`, among shapes | `text_places` |
+| A string of 100,000 characters, listed whole | `text_long` |
+| `draws` in JSON: `text` between the position and the size, with JSON's escapes | `json/run_text`; every text program in `run_both_forms` |
+| A loop that draws text runs on one core for its `String`, a literal or interpolated | `loops/text_each` |
+| Text drawn beside a split loop: the same `draws` for every number of threads | `text_cores` in `thread_programs`, `splits_match_expected` |
+| The form of its arguments: by name, color first, text first or second, a size left out, the count; one error a statement | `fail/draw_text_form` |
+| A text that is not a `String`, told to interpolate by name or with `…`; other arguments in the same pass | `fail/draw_text_types` |
+| `Draw.text` in a GPU block, in a loop and the nested `each` of one, in a function a GPU system calls | `fail/draw_text_gpu` |
+| The names other toolkits use: members of `Draw`, functions, `Text` and `Label` constructed or spawned; a program's own `Text` and `draw_text` | `fail/draw_text_names`, `fail/draw_text_hints`, `fail/draw_text_own_names` |
+| A program that draws text and opens no window | `fail/draw_text_without_window` |
+| A game that draws text and shapes and reads the keyboard | `examples/catch` |
+| `runtime/font.txt`: its header, 191 glyphs of 6 by 12 in order of code point, the replacement as drawn; the table `midnight_font.h` holds the same bits | `font_file_is_the_font` |
+| Which pixels text covers: characters and lines share their bounds; a size of 12 at a scale of 1 is the font pixel for pixel; sizes that make `u` inexact; the replacement glyph and `ð`; `"\n"` at the start, twice and at the end; a NaN, a size of zero and a negative one; a draw of text read back from `draws` | the renderer's unit tests `characters_and_lines_share_their_bounds`, `a_size_of_twelve_at_a_scale_of_one_is_the_font`, `sizes_that_make_u_inexact`, `the_replacement_glyph_and_eth`, `line_breaks`, `text_that_covers_nothing`, `text_is_read` |
+| Text on devices: sizes 12, 24, 48 and inexact ones, whole, half and other positions, several lines, the replacement glyph, `ð`, translucent text over and under shapes; every size from 5 to 28 points and a sixth more; a game's frames | `text_pixels`, `text_sizes`, `examples/catch` in `window_drawn` (5090, RADV, `llvmpipe`, four scales) and `window_shown` |
+| Rendering a frame with text makes the uploads the frame makes without it | `text_stats` with `text_stats_shapes` |
 
 ## Keyboard and mouse
 
@@ -817,6 +839,7 @@ prints, with the programs whose `.loops` file shows it and the unit test in
 | `s.upcase`, `s.downcase` | `str_case` |
 | `s.include?(t)`, `s.start_with?(t)`, `s.end_with?(t)` | `str_predicates` |
 | `s.ljust(n)`, `s.rjust(n)` | `str_justify` |
+| `s.ljust(n, pad)`, `s.rjust(n, pad)`: a pad of one character and of several, `n` below the length, characters beyond ASCII; an empty pad | `text_pad`, `panic/ljust_empty_pad`, `panic/rjust_empty_pad` |
 | `s.to_i`, `s.to_f` | `str_to_number` |
 | `s + t`, `s * n` | `str_concat_repeat`, `ops_string` |
 
@@ -1026,6 +1049,8 @@ the rule for where a column lives.
 | Int `**` with a negative exponent | variable | `panic/power_negative_exponent` | `negative exponent -2` |
 | | computed | `panic/power_negative_exponent_computed` | `negative exponent -3` |
 | `rand(n)` with `n <= 0` | zero | `panic/rand_zero` | `rand(0): the argument must be positive` |
+| `ljust` or `rjust` with an empty padding string | padding needed | `panic/ljust_empty_pad` | `` `ljust` needs a padding string that is not empty `` |
+| | no padding needed | `panic/rjust_empty_pad` | `` `rjust` needs a padding string that is not empty `` |
 | | zero from a list length | `panic/rand_empty_list_length` | `rand(0): the argument must be positive` |
 | | negative | `panic/rand_negative` | `rand(-3): the argument must be positive` |
 | `World.tick` during a tick | in a system, under `World.tick` | `panic/world_tick_in_system` | `World.tick called while a tick is in progress` |

@@ -1,0 +1,23 @@
+# The first frame: the score at zero and three lives.
+tick
+draws
+capture catch-start.png
+# Left for three ticks, which puts the basket under the first star.
+key down ArrowLeft
+tick 3
+key up ArrowLeft
+tick 60
+draws
+# Right, under the second star, and it is caught too.
+key down ArrowRight
+tick 33
+key up ArrowRight
+tick 50
+draws
+capture catch-two.png
+# The next three stars are missed, and the game is over.
+tick 150
+draws
+capture catch-over.png
+key down Escape
+tick

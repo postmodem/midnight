@@ -8,7 +8,7 @@ system` it also emits a WGSL shader, which the runtime runs through
 runs on the CPU, and an ordinary `each` the compiler finds independent, run
 in pieces on several threads, with the output of one. A program with a
 window shows it through SDL 3, takes the keyboard and the mouse from it,
-and draws its frames on the same device, or runs headless. Any program
+and draws its frames, shapes and text, on the same device, or runs headless. Any program
 can be driven by commands, which let it run a tick at a time and print
 its entities and resources between ticks, and the compiler and programs
 write JSON lines when asked. `evals/` measures how well agents work with it
@@ -26,6 +26,9 @@ second binary of the crate. `README.md` has the overview.
   `--format json`, and of every line a program writes to standard error
   with `MIDNIGHT_FORMAT=json`. Each is made from the same data as its
   text form and says no less.
+- `runtime/font.txt` is the definition of every glyph `Draw.text` draws,
+  part of the reference's "Text": the compiler makes the font's table from
+  it and the reference renderer reads it. Nothing else holds the glyphs.
 - `specs/NNNN-name.md` is one spec per change, with a status line, acceptance
   criteria and, once implemented, an Outcome. Work starts from an approved
   spec. A draft spec is not to be implemented.
@@ -119,7 +122,12 @@ command that needs it.
   with a window, when `MIDNIGHT_GPU_FLAGS` and `MIDNIGHT_WINDOW_FLAGS` are
   both set. It is called from the thread that runs the ticks and no other.
   A headless window never starts SDL.
-- `midnight_pool.c` is C11 with libc and POSIX threads, and is compiled,
+- In a program that draws text, the driver writes `midnight_font.h`, the
+  font's table made from `runtime/font.txt`, beside `midnight_window.c`,
+  and builds with `-DMN_TEXT`; only `midnight_window.c` includes the
+  header, and generated code never does. A program that draws no text is
+  built without either, and its C and shaders are those it had before
+  text existed.- `midnight_pool.c` is C11 with libc and POSIX threads, and is compiled,
   with `-DMN_THREADS -pthread`, only into programs with a loop that can be
   split: a GPU system or an independent `each`. Any other program is built
   without it, has no threads and reads no `MIDNIGHT_THREADS`.
@@ -206,6 +214,9 @@ command that needs it.
   that file. `UPDATE_EXPECT=1` rewrites `.draws` files from its release
   run and no other. A `NAME.frames` file holds the other answers.
   `thread_programs` requires the same `draws` answers for every setting.
+- Text: `font_file_is_the_font` requires `runtime/font.txt` to have the
+  form, the 191 glyphs and the header the reference's "Text" and spec 0011
+  give it, and the table the driver writes from it to hold the same bits.
 - Every program runs with `MIDNIGHT_DRIVE` set to its `NAME.drive` file,
   `capture` lines blanked, or to an empty file, and a program with a
   window with `MIDNIGHT_WINDOW=headless`; the display variables name
@@ -288,8 +299,8 @@ command that needs it.
 - GPU mode: with `MIDNIGHT_TEST_GPU=software` (llvmpipe) or
   `MIDNIGHT_TEST_GPU=hardware` (the machine's GPU), the tests
   `gpu_programs`, `gpu_stats_match_plan`, `gpu_stats_match_expected`,
-  `gpu_driver_finds_its_parts`, `gpu_strict_div_sqrt`, `window_frames` and
-  `window_drawn` also run, on release and debug builds. Without it they do
+  `gpu_driver_finds_its_parts`, `gpu_strict_div_sqrt`, `window_frames`,
+  `window_drawn` and `text_stats` also run, on release and debug builds. Without it they do
   nothing. `checks.gpu` is the software mode in the build sandbox; `apps.gpu-test` is the hardware mode,
   on the device the Vulkan loader finds, which a `VK_DRIVER_FILES` the
   caller sets chooses.
@@ -351,8 +362,15 @@ command that needs it.
     `tests/render/mod.rs`, the reference renderer, makes of that `draws`
     answer: every byte equal, but for a pixel under translucent draws,
     which may differ by one for each of them. The renderer states
-    "Which pixels a shape covers" and "Color" apart from the shaders and
+    "Which pixels a shape covers", "Color" and "Which pixels text covers"
+    apart from the shaders, reads the glyphs from `runtime/font.txt`, and
     has unit tests of its own.
+  - `text_stats` runs `tests/run/text_stats.12am`, which draws shapes and
+    text and captures a frame each tick, on the device with
+    `MIDNIGHT_GPU=stats`, in both build modes, and requires the `stats`
+    lines of `tests/run/text_stats_shapes.12am`, the same program with no
+    `Draw.text`, run the same way: a span of shapes and text counts the
+    uploads it counts without its text.
   - The first three and `window_frames` print the device they ran on. In
     GPU mode `UPDATE_EXPECT=1` rewrites `.stats` and `.frames` files and no
     others.
