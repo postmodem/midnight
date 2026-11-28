@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use crate::source::Span;
 use crate::tir::{
     BinOp as TBinOp, Block as TBlock, Body, Builtin, Compact, CompoundOp, Expr as TExpr, ExprKind,
-    FuncId, Local, LocalId, LocalKind, Place, PlaceKind, Program, Query, Stmt as TStmt, StmtKind,
-    System, Term, TimeField, Type, UnOp as TUnOp,
+    FuncId, Local, LocalId, LocalKind, Place, PlaceKind, Program, Query, Shape, Stmt as TStmt,
+    StmtKind, System, Term, TimeField, Type, UnOp as TUnOp,
 };
 
 use super::super::analysis::{self, Folded, LocalUse, Node, Use};
@@ -978,11 +978,12 @@ impl<'l, 'a> BodyCx<'l, 'a> {
                 body,
                 ..
             } => self.nested_each(query, params, body),
-            StmtKind::Draw {
-                shape, nums, color, ..
-            } => {
-                let mut exprs: Vec<&'a TExpr> = nums.iter().collect();
-                exprs.push(color);
+            StmtKind::Draw { shape, args, .. } => {
+                assert!(
+                    *shape != Shape::Text,
+                    "the checker keeps text out of GPU systems"
+                );
+                let exprs: Vec<&'a TExpr> = args.iter().collect();
                 let mut values = self.operands(&exprs);
                 let mut color = values.pop().expect("a draw has a color");
                 if !color.e.is_path() {
@@ -1602,6 +1603,8 @@ impl<'l, 'a> BodyCx<'l, 'a> {
             | Builtin::StrEndWith
             | Builtin::StrLjust
             | Builtin::StrRjust
+            | Builtin::StrLjustPad
+            | Builtin::StrRjustPad
             | Builtin::StrToI
             | Builtin::StrToF
             | Builtin::ListLength

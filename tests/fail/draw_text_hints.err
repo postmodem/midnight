@@ -1,0 +1,41 @@
+error: unknown function `text`
+ --> tests/fail/draw_text_hints.12am:5:1
+  |
+5 | text(8, 8, "SCORE")
+  | ^^^^ text is drawn with `Draw.text(x, y, text, size, color)`
+
+error: unknown function `draw_text`
+ --> tests/fail/draw_text_hints.12am:6:1
+  |
+6 | draw_text("SCORE", 8, 8)
+  | ^^^^^^^^^ text is drawn with `Draw.text(x, y, text, size, color)`
+
+error: unknown function `print_text`
+ --> tests/fail/draw_text_hints.12am:7:1
+  |
+7 | print_text("SCORE", 8, 8)
+  | ^^^^^^^^^^ text is drawn with `Draw.text(x, y, text, size, color)`
+
+error: unknown function `fill_text`
+ --> tests/fail/draw_text_hints.12am:8:1
+  |
+8 | fill_text("SCORE", 8, 8)
+  | ^^^^^^^^^ text is drawn with `Draw.text(x, y, text, size, color)`
+
+error: unknown type `Text`
+ --> tests/fail/draw_text_hints.12am:9:5
+  |
+9 | t = Text("SCORE", 8, 8)
+  |     ^^^^ text is drawn with `Draw.text(x, y, text, size, color)`
+
+error: unknown type `Label`
+  --> tests/fail/draw_text_hints.12am:10:7
+   |
+10 | spawn Label("SCORE")
+   |       ^^^^^ text is drawn with `Draw.text(x, y, text, size, color)`
+
+error: unknown component `Label`
+  --> tests/fail/draw_text_hints.12am:11:7
+   |
+11 | spawn Label
+   |       ^^^^^ text is drawn with `Draw.text(x, y, text, size, color)`

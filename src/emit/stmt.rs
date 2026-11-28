@@ -88,9 +88,7 @@ impl<'a> FnCx<'a, '_> {
                 let loc = self.cx.loc(stmt.span);
                 self.line(&format!("mn_window_open({}, {loc});", arg_list(&values)));
             }
-            StmtKind::Draw {
-                shape, nums, color, ..
-            } => self.draw(*shape, nums, color),
+            StmtKind::Draw { shape, args, .. } => self.draw(*shape, args),
         }
         if analysis::leaves(stmt) {
             self.forget(mark);
@@ -966,13 +964,28 @@ impl<'a> FnCx<'a, '_> {
         self.write_parts(&parts, values, &Sink::Out);
     }
 
-    /// A draw: its arguments in order, then its record, filled at once.
-    fn draw(&mut self, shape: Shape, nums: &'a [Expr], color: &'a Expr) {
-        let mut exprs: Vec<&'a Expr> = nums.iter().collect();
-        exprs.push(color);
+    /// A draw: its arguments in order, then its record, filled at once; a
+    /// draw of text hands its arguments to the runtime, which copies the
+    /// text.
+    fn draw(&mut self, shape: Shape, args: &'a [Expr]) {
+        let exprs: Vec<&'a Expr> = args.iter().collect();
         let values = self.operands(&exprs, Want::Peek);
         let (color_value, nums) = values.split_last().expect("a draw has a color");
+        let color = args.last().expect("a draw has a color");
         let color_name = self.declare(&color.ty, &color_value.c);
+        if shape == Shape::Text {
+            let [x, y, text, size] = nums else {
+                unreachable!("a draw of text has five arguments")
+            };
+            let color = self.tmp();
+            self.line(&format!("MnColor {color};"));
+            self.line(&format!("memcpy(&{color}, &{color_name}, sizeof {color});"));
+            self.line(&format!(
+                "mn_draw_text((float)({}), (float)({}), {}, (float)({}), {color});",
+                x.c, y.c, text.c, size.c
+            ));
+            return;
+        }
         let record = self.tmp();
         self.line(&format!("MnDraw *const {record} = mn_draw();"));
         self.line(&format!("{record}->kind = {};", draw_kind(shape)));

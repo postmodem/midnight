@@ -1,0 +1,5 @@
+# `ljust` with an empty padding string, where padding is needed.
+# Expected: `ljust` needs a padding string that is not empty
+puts "ok".ljust(3, "-")
+pad = ""
+puts "ab".ljust(5, pad)

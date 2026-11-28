@@ -1,0 +1,48 @@
+# Text is drawn from wherever a shape can be: top-level code between
+# ticks, a system, an `each`, a function and an `on`, and takes its place
+# among the shapes in the order the draws are made.
+
+component Name
+  label: String
+  x: Float
+end
+
+event Scored
+  points: Int
+end
+
+resource Score
+  points: Int = 0
+end
+
+def caption(text: String, y: Float)
+  Draw.rect(0, y, 64, 12, Color(0, 0, 80))
+  Draw.text(0, y, text, 12, Color(255, 255, 0))
+end
+
+system score
+  Score.points += 10
+  emit Scored(Score.points)
+end
+
+system names
+  Draw.rect(0, 0, 64, 48, Color(20, 20, 20))
+  each Name do |name|
+    Draw.text(name.x, 24, name.label, 12, Color(255, 255, 255))
+    Draw.circle(name.x, 24, 2, Color(255, 0, 0))
+  end
+end
+
+system scored
+  on Scored do |s|
+    caption("SCORE #{s.points}", 36)
+  end
+end
+
+spawn Name("ann", 2)
+spawn Name("bo", 30)
+Window.open("Places", 64, 48)
+Draw.text(0, 0, "READY", 24, Color(0, 255, 0))
+World.tick
+World.tick
+puts "score #{Score.points}"

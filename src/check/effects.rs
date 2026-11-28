@@ -309,12 +309,11 @@ impl<'p> Scan<'_, 'p> {
                 self.expr(width, depth);
                 self.expr(height, depth);
             }
-            StmtKind::Draw { nums, color, .. } => {
+            StmtKind::Draw { args, .. } => {
                 self.effect(EffectKind::Draw, span);
-                for num in nums {
-                    self.expr(num, depth);
+                for arg in args {
+                    self.expr(arg, depth);
                 }
-                self.expr(color, depth);
             }
         }
     }
@@ -751,11 +750,7 @@ impl Weigher<'_> {
                 total.add(self.expr(height, locals));
                 total.plus(8)
             }
-            StmtKind::Draw { nums, color, .. } => {
-                let mut total = self.exprs(nums, locals);
-                total.add(self.expr(color, locals));
-                total.plus(8)
-            }
+            StmtKind::Draw { args, .. } => self.exprs(args, locals).plus(8),
         }
     }
 

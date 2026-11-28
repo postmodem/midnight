@@ -1,0 +1,3 @@
+tests/loops/text_each.12am:11  system labels  each Dot  one core: uses a `String` at line 12
+tests/loops/text_each.12am:17  system health  each Dot  one core: uses a `String` at line 18
+tests/loops/text_each.12am:23  system marks   each Dot  cores

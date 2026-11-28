@@ -490,6 +490,11 @@ bool mn_str_end_with(MnString s, MnString suffix);
 /* Padded with spaces to at least `width` code points. */
 MnString mn_str_ljust(MnString s, int64_t width);
 MnString mn_str_rjust(MnString s, int64_t width);
+/* Padded with `pad`, repeated and cut after a whole code point, to at
+ * least `width` code points. A run-time error if `pad` is empty, whatever
+ * `width` is. */
+MnString mn_str_ljust_pad(MnString s, int64_t width, MnString pad, MnLoc loc);
+MnString mn_str_rjust_pad(MnString s, int64_t width, MnString pad, MnLoc loc);
 /* The number at the start of the string, after optional whitespace, or
  * zero. mn_str_to_i reads an optional sign and decimal digits (underscores
  * between digits allowed) and wraps on overflow. mn_str_to_f reads what

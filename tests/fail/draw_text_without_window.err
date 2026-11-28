@@ -1,0 +1,5 @@
+error: nothing opens a window for `Draw.text` to draw in
+ --> tests/fail/draw_text_without_window.12am:5:3
+  |
+5 |   Draw.text(8, 8, "SCORE", 24, Color(255, 255, 255))
+  |   ^^^^^^^^^ open one with `Window.open(title, width, height)`

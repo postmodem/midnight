@@ -1,0 +1,36 @@
+# Text is listed as the statement that drew it: its numbers as 32-bit
+# `Float`s, an `Int` among them converted, and its string quoted with the
+# escapes of `to_s` inside a struct; every character is kept, those the
+# font lacks too. An empty string, a size of zero or below and a NaN are
+# listed and draw nothing. Text drawn before `Window.open` evaluates its
+# arguments and is not kept.
+
+def nan
+  0.0 / 0.0
+end
+
+def said(s: String) -> String
+  puts "said #{s}"
+  s
+end
+
+system show
+  white = Color(255, 255, 255)
+  Draw.text(8, 8.5, "SCORE", 24, white)
+  Draw.text(1.25, 2, "\nmiddle\nend\n", 12.0, Color(10, 20, 30, 128))
+  Draw.text(0, 0, "a\r\nb\tc\ed\0e", 24, white)
+  Draw.text(0, 0, "q\"b\\h\#{x} # {", 24, white)
+  Draw.text(0, 0, "del nel nbsp  shy­", 24, white)
+  Draw.text(0, 0, "Ünïcödé ð £°±× € → 🌙", 24, white)
+  Draw.text(0, 0, "", 24, white)
+  Draw.text(0, 0, "zero", 0, white)
+  Draw.text(0, 0, "below", -24, white)
+  Draw.text(nan, 0, "x", 24, white)
+  Draw.text(0, nan, "y", 24, white)
+  Draw.text(0, 0, "size", nan, white)
+end
+
+Draw.text(0, 0, said("before"), 24, Color(1, 1, 1))
+Window.open("Text", 320, 200)
+World.tick
+puts "drawn"

@@ -20,7 +20,8 @@ fn numbers_of(kind: &str) -> Option<usize> {
     }
 }
 
-/// What a line of a `draws` answer draws; a line that is no draw is text.
+/// What a line of a `draws` answer draws: a shape read from its numbers,
+/// or any other line, `Draw.text` among them, as it is written.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Shape {
     Draw {
@@ -28,14 +29,14 @@ pub enum Shape {
         numbers: Vec<u32>,
         color: [u32; 4],
     },
-    Text(String),
+    Other(String),
 }
 
 impl Shape {
     fn kind(&self) -> &str {
         match self {
             Shape::Draw { kind, .. } => kind,
-            Shape::Text(_) => "text",
+            Shape::Other(_) => "other",
         }
     }
 }
@@ -113,29 +114,29 @@ fn color(s: &str) -> Option<[u32; 4]> {
 /// What a line of a `draws` answer draws.
 pub fn shape(line: &str) -> Shape {
     let t = text::strip(line);
-    let text_shape = || Shape::Text(t.to_string());
+    let other = || Shape::Other(t.to_string());
     let Some(rest) = t.strip_prefix("Draw.") else {
-        return text_shape();
+        return other();
     };
     let Some(open) = rest.find('(') else {
-        return text_shape();
+        return other();
     };
     let kind = &rest[..open];
     let Some(want) = numbers_of(kind) else {
-        return text_shape();
+        return other();
     };
     let Some(args) = rest[open + 1..].strip_suffix(')') else {
-        return text_shape();
+        return other();
     };
     let Some(at) = args.rfind("Color(") else {
-        return text_shape();
+        return other();
     };
     let Some(c) = color(&args[at..]) else {
-        return text_shape();
+        return other();
     };
     let prefix = &args[..at];
     if !prefix.is_empty() && !prefix.ends_with(", ") {
-        return text_shape();
+        return other();
     }
     let items: Vec<&str> = if prefix.is_empty() {
         Vec::new()
@@ -143,7 +144,7 @@ pub fn shape(line: &str) -> Shape {
         prefix[..prefix.len() - 2].split(", ").collect()
     };
     if items.iter().any(|i| i.is_empty() || i.contains(',')) {
-        return text_shape();
+        return other();
     }
     let numbers: Option<Vec<u32>> = items.iter().map(|n| bits(n)).collect();
     match numbers {
@@ -152,7 +153,7 @@ pub fn shape(line: &str) -> Shape {
             numbers,
             color: c,
         },
-        _ => text_shape(),
+        _ => other(),
     }
 }
 

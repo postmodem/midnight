@@ -922,11 +922,10 @@ impl<'p> Walker<'p> {
                 self.expr(width);
                 self.expr(height);
             }
-            StmtKind::Draw { nums, color, .. } => {
-                for num in nums {
-                    self.expr(num);
+            StmtKind::Draw { args, .. } => {
+                for arg in args {
+                    self.expr(arg);
                 }
-                self.expr(color);
             }
         }
     }

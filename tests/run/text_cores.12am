@@ -1,0 +1,55 @@
+# Text drawn in one loop beside a loop that runs in pieces on several
+# threads: the loop that draws text runs on one core, and its text comes
+# after the joined draws of the loop before it and before the shapes of the
+# loop after it, whatever the number of threads. The 600 dots are in three
+# tables; each row of `show` looks at 200 probes, which gives the loop
+# enough work to be split.
+
+component Dot
+  id: Int
+end
+
+component Probe
+  id: Int
+end
+
+tag Red
+tag Blue
+
+system show
+  each Dot do |dot|
+    each Probe do |probe|
+      if probe.id == dot.id % 200 && dot.id % 70 == 3
+        Draw.line(dot.id, probe.id, 0, 0, 1, Color(0, 200, 0))
+      end
+    end
+  end
+end
+
+system labels
+  each Dot do |dot|
+    Draw.text(dot.id, 8, "#{dot.id}", 12, Color(255, 255, 255)) if dot.id % 150 == 7
+  end
+end
+
+system after
+  Draw.rect(0, 0, 4, 4, Color(1, 2, 3))
+end
+
+600.times do |i|
+  if i % 3 == 0
+    spawn Dot(i), Red
+  elsif i % 3 == 1
+    spawn Dot(i), Blue
+  else
+    spawn Dot(i)
+  end
+end
+200.times do |i|
+  spawn Probe(i)
+end
+
+Window.open("Cores", 640, 480)
+World.tick
+World.tick
+puts "ticks: #{Time.tick}"

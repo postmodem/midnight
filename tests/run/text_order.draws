@@ -1,0 +1,4 @@
+draws: 1 tick, 64x48, 2 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.rect(0.0, 0.0, 4.0, 4.0, Color(9, 9, 9, 255))
+  Draw.text(1.0, 2.0, "hi", 24.0, Color(200, 100, 50, 255))

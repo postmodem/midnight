@@ -1,0 +1,8 @@
+# expect: a program that draws text and opens no window is told to open one, at its first draw
+# at: line 5, the draw of text
+
+system show
+  Draw.text(8, 8, "SCORE", 24, Color(255, 255, 255))
+end
+
+World.tick

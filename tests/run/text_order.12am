@@ -1,0 +1,36 @@
+# The five arguments of `Draw.text` are evaluated in the order written,
+# and the draw is made after them: the rectangle drawn by the function that
+# gives the text is listed before the text.
+
+def x -> Float
+  puts "x"
+  1.0
+end
+
+def y -> Int
+  puts "y"
+  2
+end
+
+def label -> String
+  puts "text"
+  Draw.rect(0, 0, 4, 4, Color(9, 9, 9))
+  "hi"
+end
+
+def size -> Float
+  puts "size"
+  24.0
+end
+
+def ink -> Color
+  puts "color"
+  Color(200, 100, 50)
+end
+
+system show
+  Draw.text(x, y, label, size, ink)
+end
+
+Window.open("Order", 64, 48)
+World.tick

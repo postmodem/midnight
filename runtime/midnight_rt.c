@@ -64,6 +64,7 @@ enum { MN_INT_TEXT = 20, MN_FLOAT_TEXT = 32, MN_ENTITY_TEXT = 32 };
 static bool json_lines;
 
 static int format_number(double value, bool single, char *out);
+static void sb_quoted_bytes(MnBuilder *sb, const char *bytes, int64_t len);
 
 /* Writes one whole line to standard error, standard output written out
  * first. Every line the runtime writes goes through here but the
@@ -1341,12 +1342,16 @@ typedef struct DrawSpan {
     uint32_t table;
 } DrawSpan;
 
-/* Draws in the order they were made, as spans. */
+/* Draws in the order they were made, as spans, and the bytes of their
+ * text, which a record of text names by offset and length. */
 typedef struct DrawList {
     MnDraws records;
     DrawSpan *spans;
     size_t span_count;
     size_t span_capacity;
+    char *text;
+    size_t text_len;
+    size_t text_capacity;
 } DrawList;
 
 static struct {
@@ -1410,11 +1415,13 @@ static MnDraw *list_extend(DrawList *list, size_t more) {
 static void list_clear(DrawList *list) {
     list->records.len = 0;
     list->span_count = 0;
+    list->text_len = 0;
 }
 
 static void list_free(DrawList *list) {
     free(list->records.data);
     free(list->spans);
+    free(list->text);
     memset(list, 0, sizeof *list);
 }
 
@@ -1435,6 +1442,36 @@ MnDraw *mn_draw(void) {
     }
     memset(record, 0, sizeof *record);
     return record;
+}
+
+void mn_draw_text(float x, float y, MnString text, float size, MnColor color) {
+#if defined(MN_DEBUG) && defined(MN_THREADS)
+    if (mn_loop_thread) {
+        fprintf(stderr, "midnight: mn_draw_text was called in a piece\n");
+        abort();
+    }
+#endif
+    if (!win.open) return;
+    DrawList *list = &drawing.list;
+    size_t len = (size_t)mn_str_bytesize(text);
+    if (len > UINT32_MAX - list->text_len) mn_out_of_memory();
+    if (list->text_capacity - list->text_len < len) {
+        size_t capacity = list->text_capacity ? list->text_capacity : 256;
+        while (capacity - list->text_len < len) capacity = mn_mul(capacity, 2);
+        list->text = mn_realloc(list->text, capacity);
+        list->text_capacity = capacity;
+    }
+    uint32_t place[2] = {(uint32_t)list->text_len, (uint32_t)len};
+    if (len != 0) memcpy(list->text + list->text_len, text->bytes, len);
+    list->text_len += len;
+    MnDraw *record = list_extend(list, 1);
+    memset(record, 0, sizeof *record);
+    record->kind = MN_DRAW_TEXT;
+    record->n[0] = x;
+    record->n[1] = y;
+    record->n[2] = size;
+    memcpy(&record->n[3], place, sizeof place);
+    record->color = color;
 }
 
 /* ---- The keyboard and the mouse ---- */
@@ -1927,16 +1964,17 @@ static void json_color(MnBuilder *b, MnColor color) {
 
 /* Answers `draws` with a JSON line: the frame, its background and an
  * object for each draw that is not of nothing. */
-static void draws_json(const MnDraws *frame, const char *command) {
-    static const char *const shapes[] = {"", "rect", "circle", "line", "triangle"};
+static void draws_json(const MnDraws *frame, const char *text, const char *command) {
+    static const char *const shapes[] = {"", "rect", "circle", "line", "triangle", "text"};
     static const char *const names[][6] = {
         {""},
         {"x", "y", "width", "height"},
         {"x", "y", "radius"},
         {"x1", "y1", "x2", "y2", "width"},
         {"x1", "y1", "x2", "y2", "x3", "y3"},
+        {"x", "y", "size"},
     };
-    static const int numbers[] = {0, 4, 3, 5, 6};
+    static const int numbers[] = {0, 4, 3, 5, 6, 3};
     MnBuilder b = {0};
     answer_begin(&b, command, drive.line);
     j_int(&b, "frame_tick", win.frame_tick);
@@ -1949,12 +1987,18 @@ static void draws_json(const MnDraws *frame, const char *command) {
     bool first = true;
     for (size_t i = 0; i < frame->len; i++) {
         const MnDraw *draw = &frame->data[i];
-        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TRIANGLE) continue;
+        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TEXT) continue;
         j_lit(&b, first ? "{\"shape\":\"" : ",{\"shape\":\"");
         first = false;
         j_lit(&b, shapes[draw->kind]);
         j_lit(&b, "\"");
         for (int n = 0; n < numbers[draw->kind]; n++) {
+            if (draw->kind == MN_DRAW_TEXT && n == 2) {
+                uint32_t place[2];
+                memcpy(place, &draw->n[3], sizeof place);
+                j_key(&b, "text");
+                mn_json_bytes(&b, place[1] ? text + place[0] : "", place[1]);
+            }
             j_key(&b, names[draw->kind][n]);
             mn_json_float32(&b, draw->n[n]);
         }
@@ -1969,8 +2013,8 @@ static void draws_json(const MnDraws *frame, const char *command) {
 /* Answers `draws`: the last frame as text, a line for the frame, one for
  * its background and one for each draw that is not of nothing. */
 static void window_draws(void) {
-    static const char *const shapes[] = {"", "rect", "circle", "line", "triangle"};
-    static const int numbers[] = {0, 4, 3, 5, 6};
+    static const char *const shapes[] = {"", "rect", "circle", "line", "triangle", "text"};
+    static const int numbers[] = {0, 4, 3, 5, 6, 3};
     /* The frame's records in order, those on the device brought back. */
     const DrawList *list = &drawing.frame;
     size_t total = 0;
@@ -2024,7 +2068,7 @@ static void window_draws(void) {
         if (frame->data[i].kind != MN_DRAW_NOTHING) listed++;
     }
     if (json_lines) {
-        draws_json(frame, "draws");
+        draws_json(frame, list->text, "draws");
         free(gathered);
         return;
     }
@@ -2039,7 +2083,29 @@ static void window_draws(void) {
                  (unsigned)background.b, (unsigned)background.a);
     for (size_t i = 0; i < frame->len; i++) {
         const MnDraw *draw = &frame->data[i];
-        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TRIANGLE) continue;
+        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TEXT) continue;
+        if (draw->kind == MN_DRAW_TEXT) {
+            uint32_t place[2];
+            memcpy(place, &draw->n[3], sizeof place);
+            MnBuilder line = {0};
+            char number[MN_FLOAT_TEXT];
+            mn_sb_bytes(&line, "  Draw.text(", 12);
+            for (int n = 0; n < 2; n++) {
+                mn_sb_bytes(&line, number, format_number((double)draw->n[n], true, number));
+                mn_sb_bytes(&line, ", ", 2);
+            }
+            sb_quoted_bytes(&line, place[1] ? list->text + place[0] : "", place[1]);
+            mn_sb_bytes(&line, ", ", 2);
+            mn_sb_bytes(&line, number, format_number((double)draw->n[2], true, number));
+            char color[64];
+            int color_len = snprintf(color, sizeof color, ", Color(%u, %u, %u, %u))",
+                                     (unsigned)draw->color.r, (unsigned)draw->color.g,
+                                     (unsigned)draw->color.b, (unsigned)draw->color.a);
+            mn_sb_bytes(&line, color, color_len);
+            drive_answer("%.*s", (int)line.len, line.bytes);
+            free(line.bytes);
+            continue;
+        }
         char line[320];
         int len = snprintf(line, sizeof line, "  Draw.%s(", shapes[draw->kind]);
         for (int n = 0; n < numbers[draw->kind]; n++) {
@@ -2203,6 +2269,8 @@ static MnFrame frame_now(void) {
     frame.background = win.frame_background;
     frame.spans = drawing.view;
     frame.span_count = list->span_count;
+    frame.text = list->text;
+    frame.text_length = list->text_len;
     frame.number = win.frame_number;
     return frame;
 }
@@ -3515,6 +3583,54 @@ MnString mn_str_rjust(MnString s, int64_t width) {
     return str_pad(s, width, false);
 }
 
+/* `s` with `pad` after it (`after`) or before it, repeated and cut after a
+ * whole code point, up to `width` code points. */
+static MnString str_pad_with(MnString s, int64_t width, MnString pad, bool after,
+                             MnLoc loc) {
+    int64_t pad_len = mn_str_bytesize(pad);
+    if (pad_len == 0) {
+        mn_panic(loc, "`%s` needs a padding string that is not empty",
+                 after ? "ljust" : "rjust");
+    }
+    int64_t length = mn_str_length(s);
+    if (width <= length) {
+        mn_str_retain(s);
+        return s;
+    }
+    int64_t count = width - length;
+    int64_t pad_count = mn_str_length(pad);
+    int64_t whole = count / pad_count;
+    int64_t rest = count % pad_count;
+    /* The bytes of the first `rest` code points of `pad`. */
+    int64_t rest_len = 0;
+    for (int64_t seen = 0; seen < rest; seen++) {
+        rest_len++;
+        while (rest_len < pad_len && ((unsigned char)pad->bytes[rest_len] & 0xc0) == 0x80) {
+            rest_len++;
+        }
+    }
+    int64_t len = mn_str_bytesize(s);
+    if (whole > (INT64_MAX - rest_len - len) / pad_len) mn_out_of_memory();
+    int64_t fill = whole * pad_len + rest_len;
+    MnString result = str_alloc(len + fill);
+    char *text = result->bytes + (after ? 0 : fill);
+    char *padding = result->bytes + (after ? len : 0);
+    if (len != 0) memcpy(text, s->bytes, (size_t)len);
+    for (int64_t i = 0; i < whole; i++) {
+        memcpy(padding + i * pad_len, pad->bytes, (size_t)pad_len);
+    }
+    if (rest_len != 0) memcpy(padding + whole * pad_len, pad->bytes, (size_t)rest_len);
+    return result;
+}
+
+MnString mn_str_ljust_pad(MnString s, int64_t width, MnString pad, MnLoc loc) {
+    return str_pad_with(s, width, pad, true, loc);
+}
+
+MnString mn_str_rjust_pad(MnString s, int64_t width, MnString pad, MnLoc loc) {
+    return str_pad_with(s, width, pad, false, loc);
+}
+
 static bool is_space(char c) {
     return c == ' ' || (c >= '\t' && c <= '\r');
 }
@@ -3601,12 +3717,16 @@ void mn_sb_str(MnBuilder *sb, MnString s) {
 }
 
 void mn_sb_quoted(MnBuilder *sb, MnString s) {
+    sb_quoted_bytes(sb, s ? s->bytes : NULL, mn_str_bytesize(s));
+}
+
+/* `len` bytes at `bytes` as mn_sb_quoted writes a string. */
+static void sb_quoted_bytes(MnBuilder *sb, const char *bytes, int64_t len) {
     static const char hex[] = "0123456789ABCDEF";
-    int64_t len = mn_str_bytesize(s);
     mn_sb_bytes(sb, "\"", 1);
     int64_t plain = 0; /* start of the bytes not yet appended */
     for (int64_t i = 0; i < len; i++) {
-        unsigned char byte = (unsigned char)s->bytes[i];
+        unsigned char byte = (unsigned char)bytes[i];
         char escape[4] = {'\\', 0, 0, 0};
         int escape_len = 2;
         switch (byte) {
@@ -3618,7 +3738,7 @@ void mn_sb_quoted(MnBuilder *sb, MnString s) {
         case '\\': escape[1] = '\\'; break;
         case '"': escape[1] = '"'; break;
         case '#':
-            if (i + 1 >= len || s->bytes[i + 1] != '{') continue;
+            if (i + 1 >= len || bytes[i + 1] != '{') continue;
             escape[1] = '#';
             break;
         default:
@@ -3629,11 +3749,11 @@ void mn_sb_quoted(MnBuilder *sb, MnString s) {
             escape_len = 4;
             break;
         }
-        mn_sb_bytes(sb, s->bytes + plain, i - plain);
+        mn_sb_bytes(sb, bytes + plain, i - plain);
         mn_sb_bytes(sb, escape, escape_len);
         plain = i + 1;
     }
-    if (len != 0) mn_sb_bytes(sb, s->bytes + plain, len - plain);
+    if (len != 0) mn_sb_bytes(sb, bytes + plain, len - plain);
     mn_sb_bytes(sb, "\"", 1);
 }
 

@@ -43,7 +43,8 @@ use crate::diag::Diagnostic;
 use crate::source::Span;
 use crate::tir::{
     BinOp, Block, Builtin, Compact, CompoundOp, Expr, ExprKind, FuncId, Local, LocalId, LocalKind,
-    Place, PlaceKind, Program, Query, RecordId, Stmt, StmtKind, System, Term, TimeField, Type,
+    Place, PlaceKind, Program, Query, RecordId, Shape, Stmt, StmtKind, System, Term, TimeField,
+    Type,
 };
 
 use super::{effects, util};
@@ -691,8 +692,22 @@ impl<'a, 'p> Walk<'a, 'p> {
                 "the window is opened from the CPU; call it from top-level code",
             ),
             StmtKind::Draw {
-                nums, color, head, ..
+                shape: Shape::Text,
+                args,
+                head,
             } => {
+                self.report(
+                    format!("`Draw.text` can't stand {}", self.here()),
+                    *head,
+                    "draw text from an ordinary system: a GPU system has no strings",
+                );
+                for (index, arg) in args.iter().enumerate() {
+                    if index != 2 {
+                        self.expr(arg);
+                    }
+                }
+            }
+            StmtKind::Draw { args, head, .. } => {
                 let place = if self.reach.is_some() {
                     Some("in a function called from a GPU system")
                 } else if self.each_depth >= 2 {
@@ -709,8 +724,7 @@ impl<'a, 'p> Walk<'a, 'p> {
                         "draw from the block itself: each run makes a draw once at most",
                     );
                 }
-                self.exprs(nums);
-                self.expr(color);
+                self.exprs(args);
             }
         }
     }

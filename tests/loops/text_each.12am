@@ -1,0 +1,29 @@
+# expect: an `each` that draws text runs on one core, for the `String` it
+# draws, whether the text is a literal or interpolated; a loop beside them
+# that draws shapes alone is independent.
+
+component Dot
+  x: Float
+  hp: Int
+end
+
+system labels
+  each Dot do |dot|
+    Draw.text(dot.x, 0, "dot", 12, Color(255, 255, 255))
+  end
+end
+
+system health
+  each Dot do |dot|
+    Draw.text(dot.x, 12, "#{dot.hp} hp", 12, Color(255, 0, 0))
+  end
+end
+
+system marks
+  each Dot do |dot|
+    Draw.circle(dot.x, 24, 2, Color(0, 255, 0))
+  end
+end
+
+Window.open("Labels", 64, 48)
+World.tick

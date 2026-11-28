@@ -1,0 +1,13 @@
+# json: run
+# A driven window whose frame has text: a text draw's string under `text`,
+# between its position and its size, with the escapes of JSON, beside a
+# shape.
+
+system show
+  Draw.rect(0, 0, 8, 8, Color(1, 2, 3))
+  Draw.text(4, 4.5, "SCORE 00040\nLIVES \"3\"\t\e é → \#{x}", 24, Color(255, 255, 255, 200))
+  Draw.text(0, 0, "", 12, Color(0, 0, 0))
+end
+
+Window.open("Text", 64, 48)
+World.tick

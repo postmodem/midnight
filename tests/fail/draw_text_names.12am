@@ -1,0 +1,12 @@
+# expect: the names other toolkits use for drawing text say to write `Draw.text`
+# at: line 6, `print`; line 7, `puts`; line 8, `string`; line 9, `label`; line 10, `write`; line 11, `fill_text`
+
+Window.open("Names", 64, 48)
+system show
+  Draw.print("SCORE", 8, 8)
+  Draw.puts("SCORE")
+  Draw.string(8, 8, "SCORE")
+  Draw.label("SCORE", 8, 8)
+  Draw.write(8, 8, "SCORE")
+  Draw.fill_text("SCORE", 8, 8)
+end

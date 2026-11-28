@@ -1,0 +1,27 @@
+# expect: with five arguments by position, every argument without its type is reported in one pass; a text that is not a `String` is told to interpolate, by name when it is a variable, a constant or a field read
+# at: line 18, `score`; line 19, `MAX`; line 20, `Score.points`; line 22, `ball.hp`; line 24, an expression, written `…`; line 25, a `Bool`; line 26, both the text and a `String` size
+
+MAX = 99
+
+resource Score
+  points: Int = 0
+end
+
+component Ball
+  hp: Int
+end
+
+Window.open("Types", 64, 48)
+
+system show
+  score = Score.points
+  Draw.text(8, 8, score, 24, Color(255, 255, 255))
+  Draw.text(8, 8, MAX, 24, Color(255, 255, 255))
+  Draw.text(8, 8, Score.points, 24, Color(255, 255, 255))
+  each Ball do |ball|
+    Draw.text(8, 8, ball.hp, 24, Color(255, 255, 255))
+  end
+  Draw.text(8, 8, score + 1, 24, Color(255, 255, 255))
+  Draw.text(8, 8, score > 3, 24, Color(255, 255, 255))
+  Draw.text(8, 8, score, "big", Color(255, 255, 255))
+end
