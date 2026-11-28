@@ -1,6 +1,6 @@
 # 0012 — Sessions
 
-- **Status:** draft
+- **Status:** approved
 - **Depends on:** 0011
 
 ## Goal
