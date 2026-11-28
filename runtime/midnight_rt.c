@@ -24,11 +24,11 @@
 #include "midnight_pool.h"
 
 #include <pthread.h>
-#include <setjmp.h>
 #endif
 
 #include <errno.h>
 #include <math.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -248,7 +248,7 @@ static void format_start(const MnProgram *program) {
         json_lines = true;
         MnBuilder b = {0};
         j_begin(&b, "midnight");
-        j_int(&b, "format", 1);
+        j_int(&b, "format", 2);
         j_str(&b, "version", program->version ? program->version : "");
         j_say(&b);
     }
@@ -1194,7 +1194,36 @@ static struct {
     int64_t tick_line;
     int64_t ticks_left;
     int64_t ticks_run;
+    /* MIDNIGHT_DRIVE is `-`: the commands come from standard input, and
+     * the program is in a session. */
+    bool session;
+    /* The program has reached its end. */
+    bool ended;
+    /* The command being carried out, as written. */
+    const char *command;
+    /* Where a command refused in a session returns to. */
+    jmp_buf refuse;
+    /* What the command being carried out has allocated: freed when it is
+     * done or refused. */
+    void *held[8];
+    int held_count;
 } drive;
+
+/* The bytes the program has written to standard output. */
+static int64_t out_bytes;
+
+/* Keeps `memory` until the command being carried out is done or refused,
+ * and returns it. */
+static void *drive_hold(void *memory) {
+    if (drive.held_count == (int)(sizeof drive.held / sizeof drive.held[0])) abort();
+    drive.held[drive.held_count++] = memory;
+    return memory;
+}
+
+/* Frees what the command being carried out has held. */
+static void drive_release(void) {
+    while (drive.held_count > 0) free(drive.held[--drive.held_count]);
+}
 
 /* Says a line of a command's text answer: `midnight: drive: ` and it. */
 static void drive_answer(const char *format, ...)
@@ -1230,7 +1259,9 @@ static MN_MAYBE_UNUSED void drive_answer_command(const char *text) {
     j_say(&b);
 }
 
-/* Reports a command that can't be carried out and ends the program. */
+/* Reports a command that can't be carried out. In a session the command
+ * is refused, and the program goes on to the next one; otherwise the
+ * program ends. */
 static _Noreturn void drive_fail(const char *format, ...)
     __attribute__((format(printf, 1, 2)));
 static _Noreturn void drive_fail(const char *format, ...) {
@@ -1238,6 +1269,21 @@ static _Noreturn void drive_fail(const char *format, ...) {
     va_start(args, format);
     char *message = vformat(format, args);
     va_end(args);
+    if (drive.session) {
+        if (json_lines) {
+            MnBuilder b = {0};
+            j_begin(&b, "refused");
+            j_str(&b, "command", drive.command);
+            j_int(&b, "line", drive.line);
+            j_str(&b, "message", message);
+            j_say(&b);
+        } else {
+            say_text("midnight: drive: refused: %s\n", message);
+        }
+        free(message);
+        drive_release();
+        longjmp(drive.refuse, 1);
+    }
     if (json_lines) {
         MnBuilder b = {0};
         j_begin(&b, "drive_error");
@@ -1262,6 +1308,21 @@ static int64_t drive_count(const char *word, int64_t most) {
         if (value > most) return -1;
     }
     return value < 1 ? -1 : value;
+}
+
+/* Sets `out` to the whole number from 0 up that is the whole of `word`,
+ * or INT64_MAX when it is larger, and returns true; returns false when
+ * `word` is not digits. */
+static MN_MAYBE_UNUSED bool drive_whole(const char *word, int64_t *out) {
+    int64_t value = 0;
+    if (*word == '\0') return false;
+    for (const char *c = word; *c != '\0'; c++) {
+        if (*c < '0' || *c > '9') return false;
+        int digit = *c - '0';
+        value = value > (INT64_MAX - digit) / 10 ? INT64_MAX : value * 10 + digit;
+    }
+    *out = value;
+    return true;
 }
 
 /* The command's words, split at spaces and tabs, in place. Returns how
@@ -1945,10 +2006,10 @@ static void window_start(void) {
     }
 }
 
-/* The pixels of `points` at the headless window's scale, halves rounded
- * up. */
-static int64_t scaled(int64_t points) {
-    return (points * win.scale_num * 2 + win.scale_den) / (win.scale_den * 2);
+/* The pixels of `points` at a scale of `num / den` pixels a point, halves
+ * rounded up. */
+static int64_t scaled_by(int64_t points, int64_t num, int64_t den) {
+    return (points * num * 2 + den) / (den * 2);
 }
 
 static void window_capture(const char *text, const char *file);
@@ -1962,9 +2023,19 @@ static void json_color(MnBuilder *b, MnColor color) {
     mn_sb_bytes(b, text, len);
 }
 
-/* Answers `draws` with a JSON line: the frame, its background and an
- * object for each draw that is not of nothing. */
-static void draws_json(const MnDraws *frame, const char *text, const char *command) {
+/* The most draws an answer to `draws` lists. */
+#define MN_DRAWS_LISTED 100
+
+/* Whether `draws` lists a draw: every draw but those of nothing. */
+static bool draw_listed(const MnDraw *draw) {
+    return draw->kind != MN_DRAW_NOTHING && draw->kind <= MN_DRAW_TEXT;
+}
+
+/* Answers `draws` with a JSON line: the frame, its background, the number
+ * of draws it lists, and an object for each draw of the page from draw
+ * `from`. */
+static void draws_json(const MnDraws *frame, const char *text, const char *command,
+                       int64_t count, int64_t from) {
     static const char *const shapes[] = {"", "rect", "circle", "line", "triangle", "text"};
     static const char *const names[][6] = {
         {""},
@@ -1982,12 +2053,17 @@ static void draws_json(const MnDraws *frame, const char *text, const char *comma
     j_int(&b, "height", win.frame_point_height);
     j_key(&b, "background");
     json_color(&b, win.frame_background);
+    j_int(&b, "count", count);
+    j_int(&b, "from", from);
     j_key(&b, "draws");
     j_lit(&b, "[");
     bool first = true;
-    for (size_t i = 0; i < frame->len; i++) {
+    int64_t at = 0;
+    int64_t left = MN_DRAWS_LISTED;
+    for (size_t i = 0; i < frame->len && left > 0; i++) {
         const MnDraw *draw = &frame->data[i];
-        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TEXT) continue;
+        if (!draw_listed(draw) || at++ < from) continue;
+        left--;
         j_lit(&b, first ? "{\"shape\":\"" : ",{\"shape\":\"");
         first = false;
         j_lit(&b, shapes[draw->kind]);
@@ -2010,9 +2086,11 @@ static void draws_json(const MnDraws *frame, const char *text, const char *comma
     j_say(&b);
 }
 
-/* Answers `draws`: the last frame as text, a line for the frame, one for
- * its background and one for each draw that is not of nothing. */
-static void window_draws(void) {
+/* Answers `draws`, `text` as written: the last frame, its background, the
+ * number of draws it lists, and the page of them from draw `from`. As
+ * text, a line for the frame, one for its background and one for each
+ * draw of the page. */
+static void window_draws(const char *text, int64_t from) {
     static const char *const shapes[] = {"", "rect", "circle", "line", "triangle", "text"};
     static const int numbers[] = {0, 4, 3, 5, 6, 3};
     /* The frame's records in order, those on the device brought back. */
@@ -2063,27 +2141,38 @@ static void window_draws(void) {
 #endif
     const MnDraws frame_records = {(MnDraw *)records, total, total};
     const MnDraws *frame = &frame_records;
-    size_t listed = 0;
+    int64_t count = 0;
     for (size_t i = 0; i < frame->len; i++) {
-        if (frame->data[i].kind != MN_DRAW_NOTHING) listed++;
+        if (draw_listed(&frame->data[i])) count++;
     }
     if (json_lines) {
-        draws_json(frame, list->text, "draws");
+        draws_json(frame, list->text, text, count, from);
         free(gathered);
         return;
     }
-    drive_answer("draws: %lld tick%s, %lldx%lld, %zu draw%s",
+    int64_t shown = from >= count ? 0 : count - from;
+    if (shown > MN_DRAWS_LISTED) shown = MN_DRAWS_LISTED;
+    char range[64] = "";
+    if (shown < count && shown == 0) {
+        snprintf(range, sizeof range, ", none from %lld", (long long)from);
+    } else if (shown < count) {
+        snprintf(range, sizeof range, ", %lld to %lld", (long long)from,
+                 (long long)(from + shown - 1));
+    }
+    drive_answer("%s: %lld tick%s, %lldx%lld, %lld draw%s%s", text,
                  (long long)win.frame_tick, win.frame_tick == 1 ? "" : "s",
                  (long long)win.frame_point_width,
-                 (long long)win.frame_point_height, listed,
-                 listed == 1 ? "" : "s");
+                 (long long)win.frame_point_height, (long long)count,
+                 count == 1 ? "" : "s", range);
     MnColor background = win.frame_background;
     drive_answer("  Window.background = Color(%u, %u, %u, %u)",
                  (unsigned)background.r, (unsigned)background.g,
                  (unsigned)background.b, (unsigned)background.a);
-    for (size_t i = 0; i < frame->len; i++) {
+    int64_t at = 0;
+    for (size_t i = 0; i < frame->len && shown > 0; i++) {
         const MnDraw *draw = &frame->data[i];
-        if (draw->kind == MN_DRAW_NOTHING || draw->kind > MN_DRAW_TEXT) continue;
+        if (!draw_listed(draw) || at++ < from) continue;
+        shown--;
         if (draw->kind == MN_DRAW_TEXT) {
             uint32_t place[2];
             memcpy(place, &draw->n[3], sizeof place);
@@ -2133,6 +2222,10 @@ static void window_command(const char *text, char **words, int count) {
         if (!win.headless) {
             drive_fail("`%s` needs MIDNIGHT_WINDOW=headless", name);
         }
+        int64_t new_width = win.width;
+        int64_t new_height = win.height;
+        int64_t new_num = win.scale_num;
+        int64_t new_den = win.scale_den;
         if (name[0] == 'r') {
             int64_t width = count == 3 ? drive_count(words[1], MN_WINDOW_LARGEST) : -1;
             int64_t height = count == 3 ? drive_count(words[2], MN_WINDOW_LARGEST) : -1;
@@ -2141,8 +2234,8 @@ static void window_command(const char *text, char **words, int count) {
                            "each from 1 to %d",
                            MN_WINDOW_LARGEST);
             }
-            win.width = width;
-            win.height = height;
+            new_width = width;
+            new_height = height;
         } else {
             /* A decimal number: digits, then optionally a point and at
              * most six digits more. */
@@ -2166,22 +2259,33 @@ static void window_command(const char *text, char **words, int count) {
             if (bad || !digits || num * 2 < den || num > den * 4) {
                 drive_fail("`scale` takes a number from 0.5 to 4");
             }
-            win.scale_num = num;
-            win.scale_den = den;
+            new_num = num;
+            new_den = den;
         }
-        if (scaled(win.width) > MN_WINDOW_LARGEST ||
-            scaled(win.height) > MN_WINDOW_LARGEST) {
+        int64_t pixel_width = scaled_by(new_width, new_num, new_den);
+        int64_t pixel_height = scaled_by(new_height, new_num, new_den);
+        if (pixel_width > MN_WINDOW_LARGEST || pixel_height > MN_WINDOW_LARGEST) {
             drive_fail("a frame of %lldx%lld pixels is larger than %d by %d",
-                       (long long)scaled(win.width),
-                       (long long)scaled(win.height), MN_WINDOW_LARGEST,
-                       MN_WINDOW_LARGEST);
+                       (long long)pixel_width, (long long)pixel_height,
+                       MN_WINDOW_LARGEST, MN_WINDOW_LARGEST);
         }
-        win.pixel_width = scaled(win.width);
-        win.pixel_height = scaled(win.height);
+        win.width = new_width;
+        win.height = new_height;
+        win.scale_num = new_num;
+        win.scale_den = new_den;
+        win.pixel_width = pixel_width;
+        win.pixel_height = pixel_height;
         drive_answer_command(text);
     } else if (strcmp(name, "draws") == 0) {
-        if (count != 1) drive_fail("`draws` takes nothing");
-        window_draws();
+        int64_t from = 0;
+        bool paged = count > 1 && strcmp(words[1], "from") == 0;
+        if (paged && (count < 3 || !drive_whole(words[2], &from))) {
+            drive_fail("draws: `from` takes a draw number from 0 up");
+        }
+        if (count > 3 || (count > 1 && !paged)) {
+            drive_fail("`draws` takes nothing, or `from` and a draw number");
+        }
+        window_draws(text, from);
     } else if (strcmp(name, "close") == 0) {
         if (count != 1) drive_fail("`close` takes nothing");
         win.closing = true;
@@ -2657,17 +2761,16 @@ static void window_capture(const char *text, const char *file) {
 #else
     MnFrame frame = frame_now();
     size_t size = (size_t)frame.width * frame.height * 4;
-    unsigned char *rgba = mn_malloc(size);
+    unsigned char *rgba = drive_hold(mn_malloc(size));
     const char *unable = mn_window_read(&frame, rgba);
     if (unable) drive_fail("can't capture: %s", unable);
     PngOut png = {0};
     png_make(&png, frame.width, frame.height, rgba);
+    drive_hold(png.data);
     uint32_t crc = crc32_of(0, rgba, size);
-    free(rgba);
     FILE *out = fopen(file, "wb");
     bool written = out && fwrite(png.data, 1, png.len, out) == png.len;
     if (out && fclose(out) != 0) written = false;
-    free(png.data);
     if (!written) {
         drive_fail("can't capture: can't write %s: %s", file, strerror(errno));
     }
@@ -2793,6 +2896,27 @@ static uint32_t component_named(Token token) {
     return MN_NONE;
 }
 
+/* `it has` and the names of the program's components and tags, a tag
+ * followed by ` (tag)`, or of its resources, in the order the program
+ * declares them, or `it has none`; held until the command is done. */
+static const char *names_had(bool resources) {
+    const MnProgram *program = mn_world.program;
+    uint32_t count = resources ? program->resource_count : program->component_count;
+    MnBuilder b = {0};
+    j_lit(&b, count == 0 ? "it has none" : "it has ");
+    for (uint32_t i = 0; i < count; i++) {
+        if (i != 0) j_lit(&b, ", ");
+        if (resources) {
+            j_lit(&b, program->resources[i].name);
+        } else {
+            j_lit(&b, program->components[i].name);
+            if (program->components[i].size == 0) j_lit(&b, " (tag)");
+        }
+    }
+    mn_sb_bytes(&b, "", 1);
+    return drive_hold(b.bytes);
+}
+
 /* `Time.tick` as `N ticks`. */
 static const char *ticks_said(char *out, size_t size) {
     snprintf(out, size, "%lld tick%s", (long long)mn_time.tick,
@@ -2805,14 +2929,14 @@ static void drive_query(const char *text) {
     static const char *const unreadable = "`query` takes the terms of an `each`";
     const MnProgram *program = mn_world.program;
     uint32_t most = program->component_count + 1;
-    uint32_t *with = mn_calloc(most, sizeof(uint32_t));
-    uint32_t *without = mn_calloc(most, sizeof(uint32_t));
-    uint32_t *terms = mn_calloc(most, sizeof(uint32_t));
+    uint32_t *with = drive_hold(mn_calloc(most, sizeof(uint32_t)));
+    uint32_t *without = drive_hold(mn_calloc(most, sizeof(uint32_t)));
+    uint32_t *terms = drive_hold(mn_calloc(most, sizeof(uint32_t)));
     uint32_t with_count = 0;
     uint32_t without_count = 0;
     uint32_t term_count = 0;
     uint32_t filter_count = 0;
-    uint32_t *filters = mn_calloc(most, sizeof(uint32_t));
+    uint32_t *filters = drive_hold(mn_calloc(most, sizeof(uint32_t)));
     bool entity = false;
     bool seen_with = false;
     bool seen_without = false;
@@ -2843,8 +2967,8 @@ static void drive_query(const char *text) {
             } else {
                 uint32_t id = component_named(token);
                 if (id == MN_NONE) {
-                    drive_fail("query: `%.*s` is not a component or tag of this program",
-                               (int)token.len, token.at);
+                    drive_fail("query: `%.*s` is not a component or tag of this program; %s",
+                               (int)token.len, token.at, names_had(false));
                 }
                 for (uint32_t i = 0; i < with_count; i++) {
                     if (with[i] == id) {
@@ -2880,8 +3004,8 @@ static void drive_query(const char *text) {
                 if (token_is(name, "Entity")) drive_fail("query: `Entity` can't be a filter");
                 uint32_t id = component_named(name);
                 if (id == MN_NONE) {
-                    drive_fail("query: `%.*s` is not a component or tag of this program",
-                               (int)name.len, name.at);
+                    drive_fail("query: `%.*s` is not a component or tag of this program; %s",
+                               (int)name.len, name.at, names_had(false));
                 }
                 bool twice = false;
                 for (uint32_t i = 0; i < with_count; i++) twice = twice || with[i] == id;
@@ -2928,7 +3052,6 @@ static void drive_query(const char *text) {
             drive_fail("%s", unreadable);
         }
     }
-    free(filters);
 
     MnQuery query = {with, with_count, without, without_count, NULL, 0, 0, 0};
     mn_query_refresh(&query);
@@ -3006,9 +3129,6 @@ static void drive_query(const char *text) {
         free(b.bytes);
     }
     free(query.tables);
-    free(with);
-    free(without);
-    free(terms);
 }
 
 /* Carries out `resource NAME`, `text` the command as written. */
@@ -3032,8 +3152,8 @@ static void drive_resource(const char *text) {
         if (token_is(name, program->resources[i].name)) resource = &program->resources[i];
     }
     if (!resource) {
-        drive_fail("resource: `%.*s` is not a resource of this program", (int)name.len,
-                   name.at);
+        drive_fail("resource: `%.*s` is not a resource of this program; %s", (int)name.len,
+                   name.at, names_had(true));
     }
     MnBuilder b = {0};
     if (json_lines) {
@@ -3066,20 +3186,42 @@ static bool window_command_named(const char *name) {
     return false;
 }
 
+/* What a command lets the program do next: read the next command, run
+ * ticks, or end. */
+typedef enum { DRIVE_NEXT, DRIVE_TICKS, DRIVE_QUIT } DriveNext;
+
+/* Answers `tick`, `text` as written, read in a session after the program
+ * has ended: no tick ran. */
+static void drive_tick_after_end(const char *text) {
+    if (json_lines) {
+        MnBuilder b = {0};
+        answer_begin(&b, text, drive.line);
+        j_int(&b, "ran", 0);
+        j_bool(&b, "ended", true);
+        j_say(&b);
+    } else {
+        drive_answer("%s: the program ended after 0 ticks", text);
+    }
+}
+
 /* Carries out one command, given without its line break and without the
- * spaces around it. Returns true when it lets ticks run. */
-static bool drive_command(char *text) {
-    char *copy = mn_malloc(strlen(text) + 1);
+ * spaces around it. `quit` before the program's end ends the program. */
+static DriveNext drive_command(char *text) {
+    char *copy = drive_hold(mn_malloc(strlen(text) + 1));
     strcpy(copy, text);
     char *words[5];
     int count = drive_words(copy, words, 4);
     const char *name = words[0];
-    bool runs = false;
+    DriveNext next = DRIVE_NEXT;
     if (strcmp(name, "tick") == 0) {
         int64_t ticks = 1;
         if (count == 2) ticks = drive_count(words[1], INT64_MAX / 16);
         if (count > 2 || ticks < 1) {
             drive_fail("`tick` takes a number of ticks from 1 up, or nothing");
+        }
+        if (drive.session && drive.ended) {
+            drive_tick_after_end(text);
+            return DRIVE_NEXT;
         }
         free(drive.tick_text);
         drive.tick_text = mn_malloc(strlen(text) + 1);
@@ -3087,7 +3229,13 @@ static bool drive_command(char *text) {
         drive.ticks_left = ticks;
         drive.ticks_run = 0;
         drive.tick_line = drive.line;
-        runs = true;
+        next = DRIVE_TICKS;
+    } else if (strcmp(name, "quit") == 0) {
+        if (count != 1) drive_fail("`quit` takes nothing");
+        drive_answer_command(text);
+        drive.done = true;
+        if (!drive.ended) mn_exit(0);
+        next = DRIVE_QUIT;
     } else if (strcmp(name, "query") == 0) {
         drive_query(text);
     } else if (strcmp(name, "resource") == 0) {
@@ -3111,36 +3259,49 @@ static bool drive_command(char *text) {
     } else {
         drive_fail("unknown command `%s`", name);
     }
-    free(copy);
-    return runs;
+    return next;
 }
 
-/* Reads and carries out commands until one lets ticks run. Returns false
- * when they have run out. */
-static bool drive_until_tick(void) {
-    if (drive.done) return false;
-    if (!drive.file) {
-        drive.file = fopen(drive.name, "r");
-        if (!drive.file) {
-            if (json_lines) {
-                MnBuilder b = {0};
-                j_begin(&b, "drive_unopened");
-                j_str(&b, "file", drive.name);
-                j_str(&b, "message", strerror(errno));
-                j_say(&b);
-            } else {
-                say_text("midnight: drive: can't open %s: %s\n", drive.name,
-                         strerror(errno));
-            }
-            mn_leave(1);
-        }
+/* Carries out one command and frees what it held. In a session a command
+ * that is refused returns here, having changed nothing, and the program
+ * goes on to the next. */
+static DriveNext drive_carry_out(char *text) {
+    drive.command = text;
+    if (drive.session) {
+        if (setjmp(drive.refuse) != 0) return DRIVE_NEXT;
     }
+    DriveNext next = drive_command(text);
+    drive_release();
+    return next;
+}
+
+/* In a session, says that the program waits for a command: Time.tick,
+ * the bytes it has written to standard output, and whether it has
+ * ended. */
+static void drive_ready(void) {
+    if (json_lines) {
+        MnBuilder b = {0};
+        j_begin(&b, "ready");
+        j_int(&b, "tick", mn_time.tick);
+        j_int(&b, "output_bytes", out_bytes);
+        j_bool(&b, "ended", drive.ended);
+        j_say(&b);
+    } else {
+        say_text("midnight: drive: ready: %lld tick%s, %lld byte%s out%s\n",
+                 (long long)mn_time.tick, mn_time.tick == 1 ? "" : "s",
+                 (long long)out_bytes, out_bytes == 1 ? "" : "s",
+                 drive.ended ? ", the program has ended" : "");
+    }
+}
+
+/* The next command that is not empty or a comment, without the spaces
+ * around it, or NULL when the commands have run out. In a session a
+ * `ready` line comes before each line is read. */
+static char *drive_read(void) {
     for (;;) {
+        if (drive.session) drive_ready();
         ssize_t got = getline(&drive.buf, &drive.capacity, drive.file);
-        if (got < 0) {
-            drive.done = true;
-            return false;
-        }
+        if (got < 0) return NULL;
         drive.line++;
         char *text = drive.buf;
         size_t len = (size_t)got;
@@ -3150,8 +3311,51 @@ static bool drive_until_tick(void) {
         }
         text[len] = '\0';
         while (*text == ' ' || *text == '\t') text++;
-        if (*text == '\0' || *text == '#') continue;
-        if (drive_command(text)) return true;
+        if (*text != '\0' && *text != '#') return text;
+    }
+}
+
+/* Opens the file of commands, or takes standard input in a session, the
+ * first time a command is wanted. */
+static void drive_open(void) {
+    if (drive.file) return;
+    if (drive.session) {
+        drive.file = stdin;
+        return;
+    }
+    drive.file = fopen(drive.name, "r");
+    if (!drive.file) {
+        if (json_lines) {
+            MnBuilder b = {0};
+            j_begin(&b, "drive_unopened");
+            j_str(&b, "file", drive.name);
+            j_str(&b, "message", strerror(errno));
+            j_say(&b);
+        } else {
+            say_text("midnight: drive: can't open %s: %s\n", drive.name,
+                     strerror(errno));
+        }
+        mn_leave(1);
+    }
+}
+
+/* Reads and carries out commands until one lets ticks run. Returns false
+ * when they have run out or `quit` came after the program's end. In a
+ * session the end of input before the program's end ends it as `quit`
+ * does. */
+static bool drive_until_tick(void) {
+    if (drive.done) return false;
+    drive_open();
+    for (;;) {
+        char *text = drive_read();
+        if (!text) {
+            drive.done = true;
+            if (drive.session && !drive.ended) mn_exit(0);
+            return false;
+        }
+        DriveNext next = drive_carry_out(text);
+        if (next == DRIVE_TICKS) return true;
+        if (next == DRIVE_QUIT) return false;
     }
 }
 
@@ -3180,6 +3384,7 @@ static void drive_tick_answer(bool ending) {
 static void drive_start(void) {
     const char *name = getenv("MIDNIGHT_DRIVE");
     if (name && *name != '\0') drive.name = name;
+    drive.session = name && strcmp(name, "-") == 0;
 }
 
 /* Before a tick begins: carries out commands until one lets it run, unless
@@ -3198,15 +3403,17 @@ static void drive_tick_end(void) {
 }
 
 /* When the program ends: answers a pending `tick` command and carries out
- * the commands up to the next `tick`. */
+ * the commands up to the next `tick`, or in a session until `quit` or the
+ * end of input, answering each `tick` with no tick run. */
 static void drive_finish(void) {
     drive_tick_answer(true);
+    drive.ended = true;
     if (drive.name && !drive.done) drive_until_tick();
     free(drive.tick_text);
     drive.tick_text = NULL;
     free(drive.buf);
     drive.buf = NULL;
-    if (drive.file) fclose(drive.file);
+    if (drive.file && drive.file != stdin) fclose(drive.file);
     drive.file = NULL;
     drive.done = true;
 }
@@ -3798,7 +4005,10 @@ void mn_sb_write(MnBuilder *sb) {
 /* ---- Output -------------------------------------------------------------- */
 
 void mn_out_bytes(const char *bytes, int64_t len) {
-    if (len > 0) fwrite(bytes, 1, (size_t)len, stdout);
+    if (len > 0) {
+        fwrite(bytes, 1, (size_t)len, stdout);
+        out_bytes += len;
+    }
 }
 
 void mn_out_str(MnString s) {
@@ -3828,7 +4038,10 @@ void mn_out_entity(MnEntity e) {
     mn_out_bytes(text, format_entity(e, text));
 }
 
-void mn_out_newline(void) { putc('\n', stdout); }
+void mn_out_newline(void) {
+    putc('\n', stdout);
+    out_bytes++;
+}
 
 /* ---- Lists --------------------------------------------------------------- */
 

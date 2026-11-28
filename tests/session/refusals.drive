@@ -1,0 +1,46 @@
+fly
+tick 0
+scale 4
+resize 4000 10
+resize 0 10
+scale 9
+key Q2
+key down A
+key down A
+key up B
+mouse Left
+mouse move 200 3
+mouse move 3 3
+mouse down Left
+mouse down Left
+mouse up Right
+scroll 1001 0
+focus
+blur now
+draws all
+draws from x
+query Bal
+query Ball, Frozen
+query Ball, with: Nope
+query Ball from
+query Entity, Entity
+resource Average
+resource Time
+resource
+capture
+capture frame.png
+quit now
+tick
+query Ball
+resource Score
+draws
+key up A
+mouse up Left
+mouse leave
+close
+tick
+draws
+close
+key down A
+tick
+query Ball

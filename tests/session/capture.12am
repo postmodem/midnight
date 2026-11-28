@@ -1,0 +1,14 @@
+# expect: `capture` in a session answers as in a file: with no device it is
+# refused, and on a device a refused capture into a missing directory
+# changes nothing the captures after it show.
+
+Window.background = Color(16, 16, 32)
+
+system paint
+  Draw.rect(4.0, 4.0, 20.0, 12.0, Color(200, 40, 40))
+  Draw.circle(40.0 + Time.tick.to_f, 20.0, 8.0, Color(40, 200, 40))
+end
+
+Window.open("capture", 64, 48)
+World.run
+puts "closed at #{Time.tick}"

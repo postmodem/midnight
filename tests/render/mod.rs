@@ -96,61 +96,91 @@ fn quoted(text: &str) -> Option<(String, &str)> {
     Some((String::from_utf8(bytes).ok()?, after))
 }
 
-/// Reads the lines of one `draws` answer, with or without
-/// `midnight: drive: ` before each.
+/// The size a `draws` answer's first line gives, or `None` when `head` is
+/// not one: `draws: …` or `draws from N: …`.
+fn page_size(head: &str) -> Option<(u32, u32)> {
+    let rest = head.strip_prefix("draws")?;
+    let rest = match rest.strip_prefix(" from ") {
+        Some(page) => page.split_once(": ")?.1,
+        None => rest.strip_prefix(": ")?,
+    };
+    let (w, h) = rest.split(", ").nth(1)?.split_once('x')?;
+    Some((w.parse().ok()?, h.parse().ok()?))
+}
+
+/// Reads the lines of one `draws` answer, or of several pages of one frame
+/// one after another, with or without `midnight: drive: ` before each.
+/// Every page must give the size and background of the first; the frame
+/// has the draws of every page in order.
 pub fn parse(answer: &str) -> Result<Frame, String> {
     let mut lines = answer
         .lines()
-        .map(|line| line.strip_prefix("midnight: drive: ").unwrap_or(line));
-    let head = lines.next().ok_or("an empty answer")?;
-    let size = head
-        .strip_prefix("draws: ")
-        .and_then(|rest| rest.split(", ").nth(1))
-        .and_then(|size| size.split_once('x'))
-        .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
-        .ok_or_else(|| format!("not the first line of a `draws` answer: {head}"))?;
-    let line = lines.next().unwrap_or_default();
-    let background = line
-        .strip_prefix("  Window.background = ")
-        .and_then(color)
-        .filter(|(_, rest)| rest.is_empty())
-        .map(|(bytes, _)| bytes)
-        .ok_or_else(|| format!("not a background: {line}"))?;
-    let mut draws = Vec::new();
-    for line in lines {
-        let draw = (|| {
-            let rest = line.strip_prefix("  Draw.")?;
-            let (name, rest) = rest.split_once('(')?;
-            let (shape, count) = Shape::named(name)?;
-            let mut n = [0.0f32; 6];
-            let mut rest = rest;
-            let mut text = String::new();
-            for (k, number) in n.iter_mut().take(count).enumerate() {
-                if shape == Shape::Text && k == 2 {
-                    let (string, after) = quoted(rest)?;
-                    text = string;
-                    rest = after.strip_prefix(", ")?;
-                }
-                let (digits, after) = rest.split_once(", ")?;
-                *number = digits.parse().ok()?;
-                rest = after;
+        .map(|line| line.strip_prefix("midnight: drive: ").unwrap_or(line))
+        .peekable();
+    let mut frame: Option<Frame> = None;
+    while let Some(head) = lines.next() {
+        let size = page_size(head)
+            .ok_or_else(|| format!("not the first line of a `draws` answer: {head}"))?;
+        let line = lines.next().unwrap_or_default();
+        let background = line
+            .strip_prefix("  Window.background = ")
+            .and_then(color)
+            .filter(|(_, rest)| rest.is_empty())
+            .map(|(bytes, _)| bytes)
+            .ok_or_else(|| format!("not a background: {line}"))?;
+        let mut page = Vec::new();
+        while let Some(line) = lines.next_if(|line| page_size(line).is_none()) {
+            page.push(parse_draw(line)?);
+        }
+        match &mut frame {
+            None => {
+                frame = Some(Frame {
+                    width: size.0,
+                    height: size.1,
+                    background,
+                    draws: page,
+                })
             }
-            let (color, rest) = color(rest)?;
-            (rest == ")").then_some(Draw {
-                shape,
-                n,
-                color,
-                text,
-            })
-        })();
-        draws.push(draw.ok_or_else(|| format!("not a draw: {line}"))?);
+            Some(frame)
+                if (frame.width, frame.height, frame.background)
+                    == (size.0, size.1, background) =>
+            {
+                frame.draws.extend(page)
+            }
+            Some(_) => return Err(format!("a page of another frame: {head}")),
+        }
     }
-    Ok(Frame {
-        width: size.0,
-        height: size.1,
-        background,
-        draws,
-    })
+    frame.ok_or_else(|| "an empty answer".to_string())
+}
+
+/// Reads one line of a `draws` answer that gives a draw.
+fn parse_draw(line: &str) -> Result<Draw, String> {
+    let draw = (|| {
+        let rest = line.strip_prefix("  Draw.")?;
+        let (name, rest) = rest.split_once('(')?;
+        let (shape, count) = Shape::named(name)?;
+        let mut n = [0.0f32; 6];
+        let mut rest = rest;
+        let mut text = String::new();
+        for (k, number) in n.iter_mut().take(count).enumerate() {
+            if shape == Shape::Text && k == 2 {
+                let (string, after) = quoted(rest)?;
+                text = string;
+                rest = after.strip_prefix(", ")?;
+            }
+            let (digits, after) = rest.split_once(", ")?;
+            *number = digits.parse().ok()?;
+            rest = after;
+        }
+        let (color, rest) = color(rest)?;
+        (rest == ")").then_some(Draw {
+            shape,
+            n,
+            color,
+            text,
+        })
+    })();
+    draw.ok_or_else(|| format!("not a draw: {line}"))
 }
 
 /// Whether a center exactly on an edge of direction `(dx, dy)`, with the
@@ -885,6 +915,33 @@ mod tests {
         assert!(line.n[0].is_nan() && line.n[1] == f32::NEG_INFINITY && line.n[2] == 1e30);
         assert!(line.n[3] == 0.0 && line.n[3].is_sign_negative() && line.n[4] == 1.0 / 3.0);
         assert!(parse("draws: 1 tick, 2x2, 1 draw\n  Window.background = Color(0, 0, 0, 255)\n  Draw.oval(1.0, Color(0, 0, 0, 255))\n").is_err());
+    }
+
+    #[test]
+    fn pages_are_put_together() {
+        let page = |head: &str, x: &str| {
+            format!(
+                "{head}\n  Window.background = Color(1, 2, 3, 255)\n  \
+                 Draw.circle({x}, 1.0, 1.0, Color(9, 9, 9, 255))\n"
+            )
+        };
+        let frame = parse(&format!(
+            "{}{}{}",
+            page("draws: 1 tick, 8x8, 3 draws, 0 to 0", "1.0"),
+            page("draws from 1: 1 tick, 8x8, 3 draws, 1 to 1", "2.0"),
+            page("draws from 2: 1 tick, 8x8, 3 draws, 2 to 2", "3.0"),
+        ))
+        .unwrap();
+        let xs: Vec<f32> = frame.draws.iter().map(|draw| draw.n[0]).collect();
+        assert_eq!(xs, [1.0, 2.0, 3.0]);
+        let other = page("draws from 1: 1 tick, 9x8, 3 draws, 1 to 1", "2.0");
+        assert!(
+            parse(&format!(
+                "{}{other}",
+                page("draws: 1 tick, 8x8, 3 draws, 0 to 0", "1.0")
+            ))
+            .is_err()
+        );
     }
 
     /// Every pixel whose center lies in a cell of `draw` lies in exactly one

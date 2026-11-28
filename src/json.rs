@@ -4,7 +4,7 @@
 //! a newline at its end. `docs/json.md` lists every kind.
 
 /// The version of the JSON forms.
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 
 /// How the compiler writes what it says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -148,7 +148,7 @@ mod tests {
         assert_eq!(
             first_line(),
             format!(
-                "{{\"kind\":\"midnight\",\"format\":1,\"version\":\"{}\"}}\n",
+                "{{\"kind\":\"midnight\",\"format\":2,\"version\":\"{}\"}}\n",
                 env!("CARGO_PKG_VERSION")
             )
         );

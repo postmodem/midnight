@@ -1,0 +1,7 @@
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: tick 4: the program ended after 2 ticks
+midnight: drive: ready: 1 tick, 14 bytes out, the program has ended
+midnight: drive: tick: the program ended after 0 ticks
+midnight: drive: ready: 1 tick, 14 bytes out, the program has ended
+midnight: drive: quit
+status 3

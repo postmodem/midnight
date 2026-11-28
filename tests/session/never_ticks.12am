@@ -1,0 +1,6 @@
+# expect: a program that never ticks reads its first command at its end;
+# a `ready` says so, `tick` runs nothing, and a program with no
+# components or resources says it has none.
+
+puts "hello"
+puts "bye"

@@ -1,0 +1,10 @@
+midnight: drive: ready: 0 ticks, 10 bytes out, the program has ended
+midnight: drive: refused: query: `Ball` is not a component or tag of this program; it has none
+midnight: drive: ready: 0 ticks, 10 bytes out, the program has ended
+midnight: drive: refused: resource: `Score` is not a resource of this program; it has none
+midnight: drive: ready: 0 ticks, 10 bytes out, the program has ended
+midnight: drive: tick: the program ended after 0 ticks
+midnight: drive: ready: 0 ticks, 10 bytes out, the program has ended
+midnight: drive: tick 3: the program ended after 0 ticks
+midnight: drive: ready: 0 ticks, 10 bytes out, the program has ended
+status 0

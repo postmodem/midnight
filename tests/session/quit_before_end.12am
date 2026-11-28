@@ -1,0 +1,15 @@
+# expect: `quit` before the program's end ends a windowless `World.run`
+# that only `World.stop` would end, where it stands, with status 0 and its
+# output written out; nothing after `quit` is carried out.
+
+resource Clock
+  ticks: Int = 0
+end
+
+system count
+  Clock.ticks += 1
+  puts "tick #{Clock.ticks}"
+end
+
+World.run
+puts "never"

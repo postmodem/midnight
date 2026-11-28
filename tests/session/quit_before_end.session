@@ -1,0 +1,7 @@
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: tick 2
+midnight: drive: ready: 2 ticks, 14 bytes out
+midnight: drive: resource Clock: 2 ticks, Clock(ticks: 2)
+midnight: drive: ready: 2 ticks, 14 bytes out
+midnight: drive: quit
+status 0

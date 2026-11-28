@@ -1,4 +1,4 @@
-{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"midnight","format":2,"version":"VERSION"}
 {"kind":"answer","name":"tick","command":"tick","line":1,"tick":1,"ran":1,"ended":false}
 {"kind":"answer","name":"query","command":"query Body","line":2,"tick":1,"count":2,"from":0,"rows":[{"entity":"Entity(0v1)","Body":{"pos":{"x":1.5,"y":-2.25},"speed":0.1,"path":[7.0385307e-26],"mood":"Angry","name":"tab\there\u001b→","link":"Entity(none)","tint":[1,2,3,4],"big":-9007199254740993,"small":255,"alive":false}},{"entity":"Entity(1v1)","Body":{"pos":{"x":0.0,"y":0.0},"speed":"NaN","path":[],"mood":"Calm","name":"","link":"Entity(0v1)","tint":[0,0,0,255],"big":0,"small":0,"alive":true}}]}
 {"kind":"answer","name":"query","command":"query Entity, Body, without: Frozen from 1","line":3,"tick":1,"count":1,"from":1,"rows":[]}

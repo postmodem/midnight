@@ -1,0 +1,20 @@
+# json: session
+# A session in JSON: a `ready` line before each line is read, comments and
+# empty lines included and counted, a refused command, a page of `draws`
+# with `count` and `from`, a `tick` after the program's end, and `quit`.
+
+component Ball
+  x: Float
+end
+
+system paint
+  each Ball do |b|
+    Draw.circle(b.x, 4.0, 2.0, Color(1, 2, 3))
+  end
+end
+
+spawn Ball(1.0)
+spawn Ball(5.0)
+spawn Ball(9.0)
+Window.open("session", 16, 8)
+World.tick

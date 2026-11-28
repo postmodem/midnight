@@ -1,0 +1,7 @@
+tick
+tick 5
+query Count
+resource Total
+tick
+tick 2
+query Count from 1

@@ -1,0 +1,9 @@
+# expect: empty lines and comments each get a `ready`, and are counted as
+# lines; the end of input before the program's end ends it as `quit`
+# does, with status 0.
+
+system step
+  puts "tick #{Time.tick}"
+end
+
+World.run

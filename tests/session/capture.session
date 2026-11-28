@@ -1,0 +1,18 @@
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: tick
+midnight: drive: ready: 1 tick, 0 bytes out
+midnight: drive: refused: can't capture: the program has no device
+midnight: drive: ready: 1 tick, 0 bytes out
+midnight: drive: refused: can't capture: the program has no device
+midnight: drive: ready: 1 tick, 0 bytes out
+midnight: drive: scale 2
+midnight: drive: ready: 1 tick, 0 bytes out
+midnight: drive: tick 2
+midnight: drive: ready: 3 ticks, 0 bytes out
+midnight: drive: refused: can't capture: the program has no device
+midnight: drive: ready: 3 ticks, 0 bytes out
+midnight: drive: close
+midnight: drive: ready: 3 ticks, 0 bytes out
+midnight: drive: tick
+midnight: drive: ready: 4 ticks, 12 bytes out, the program has ended
+status 0

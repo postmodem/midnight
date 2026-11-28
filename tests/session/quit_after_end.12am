@@ -1,0 +1,10 @@
+# expect: a program that ends with `exit(3)` waits in its session; `quit`
+# then lets the end go on, and the status is the one the program ended
+# with.
+
+system step
+  puts "tick #{Time.tick}"
+  exit(3) if Time.tick == 1
+end
+
+World.run

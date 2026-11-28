@@ -1,0 +1,8 @@
+# a comment
+
+query Bal
+tick
+draws from 1
+tick 2
+query Ball from 2
+quit

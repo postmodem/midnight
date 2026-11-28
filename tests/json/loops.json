@@ -1,4 +1,4 @@
-{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"midnight","format":2,"version":"VERSION"}
 {"kind":"loop","file":"tests/json/loops.12am","line":22,"in":{"def":"Vec2.total"},"terms":["Health"],"with":[],"without":[],"runs":"one_core","reason":"`t += …` at line 23 is a `Float` sum","rule":4}
 {"kind":"loop","file":"tests/json/loops.12am","line":30,"in":{"def":"heal"},"terms":["Health"],"with":["Visible"],"without":[],"runs":"cores"}
 {"kind":"loop","file":"tests/json/loops.12am","line":36,"in":{"system":"move","gpu":true,"strict":false},"terms":["Position"],"with":[],"without":["Frozen","Visible"],"runs":"gpu"}

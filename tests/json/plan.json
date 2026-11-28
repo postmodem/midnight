@@ -1,4 +1,4 @@
-{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"midnight","format":2,"version":"VERSION"}
 {"kind":"transfer","direction":"upload","component":"Position","from":{"system":"report","strict":false},"to":{"system":"move","strict":false},"rows":false}
 {"kind":"transfer","direction":"upload","component":"Velocity","from":{"system":"grow","strict":false},"to":{"system":"move","strict":false},"rows":true,"on":"spawn"}
 {"kind":"transfer","direction":"upload","component":"Mass","from":{"top_level":true},"to":{"system":"move","strict":false},"rows":false}

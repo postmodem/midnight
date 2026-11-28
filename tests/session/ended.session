@@ -1,0 +1,19 @@
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: tick
+midnight: drive: ready: 1 tick, 0 bytes out
+midnight: drive: tick 5: the program ended after 2 ticks
+midnight: drive: ready: 3 ticks, 10 bytes out, the program has ended
+midnight: drive: query Count: 3 ticks, 2 rows
+midnight: drive:   Entity(0v1) Count(n: 3)
+midnight: drive:   Entity(1v1) Count(n: 13)
+midnight: drive: ready: 3 ticks, 10 bytes out, the program has ended
+midnight: drive: resource Total: 3 ticks, Total(sum: 42)
+midnight: drive: ready: 3 ticks, 10 bytes out, the program has ended
+midnight: drive: tick: the program ended after 0 ticks
+midnight: drive: ready: 3 ticks, 10 bytes out, the program has ended
+midnight: drive: tick 2: the program ended after 0 ticks
+midnight: drive: ready: 3 ticks, 10 bytes out, the program has ended
+midnight: drive: query Count from 1: 3 ticks, 2 rows, 1 to 1
+midnight: drive:   Entity(1v1) Count(n: 13)
+midnight: drive: ready: 3 ticks, 10 bytes out, the program has ended
+status 0

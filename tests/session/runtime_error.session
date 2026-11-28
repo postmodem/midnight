@@ -1,0 +1,5 @@
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: tick
+midnight: drive: ready: 1 tick, 9 bytes out
+tests/session/runtime_error.12am:7: runtime error: index 3 out of range for a list of length 3
+status 1

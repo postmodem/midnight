@@ -284,7 +284,7 @@ fn split_answers(answers: &str) -> [String; 3] {
     let mut kind = 2;
     for line in answers.split_inclusive('\n') {
         if !line.starts_with("  ") {
-            kind = if line.starts_with("draws: ") {
+            kind = if line.starts_with("draws: ") || line.starts_with("draws from ") {
                 0
             } else if line.starts_with("query ") || line.starts_with("resource ") {
                 1
@@ -975,6 +975,14 @@ fn json_programs() {
                     .env("MIDNIGHT_DRIVE", source.with_extension("drive"));
                 run_within(&mut command, RUN_LIMIT).stderr
             }
+            "session" => {
+                let exe = exe_path(&dir, source, Mode::Release);
+                build(source, &exe, Mode::Release)?;
+                let mut command = in_session(&exe);
+                command.env("MIDNIGHT_FORMAT", "json");
+                let input = source.with_extension("drive");
+                run_with_input(&mut command, RUN_LIMIT, Some(&input)).stderr
+            }
             other => return Err(label(format!("unknown command `{other}`"))),
         };
         for (i, line) in actual.lines().enumerate() {
@@ -994,7 +1002,7 @@ fn json_programs() {
 /// The first line of every JSON form, with this compiler's version.
 fn json_first_line() -> String {
     format!(
-        "{{\"kind\":\"midnight\",\"format\":1,\"version\":\"{}\"}}\n",
+        "{{\"kind\":\"midnight\",\"format\":2,\"version\":\"{}\"}}\n",
         env!("CARGO_PKG_VERSION")
     )
 }
@@ -2493,7 +2501,9 @@ fn check_drawn(answers: &str, dir: &Path) -> Result<usize, String> {
             continue;
         };
         let mut first = at;
-        while first > 0 && lines[first - 1].starts_with("  ") {
+        while first > 0
+            && (lines[first - 1].starts_with("  ") || lines[first - 1].starts_with("draws from "))
+        {
             first -= 1;
         }
         if first == 0 || first == at || !lines[first - 1].starts_with("draws: ") {
@@ -2509,6 +2519,42 @@ fn check_drawn(answers: &str, dir: &Path) -> Result<usize, String> {
     Ok(count)
 }
 
+/// `commands` with `draws from 100`, `draws from 200`, … after each `draws`
+/// whose answer in `answers`, the answers of a run of `commands`, gives a
+/// frame of more than one page, so that the pages after the first follow
+/// it; `None` when every frame fits in one.
+fn with_pages(commands: &str, answers: &str) -> Option<String> {
+    let counts: Vec<u64> = answers
+        .lines()
+        .filter_map(|line| line.strip_prefix("draws: "))
+        .map(|head| {
+            head.split(", ")
+                .nth(2)
+                .and_then(|draws| draws.split(' ').next())
+                .and_then(|count| count.parse().ok())
+                .expect("the count of a `draws` answer")
+        })
+        .collect();
+    let mut counts = counts.into_iter();
+    let mut paged = false;
+    let mut out = String::new();
+    for line in commands.lines() {
+        out.push_str(line);
+        out.push('\n');
+        if line.trim() != "draws" {
+            continue;
+        }
+        let count = counts.next().unwrap_or(0);
+        let mut from = 100;
+        while from < count {
+            out.push_str(&format!("draws from {from}\n"));
+            paged = true;
+            from += 100;
+        }
+    }
+    paged.then_some(out)
+}
+
 /// The scales `window_drawn` runs each program at besides its own.
 const DRAWN_SCALES: [&str; 3] = ["1.25", "1.5", "2"];
 
@@ -2517,7 +2563,10 @@ const DRAWN_SCALES: [&str; 3] = ["1.25", "1.5", "2"];
 /// device, in release and debug builds, as it is and with a `scale`
 /// command of 1.25, 1.5 and 2 before its commands. It must print
 /// `NAME.out`, and each capture after a `draws` must agree with the
-/// reference renderer's picture of that `draws` answer. No GPU block may
+/// reference renderer's picture of that `draws` answer. A frame of more
+/// than one page is listed whole: a first run learns its count, and a
+/// second lists the pages after the first right after its `draws` and
+/// renders them put together. No GPU block may
 /// run on the CPU but as the program's `# on the CPU:` line says.
 #[test]
 fn window_drawn() {
@@ -2562,32 +2611,39 @@ fn window_drawn() {
                 Some(scale) => format!("scale {scale}\n{commands}"),
                 None => commands.clone(),
             };
-            std::fs::write(&drive, given).expect("write the commands");
-            let mut command = Command::new(&exe);
-            command
-                .env("MIDNIGHT_WINDOW", "headless")
-                .env("MIDNIGHT_DRIVE", &drive);
-            no_display(&mut command);
-            on_device(&mut command, device);
-            command.current_dir(&files);
-            let mut run = run_within(&mut command, RUN_LIMIT);
-            let said =
-                device_said(&mut run, device).map_err(|message| format!("{label}: {message}"))?;
-            run.stderr = cpu_runs_as_stated(&run.stderr, reason.as_deref(), false)
-                .map_err(|message| format!("{label}: {message}"))?;
-            if run.status != Some(0) || !run.stderr.is_empty() {
-                return Err(format!(
-                    "{label}: exited with {:?}\n--- answers\n{}--- stderr\n{}---",
-                    run.status, run.drive, run.stderr
-                ));
-            }
-            devices.lock().unwrap().insert(said);
-            let out = std::fs::read_to_string(source.with_extension("out")).unwrap_or_default();
-            if run.stdout != out {
-                return Err(format!(
-                    "{label}: standard output differs from the .out file\n--- actual\n{}---",
-                    run.stdout
-                ));
+            let run_given = |given: &str| -> Result<TimedRun, String> {
+                std::fs::write(&drive, given).expect("write the commands");
+                let mut command = Command::new(&exe);
+                command
+                    .env("MIDNIGHT_WINDOW", "headless")
+                    .env("MIDNIGHT_DRIVE", &drive);
+                no_display(&mut command);
+                on_device(&mut command, device);
+                command.current_dir(&files);
+                let mut run = run_within(&mut command, RUN_LIMIT);
+                let said = device_said(&mut run, device)
+                    .map_err(|message| format!("{label}: {message}"))?;
+                run.stderr = cpu_runs_as_stated(&run.stderr, reason.as_deref(), false)
+                    .map_err(|message| format!("{label}: {message}"))?;
+                if run.status != Some(0) || !run.stderr.is_empty() {
+                    return Err(format!(
+                        "{label}: exited with {:?}\n--- answers\n{}--- stderr\n{}---",
+                        run.status, run.drive, run.stderr
+                    ));
+                }
+                devices.lock().unwrap().insert(said);
+                let out = std::fs::read_to_string(source.with_extension("out")).unwrap_or_default();
+                if run.stdout != out {
+                    return Err(format!(
+                        "{label}: standard output differs from the .out file\n--- actual\n{}---",
+                        run.stdout
+                    ));
+                }
+                Ok(run)
+            };
+            let mut run = run_given(&given)?;
+            if let Some(paged) = with_pages(&given, &run.drive) {
+                run = run_given(&paged)?;
             }
             let count =
                 check_drawn(&run.drive, &files).map_err(|message| format!("{label}: {message}"))?;
@@ -3454,9 +3510,19 @@ struct TimedRun {
 
 /// Runs a command, and kills it when it has not ended after `limit`.
 fn run_within(command: &mut Command, limit: Duration) -> TimedRun {
+    run_with_input(command, limit, None)
+}
+
+/// Runs a command with the file `input` as its standard input, or none,
+/// and kills it when it has not ended after `limit`.
+fn run_with_input(command: &mut Command, limit: Duration, input: Option<&Path>) -> TimedRun {
     use std::io::Read;
+    let stdin = match input {
+        Some(path) => Stdio::from(std::fs::File::open(path).expect("open standard input")),
+        None => Stdio::null(),
+    };
     let mut child = command
-        .stdin(Stdio::null())
+        .stdin(stdin)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -3505,9 +3571,18 @@ fn run_within(command: &mut Command, limit: Duration) -> TimedRun {
 /// a JSON form on standard error, and its lines, written as text, the
 /// standard error of the first run. Returns the first run.
 fn run_both_forms(command: &mut Command, limit: Duration) -> Result<TimedRun, String> {
-    let plain = run_within(command, limit);
+    run_both_forms_with_input(command, limit, None)
+}
+
+/// As `run_both_forms`, with the file `input` as standard input.
+fn run_both_forms_with_input(
+    command: &mut Command,
+    limit: Duration,
+    input: Option<&Path>,
+) -> Result<TimedRun, String> {
+    let plain = run_with_input(command, limit, input);
     command.env("MIDNIGHT_FORMAT", "json");
-    let json = run_within(command, limit);
+    let json = run_with_input(command, limit, input);
     command.env_remove("MIDNIGHT_FORMAT");
     let differs = |what: &str, plain: &str, json: &str| {
         format!("{what} differs in JSON\n--- text\n{plain}--- JSON\n{json}---")
@@ -4099,7 +4174,7 @@ fn float32_text_round_trips() {
 fn lines_no_program_writes_on_demand() {
     let dir = scratch("lines");
     let exe = build_lines(&dir, true);
-    let first = "{\"kind\":\"midnight\",\"format\":1,\"version\":\"test\"}\n";
+    let first = "{\"kind\":\"midnight\",\"format\":2,\"version\":\"test\"}\n";
     for (mode, status, text_line, json_line) in [
         (
             "gpu_error",
@@ -4238,6 +4313,281 @@ fn run_passes_the_format() {
     assert!(!stderr.contains('{'), "{stderr}");
 }
 
+/// Each wrong command of `drive_errors`: the commands, the answers before
+/// the error, and the error after the file's name.
+const DRIVE_ERRORS: &[(&str, &str, &str)] = &[
+    ("tick\nfly\n", "tick\n", "2: unknown command `fly`"),
+    (
+        "tick 0\n",
+        "",
+        "1: `tick` takes a number of ticks from 1 up, or nothing",
+    ),
+    (
+        "tick two\n",
+        "",
+        "1: `tick` takes a number of ticks from 1 up, or nothing",
+    ),
+    (
+        "tick 1 2\n",
+        "",
+        "1: `tick` takes a number of ticks from 1 up, or nothing",
+    ),
+    (
+        "# a comment\n\nresize 10\n",
+        "",
+        "3: `resize` takes a width and a height in points, each from 1 to 8192",
+    ),
+    (
+        "resize 0 10\n",
+        "",
+        "1: `resize` takes a width and a height in points, each from 1 to 8192",
+    ),
+    (
+        "resize 8193 10\n",
+        "",
+        "1: `resize` takes a width and a height in points, each from 1 to 8192",
+    ),
+    (
+        "resize 10 10 10\n",
+        "",
+        "1: `resize` takes a width and a height in points, each from 1 to 8192",
+    ),
+    ("scale 0.4\n", "", "1: `scale` takes a number from 0.5 to 4"),
+    (
+        "scale 4.01\n",
+        "",
+        "1: `scale` takes a number from 0.5 to 4",
+    ),
+    ("scale 1e2\n", "", "1: `scale` takes a number from 0.5 to 4"),
+    ("scale -1\n", "", "1: `scale` takes a number from 0.5 to 4"),
+    ("scale\n", "", "1: `scale` takes a number from 0.5 to 4"),
+    (
+        "scale 4\nresize 4000 10\n",
+        "scale 4\n",
+        "2: a frame of 16000x40 pixels is larger than 8192 by 8192",
+    ),
+    ("close now\n", "", "1: `close` takes nothing"),
+    ("capture\n", "", "1: `capture` takes the name of a file"),
+    (
+        "capture frame.png\n",
+        "",
+        "1: can't capture: the program has no device",
+    ),
+    (
+        "close\ntick\ncapture frame.png\n",
+        "close\ntick\n",
+        "3: can't capture: no window is open",
+    ),
+    (
+        "draws all\n",
+        "",
+        "1: `draws` takes nothing, or `from` and a draw number",
+    ),
+    (
+        "draws from\n",
+        "",
+        "1: draws: `from` takes a draw number from 0 up",
+    ),
+    (
+        "draws from -1\n",
+        "",
+        "1: draws: `from` takes a draw number from 0 up",
+    ),
+    (
+        "draws from 1 2\n",
+        "",
+        "1: `draws` takes nothing, or `from` and a draw number",
+    ),
+    (
+        "draws to 1\n",
+        "",
+        "1: `draws` takes nothing, or `from` and a draw number",
+    ),
+    ("quit now\n", "", "1: `quit` takes nothing"),
+    (
+        "close\ntick\ndraws\n",
+        "close\ntick\n",
+        "3: can't list the draws: no window is open",
+    ),
+    // The keyboard and the mouse: names and numbers first.
+    ("key Q2\n", "", "1: `Q2` is not a key"),
+    ("key a\n", "", "1: `a` is not a key"),
+    (
+        "key\n",
+        "",
+        "1: `key` takes `down` or `up` and a key, or a key",
+    ),
+    (
+        "key press A\n",
+        "",
+        "1: `key` takes `down` or `up` and a key, or a key",
+    ),
+    ("mouse Middle2\n", "", "1: `Middle2` is not a mouse button"),
+    ("mouse down left\n", "", "1: `left` is not a mouse button"),
+    (
+        "mouse\n",
+        "",
+        "1: `mouse` takes `move` and a position, `down` or `up` and a button, `leave`, or a button",
+    ),
+    (
+        "mouse move 1.123456789 3\n",
+        "",
+        "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+    ),
+    (
+        "mouse move 1. 3\n",
+        "",
+        "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+    ),
+    (
+        "mouse move 3 .5\n",
+        "",
+        "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+    ),
+    (
+        "mouse move -8192.00000001 3\n",
+        "",
+        "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+    ),
+    (
+        "mouse move 1e2 3\n",
+        "",
+        "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+    ),
+    (
+        "mouse move 3\n",
+        "",
+        "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
+    ),
+    (
+        "scroll 1001 0\n",
+        "",
+        "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
+    ),
+    (
+        "scroll +1 0\n",
+        "",
+        "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
+    ),
+    (
+        "scroll 1\n",
+        "",
+        "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
+    ),
+    ("blur now\n", "", "1: `blur` takes nothing"),
+    ("focus now\n", "", "1: `focus` takes nothing"),
+    ("blur\nkey down Nope\n", "blur\n", "2: `Nope` is not a key"),
+    // Then the focus.
+    (
+        "blur\nkey A\n",
+        "blur\n",
+        "2: `key A` while the window does not have the focus",
+    ),
+    (
+        "blur\nkey up A\n",
+        "blur\n",
+        "2: `key up A` while the window does not have the focus",
+    ),
+    (
+        "close\nkey down A\n",
+        "close\n",
+        "2: `key down A` while the window does not have the focus",
+    ),
+    // Then what is held.
+    (
+        "key down A\nkey down A\n",
+        "key down A\n",
+        "2: `A` is already down",
+    ),
+    (
+        "key down A\nkey A\n",
+        "key down A\n",
+        "2: `A` is already down",
+    ),
+    ("key up A\n", "", "1: `A` is already up"),
+    (
+        "key down A\nblur\nfocus\nkey up A\n",
+        "key down A\nblur\nfocus\n",
+        "4: `A` is already up",
+    ),
+    (
+        "mouse move 3 3\nmouse down Left\nmouse Left\n",
+        "mouse move 3 3\nmouse down Left\n",
+        "3: `Left` is already down",
+    ),
+    ("mouse up Back\n", "", "1: `Back` is already up"),
+    // Then the pointer.
+    (
+        "mouse move 100 3\n",
+        "",
+        "1: `mouse move 100 3` is outside the window of 100x100 points while no button is held; a pointer that leaves is `mouse leave`",
+    ),
+    (
+        "mouse move 5 5\nmouse down Left\nmouse move 200 -3\nmouse up Left\nmouse move 300 3\n",
+        "mouse move 5 5\nmouse down Left\nmouse move 200 -3\nmouse up Left\n",
+        "5: `mouse move 300 3` is outside the window of 100x100 points while no button is held; a pointer that leaves is `mouse leave`",
+    ),
+    (
+        "mouse Left\n",
+        "",
+        "1: `mouse Left` while the pointer is not over the window and no button is held",
+    ),
+    (
+        "mouse move 3 3\nmouse leave\nmouse down Right\n",
+        "mouse move 3 3\nmouse leave\n",
+        "3: `mouse down Right` while the pointer is not over the window and no button is held",
+    ),
+    (
+        "mouse move 50 50\nresize 40 40\nmouse Left\n",
+        "mouse move 50 50\nresize 40 40\n",
+        "3: `mouse Left` while the pointer is not over the window and no button is held",
+    ),
+    (
+        "mouse leave\n",
+        "",
+        "1: `mouse leave` while the pointer is not over the window",
+    ),
+    (
+        "mouse move 3 3\nmouse leave\nmouse leave\n",
+        "mouse move 3 3\nmouse leave\n",
+        "3: `mouse leave` while the pointer is not over the window",
+    ),
+    // Then the focus commands.
+    ("focus\n", "", "1: `focus` while the window has the focus"),
+    (
+        "blur\nblur\n",
+        "blur\n",
+        "2: `blur` while the window does not have the focus",
+    ),
+    // The window's commands once it has closed: after the program ends,
+    // and between the ticks after `World.run`, which wait for commands.
+    (
+        "close\ntick 5\nclose\n",
+        "close\ntick 5: the program ended after 3 ticks\n",
+        "3: can't `close`: no window is open",
+    ),
+    (
+        "close\ntick\ntick\nkey down A\n",
+        "close\ntick\ntick\n",
+        "4: can't `key down A`: no window is open",
+    ),
+    (
+        "close\ntick\nresize 0 0\n",
+        "close\ntick\n",
+        "3: can't `resize 0 0`: no window is open",
+    ),
+    (
+        "close\ntick\ndraws\n",
+        "close\ntick\n",
+        "3: can't list the draws: no window is open",
+    ),
+    (
+        "close\ntick\ncapture\n",
+        "close\ntick\n",
+        "3: can't capture: no window is open",
+    ),
+];
+
 /// Every way a command can be wrong stops the program with status 1 and a
 /// line that names the file and the line, after the answers to the
 /// commands before it.
@@ -4245,253 +4595,7 @@ fn run_passes_the_format() {
 fn drive_errors() {
     let dir = scratch("drive-errors");
     let exe = build_text(&dir, "driven", DRIVEN);
-    let cases: &[(&str, &str, &str)] = &[
-        ("tick\nfly\n", "tick\n", "2: unknown command `fly`"),
-        (
-            "tick 0\n",
-            "",
-            "1: `tick` takes a number of ticks from 1 up, or nothing",
-        ),
-        (
-            "tick two\n",
-            "",
-            "1: `tick` takes a number of ticks from 1 up, or nothing",
-        ),
-        (
-            "tick 1 2\n",
-            "",
-            "1: `tick` takes a number of ticks from 1 up, or nothing",
-        ),
-        (
-            "# a comment\n\nresize 10\n",
-            "",
-            "3: `resize` takes a width and a height in points, each from 1 to 8192",
-        ),
-        (
-            "resize 0 10\n",
-            "",
-            "1: `resize` takes a width and a height in points, each from 1 to 8192",
-        ),
-        (
-            "resize 8193 10\n",
-            "",
-            "1: `resize` takes a width and a height in points, each from 1 to 8192",
-        ),
-        (
-            "resize 10 10 10\n",
-            "",
-            "1: `resize` takes a width and a height in points, each from 1 to 8192",
-        ),
-        ("scale 0.4\n", "", "1: `scale` takes a number from 0.5 to 4"),
-        (
-            "scale 4.01\n",
-            "",
-            "1: `scale` takes a number from 0.5 to 4",
-        ),
-        ("scale 1e2\n", "", "1: `scale` takes a number from 0.5 to 4"),
-        ("scale -1\n", "", "1: `scale` takes a number from 0.5 to 4"),
-        ("scale\n", "", "1: `scale` takes a number from 0.5 to 4"),
-        (
-            "scale 4\nresize 4000 10\n",
-            "scale 4\n",
-            "2: a frame of 16000x40 pixels is larger than 8192 by 8192",
-        ),
-        ("close now\n", "", "1: `close` takes nothing"),
-        ("capture\n", "", "1: `capture` takes the name of a file"),
-        (
-            "capture frame.png\n",
-            "",
-            "1: can't capture: the program has no device",
-        ),
-        (
-            "close\ntick\ncapture frame.png\n",
-            "close\ntick\n",
-            "3: can't capture: no window is open",
-        ),
-        ("draws all\n", "", "1: `draws` takes nothing"),
-        (
-            "close\ntick\ndraws\n",
-            "close\ntick\n",
-            "3: can't list the draws: no window is open",
-        ),
-        // The keyboard and the mouse: names and numbers first.
-        ("key Q2\n", "", "1: `Q2` is not a key"),
-        ("key a\n", "", "1: `a` is not a key"),
-        (
-            "key\n",
-            "",
-            "1: `key` takes `down` or `up` and a key, or a key",
-        ),
-        (
-            "key press A\n",
-            "",
-            "1: `key` takes `down` or `up` and a key, or a key",
-        ),
-        ("mouse Middle2\n", "", "1: `Middle2` is not a mouse button"),
-        ("mouse down left\n", "", "1: `left` is not a mouse button"),
-        (
-            "mouse\n",
-            "",
-            "1: `mouse` takes `move` and a position, `down` or `up` and a button, `leave`, or a button",
-        ),
-        (
-            "mouse move 1.123456789 3\n",
-            "",
-            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
-        ),
-        (
-            "mouse move 1. 3\n",
-            "",
-            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
-        ),
-        (
-            "mouse move 3 .5\n",
-            "",
-            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
-        ),
-        (
-            "mouse move -8192.00000001 3\n",
-            "",
-            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
-        ),
-        (
-            "mouse move 1e2 3\n",
-            "",
-            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
-        ),
-        (
-            "mouse move 3\n",
-            "",
-            "1: `mouse move` takes a position in points, each a number from -8192 to 8192",
-        ),
-        (
-            "scroll 1001 0\n",
-            "",
-            "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
-        ),
-        (
-            "scroll +1 0\n",
-            "",
-            "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
-        ),
-        (
-            "scroll 1\n",
-            "",
-            "1: `scroll` takes two numbers of notches, each from -1000 to 1000",
-        ),
-        ("blur now\n", "", "1: `blur` takes nothing"),
-        ("focus now\n", "", "1: `focus` takes nothing"),
-        ("blur\nkey down Nope\n", "blur\n", "2: `Nope` is not a key"),
-        // Then the focus.
-        (
-            "blur\nkey A\n",
-            "blur\n",
-            "2: `key A` while the window does not have the focus",
-        ),
-        (
-            "blur\nkey up A\n",
-            "blur\n",
-            "2: `key up A` while the window does not have the focus",
-        ),
-        (
-            "close\nkey down A\n",
-            "close\n",
-            "2: `key down A` while the window does not have the focus",
-        ),
-        // Then what is held.
-        (
-            "key down A\nkey down A\n",
-            "key down A\n",
-            "2: `A` is already down",
-        ),
-        (
-            "key down A\nkey A\n",
-            "key down A\n",
-            "2: `A` is already down",
-        ),
-        ("key up A\n", "", "1: `A` is already up"),
-        (
-            "key down A\nblur\nfocus\nkey up A\n",
-            "key down A\nblur\nfocus\n",
-            "4: `A` is already up",
-        ),
-        (
-            "mouse move 3 3\nmouse down Left\nmouse Left\n",
-            "mouse move 3 3\nmouse down Left\n",
-            "3: `Left` is already down",
-        ),
-        ("mouse up Back\n", "", "1: `Back` is already up"),
-        // Then the pointer.
-        (
-            "mouse move 100 3\n",
-            "",
-            "1: `mouse move 100 3` is outside the window of 100x100 points while no button is held; a pointer that leaves is `mouse leave`",
-        ),
-        (
-            "mouse move 5 5\nmouse down Left\nmouse move 200 -3\nmouse up Left\nmouse move 300 3\n",
-            "mouse move 5 5\nmouse down Left\nmouse move 200 -3\nmouse up Left\n",
-            "5: `mouse move 300 3` is outside the window of 100x100 points while no button is held; a pointer that leaves is `mouse leave`",
-        ),
-        (
-            "mouse Left\n",
-            "",
-            "1: `mouse Left` while the pointer is not over the window and no button is held",
-        ),
-        (
-            "mouse move 3 3\nmouse leave\nmouse down Right\n",
-            "mouse move 3 3\nmouse leave\n",
-            "3: `mouse down Right` while the pointer is not over the window and no button is held",
-        ),
-        (
-            "mouse move 50 50\nresize 40 40\nmouse Left\n",
-            "mouse move 50 50\nresize 40 40\n",
-            "3: `mouse Left` while the pointer is not over the window and no button is held",
-        ),
-        (
-            "mouse leave\n",
-            "",
-            "1: `mouse leave` while the pointer is not over the window",
-        ),
-        (
-            "mouse move 3 3\nmouse leave\nmouse leave\n",
-            "mouse move 3 3\nmouse leave\n",
-            "3: `mouse leave` while the pointer is not over the window",
-        ),
-        // Then the focus commands.
-        ("focus\n", "", "1: `focus` while the window has the focus"),
-        (
-            "blur\nblur\n",
-            "blur\n",
-            "2: `blur` while the window does not have the focus",
-        ),
-        // The window's commands once it has closed: after the program ends,
-        // and between the ticks after `World.run`, which wait for commands.
-        (
-            "close\ntick 5\nclose\n",
-            "close\ntick 5: the program ended after 3 ticks\n",
-            "3: can't `close`: no window is open",
-        ),
-        (
-            "close\ntick\ntick\nkey down A\n",
-            "close\ntick\ntick\n",
-            "4: can't `key down A`: no window is open",
-        ),
-        (
-            "close\ntick\nresize 0 0\n",
-            "close\ntick\n",
-            "3: can't `resize 0 0`: no window is open",
-        ),
-        (
-            "close\ntick\ndraws\n",
-            "close\ntick\n",
-            "3: can't list the draws: no window is open",
-        ),
-        (
-            "close\ntick\ncapture\n",
-            "close\ntick\n",
-            "3: can't capture: no window is open",
-        ),
-    ];
+    let cases = DRIVE_ERRORS;
     let mut failures = Vec::new();
     for (index, (commands, answers, error)) in cases.iter().enumerate() {
         let (run, file) = drive(&dir, &exe, &format!("case{index}"), "headless", commands);
@@ -4556,6 +4660,64 @@ fn drive_answers() {
         run.drive,
         "tick   2\nclose\ntick 5: the program ended after 3 ticks\n"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `draws` lists at most 100 draws, and `draws from N` lists from draw
+/// `N`, numbered among the draws it lists: the first page of
+/// `tests/run/draws_pages.12am`, whose 375 rows draw for two in three, a
+/// middle and a last page, and pages from past the end, each with the
+/// background line and the first draw of the page in its place.
+#[test]
+fn draws_from() {
+    let dir = scratch("draws-from");
+    let source = Path::new("tests/run/draws_pages.12am");
+    let exe = exe_path(&dir, source, Mode::Release);
+    build(source, &exe, Mode::Release).unwrap_or_else(|message| panic!("{message}"));
+    let commands = std::fs::read_to_string(source.with_extension("drive")).expect("read commands");
+    let (run, _) = drive(&dir, &exe, "pages", "headless", &commands);
+    assert_eq!(run.status, Some(0), "{}", run.stderr);
+    // The first draw of a page listed from `k`: row `k + k / 2 + 1`.
+    let pages = [
+        ("draws: 1 tick, 64x64, 250 draws, 0 to 99", 100, Some(1)),
+        (
+            "draws from 100: 1 tick, 64x64, 250 draws, 100 to 199",
+            100,
+            Some(151),
+        ),
+        (
+            "draws from 200: 1 tick, 64x64, 250 draws, 200 to 249",
+            50,
+            Some(301),
+        ),
+        (
+            "draws from 250: 1 tick, 64x64, 250 draws, none from 250",
+            0,
+            None,
+        ),
+        (
+            "draws from 99999999999999999999999: 1 tick, 64x64, 250 draws, none from 9223372036854775807",
+            0,
+            None,
+        ),
+    ];
+    let mut lines = run.drive.lines().skip_while(|line| *line == "tick");
+    for (head, count, first) in pages {
+        assert_eq!(lines.next(), Some(head));
+        assert_eq!(
+            lines.next(),
+            Some("  Window.background = Color(0, 0, 0, 255)")
+        );
+        let listed: Vec<&str> = (0..count).filter_map(|_| lines.next()).collect();
+        assert_eq!(listed.len(), count, "{head}");
+        if let Some(row) = first {
+            assert_eq!(
+                listed[0],
+                format!("  Draw.circle({row}.0, 1.0, 1.0, Color(1, 2, 3, 255))")
+            );
+        }
+    }
+    assert_eq!(lines.next(), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -4722,7 +4884,8 @@ fn query_errors() {
         "component Body\n  x: Int\nend\n\ntag Frozen\n\nresource Score\n  points: Int = 0\nend\n\n\
          spawn Body(1), Frozen\nWorld.tick\n",
     );
-    let not_component = "query: `Ghost` is not a component or tag of this program";
+    let not_component =
+        "query: `Ghost` is not a component or tag of this program; it has Body, Frozen (tag)";
     let unreadable = "`query` takes the terms of an `each`";
     let no_resource = "`resource` takes the name of a resource";
     let cases = [
@@ -4764,14 +4927,14 @@ fn query_errors() {
         ("query Body from 1 2", unreadable),
         (
             "query Body, with : Frozen",
-            "query: `with` is not a component or tag of this program",
+            "query: `with` is not a component or tag of this program; it has Body, Frozen (tag)",
         ),
         // Two apply: the first in the line.
         ("query Ghost, Frozen", not_component),
         ("query Body, Body, Ghost", "query: `Body` appears twice"),
         (
             "resource Ghost",
-            "resource: `Ghost` is not a resource of this program",
+            "resource: `Ghost` is not a resource of this program; it has Score",
         ),
         (
             "resource Time",
@@ -4888,6 +5051,474 @@ fn a_program_without_a_window_is_driven() {
     }
     let _ = std::fs::remove_dir_all(&dir);
     report("windowless driven runs", 17, failures);
+}
+
+// ---- Sessions ----
+
+/// A command that runs `exe` in a session with no device: commands from
+/// standard input, a window headless, the display variables naming
+/// nothing.
+fn in_session(exe: &Path) -> Command {
+    let mut command = Command::new(exe);
+    command
+        .env("MIDNIGHT_GPU", "off")
+        .env("MIDNIGHT_WINDOW", "headless")
+        .env("MIDNIGHT_DRIVE", "-");
+    no_display(&mut command);
+    command
+}
+
+/// What a session's standard error is compared with: the lines as written,
+/// then `status N`, or `status none` when a signal or the limit ended it.
+fn session_said(run: &TimedRun) -> String {
+    let status = run
+        .status
+        .map_or("none".to_string(), |status| status.to_string());
+    format!("{}status {status}\n", run.raw)
+}
+
+/// Every program of `tests/session`, in release and debug and in both
+/// forms, with its `NAME.drive` as standard input and `MIDNIGHT_DRIVE=-`:
+/// standard output must be `NAME.out`, and standard error `NAME.session`
+/// followed by its status. `UPDATE_EXPECT=1` rewrites both from the
+/// release run.
+#[test]
+fn session_programs() {
+    let sources = programs("tests/session");
+    assert!(
+        !sources.is_empty(),
+        "no program under tests/session of the working directory"
+    );
+    let dir = scratch("session-programs");
+    let jobs: Vec<(&PathBuf, Mode)> = sources
+        .iter()
+        .flat_map(|source| MODES.map(|mode| (source, mode)))
+        .collect();
+    let failures = for_each_parallel(&jobs, |(source, mode)| {
+        let label = format!("{} ({mode:?})", source.display());
+        let exe = exe_path(&dir, source, *mode);
+        build(source, &exe, *mode)?;
+        let input = source.with_extension("drive");
+        let run = run_both_forms_with_input(&mut in_session(&exe), PANIC_LIMIT, Some(&input))
+            .map_err(|message| format!("{label}: {message}"))?;
+        if update_expect() && *mode == Mode::Debug {
+            return Ok(());
+        }
+        expect(
+            &source.with_extension("out"),
+            &run.stdout,
+            "standard output",
+        )
+        .and_then(|()| {
+            expect(
+                &source.with_extension("session"),
+                &session_said(&run),
+                "standard error",
+            )
+        })
+        .map_err(|message| format!("{label}: {message}"))
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    report("session programs", jobs.len(), failures);
+}
+
+/// A program with a window of 100 by 100 points that prints the fields of
+/// `Window`, `Keyboard` and `Mouse` each tick, and draws, lets ticks run
+/// until its window is closed, and ticks twice more: `DRIVEN` with output.
+const DRIVEN_SAYS: &str = "\
+system report
+  puts \"#{Time.tick}: #{Window.open?} #{Window.width}x#{Window.height} #{Window.pixel_width}x#{Window.pixel_height} focused #{Window.focused?} A #{Keyboard.down?(Key::A)} #{Keyboard.pressed?(Key::A)} #{Keyboard.released?(Key::A)} left #{Mouse.down?(MouseButton::Left)} #{Mouse.pressed?(MouseButton::Left)} right #{Mouse.down?(MouseButton::Right)} back #{Mouse.down?(MouseButton::Back)} at #{Mouse.x}, #{Mouse.y} #{Mouse.inside?} wheel #{Mouse.wheel_x}, #{Mouse.wheel_y}\"
+  Draw.rect(1.0, 2.0, 3.0, 4.0, Color(5, 6, 7))
+end
+
+Window.open(\"driven\", 100, 100)
+World.run
+World.tick
+World.tick
+";
+
+/// Every case of `drive_errors`, sent in a session and followed by `tick`,
+/// `draws` and `tick` while the window is open, then `quit`: the wrong
+/// command is refused with the message a file reports, and standard output
+/// and every other answer are those of a file of the same commands
+/// without the wrong one.
+#[test]
+fn session_refuses_every_drive_error() {
+    let dir = scratch("session-refuses");
+    let exe = build_text(&dir, "says", DRIVEN_SAYS);
+    let mut failures = Vec::new();
+    for (index, (commands, _, error)) in DRIVE_ERRORS.iter().enumerate() {
+        let (_, message) = error.split_once(": ").expect("a line number");
+        let lines: Vec<&str> = commands.lines().collect();
+        let (wrong, before) = lines.split_last().expect("a command");
+        let after = if commands.contains("close") {
+            "quit\n"
+        } else {
+            "tick\ndraws\ntick\nquit\n"
+        };
+        let mut prefix = before.join("\n");
+        if !prefix.is_empty() {
+            prefix.push('\n');
+        }
+        let session_input = dir.join(format!("case{index}.session"));
+        std::fs::write(&session_input, format!("{prefix}{wrong}\n{after}"))
+            .expect("write commands");
+        let mut command = in_session(&exe);
+        let session =
+            match run_both_forms_with_input(&mut command, PANIC_LIMIT, Some(&session_input)) {
+                Ok(run) => run,
+                Err(message) => {
+                    failures.push(format!("{commands:?}: {message}"));
+                    continue;
+                }
+            };
+        let (file_run, _) = drive(
+            &dir,
+            &exe,
+            &format!("case{index}"),
+            "headless",
+            &format!("{prefix}{after}"),
+        );
+        let refusal = format!("refused: {message}\n");
+        let mut refused = 0;
+        let answers: String = session
+            .drive
+            .split_inclusive('\n')
+            .filter(|line| !line.starts_with("ready: "))
+            .filter(|line| {
+                let is_refusal = *line == refusal;
+                refused += usize::from(is_refusal);
+                !is_refusal
+            })
+            .collect();
+        if refused != 1
+            || session.status != Some(0)
+            || file_run.status != Some(0)
+            || session.stdout != file_run.stdout
+            || answers != file_run.drive
+            || !session.stderr.is_empty()
+        {
+            failures.push(format!(
+                "{commands:?}: refused {refused} times, exited with {:?} and {:?} in a file\n\
+                 --- session answers\n{}--- file answers\n{}--- session output\n{}--- file output\n{}--- stderr\n{}---",
+                session.status,
+                file_run.status,
+                session.drive,
+                file_run.drive,
+                session.stdout,
+                file_run.stdout,
+                session.stderr
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("refused commands", DRIVE_ERRORS.len(), failures);
+}
+
+/// A program in a session, its three streams as pipes: standard output
+/// gathered on a thread of its own, standard error read a line at a time.
+struct Live {
+    child: std::process::Child,
+    stdin: Option<std::process::ChildStdin>,
+    lines: std::sync::mpsc::Receiver<String>,
+    out: std::sync::Arc<Mutex<Vec<u8>>>,
+    out_read: Option<std::thread::JoinHandle<()>>,
+    taken: usize,
+}
+
+impl Live {
+    fn start(mut command: Command) -> Live {
+        use std::io::{BufRead, Read};
+        let mut child = command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("start the program");
+        let mut stdout = child.stdout.take().expect("piped");
+        let stderr = child.stderr.take().expect("piped");
+        let out = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let gathered = out.clone();
+        let out_read = std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            while let Ok(n) = stdout.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                gathered.lock().unwrap().extend_from_slice(&buf[..n]);
+            }
+        });
+        let (send, lines) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(stderr).lines() {
+                let Ok(line) = line else { break };
+                if send.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        Live {
+            stdin: child.stdin.take(),
+            child,
+            lines,
+            out,
+            out_read: Some(out_read),
+            taken: 0,
+        }
+    }
+
+    fn send(&mut self, command: &str) {
+        let stdin = self.stdin.as_mut().expect("standard input is open");
+        stdin
+            .write_all(format!("{command}\n").as_bytes())
+            .expect("write a command");
+        stdin.flush().expect("write a command");
+    }
+
+    /// The lines of standard error up to the next `ready` line, which is
+    /// returned apart, or up to its end; and the standard output the
+    /// `ready` line's count of bytes gives since the last one.
+    fn answer(&mut self) -> (Vec<String>, Option<String>, String) {
+        let mut said = Vec::new();
+        let mut ready = None;
+        while let Ok(line) = self.lines.recv_timeout(Duration::from_secs(10)) {
+            if let Some(rest) = line.strip_prefix("midnight: drive: ready: ") {
+                ready = Some(rest.to_string());
+                break;
+            }
+            said.push(line);
+        }
+        let Some(rest) = &ready else {
+            return (said, None, String::new());
+        };
+        let bytes: usize = rest
+            .split(", ")
+            .nth(1)
+            .and_then(|count| count.split(' ').next())
+            .and_then(|count| count.parse().ok())
+            .expect("a count of bytes");
+        let started = Instant::now();
+        loop {
+            let out = self.out.lock().unwrap();
+            if out.len() >= bytes {
+                let chunk = text(&out[self.taken..bytes]);
+                drop(out);
+                self.taken = bytes;
+                return (said, ready, chunk);
+            }
+            drop(out);
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "standard output never reached {bytes} bytes"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    /// Closes standard input and waits up to `limit` for the program to
+    /// end.
+    fn end(&mut self, limit: Duration) -> Option<std::process::ExitStatus> {
+        self.stdin = None;
+        let started = Instant::now();
+        loop {
+            if let Some(status) = self.child.try_wait().expect("wait for the program") {
+                if let Some(reader) = self.out_read.take() {
+                    reader.join().expect("read standard output");
+                }
+                return Some(status);
+            }
+            if started.elapsed() >= limit {
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    /// All the standard output the program has written.
+    fn output(&self) -> String {
+        text(&self.out.lock().unwrap())
+    }
+}
+
+/// A program that prints in its systems and between its ticks.
+const LIVE: &str = "\
+system step
+  puts \"in tick #{Time.tick}\"
+end
+
+puts \"before\"
+i = 0
+while i < 3
+  World.tick
+  puts \"between #{i}\"
+  i += 1
+end
+puts \"after\"
+";
+
+/// Commands written one at a time, each once the `ready` of the one before
+/// has come: each brings its answers before its `ready`, and the
+/// `ready`'s count of bytes splits standard output exactly between them.
+#[test]
+fn session_live() {
+    let dir = scratch("session-live");
+    let exe = build_text(&dir, "live", LIVE);
+    let mut live = Live::start(in_session(&exe));
+    let steps: &[(Option<&str>, &[&str], &str, &str)] = &[
+        (None, &[], "before\n", "0 ticks, 7 bytes out"),
+        (
+            Some("tick"),
+            &["midnight: drive: tick"],
+            "in tick 0\nbetween 0\n",
+            "1 tick, 27 bytes out",
+        ),
+        (
+            Some("query Ghost"),
+            &[
+                "midnight: drive: refused: query: `Ghost` is not a component or tag of this program; it has none",
+            ],
+            "",
+            "1 tick, 27 bytes out",
+        ),
+        (Some("# nothing"), &[], "", "1 tick, 27 bytes out"),
+        (
+            Some("tick 2"),
+            &["midnight: drive: tick 2"],
+            "in tick 1\nbetween 1\nin tick 2\nbetween 2\nafter\n",
+            "3 ticks, 73 bytes out, the program has ended",
+        ),
+        (
+            Some("tick"),
+            &["midnight: drive: tick: the program ended after 0 ticks"],
+            "",
+            "3 ticks, 73 bytes out, the program has ended",
+        ),
+    ];
+    for (command, said, out, ready) in steps {
+        if let Some(command) = command {
+            live.send(command);
+        }
+        let (lines, got_ready, chunk) = live.answer();
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        assert_eq!(
+            (lines.as_slice(), got_ready.as_deref(), chunk.as_str()),
+            (*said, Some(*ready), *out),
+            "after {command:?}"
+        );
+    }
+    live.send("quit");
+    let (lines, ready, _) = live.answer();
+    assert_eq!(
+        (lines, ready),
+        (vec!["midnight: drive: quit".to_string()], None)
+    );
+    let status = live.end(Duration::from_secs(5)).expect("the program ends");
+    assert_eq!(status.code(), Some(0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The end of standard input ends a program in a session as `quit` does:
+/// a windowless `World.run` that only `World.stop` would end, and one with
+/// a headless window, input closed right after `tick 3`, end with status 0
+/// within a second, and print nothing of a fourth tick.
+#[test]
+fn session_end_of_input() {
+    let dir = scratch("session-end");
+    let programs = [
+        (
+            "plain",
+            "system step\n  puts \"tick #{Time.tick}\"\nend\n\nWorld.run\n",
+        ),
+        (
+            "window",
+            "system step\n  puts \"tick #{Time.tick}\"\nend\n\nWindow.open(\"w\", 8, 8)\nWorld.run\n",
+        ),
+    ];
+    for (name, program) in programs {
+        let exe = build_text(&dir, name, program);
+        let mut live = Live::start(in_session(&exe));
+        live.send("tick 3");
+        let started = Instant::now();
+        let status = live.end(Duration::from_secs(5));
+        let took = started.elapsed();
+        assert_eq!(
+            status.and_then(|status| status.code()),
+            Some(0),
+            "{name}: the program did not end with status 0"
+        );
+        assert!(took < Duration::from_secs(1), "{name}: took {took:?}");
+        assert_eq!(live.output(), "tick 0\ntick 1\ntick 2\n", "{name}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// On the device, `tests/session/capture.12am` in a session answers its
+/// captures as the same commands in a file do, without the capture the
+/// session refuses.
+#[test]
+fn session_capture() {
+    let Some(device) = Device::from_env() else {
+        return;
+    };
+    let source = Path::new("tests/session/capture.12am");
+    let dir = std::path::absolute(scratch("session-capture")).expect("an absolute path");
+    let commands = std::fs::read_to_string(source.with_extension("drive")).expect("read commands");
+    let mut failures = Vec::new();
+    for mode in MODES {
+        let exe = exe_path(&dir, source, mode);
+        if let Err(message) = build(source, &exe, mode) {
+            failures.push(message);
+            continue;
+        }
+        let captures = |run: &TimedRun| -> Vec<String> {
+            run.drive
+                .lines()
+                .filter(|line| line.starts_with("capture "))
+                .map(str::to_string)
+                .collect()
+        };
+        let files = dir.join(format!("{mode:?}"));
+        std::fs::create_dir_all(&files).expect("create a directory");
+        let input = dir.join(format!("{mode:?}.session"));
+        std::fs::write(&input, &commands).expect("write commands");
+        let mut command = Command::new(&exe);
+        command
+            .env("MIDNIGHT_WINDOW", "headless")
+            .env("MIDNIGHT_DRIVE", "-")
+            .current_dir(&files);
+        no_display(&mut command);
+        on_device(&mut command, device);
+        let session = run_with_input(&mut command, RUN_LIMIT, Some(&input));
+        let file = dir.join(format!("{mode:?}.drive"));
+        let kept: String = commands
+            .lines()
+            .filter(|line| !line.contains("missing/"))
+            .map(|line| format!("{line}\n"))
+            .collect();
+        std::fs::write(&file, kept).expect("write commands");
+        command.env("MIDNIGHT_DRIVE", &file);
+        let file_run = run_within(&mut command, RUN_LIMIT);
+        let refused = session
+            .drive
+            .lines()
+            .filter(|line| line.starts_with("refused: can't capture: can't write missing/two.png"))
+            .count();
+        if session.status != Some(0)
+            || file_run.status != Some(0)
+            || refused != 1
+            || captures(&session) != captures(&file_run)
+            || captures(&session).len() != 2
+        {
+            failures.push(format!(
+                "{mode:?}: exited with {:?}, and {:?} in a file\n--- session\n{}--- file\n{}---",
+                session.status, file_run.status, session.raw, file_run.raw
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    report("captures in a session", MODES.len(), failures);
 }
 
 /// A program with a loop that can be split reports a word of
@@ -5217,6 +5848,13 @@ fn shown_frames(dir: &Path, source: &Path, mode: Mode, device: Device) -> Result
         lines[..last].concat().into_bytes()
     } else {
         commands
+    };
+    // A frame of more than one page is listed whole: its count comes from
+    // a run with no device.
+    let counted = run_within(&mut on_cpu(&exe, source), RUN_LIMIT);
+    let commands = match with_pages(&String::from_utf8_lossy(&commands), &counted.drive) {
+        Some(paged) => paged.into_bytes(),
+        None => commands,
     };
 
     let mut shown = Shown::start(&exe, &files, Some(&pipe), device);

@@ -1,0 +1,15 @@
+{"kind":"midnight","format":2,"version":"VERSION"}
+{"kind":"ready","tick":0,"output_bytes":0,"ended":false}
+{"kind":"ready","tick":0,"output_bytes":0,"ended":false}
+{"kind":"ready","tick":0,"output_bytes":0,"ended":false}
+{"kind":"refused","command":"query Bal","line":3,"message":"query: `Bal` is not a component or tag of this program; it has Ball"}
+{"kind":"ready","tick":0,"output_bytes":0,"ended":false}
+{"kind":"answer","name":"tick","command":"tick","line":4,"tick":1,"ran":1,"ended":false}
+{"kind":"ready","tick":1,"output_bytes":0,"ended":true}
+{"kind":"answer","name":"draws","command":"draws from 1","line":5,"tick":1,"frame_tick":1,"width":16,"height":8,"background":[0,0,0,255],"count":3,"from":1,"draws":[{"shape":"circle","x":5.0,"y":4.0,"radius":2.0,"color":[1,2,3,255]},{"shape":"circle","x":9.0,"y":4.0,"radius":2.0,"color":[1,2,3,255]}]}
+{"kind":"ready","tick":1,"output_bytes":0,"ended":true}
+{"kind":"answer","name":"tick","command":"tick 2","line":6,"tick":1,"ran":0,"ended":true}
+{"kind":"ready","tick":1,"output_bytes":0,"ended":true}
+{"kind":"answer","name":"query","command":"query Ball from 2","line":7,"tick":1,"count":3,"from":2,"rows":[{"entity":"Entity(2v1)","Ball":{"x":9.0}}]}
+{"kind":"ready","tick":1,"output_bytes":0,"ended":true}
+{"kind":"answer","name":"quit","command":"quit","line":8,"tick":1}

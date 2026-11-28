@@ -1,0 +1,3 @@
+tick 0: 100x100 400x400 a true left true at 3.0, 3.0
+tick 1: 100x100 400x400 a false left false at 3.0, 3.0
+closed after 2 ticks

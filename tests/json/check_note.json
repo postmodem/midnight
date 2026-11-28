@@ -1,4 +1,4 @@
-{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"midnight","format":2,"version":"VERSION"}
 {"kind":"error","message":"unknown component `Postion`","label":"did you mean `Position`?","file":"tests/json/check_note.12am","start":{"line":10,"column":8,"byte":168},"end":{"line":10,"column":15,"byte":175},"notes":[]}
 {"kind":"error","message":"block parameter `item` reuses a name that is already in scope","file":"tests/json/check_note.12am","start":{"line":16,"column":33,"byte":266},"end":{"line":16,"column":37,"byte":270},"notes":[{"message":"`item` is defined here","file":"tests/json/check_note.12am","start":{"line":16,"column":27,"byte":260},"end":{"line":16,"column":31,"byte":264}}]}
 {"kind":"error","message":"expected `String`, found `Int`","label":"convert it with `to_s`, or interpolate: `\"#{…}\"`","file":"tests/json/check_note.12am","start":{"line":19,"column":11,"byte":300},"end":{"line":19,"column":12,"byte":301},"notes":[]}

@@ -1,0 +1,10 @@
+# expect: a run-time error during `tick 5` ends the program at once with
+# status 1: the error is the last line and no `ready` follows.
+
+system step
+  puts "tick #{Time.tick}"
+  values = [1, 2, 3]
+  puts values[Time.tick]
+end
+
+World.run

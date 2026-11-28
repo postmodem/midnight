@@ -1,0 +1,98 @@
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: unknown command `fly`
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `tick` takes a number of ticks from 1 up, or nothing
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: scale 4
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: a frame of 16000x40 pixels is larger than 8192 by 8192
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `resize` takes a width and a height in points, each from 1 to 8192
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `scale` takes a number from 0.5 to 4
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `Q2` is not a key
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: key down A
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `A` is already down
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `B` is already up
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `mouse Left` while the pointer is not over the window and no button is held
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `mouse move 200 3` is outside the window of 100x100 points while no button is held; a pointer that leaves is `mouse leave`
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: mouse move 3 3
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: mouse down Left
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `Left` is already down
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `Right` is already up
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `scroll` takes two numbers of notches, each from -1000 to 1000
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `focus` while the window has the focus
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `blur` takes nothing
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `draws` takes nothing, or `from` and a draw number
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: draws: `from` takes a draw number from 0 up
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: query: `Bal` is not a component or tag of this program; it has Ball, Frozen (tag)
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: query: tag `Frozen` can't be a term; filter with `with: Frozen`
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: query: `Nope` is not a component or tag of this program; it has Ball, Frozen (tag)
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: query: `from` takes a row number from 0 up
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: query: `Entity` appears twice
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: resource: `Average` is not a resource of this program; it has Score
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: resource: `Time` is built in; `resource` reads the program's own resources
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `resource` takes the name of a resource
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `capture` takes the name of a file
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: can't capture: the program has no device
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: refused: `quit` takes nothing
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: tick
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: query Ball: 1 tick, 1 row
+midnight: drive:   Entity(0v1) Ball(x: 6.0)
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: resource Score: 1 tick, Score(points: 1)
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: draws: 1 tick, 100x100, 1 draw
+midnight: drive:   Window.background = Color(0, 0, 0, 255)
+midnight: drive:   Draw.circle(6.0, 10.0, 4.0, Color(255, 255, 0, 255))
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: key up A
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: mouse up Left
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: mouse leave
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: close
+midnight: drive: ready: 1 tick, 53 bytes out
+midnight: drive: tick
+midnight: drive: ready: 2 ticks, 129 bytes out, the program has ended
+midnight: drive: refused: can't list the draws: no window is open
+midnight: drive: ready: 2 ticks, 129 bytes out, the program has ended
+midnight: drive: refused: can't `close`: no window is open
+midnight: drive: ready: 2 ticks, 129 bytes out, the program has ended
+midnight: drive: refused: can't `key down A`: no window is open
+midnight: drive: ready: 2 ticks, 129 bytes out, the program has ended
+midnight: drive: tick: the program ended after 0 ticks
+midnight: drive: ready: 2 ticks, 129 bytes out, the program has ended
+midnight: drive: query Ball: 2 ticks, 1 row
+midnight: drive:   Entity(0v1) Ball(x: 7.0)
+midnight: drive: ready: 2 ticks, 129 bytes out, the program has ended
+status 0

@@ -571,7 +571,9 @@ void mn_sb_float32(MnBuilder *sb, float value);
 /* ---- Output -------------------------------------------------------------- */
 
 /* Standard output is buffered; the runtime flushes it before a run-time
- * error and at exit. */
+ * error and at exit. Generated code writes to standard output through
+ * these and nothing else: the runtime counts every byte they write, for
+ * the `ready` lines of a session. */
 void mn_out_bytes(const char *bytes, int64_t len);
 void mn_out_str(MnString s);
 void mn_out_int(int64_t value);

@@ -1,0 +1,23 @@
+# A frame of 250 draws among draws of nothing, from a GPU system that draws
+# for two rows in three: `draws` lists it in pages of 100, numbered among
+# the draws it lists, and a page from past the end lists none.
+
+component Dot
+  i: Int32
+end
+
+gpu system paint
+  each Dot do |d|
+    if d.i % 3 != 0
+      Draw.circle(d.i.to_f, 1.0, 1.0, Color(1, 2, 3))
+    end
+  end
+end
+
+i = 0
+while i < 375
+  spawn Dot(i)
+  i += 1
+end
+Window.open("pages", 64, 64)
+World.run

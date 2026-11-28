@@ -1,0 +1,29 @@
+# expect: every kind of command error is refused in a session and changes
+# nothing: the window keeps its size and scale, no key or button goes down,
+# no tick runs; names that do not exist are answered with those that do.
+# The program ends by its last statement, so a debug build checks its
+# buffers after the refusals.
+
+component Ball
+  x: Float
+end
+
+tag Frozen
+
+resource Score
+  points: Int = 0
+end
+
+system report
+  puts "tick #{Time.tick}: #{Window.width}x#{Window.height} #{Window.pixel_width}x#{Window.pixel_height} a #{Keyboard.down?(Key::A)} left #{Mouse.down?(MouseButton::Left)} at #{Mouse.x}, #{Mouse.y}"
+  each Ball do |b|
+    b.x += 1.0
+    Draw.circle(b.x, 10.0, 4.0, Color(255, 255, 0))
+  end
+  Score.points += 1
+end
+
+spawn Ball(5.0)
+Window.open("refusals", 100, 100)
+World.run
+puts "closed after #{Time.tick} ticks"

@@ -1,0 +1,10 @@
+# A windowless `World.run` that only `World.stop` would end, driven by a
+# file that ends with `quit`: the program ends where it stands, status 0,
+# with its output written out, and nothing after `quit` is read.
+
+system count
+  puts "tick #{Time.tick}"
+end
+
+World.run
+puts "never"

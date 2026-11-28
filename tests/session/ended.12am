@@ -1,0 +1,26 @@
+# expect: a program that ends by its last statement during `tick 5` answers
+# it with the ticks that ran; afterwards it is looked at as at the end of a
+# file, `tick` is answered with no tick run, and the end of input ends it
+# with status 0.
+
+component Count
+  n: Int
+end
+
+resource Total
+  sum: Int = 0
+end
+
+system step
+  each Count do |c|
+    c.n += 1
+    Total.sum += c.n
+  end
+end
+
+spawn Count(0)
+spawn Count(10)
+3.times do
+  World.tick
+end
+puts "done at #{Time.tick}"

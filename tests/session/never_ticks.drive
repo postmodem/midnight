@@ -1,0 +1,4 @@
+query Ball
+resource Score
+tick
+tick 3

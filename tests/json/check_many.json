@@ -1,4 +1,4 @@
-{"kind":"midnight","format":1,"version":"VERSION"}
+{"kind":"midnight","format":2,"version":"VERSION"}
 {"kind":"error","message":"unknown variable or function `undefined_1`","file":"tests/json/check_many.12am","start":{"line":4,"column":6,"byte":73},"end":{"line":4,"column":17,"byte":84},"notes":[]}
 {"kind":"error","message":"unknown variable or function `undefined_2`","file":"tests/json/check_many.12am","start":{"line":5,"column":6,"byte":90},"end":{"line":5,"column":17,"byte":101},"notes":[]}
 {"kind":"error","message":"unknown variable or function `undefined_3`","file":"tests/json/check_many.12am","start":{"line":6,"column":6,"byte":107},"end":{"line":6,"column":17,"byte":118},"notes":[]}

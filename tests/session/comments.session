@@ -1,0 +1,11 @@
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: ready: 0 ticks, 0 bytes out
+midnight: drive: tick
+midnight: drive: ready: 1 tick, 7 bytes out
+midnight: drive: ready: 1 tick, 7 bytes out
+midnight: drive: tick   2
+midnight: drive: ready: 3 ticks, 21 bytes out
+midnight: drive: ready: 3 ticks, 21 bytes out
+status 0

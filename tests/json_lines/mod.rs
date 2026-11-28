@@ -173,7 +173,7 @@ pub fn parse_line(line: &str) -> Result<Value, String> {
 }
 
 /// Parses a JSON form: every line one object with a string `kind`, each
-/// ended by a newline, the first `{"kind":"midnight","format":1,...}` with
+/// ended by a newline, the first `{"kind":"midnight","format":2,...}` with
 /// a string `version`. Returns the lines after the first.
 pub fn parse_form(text: &str) -> Result<Vec<Value>, String> {
     if text.is_empty() {
@@ -198,7 +198,7 @@ pub fn parse_form(text: &str) -> Result<Vec<Value>, String> {
         .map(|(key, _)| key.as_str())
         .collect();
     if first.kind() != "midnight"
-        || first.int("format") != Ok(1)
+        || first.int("format") != Ok(2)
         || first.str("version").is_err()
         || keys != ["kind", "format", "version"]
     {
@@ -454,14 +454,23 @@ fn answer_text(line: &Value) -> Result<Vec<String>, String> {
         }
         "draws" => {
             let draws = line.array("draws")?;
+            let count = line.int("count")?;
+            let from = line.int("from")?;
+            let listed = draws.len() as i64;
+            let mut head = format!(
+                "{command}: {}, {}x{}, {}",
+                counted(line.int("frame_tick")?, "tick"),
+                line.int("width")?,
+                line.int("height")?,
+                counted(count, "draw")
+            );
+            if listed < count && listed == 0 {
+                head.push_str(&format!(", none from {from}"));
+            } else if listed < count {
+                head.push_str(&format!(", {from} to {}", from + listed - 1));
+            }
             let mut lines = vec![
-                format!(
-                    "draws: {}, {}x{}, {}",
-                    counted(line.int("frame_tick")?, "tick"),
-                    line.int("width")?,
-                    line.int("height")?,
-                    counted(draws.len() as i64, "draw")
-                ),
+                head,
                 format!(
                     "  Window.background = {}",
                     color_text(line.get("background").ok_or("no background")?)?
@@ -628,6 +637,21 @@ pub fn runtime_text(lines: &[Value]) -> Result<String, String> {
                 line.int("line")?,
                 line.str("message")?
             ),
+            "ready" => format!(
+                "midnight: drive: ready: {}, {} out{}",
+                counted(line.int("tick")?, "tick"),
+                counted(line.int("output_bytes")?, "byte"),
+                if line.bool("ended")? {
+                    ", the program has ended"
+                } else {
+                    ""
+                }
+            ),
+            "refused" => {
+                line.str("command")?;
+                line.int("line")?;
+                format!("midnight: drive: refused: {}", line.str("message")?)
+            }
             "drive_unopened" => format!(
                 "midnight: drive: can't open {}: {}",
                 line.str("file")?,
@@ -866,7 +890,7 @@ mod tests {
 
     #[test]
     fn a_form_begins_with_the_midnight_line() {
-        let first = "{\"kind\":\"midnight\",\"format\":1,\"version\":\"0.9.0\"}\n";
+        let first = "{\"kind\":\"midnight\",\"format\":2,\"version\":\"0.9.0\"}\n";
         assert_eq!(parse_form(first).unwrap(), vec![]);
         let lines = parse_form(&format!("{first}{{\"kind\":\"x\"}}\n")).unwrap();
         assert_eq!(lines[0].kind(), "x");
