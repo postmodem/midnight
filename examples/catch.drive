@@ -15,7 +15,9 @@ key up ArrowRight
 tick 50
 draws
 capture catch-two.png
+# The window is made larger: the field is drawn twice as large, centered.
 # The next three stars are missed, and the game is over.
+resize 800 450
 tick 150
 draws
 capture catch-over.png

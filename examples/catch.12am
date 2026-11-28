@@ -1,8 +1,12 @@
 # Stars fall; move the basket with the arrow keys to catch them. The score
 # is at the top left, padded with zeros, and the keys are named at the
 # bottom for the first two seconds. Three stars missed and the game is
-# over: "GAME OVER" is drawn in the middle of the window, the score under
+# over: "GAME OVER" is drawn in the middle of the field, the score under
 # it, and Escape ends the program.
+#
+# The game is played on a field of 320 by 200 points, drawn as large as
+# whole multiples of its size fit the window and centered in it, so it
+# plays the same however large the window is made.
 #
 #   nix run . -- run examples/catch.12am
 #
@@ -25,6 +29,8 @@ resource Score
   missed: Int = 0
 end
 
+FIELD_W = 320
+FIELD_H = 200
 WIDTH = 40
 GROUND = 184
 
@@ -32,18 +38,47 @@ def over? -> Bool
   Score.missed >= 3
 end
 
+# How many window points a point of the field takes: the largest whole
+# number at which the field fits the window, and at least 1.
+def zoom -> Int
+  k = Window.width / FIELD_W
+  k = Window.height / FIELD_H if Window.height / FIELD_H < k
+  k = 1 if k < 1
+  k
+end
+
+# Where the field's top left corner is in the window.
+def left -> Int
+  (Window.width - FIELD_W * zoom) / 2
+end
+
+def top -> Int
+  (Window.height - FIELD_H * zoom) / 2
+end
+
+# A rectangle and a text given in field points, drawn in window points.
+def field_rect(x: Float, y: Float, w: Float, h: Float, c: Color)
+  k = zoom
+  Draw.rect(left + x * k, top + y * k, w * k, h * k, c)
+end
+
+def field_text(x: Float, y: Float, text: String, size: Int, c: Color)
+  k = zoom
+  Draw.text(left + x * k, top + y * k, text, size * k, c)
+end
+
 system steer
   unless over?
     Basket.x -= 4 if Keyboard.down?(Key::ArrowLeft)
     Basket.x += 4 if Keyboard.down?(Key::ArrowRight)
-    Basket.x = Basket.x.clamp(0.0, (Window.width - WIDTH).to_f)
+    Basket.x = Basket.x.clamp(0.0, (FIELD_W - WIDTH).to_f)
   end
   World.stop if Keyboard.pressed?(Key::Escape)
 end
 
 system drop
   if !over? && Time.tick % 45 == 1
-    spawn Star(8 + rand(Window.width - 16), 0)
+    spawn Star(8 + rand(FIELD_W - 16), 0)
   end
 end
 
@@ -62,30 +97,32 @@ system fall
 end
 
 system show
-  Draw.rect(0, GROUND + 6, Window.width, Window.height - GROUND - 6, Color(40, 40, 60))
+  k = zoom
+  field_rect(0, 0, FIELD_W, FIELD_H, Color(16, 16, 32))
+  field_rect(0, GROUND + 6, FIELD_W, FIELD_H - GROUND - 6, Color(40, 40, 60))
   each Star do |star|
-    Draw.circle(star.x, star.y, 5, Color(255, 220, 80))
+    Draw.circle(left + star.x * k, top + star.y * k, 5 * k, Color(255, 220, 80))
   end
-  Draw.rect(Basket.x, GROUND, WIDTH, 6, Color(120, 200, 255))
+  field_rect(Basket.x, GROUND, WIDTH, 6, Color(120, 200, 255))
   points = Score.points.to_s.rjust(5, "0")
-  Draw.text(8, 8, "SCORE #{points}", 24, Color(255, 255, 255))
+  field_text(8, 8, "SCORE #{points}", 24, Color(255, 255, 255))
   lives = ("*" * (3 - Score.missed).clamp(0, 3)).rjust(3)
-  Draw.text(Window.width - 3 * 12 - 8, 8, lives, 24, Color(255, 120, 120))
+  field_text(FIELD_W - 3 * 12 - 8, 8, lives, 24, Color(255, 120, 120))
   hint = ""
   hint = "ARROW KEYS MOVE" if Time.tick <= 120
   hint = "ESCAPE QUITS" if over?
   if hint.length > 0
-    Draw.text((Window.width - hint.length * 12) / 2, 152, hint, 24, Color(160, 160, 200))
+    field_text((FIELD_W - hint.length * 12) / 2, 152, hint, 24, Color(160, 160, 200))
   end
   if over?
     message = "GAME OVER"
-    Draw.text((Window.width - message.length * 24) / 2, 64, message, 48, Color(255, 80, 80))
+    field_text((FIELD_W - message.length * 24) / 2, 64, message, 48, Color(255, 80, 80))
     score = "SCORE #{Score.points}"
-    Draw.text((Window.width - score.length * 12) / 2, 120, score, 24, Color(255, 255, 255))
+    field_text((FIELD_W - score.length * 12) / 2, 120, score, 24, Color(255, 255, 255))
   end
 end
 
-Window.background = Color(16, 16, 32)
+Window.background = Color(4, 4, 10)
 Window.open("Catch", 320, 200)
 World.run
 puts "#{Score.points} points, #{Score.missed} missed, after #{Time.tick} ticks"
