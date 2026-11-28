@@ -1,0 +1,9 @@
+# A string of 100,000 characters is copied into the frame and listed
+# whole.
+
+system show
+  Draw.text(0, 0, "0123456789" * 10_000, 24, Color(255, 255, 255))
+end
+
+Window.open("Long", 64, 48)
+World.tick

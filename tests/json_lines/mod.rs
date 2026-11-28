@@ -250,12 +250,37 @@ fn color_text(value: &Value) -> Result<String, String> {
 }
 
 /// The argument names of each shape, in the order of its statement.
-const SHAPES: [(&str, &[&str]); 4] = [
+const SHAPES: [(&str, &[&str]); 5] = [
     ("rect", &["x", "y", "width", "height"]),
     ("circle", &["x", "y", "radius"]),
     ("line", &["x1", "y1", "x2", "y2", "width"]),
     ("triangle", &["x1", "y1", "x2", "y2", "x3", "y3"]),
+    ("text", &["x", "y", "text", "size"]),
 ];
+
+/// A string as the text form writes it inside a struct and in a draw of
+/// text: quoted, with `\n \t \r \0 \e \\ \"` escaped, `\#` before `{`, and
+/// other bytes below 0x20 as `\x` and two upper-case hexadecimal digits.
+fn quoted_text(text: &str) -> String {
+    let mut out = String::from("\"");
+    let chars: Vec<char> = text.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
+        match c {
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            '\x1b' => out.push_str("\\e"),
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '#' if chars.get(i + 1) == Some(&'{') => out.push_str("\\#"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\x{:02X}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
 
 /// The leaves of a value of the world in its text form, in order: numbers
 /// as written (`n:`), Booleans (`b:`), and as strings (`s:`) strings
@@ -450,6 +475,10 @@ fn answer_text(line: &Value) -> Result<Vec<String>, String> {
                     .ok_or_else(|| format!("no shape `{shape}`"))?;
                 let mut args = Vec::new();
                 for name in names.iter() {
+                    if *name == "text" {
+                        args.push(quoted_text(draw.str("text")?));
+                        continue;
+                    }
                     args.push(number_text(draw.get(name).ok_or(format!("no `{name}`"))?)?);
                 }
                 args.push(color_text(draw.get("color").ok_or("no color")?)?);

@@ -1,0 +1,5 @@
+# `rjust` with an empty padding string is an error even where the string
+# is already long enough and no padding is needed.
+# Expected: `rjust` needs a padding string that is not empty
+puts "ok".rjust(3, "0")
+puts "long enough".rjust(2, "")

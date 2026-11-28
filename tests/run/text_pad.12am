@@ -1,0 +1,14 @@
+# `ljust` and `rjust` with a padding string repeat it, cut after a whole
+# character, in place of spaces; `n` counts characters, and a string that
+# is long enough is unchanged.
+
+puts "42".rjust(5, "0")
+puts "ab".ljust(7, "xy")
+puts "ab".rjust(7, "xy")
+puts "hello".rjust(3, "0")
+puts "hello".ljust(5, "-")
+puts "é".rjust(4, "€→")
+puts "naïve".ljust(8, "·")
+puts "".ljust(3, "ab")
+puts "x".ljust(4)
+puts "[#{12.to_s.rjust(4, " ")}]"

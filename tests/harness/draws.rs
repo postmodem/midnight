@@ -96,11 +96,15 @@ fn the_same_draws_written_otherwise() {
     assert_eq!(diff(ANSWER, RESPELT, false), None);
     assert!(matches!(
         d::shape("Draw.rect(1.0, 2.0, Color(0, 0, 0, 255))"),
-        Shape::Text(_)
+        Shape::Other(_)
     ));
     assert!(matches!(
         d::shape("Draw.oval(1.0, 2.0, 3.0, Color(0, 0, 0, 255))"),
-        Shape::Text(_)
+        Shape::Other(_)
+    ));
+    assert!(matches!(
+        d::shape("Draw.text(1.0, 2.0, \"A, Color(1, 2, 3, 4)\", 24.0, Color(0, 0, 0, 255))"),
+        Shape::Other(_)
     ));
 }
 

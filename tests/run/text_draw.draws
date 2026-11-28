@@ -1,0 +1,14 @@
+draws: 1 tick, 320x200, 12 draws
+  Window.background = Color(0, 0, 0, 255)
+  Draw.text(8.0, 8.5, "SCORE", 24.0, Color(255, 255, 255, 255))
+  Draw.text(1.25, 2.0, "\nmiddle\nend\n", 12.0, Color(10, 20, 30, 128))
+  Draw.text(0.0, 0.0, "a\r\nb\tc\ed\0e", 24.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, 0.0, "q\"b\\h\#{x} # {", 24.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, 0.0, "del nel nbsp  shy­", 24.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, 0.0, "Ünïcödé ð £°±× € → 🌙", 24.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, 0.0, "", 24.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, 0.0, "zero", 0.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, 0.0, "below", -24.0, Color(255, 255, 255, 255))
+  Draw.text(NaN, 0.0, "x", 24.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, NaN, "y", 24.0, Color(255, 255, 255, 255))
+  Draw.text(0.0, 0.0, "size", NaN, Color(255, 255, 255, 255))

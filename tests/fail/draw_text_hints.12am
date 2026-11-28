@@ -1,0 +1,11 @@
+# expect: a function or a type named for drawing text, which the program does not define, says text is drawn with `Draw.text`
+# at: lines 5 to 8, the functions `text`, `draw_text`, `print_text` and `fill_text`; line 9, `Text` constructed; line 10, `Label` spawned with arguments, an unknown type; line 11, `Label` spawned bare, an unknown component
+
+Window.open("Hints", 64, 48)
+text(8, 8, "SCORE")
+draw_text("SCORE", 8, 8)
+print_text("SCORE", 8, 8)
+fill_text("SCORE", 8, 8)
+t = Text("SCORE", 8, 8)
+spawn Label("SCORE")
+spawn Label

@@ -1,0 +1,28 @@
+error: `Draw.text` can't stand in a function called from a GPU system
+ --> tests/fail/draw_text_gpu.12am:9:3
+  |
+9 |   Draw.text(x, 0, "#{x}", 12, Color(1, 1, 1))
+  |   ^^^^^^^^^ draw text from an ordinary system: a GPU system has no strings
+note: GPU system `show` calls `label` here
+  --> tests/fail/draw_text_gpu.12am:21:5
+   |
+21 |     label(spot.x)
+   |     -------------
+
+error: `Draw.text` can't stand in a GPU system
+  --> tests/fail/draw_text_gpu.12am:14:5
+   |
+14 |     Draw.text(spot.x, Time.elapsed, "*", 12, Color(255, 255, 0))
+   |     ^^^^^^^^^ draw text from an ordinary system: a GPU system has no strings
+
+error: `Draw.text` can't stand in a GPU system
+  --> tests/fail/draw_text_gpu.12am:16:7
+   |
+16 |       Draw.text(spot.x, i, "+", 12, Color(1, 1, 1))
+   |       ^^^^^^^^^ draw text from an ordinary system: a GPU system has no strings
+
+error: `Draw.text` can't stand in a GPU system
+  --> tests/fail/draw_text_gpu.12am:19:7
+   |
+19 |       Draw.text(other.x, 0, "-", 12, Color(1, 1, 1))
+   |       ^^^^^^^^^ draw text from an ordinary system: a GPU system has no strings

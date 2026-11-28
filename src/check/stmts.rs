@@ -50,6 +50,15 @@ fn draw_form(expr: &ast::Expr) -> Option<(&ast::Expr, &ast::Ident, &[ast::Arg])>
 }
 
 /// The arguments of `Window.open(…)` written as a statement.
+/// A variable, a constant or a field read: a place with no index in it.
+fn plain_place(place: &tir::Place) -> bool {
+    match &place.kind {
+        tir::PlaceKind::Index { .. } => false,
+        tir::PlaceKind::Field { base, .. } => plain_place(base),
+        _ => true,
+    }
+}
+
 fn window_open(expr: &ast::Expr) -> Option<&[ast::Arg]> {
     match &expr.kind {
         ast::ExprKind::Member {
@@ -572,6 +581,16 @@ impl Checker<'_> {
             );
             return None;
         }
+        if shape == tir::Shape::Text
+            && !self.text_form(
+                &values,
+                &color,
+                span,
+                args.iter().any(|arg| arg.name.is_some()),
+            )
+        {
+            return None;
+        }
         let want = shape.params().len() + 1;
         if args.len() != want {
             self.err_label(
@@ -588,36 +607,97 @@ impl Checker<'_> {
         if args.iter().any(|arg| arg.name.is_some()) {
             return None;
         }
-        let mut values = values.into_iter();
-        let mut nums = Vec::new();
+        let mut types = shape.param_types();
+        types.push(color);
+        let mut converted = Vec::new();
         let mut ok = true;
-        for value in values.by_ref().take(want - 1) {
-            match value.and_then(|value| self.convert(value, &Type::Float, Some(form.clone()))) {
-                Some(value) => nums.push(value),
+        for (value, ty) in values.into_iter().zip(&types) {
+            let value = match value {
+                Some(value) if *ty == Type::String => self.text_value(value, &statement),
+                Some(value) => self.convert(value, ty, Some(form.clone())),
+                None => None,
+            };
+            match value {
+                Some(value) => converted.push(value),
                 None => ok = false,
             }
         }
-        let color = values
-            .next()
-            .flatten()
-            .and_then(|value| self.convert(value, &color, Some(form.clone())));
-        if !ok {
-            return None;
-        }
-        Some(StmtKind::Draw {
+        ok.then_some(StmtKind::Draw {
             shape,
-            nums,
-            color: color?,
+            args: converted,
             head,
         })
+    }
+
+    /// The rules on the form of the arguments of `Draw.text` that come
+    /// before their count: by name, then a `String` first or second, then a
+    /// size left out. Reports the first that applies and returns false, or
+    /// returns true.
+    fn text_form(
+        &mut self,
+        values: &[Option<tir::Expr>],
+        color: &Type,
+        span: Span,
+        named: bool,
+    ) -> bool {
+        if named {
+            return false;
+        }
+        let form = tir::Shape::Text.form();
+        if let Some(text) = values
+            .iter()
+            .take(2)
+            .flatten()
+            .find(|value| value.ty == Type::String)
+        {
+            self.err_label(
+                "`Draw.text` takes its text third",
+                text.span,
+                format!("write `{form}`"),
+            );
+            return false;
+        }
+        if let [_, _, Some(text), Some(last)] = values
+            && text.ty == Type::String
+            && last.ty == *color
+        {
+            self.err_label(
+                "`Draw.text` needs a size",
+                span,
+                format!("write `{form}`: the size is the height of a line in points"),
+            );
+            return false;
+        }
+        true
+    }
+
+    /// The text of `Draw.text`, which must be a `String`.
+    fn text_value(&mut self, value: tir::Expr, statement: &str) -> Option<tir::Expr> {
+        if value.ty == Type::String {
+            return Some(value);
+        }
+        let name = match &value.kind {
+            tir::ExprKind::Read(place) if plain_place(place) => self.snippet(value.span),
+            _ => None,
+        }
+        .unwrap_or("…")
+        .to_string();
+        self.err_label(
+            format!("`{statement}` takes a `String` to draw"),
+            value.span,
+            format!("write `\"#{{{name}}}\"` to draw a value"),
+        );
+        None
     }
 
     /// Reports a member of `Draw` that is not one of its shapes.
     pub(super) fn draw_unknown(&mut self, name: &ast::Ident) {
         let member = name.name.as_str();
-        if matches!(member, "text" | "sprite" | "image") {
+        if matches!(member, "sprite" | "image") {
             self.err(
-                format!("`Draw.{member}` is not in 0.8, which draws shapes only"),
+                format!(
+                    "`Draw.{member}` is not in this version of Midnight, which draws shapes and text"
+                ),
                 name.span,
             );
             return;
@@ -626,6 +706,9 @@ impl Checker<'_> {
             "rectangle" | "square" | "box" => tir::Shape::Rect.form(),
             "ellipse" | "disc" => tir::Shape::Circle.form(),
             "point" | "pixel" => "Draw.rect(x, y, 1, 1, color)".to_string(),
+            "print" | "puts" | "string" | "label" | "write" | "fill_text" => {
+                tir::Shape::Text.form()
+            }
             _ => tir::Shape::ALL
                 .into_iter()
                 .min_by_key(|shape| util::edit_distance(member, shape.name()))

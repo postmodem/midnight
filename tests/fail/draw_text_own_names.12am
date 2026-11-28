@@ -1,0 +1,15 @@
+# expect: a program's own `Text` component and `draw_text` function are used as declared, with no hint
+# at: line 15, a `String` given for the `Int` field `size` of the program's `Text`, with no hint about `Draw.text`
+
+component Text
+  size: Int
+end
+
+def draw_text(s: String)
+  Draw.text(8, 8, s, 24, Color(255, 255, 255))
+end
+
+Window.open("Own", 64, 48)
+draw_text("hello")
+spawn Text(2)
+spawn Text("big")

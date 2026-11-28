@@ -1,0 +1,5 @@
+error: expected `Int`, found `String`
+  --> tests/fail/draw_text_own_names.12am:15:12
+   |
+15 | spawn Text("big")
+   |            ^^^^^

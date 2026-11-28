@@ -1,0 +1,35 @@
+error: `Draw` has no `print`
+ --> tests/fail/draw_text_names.12am:6:8
+  |
+6 |   Draw.print("SCORE", 8, 8)
+  |        ^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw` has no `puts`
+ --> tests/fail/draw_text_names.12am:7:8
+  |
+7 |   Draw.puts("SCORE")
+  |        ^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw` has no `string`
+ --> tests/fail/draw_text_names.12am:8:8
+  |
+8 |   Draw.string(8, 8, "SCORE")
+  |        ^^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw` has no `label`
+ --> tests/fail/draw_text_names.12am:9:8
+  |
+9 |   Draw.label("SCORE", 8, 8)
+  |        ^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw` has no `write`
+  --> tests/fail/draw_text_names.12am:10:8
+   |
+10 |   Draw.write(8, 8, "SCORE")
+   |        ^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw` has no `fill_text`
+  --> tests/fail/draw_text_names.12am:11:8
+   |
+11 |   Draw.fill_text("SCORE", 8, 8)
+   |        ^^^^^^^^^ write `Draw.text(x, y, text, size, color)`

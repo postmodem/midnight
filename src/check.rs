@@ -490,6 +490,7 @@ struct Checker<'a> {
 /// `Circle`, `Rect`, `draw_circle`, `fill_rect` and the like.
 fn draw_hint(name: &str) -> Option<String> {
     let shape = match name {
+        "Text" | "Label" | "print_text" => tir::Shape::Text,
         "Rect" | "Rectangle" => tir::Shape::Rect,
         "Circle" => tir::Shape::Circle,
         "Line" => tir::Shape::Line,
@@ -509,6 +510,7 @@ fn draw_hint(name: &str) -> Option<String> {
         tir::Shape::Circle => "a circle",
         tir::Shape::Line => "a line",
         tir::Shape::Triangle => "a triangle",
+        tir::Shape::Text => "text",
     };
     Some(format!("{what} is drawn with `{}`", shape.form()))
 }

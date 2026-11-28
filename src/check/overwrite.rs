@@ -88,11 +88,10 @@ fn visit_stmt(s: &Stmt, depth: usize, f: Visit<'_>) {
             visit_expr(width, depth, f);
             visit_expr(height, depth, f);
         }
-        StmtKind::Draw { nums, color, .. } => {
-            for num in nums {
-                visit_expr(num, depth, f);
+        StmtKind::Draw { args, .. } => {
+            for arg in args {
+                visit_expr(arg, depth, f);
             }
-            visit_expr(color, depth, f);
         }
     }
 }

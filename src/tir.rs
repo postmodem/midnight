@@ -486,16 +486,15 @@ pub enum StmtKind {
         width: Expr,
         height: Expr,
     },
-    /// `Draw.rect(…)` and the other shapes: `nums` holds the shape's
-    /// numbers as `Float`s, in the order of [`Shape::params`], and `color`
-    /// is a `Color`; they are evaluated in that order, and then the draw is
-    /// added to the frame's list. In a GPU block it stands directly in the
-    /// block or in a branch of it, never in a loop, the nested `each` or a
-    /// function.
+    /// `Draw.rect(…)`, the other shapes and `Draw.text(…)`: `args` holds
+    /// every argument in source order, of the types of
+    /// [`Shape::param_types`] and then a `Color`; they are evaluated in that
+    /// order, and then the draw is added to the frame's list. In a GPU
+    /// block it is a shape, never text, and stands directly in the block or
+    /// in a branch of it, never in a loop, the nested `each` or a function.
     Draw {
         shape: Shape,
-        nums: Vec<Expr>,
-        color: Expr,
+        args: Vec<Expr>,
         /// `Draw.rect` as written, for messages.
         head: Span,
     },
@@ -508,10 +507,18 @@ pub enum Shape {
     Circle,
     Line,
     Triangle,
+    /// `Draw.text`, which takes a `String` third.
+    Text,
 }
 
 impl Shape {
-    pub const ALL: [Shape; 4] = [Shape::Rect, Shape::Circle, Shape::Line, Shape::Triangle];
+    pub const ALL: [Shape; 5] = [
+        Shape::Rect,
+        Shape::Circle,
+        Shape::Line,
+        Shape::Triangle,
+        Shape::Text,
+    ];
 
     /// The member of `Draw`.
     pub fn name(self) -> &'static str {
@@ -520,17 +527,31 @@ impl Shape {
             Shape::Circle => "circle",
             Shape::Line => "line",
             Shape::Triangle => "triangle",
+            Shape::Text => "text",
         }
     }
 
-    /// The names of its numbers, in order; the color comes after them.
+    /// The names of its arguments before the color, in order.
     pub fn params(self) -> &'static [&'static str] {
         match self {
             Shape::Rect => &["x", "y", "width", "height"],
             Shape::Circle => &["x", "y", "radius"],
             Shape::Line => &["x1", "y1", "x2", "y2", "width"],
             Shape::Triangle => &["x1", "y1", "x2", "y2", "x3", "y3"],
+            Shape::Text => &["x", "y", "text", "size"],
         }
+    }
+
+    /// The types of its arguments before the color, in order: `Float`
+    /// but for the text of `Draw.text`, a `String`.
+    pub fn param_types(self) -> Vec<Type> {
+        self.params()
+            .iter()
+            .map(|&param| match (self, param) {
+                (Shape::Text, "text") => Type::String,
+                _ => Type::Float,
+            })
+            .collect()
     }
 
     /// The kind word of its record: `MN_DRAW_RECT` and the others.
@@ -540,6 +561,7 @@ impl Shape {
             Shape::Circle => 2,
             Shape::Line => 3,
             Shape::Triangle => 4,
+            Shape::Text => 5,
         }
     }
 
@@ -1175,6 +1197,11 @@ pub enum Builtin {
     StrLjust,
     /// (String, Int) -> String
     StrRjust,
+    /// (String, Int, String) -> String; an empty padding string is a
+    /// run-time error
+    StrLjustPad,
+    /// (String, Int, String) -> String; as `StrLjustPad`
+    StrRjustPad,
     /// (String) -> Int
     StrToI,
     /// (String) -> Float

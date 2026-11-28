@@ -241,5 +241,6 @@ pub fn draw_kind(shape: crate::tir::Shape) -> &'static str {
         crate::tir::Shape::Circle => "MN_DRAW_CIRCLE",
         crate::tir::Shape::Line => "MN_DRAW_LINE",
         crate::tir::Shape::Triangle => "MN_DRAW_TRIANGLE",
+        crate::tir::Shape::Text => "MN_DRAW_TEXT",
     }
 }

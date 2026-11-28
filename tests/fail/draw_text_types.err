@@ -1,0 +1,47 @@
+error: `Draw.text` takes a `String` to draw
+  --> tests/fail/draw_text_types.12am:18:19
+   |
+18 |   Draw.text(8, 8, score, 24, Color(255, 255, 255))
+   |                   ^^^^^ write `"#{score}"` to draw a value
+
+error: `Draw.text` takes a `String` to draw
+  --> tests/fail/draw_text_types.12am:19:19
+   |
+19 |   Draw.text(8, 8, MAX, 24, Color(255, 255, 255))
+   |                   ^^^ write `"#{MAX}"` to draw a value
+
+error: `Draw.text` takes a `String` to draw
+  --> tests/fail/draw_text_types.12am:20:19
+   |
+20 |   Draw.text(8, 8, Score.points, 24, Color(255, 255, 255))
+   |                   ^^^^^^^^^^^^ write `"#{Score.points}"` to draw a value
+
+error: `Draw.text` takes a `String` to draw
+  --> tests/fail/draw_text_types.12am:22:21
+   |
+22 |     Draw.text(8, 8, ball.hp, 24, Color(255, 255, 255))
+   |                     ^^^^^^^ write `"#{ball.hp}"` to draw a value
+
+error: `Draw.text` takes a `String` to draw
+  --> tests/fail/draw_text_types.12am:24:19
+   |
+24 |   Draw.text(8, 8, score + 1, 24, Color(255, 255, 255))
+   |                   ^^^^^^^^^ write `"#{…}"` to draw a value
+
+error: `Draw.text` takes a `String` to draw
+  --> tests/fail/draw_text_types.12am:25:19
+   |
+25 |   Draw.text(8, 8, score > 3, 24, Color(255, 255, 255))
+   |                   ^^^^^^^^^ write `"#{…}"` to draw a value
+
+error: `Draw.text` takes a `String` to draw
+  --> tests/fail/draw_text_types.12am:26:19
+   |
+26 |   Draw.text(8, 8, score, "big", Color(255, 255, 255))
+   |                   ^^^^^ write `"#{score}"` to draw a value
+
+error: expected `Float`, found `String`
+  --> tests/fail/draw_text_types.12am:26:26
+   |
+26 |   Draw.text(8, 8, score, "big", Color(255, 255, 255))
+   |                          ^^^^^ `Draw.text(x, y, text, size, color)`

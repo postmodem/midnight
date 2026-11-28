@@ -1,0 +1,53 @@
+error: `Draw.text` takes no arguments by name
+ --> tests/fail/draw_text_form.12am:7:13
+  |
+7 |   Draw.text(x: 8, 8, "SCORE", 24, Color(255, 255, 255))
+  |             ^ its arguments go by position: `Draw.text(x, y, text, size, color)`
+
+error: `Draw.text` takes no arguments by name
+ --> tests/fail/draw_text_form.12am:8:13
+  |
+8 |   Draw.text(text: "SCORE", 8, 8, 24, Color(255, 255, 255))
+  |             ^^^^ its arguments go by position: `Draw.text(x, y, text, size, color)`
+
+error: `Draw.text` takes its color last
+ --> tests/fail/draw_text_form.12am:9:13
+  |
+9 |   Draw.text(Color(1, 1, 1), 8, 8, "SCORE", 24)
+  |             ^^^^^^^^^^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw.text` takes its text third
+  --> tests/fail/draw_text_form.12am:10:13
+   |
+10 |   Draw.text("SCORE", 8, 8, 24, Color(255, 255, 255))
+   |             ^^^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw.text` takes its text third
+  --> tests/fail/draw_text_form.12am:11:16
+   |
+11 |   Draw.text(8, "SCORE", 8, 24, Color(255, 255, 255))
+   |                ^^^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw.text` takes its text third
+  --> tests/fail/draw_text_form.12am:12:13
+   |
+12 |   Draw.text("SCORE", 8, 8, Color(255, 255, 255))
+   |             ^^^^^^^ write `Draw.text(x, y, text, size, color)`
+
+error: `Draw.text` needs a size
+  --> tests/fail/draw_text_form.12am:13:3
+   |
+13 |   Draw.text(8, 8, "SCORE", Color(255, 255, 255))
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ write `Draw.text(x, y, text, size, color)`: the size is the height of a line in points
+
+error: `Draw.text` takes 5 arguments, but 3 were given
+  --> tests/fail/draw_text_form.12am:14:3
+   |
+14 |   Draw.text(8, 8, "SCORE")
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^ `Draw.text(x, y, text, size, color)`
+
+error: `Draw.text` takes 5 arguments, but 6 were given
+  --> tests/fail/draw_text_form.12am:15:3
+   |
+15 |   Draw.text(8, 8, "SCORE", 24, Color(255, 255, 255), 1)
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Draw.text(x, y, text, size, color)`

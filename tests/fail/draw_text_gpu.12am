@@ -1,0 +1,25 @@
+# expect: `Draw.text` in a GPU system is one error at the statement, in place of the error for its `String` and of the errors for where a draw stands; its other arguments are checked as GPU code
+# at: line 9, in `label`, with a note at the call on line 21; line 14, in the block; line 16, in a loop; line 19, in the nested `each`; line 14 also reads `Time.elapsed` as a `Float` argument, which is allowed
+
+component Spot
+  x: Float32
+end
+
+def label(x: Float)
+  Draw.text(x, 0, "#{x}", 12, Color(1, 1, 1))
+end
+
+gpu system show
+  each Spot do |spot|
+    Draw.text(spot.x, Time.elapsed, "*", 12, Color(255, 255, 0))
+    3.times do |i|
+      Draw.text(spot.x, i, "+", 12, Color(1, 1, 1))
+    end
+    each Spot do |other|
+      Draw.text(other.x, 0, "-", 12, Color(1, 1, 1))
+    end
+    label(spot.x)
+  end
+end
+
+Window.open("GPU", 64, 48)

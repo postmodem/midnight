@@ -392,6 +392,20 @@ impl Checker<'_> {
                     span,
                 ));
             }
+            (Type::String, "ljust" | "rjust") if args.len() >= 2 => {
+                if args.len() > 2 {
+                    self.at_most(method, 2, args.len(), span);
+                    return None;
+                }
+                let width = self.store(&args[0].value, &Type::Int);
+                let pad = self.store(&args[1].value, &Type::String);
+                let op = if method == "ljust" {
+                    Builtin::StrLjustPad
+                } else {
+                    Builtin::StrRjustPad
+                };
+                return Some(builtin(op, vec![recv, width?, pad?], Type::String, span));
+            }
             (Type::Int, "times" | "upto" | "downto") => {
                 self.needs_block(method, name.span);
                 return None;

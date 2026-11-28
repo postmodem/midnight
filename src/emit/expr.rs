@@ -1291,6 +1291,15 @@ impl<'a> FnCx<'a, '_> {
             Builtin::StrEndWith => pure("mn_str_end_with"),
             Builtin::StrLjust => effect("mn_str_ljust", Own::Owned),
             Builtin::StrRjust => effect("mn_str_rjust", Own::Owned),
+            Builtin::StrLjustPad | Builtin::StrRjustPad => {
+                let name = if op == Builtin::StrLjustPad {
+                    "mn_str_ljust_pad"
+                } else {
+                    "mn_str_rjust_pad"
+                };
+                let loc = self.cx.loc(expr.span);
+                Val::pending(format!("{name}({}, {loc})", arg_list(&values)), Own::Owned)
+            }
             Builtin::StrToI => pure("mn_str_to_i"),
             Builtin::StrToF => pure("mn_str_to_f"),
             Builtin::ListLength => pure("mn_list_len"),

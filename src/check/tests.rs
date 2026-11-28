@@ -416,14 +416,15 @@ impl Dump<'_> {
                 self.expr(width),
                 self.expr(height)
             ),
-            StmtKind::Draw {
-                shape, nums, color, ..
-            } => format!(
-                "Draw.{} {} {}",
-                shape.name(),
-                self.list(nums),
-                self.expr(color)
-            ),
+            StmtKind::Draw { shape, args, .. } => {
+                let (color, rest) = args.split_last().expect("a draw has a color");
+                format!(
+                    "Draw.{} {} {}",
+                    shape.name(),
+                    self.list(rest),
+                    self.expr(color)
+                )
+            }
         }
     }
 }

@@ -1,0 +1,16 @@
+# expect: the form of `Draw.text`'s arguments, one error a statement, the first rule that applies: by name, color first, text first or second whatever the count, a size left out, then the count
+# at: lines 7 and 8, by name (line 8 also gives its text first, not reported); line 9, color first; lines 10 to 12, the text first or second (line 12 with four arguments); line 13, the size left out; lines 14 and 15, the count
+
+Window.open("Form", 64, 48)
+
+system show
+  Draw.text(x: 8, 8, "SCORE", 24, Color(255, 255, 255))
+  Draw.text(text: "SCORE", 8, 8, 24, Color(255, 255, 255))
+  Draw.text(Color(1, 1, 1), 8, 8, "SCORE", 24)
+  Draw.text("SCORE", 8, 8, 24, Color(255, 255, 255))
+  Draw.text(8, "SCORE", 8, 24, Color(255, 255, 255))
+  Draw.text("SCORE", 8, 8, Color(255, 255, 255))
+  Draw.text(8, 8, "SCORE", Color(255, 255, 255))
+  Draw.text(8, 8, "SCORE")
+  Draw.text(8, 8, "SCORE", 24, Color(255, 255, 255), 1)
+end

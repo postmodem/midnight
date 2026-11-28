@@ -1,17 +1,11 @@
-error: `Draw.text` is not in 0.8, which draws shapes only
+error: `Draw.sprite` is not in this version of Midnight, which draws shapes and text
  --> tests/fail/draw_not_shapes.12am:6:8
   |
-6 |   Draw.text(0, 0, "hello", Color(1, 1, 1))
-  |        ^^^^
-
-error: `Draw.sprite` is not in 0.8, which draws shapes only
- --> tests/fail/draw_not_shapes.12am:7:8
-  |
-7 |   Draw.sprite(0, 0, 3)
+6 |   Draw.sprite(0, 0, 3)
   |        ^^^^^^
 
-error: `Draw.image` is not in 0.8, which draws shapes only
- --> tests/fail/draw_not_shapes.12am:8:8
+error: `Draw.image` is not in this version of Midnight, which draws shapes and text
+ --> tests/fail/draw_not_shapes.12am:7:8
   |
-8 |   Draw.image(0, 0)
+7 |   Draw.image(0, 0)
   |        ^^^^^

@@ -67,11 +67,10 @@ pub(super) fn stmt(s: &mut Stmt, f: Visit<'_>) {
             expr(width, f);
             expr(height, f);
         }
-        StmtKind::Draw { nums, color, .. } => {
-            for num in nums {
-                expr(num, f);
+        StmtKind::Draw { args, .. } => {
+            for arg in args {
+                expr(arg, f);
             }
-            expr(color, f);
         }
     }
 }
